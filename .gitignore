@@ -1,0 +1,13 @@
+# Python bytecode (Spec Kit scripts)
+__pycache__/
+*.pyc
+
+# Agent-local settings (may hold machine-specific or private state)
+.claude/settings.local.json
+
+# Spec Kit companion's local run trace
+.trace.jsonl
+
+# OS
+.DS_Store
+Thumbs.db
