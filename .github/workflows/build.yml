@@ -1,0 +1,64 @@
+# Checks every pull request into develop and every change to develop (etalii.adp spec 001-ci-and-badges).
+# Until this repository holds plug-in code, the check job checks the files it does hold, and the plugin
+# job reports itself as skipped. Once package.json exists, the plugin job builds the VS Code extension (.vsix) and offers it as a download
+# from the run. The packaging command below is the ecosystem's usual one; the first pull request with
+# plug-in code confirms or replaces it.
+name: Build
+
+on:
+  pull_request:
+    branches: [develop]
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - run: python -m pip install pyyaml
+      - name: Check JSON, YAML and markdown links
+        run: python .github/scripts/check-files.py
+
+  plugin:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Look for plug-in code
+        id: detect
+        run: |
+          if [ -f package.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No plug-in code yet: nothing to build." >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice::No plug-in code yet: nothing to build."
+          fi
+      - uses: actions/setup-node@v7
+        if: steps.detect.outputs.present == 'true'
+        with:
+          node-version: 22
+      - name: Build the plug-in
+        if: steps.detect.outputs.present == 'true'
+        run: |
+          npm ci
+          npx --yes @vscode/vsce package
+      - name: Offer the plug-in for download
+        if: steps.detect.outputs.present == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: etalii.adp.ide.vscode-plugin
+          path: '*.vsix'
+          if-no-files-found: error
