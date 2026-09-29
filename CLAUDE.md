@@ -1,6 +1,6 @@
 # etalii.adp.ide.vscode
 
-ADP designers for Visual Studio Code.
+ADP tools for Visual Studio Code. Every ADP tool is a diagram, a designer or an editor; these words, and the specification and definition languages (DISL/DID, DESL/DED, EDSL/EDD), mean what [ADP terminology](https://github.com/etalii-adp/etalii.adp/blob/develop/docs/terminology.md) says they mean, which is their single source.
 
 ## How work is done here: spec-driven development (GitHub Spec Kit)
 
