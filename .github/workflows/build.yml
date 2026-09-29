@@ -62,3 +62,21 @@ jobs:
           name: etalii.adp.ide.vscode-plugin
           path: '*.vsix'
           if-no-files-found: error
+
+  # Flags a retired use of the ADP vocabulary (etalii.adp spec 002, FR-017). The runner and its list of retired
+  # patterns and allowances live in etalii.adp and are read from its develop branch, so every repository is checked
+  # against the same list.
+  terminology:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Check the vocabulary against the glossary
+        env:
+          SOURCE: https://raw.githubusercontent.com/etalii-adp/etalii.adp/develop
+        run: |
+          curl -fsSL "$SOURCE/.github/scripts/terminology-check.py" -o "$RUNNER_TEMP/terminology-check.py"
+          python "$RUNNER_TEMP/terminology-check.py" --name "${{ github.event.repository.name }}" --config "$SOURCE/docs/terminology-check.json"
