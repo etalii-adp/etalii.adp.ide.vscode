@@ -28,13 +28,24 @@
       "presentation": { "reveal": "never" }
     },
     {
-      "label": "ADP: prepare a debug session",
+      "label": "ADP: install the dependencies",
+      "type": "shell",
+      "command": "node scripts/ensure-dependencies.mjs",
+      "presentation": { "reveal": "silent" }
+    },
+    {
+      "label": "ADP: build while editing",
       "dependsOn": ["ADP: refresh the debug examples", "ADP: watch", "ADP: type check while editing"]
+    },
+    {
+      "label": "ADP: prepare a debug session",
+      "dependsOrder": "sequence",
+      "dependsOn": ["ADP: install the dependencies", "ADP: build while editing"]
     },
     {
       "label": "ADP: prepare the tests in Visual Studio Code",
       "type": "shell",
-      "command": "npm run package && node scripts/unpack-plugin.mjs && npx tsc -p test/vscode/tsconfig.json",
+      "command": "node scripts/ensure-dependencies.mjs && npm run package && node scripts/unpack-plugin.mjs && npx tsc -p test/vscode/tsconfig.json",
       "presentation": { "reveal": "silent" }
     }
   ]

@@ -24,10 +24,9 @@ The plug-in needs Visual Studio Code 1.140 or later, and nothing else installed 
 
 ## Build
 
-You need [Node.js](https://nodejs.org) 22 or later. Nothing else: the tests download the Visual Studio Code they run in.
+You need [Node.js](https://nodejs.org) 22 or later. Nothing else: every command below installs the dependencies itself when they are missing or older than `package-lock.json`, and the tests download the Visual Studio Code they run in.
 
 ```sh
-npm ci
 npm run check        # types and lint
 npm test             # check, then every test at the three levels below
 npm run package      # writes etalii-adp-<version>.vsix
@@ -44,7 +43,7 @@ Every pull request into `develop` and every change to `develop` is checked by th
 
 ## Debug
 
-Open this folder in Visual Studio Code and start **Run ADP** (F5). A second window opens with the plug-in loaded on `.debug/examples`, a copy of `examples/` that is refreshed on every start, so nothing you edit there changes what the tests read.
+Open this folder in Visual Studio Code and start **Run ADP** (F5). A second window opens with the plug-in loaded on `.debug/examples`, a copy of `examples/` that is refreshed on every start, so nothing you edit there changes what the tests read. On a fresh clone the first start also installs the dependencies, which takes a minute; nothing has to be run beforehand.
 
 - Breakpoints work in the original TypeScript in both halves: the code that runs in the extension host (`src/extension`, `src/core`) and the code that runs in a webview (`src/webview`).
 - The build runs in watch mode while you debug. After a change, run **Developer: Reload Window** in the second window. Build and type errors show in the Problems panel as you type.
