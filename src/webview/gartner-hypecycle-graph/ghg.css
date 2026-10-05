@@ -1,0 +1,61 @@
+/*
+ * What the Gartner hype cycle graph needs that the diagram library's shared appearance has no
+ * opinion about: the fill of each of the four phases, the chevrons between them, the trigger's
+ * circle and the note's box. The colours are the definition's own, the same in every ADP host, one
+ * value per kind of colour theme. Everything else comes from the library's canvas.css.
+ */
+:root {
+  --adp-ghg-peak: #f7e7a1;
+  --adp-ghg-trough: #dfe3e8;
+  --adp-ghg-slope: #f6c99a;
+  --adp-ghg-plateau: #cde8a8;
+  --adp-ghg-chevron: #475569;
+  --adp-ghg-trigger: #7c3aed;
+  --adp-ghg-note: #fef9c3;
+  --adp-ghg-note-text: #0f172a;
+}
+
+body.vscode-dark,
+body.vscode-high-contrast:not(.vscode-high-contrast-light) {
+  --adp-ghg-peak: #6b5a17;
+  --adp-ghg-trough: #475569;
+  --adp-ghg-slope: #7c4a1c;
+  --adp-ghg-plateau: #3f6212;
+  --adp-ghg-chevron: #e2e8f0;
+  --adp-ghg-trigger: #c4b5fd;
+  --adp-ghg-note: #423a10;
+  --adp-ghg-note-text: #f1f5f9;
+}
+
+/* Each phase, and the legend's swatch for it, in the phase's colour. */
+.adp-segment.ghg-peak, .adp-legend-swatch.ghg-peak { fill: var(--adp-ghg-peak); background: var(--adp-ghg-peak); }
+.adp-segment.ghg-trough, .adp-legend-swatch.ghg-trough { fill: var(--adp-ghg-trough); background: var(--adp-ghg-trough); }
+.adp-segment.ghg-slope, .adp-legend-swatch.ghg-slope { fill: var(--adp-ghg-slope); background: var(--adp-ghg-slope); }
+.adp-segment.ghg-plateau, .adp-legend-swatch.ghg-plateau { fill: var(--adp-ghg-plateau); background: var(--adp-ghg-plateau); }
+
+.ghg-trend .adp-segment-divider {
+  stroke: var(--adp-ghg-chevron);
+  stroke-width: 1;
+}
+
+/* A trigger: a small solid circle, read without a legend as a moment rather than a span. */
+.adp-node.ghg-trigger-circle {
+  fill: var(--adp-ghg-trigger);
+  stroke: var(--adp-ghg-trigger);
+}
+
+/* A note: the author's remark, a pale box with its text in prose lines. */
+.adp-node.ghg-note-box {
+  fill: var(--adp-ghg-note);
+}
+
+.adp-text.ghg-note-text {
+  justify-content: flex-start;
+  color: var(--adp-ghg-note-text);
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+}

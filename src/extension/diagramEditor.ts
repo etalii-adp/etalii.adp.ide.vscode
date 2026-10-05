@@ -160,7 +160,6 @@ export class Diagrams implements vscode.Disposable {
     diagram.lastView = view;
     diagram.post({
       v: 1, type: 'view', origin: diagram.type.origin, view,
-      toolbox: view.readOnly ? [] : diagram.type.toolbox(source),
       actions: view.readOnly ? [] : diagram.type.actions(source, diagram.selection),
       version: diagram.document.version,
     });

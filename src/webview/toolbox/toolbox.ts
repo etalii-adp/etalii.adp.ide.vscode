@@ -1,39 +1,33 @@
 import type { ToolboxEntry } from '../../core/frame/diagramType';
-import { html } from '../canvas/dom';
-import { icon } from '../canvas/icons';
+import { html } from '../diagram/dom';
+import { icon } from '../diagram/icons';
 
 /** The data a dragged toolbox entry carries, so the canvas knows a drop is one of its own. */
 export const toolboxMime = 'application/x-adp-toolbox';
 
 /**
- * The ADP Toolbox, docked in the diagram's editor: the entries of the diagram's type with their
- * icons and descriptions. An entry is dragged onto the canvas, or added at the centre of the view
- * with Enter. It sits in the editor rather than in a view of its own because Visual Studio Code
- * does not carry a drag from one webview to another.
+ * The ADP Toolbox: the entries of the active diagram's type with their icons and descriptions, in a
+ * view of its own. An entry is dragged onto the canvas, or added at the centre of what the canvas
+ * shows with a click, Enter or Space.
  */
 export class Toolbox {
-  readonly element = html('aside', { class: 'adp-toolbox', 'aria-label': 'ADP Toolbox' });
-  private readonly list = html('div', { class: 'adp-toolbox-entries', role: 'list' });
+  readonly element = html('div', { class: 'adp-toolbox', role: 'list', 'aria-label': 'ADP Toolbox' });
+  private readonly empty = html('p', { class: 'adp-toolbox-empty' });
   private shown = '';
 
   constructor(host: HTMLElement, private readonly add: (entry: string) => void) {
-    const toggle = html('button', { class: 'adp-toolbox-title', type: 'button', title: 'Collapse or expand the ADP Toolbox', 'aria-expanded': 'true' }, 'ADP Toolbox');
-    toggle.addEventListener('click', () => {
-      const collapsed = this.element.classList.toggle('adp-collapsed');
-      toggle.setAttribute('aria-expanded', String(!collapsed));
-    });
-    this.element.append(toggle, this.list);
-    this.element.hidden = true;
-    host.append(this.element);
+    this.empty.hidden = true;
+    host.append(this.element, this.empty);
   }
 
-  /** Shows the entries; with none, as for a read-only diagram, the toolbox is not shown at all. */
-  show(entries: readonly ToolboxEntry[]): void {
-    this.element.hidden = entries.length === 0;
+  /** Shows the entries; with none, the sentence that says why. */
+  show(entries: readonly ToolboxEntry[], empty: string | undefined): void {
+    this.empty.hidden = entries.length > 0;
+    this.empty.textContent = entries.length > 0 ? '' : (empty ?? '');
     const key = JSON.stringify(entries);
     if (key === this.shown) return;
     this.shown = key;
-    this.list.replaceChildren(...entries.map((entry) => this.entry(entry)));
+    this.element.replaceChildren(...entries.map((entry) => this.entry(entry)));
   }
 
   private entry(entry: ToolboxEntry): HTMLElement {
@@ -44,7 +38,7 @@ export class Toolbox {
       event.dataTransfer?.setData('text/plain', entry.label);
       if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copy';
     });
-    // A click is how Enter and Space arrive too: the entry is added at the centre of the view.
+    // A click is how Enter and Space arrive too.
     button.addEventListener('click', () => this.add(entry.id));
     return button;
   }

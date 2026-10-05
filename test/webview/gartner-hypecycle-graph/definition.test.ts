@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { gartnerHypecycleGraph as type } from '../../../src/core/gartner-hypecycle-graph/index';
-import type { DrawContext } from '../../../src/webview/canvas/notation';
-import { gartnerHypecycleGraphNotation as notation } from '../../../src/webview/gartner-hypecycle-graph/notation';
+import { notationFor, type DrawContext } from '../../../src/webview/diagram/notation';
+import '../../../src/webview/tools';
 import { read } from '../../core/files';
 
+const notation = notationFor(type.origin)!;
 const view = type.view({ text: read('fixtures/gartner-hypecycle-graph/triggers-and-notes.ghg') }, {});
 const context: DrawContext = { view, elements: new Map(view.elements.map((element) => [element.id, element])) };
 const draw = (id: string): SVGGElement => notation.element(context.elements.get(id)!, context);
@@ -11,26 +12,26 @@ const draw = (id: string): SVGGElement => notation.element(context.elements.get(
 describe('a trend', () => {
   it('is a banner of one polygon per visible phase, in the phase colours, with a chevron between each two', () => {
     const four = draw('transistors');
-    expect([...four.querySelectorAll('.ghg-phase')].map((phase) => phase.getAttribute('class'))).toEqual([
-      'ghg-phase ghg-peak', 'ghg-phase ghg-trough', 'ghg-phase ghg-slope', 'ghg-phase ghg-plateau',
+    expect([...four.querySelectorAll('.adp-segment')].map((phase) => phase.getAttribute('class'))).toEqual([
+      'adp-segment ghg-peak', 'adp-segment ghg-trough', 'adp-segment ghg-slope', 'adp-segment ghg-plateau',
     ]);
-    expect(four.querySelectorAll('.ghg-chevron')).toHaveLength(3);
+    expect(four.querySelectorAll('.adp-segment-divider')).toHaveLength(3);
     const three = draw('radio');
-    expect(three.querySelectorAll('.ghg-phase')).toHaveLength(3);
-    expect(three.querySelectorAll('.ghg-chevron')).toHaveLength(2);
+    expect(three.querySelectorAll('.adp-segment')).toHaveLength(3);
+    expect(three.querySelectorAll('.adp-segment-divider')).toHaveLength(2);
   });
 
   it('names each phase in full as its tooltip, and carries its id', () => {
     const banner = draw('transistors');
     expect(banner.getAttribute('data-id')).toBe('transistors');
-    expect([...banner.querySelectorAll('.ghg-phase title')].map((title) => title.textContent)).toEqual([
+    expect([...banner.querySelectorAll('.adp-segment title')].map((title) => title.textContent)).toEqual([
       'Peak of Inflated Expectations', 'Trough of Disillusionment', 'Slope of Enlightenment', 'Plateau of Productivity',
     ]);
   });
 
   it('ends in a point at its full width, and writes its name before it', () => {
     const banner = draw('transistors');
-    expect(banner.querySelector('.adp-outline')?.getAttribute('points')).toBe('200,56 344,56 360,72 344,88 200,88');
+    expect(banner.querySelector('.adp-node')?.getAttribute('points')).toBe('200,56 344,56 360,72 344,88 200,88');
     const label = banner.querySelector('.adp-label')!;
     expect(label.textContent).toBe('Transistors');
     expect(label.getAttribute('x')).toBe('192');
@@ -41,7 +42,7 @@ describe('a trend', () => {
 describe('a trigger', () => {
   it('is a circle half a trend high with its name and date before it', () => {
     const trigger = draw('transistor-invented');
-    expect(trigger.querySelector('circle')?.getAttribute('r')).toBe('8');
+    expect(trigger.querySelector('ellipse.adp-node')?.getAttribute('rx')).toBe('8');
     expect(trigger.querySelector('.adp-label')?.textContent).toBe('Transistor invented · 1947');
     expect(trigger.querySelector('title')?.textContent).toBe('Trigger: Transistor invented, 1947');
   });

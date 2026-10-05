@@ -8,15 +8,16 @@ export const protocolVersion = 1;
 export type ToCanvas =
   /** What to draw, and the version of the document it was computed from. */
   | {
-    readonly v: 1; readonly type: 'view'; readonly origin: string; readonly view: ViewModel; readonly toolbox: readonly ToolboxEntry[];
-    readonly actions: readonly Action[]; readonly version: number;
+    readonly v: 1; readonly type: 'view'; readonly origin: string; readonly view: ViewModel; readonly actions: readonly Action[]; readonly version: number;
   }
   /** The answer to an edit request. */
   | { readonly v: 1; readonly type: 'outcome'; readonly seq: number; readonly result: 'applied' | 'refused' | 'cancelled'; readonly sentence?: string }
   /** Select an element and bring it into view; with `editLabel`, open its text for editing in place. */
   | { readonly v: 1; readonly type: 'reveal'; readonly id: string; readonly editLabel?: boolean; readonly multiline?: boolean }
   /** A command invoked from the Command Palette or a shortcut, for the canvas to carry out on its selection. */
-  | { readonly v: 1; readonly type: 'command'; readonly command: string };
+  | { readonly v: 1; readonly type: 'command'; readonly command: string }
+  /** An ADP Toolbox entry activated in its view: added at the centre of what the canvas shows. */
+  | { readonly v: 1; readonly type: 'addAtCentre'; readonly entry: string };
 
 export type FromCanvas =
   | { readonly v: 1; readonly type: 'ready' }
@@ -35,3 +36,11 @@ export type ToProperties =
 export type FromProperties =
   | { readonly v: 1; readonly type: 'ready' }
   | { readonly v: 1; readonly type: 'setField'; readonly target: string; readonly field: string; readonly value: string };
+export type ToToolbox =
+  /** The entries of the active diagram's type, or a sentence when there is nothing to add to. */
+  | { readonly v: 1; readonly type: 'entries'; readonly entries: readonly ToolboxEntry[]; readonly empty?: string };
+
+export type FromToolbox =
+  | { readonly v: 1; readonly type: 'ready' }
+  /** An entry activated with a click, Enter or Space. */
+  | { readonly v: 1; readonly type: 'add'; readonly entry: string };

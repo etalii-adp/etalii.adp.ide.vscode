@@ -1,17 +1,12 @@
 import type { FromCanvas, ToCanvas } from '../../core/frame/protocol';
-import { agentBehaviorModellingNotation } from '../agent-behavior-modelling/notation';
-import { gartnerHypecycleGraphNotation } from '../gartner-hypecycle-graph/notation';
-import { Canvas } from './canvas';
 import './canvas.css';
-import { registerNotation } from './notation';
+import '../tools';
+import { Canvas } from './canvas';
 
-// The entry point of a diagram's webview: every notation this plug-in brings, one canvas, and the
-// messages between it and the extension.
+// The entry point of a diagram's webview: every diagram type this plug-in brings, one canvas, and
+// the messages between it and the extension.
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
-
-registerNotation(gartnerHypecycleGraphNotation);
-registerNotation(agentBehaviorModellingNotation);
 
 const vscode = acquireVsCodeApi();
 const canvas = new Canvas(document.body, (message: FromCanvas) => vscode.postMessage(message));

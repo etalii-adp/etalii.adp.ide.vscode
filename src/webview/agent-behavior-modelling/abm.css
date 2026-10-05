@@ -1,0 +1,60 @@
+/*
+ * What Agent Behavior Modelling needs that the diagram library's shared appearance has no opinion
+ * about: the fill of each family of node, and the small keyword line above the label. The colours
+ * are the definition's theme tokens, one value per kind of colour theme. Everything else comes from
+ * the library's canvas.css.
+ */
+:root {
+  --adp-abm-composite: #aaed92;
+  --adp-abm-decorator: #fcf281;
+  --adp-abm-check: #9edcfa;
+  --adp-abm-action: #ededed;
+  --adp-abm-other: #86e6d9;
+  --adp-abm-text: #1c2333;
+}
+
+body.vscode-dark,
+body.vscode-high-contrast:not(.vscode-high-contrast-light) {
+  --adp-abm-composite: #2e7814;
+  --adp-abm-decorator: #736a03;
+  --adp-abm-check: #086fa1;
+  --adp-abm-action: #696969;
+  --adp-abm-other: #187569;
+  --adp-abm-text: #f1f5f9;
+}
+
+.adp-node.abm-composite { fill: var(--adp-abm-composite); }
+.adp-node.abm-decorator { fill: var(--adp-abm-decorator); }
+.adp-node.abm-check { fill: var(--adp-abm-check); }
+.adp-node.abm-action { fill: var(--adp-abm-action); }
+.adp-node.abm-other { fill: var(--adp-abm-other); }
+
+/* An item the Markdown gave no keyword: read as a Do, and drawn dashed so the author sees it. */
+.abm-implicit .adp-node {
+  stroke-dasharray: 4 3;
+}
+
+.adp-text.abm-text {
+  padding: 4px 28px;
+  color: var(--adp-abm-text);
+}
+
+/* The keyword is the node's kind: smaller than the label it introduces. */
+.abm-keyword {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.abm-label {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.25;
+}

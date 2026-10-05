@@ -2,22 +2,20 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { EditRequest } from '../../../src/core/frame/diagramType';
 import type { FromCanvas, ToCanvas } from '../../../src/core/frame/protocol';
 import { gartnerHypecycleGraph as type } from '../../../src/core/gartner-hypecycle-graph/index';
-import { Canvas } from '../../../src/webview/canvas/canvas';
-import { registerNotation } from '../../../src/webview/canvas/notation';
-import { gartnerHypecycleGraphNotation } from '../../../src/webview/gartner-hypecycle-graph/notation';
+import { Canvas } from '../../../src/webview/diagram/canvas';
+import '../../../src/webview/tools';
 import { read } from '../../core/files';
 
 // The canvas in a simulated browser. There is no layout there, so the surface is at the origin at
 // a zoom of one and a pointer position in pixels is the same position in canvas units.
 
-registerNotation(gartnerHypecycleGraphNotation);
 const source = { text: read('fixtures/gartner-hypecycle-graph/triggers-and-notes.ghg') };
 
 let canvas: Canvas;
 let sent: FromCanvas[];
 
 const viewMessage = (selection: string[] = [], options = {}): ToCanvas => ({
-  v: 1, type: 'view', origin: type.origin, view: type.view(source, options), toolbox: type.toolbox(source), actions: type.actions(source, selection), version: 7,
+  v: 1, type: 'view', origin: type.origin, view: type.view(source, options), actions: type.actions(source, selection), version: 7,
 });
 const requests = (): EditRequest[] => sent.filter((message) => message.type === 'edit').map((message) => (message as Extract<FromCanvas, { type: 'edit' }>).request);
 const group = (id: string): Element => document.querySelector(`.adp-content [data-id="${id}"]`)!;
@@ -46,20 +44,23 @@ describe('the canvas', () => {
   });
 
   it('selects what is clicked, tells the extension, and clears the selection on empty canvas', () => {
-    pointer(group('radio').querySelector('.ghg-phase')!, 'click', 230, 128);
+    pointer(group('radio').querySelector('.adp-segment')!, 'click', 230, 128);
     expect(group('radio').classList.contains('adp-selected')).toBe(true);
     expect(sent).toContainEqual({ v: 1, type: 'selection', ids: ['radio'] });
     pointer(document.querySelector('.adp-surface')!, 'click', 5, 5);
     expect(sent[sent.length - 1]).toEqual({ v: 1, type: 'selection', ids: [] });
   });
 
-  it('shows the toolbox it is sent, and adds an entry at the centre of the view when it is activated', () => {
-    const entries = [...document.querySelectorAll('.adp-toolbox-entry')];
-    expect(entries.map((entry) => entry.textContent)).toEqual(['Trend', 'Trigger', 'Note']);
-    expect(entries[0].getAttribute('title')).toBe('A trend through the hype cycle. Drop it where it starts; it is a year long with all four phases.');
-    expect(entries[0].getAttribute('draggable')).toBe('true');
-    (entries[2] as HTMLElement).click();
+  it('adds an ADP Toolbox entry activated in its view at the centre of what it shows', () => {
+    canvas.receive({ v: 1, type: 'addAtCentre', entry: 'ghg.add.note' });
     expect(requests()).toEqual([{ kind: 'drop', entry: 'ghg.add.note', x: 0, y: 0 }]);
+  });
+
+  it('adds an ADP Toolbox entry dropped on it where it was dropped', () => {
+    const drop = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent;
+    Object.assign(drop, { clientX: 120, clientY: 64, dataTransfer: { getData: (kind: string) => (kind === 'application/x-adp-toolbox' ? 'ghg.add.trend' : '') } });
+    document.querySelector('.adp-surface')!.dispatchEvent(drop);
+    expect(requests()).toEqual([{ kind: 'drop', entry: 'ghg.add.trend', x: 120, y: 64 }]);
   });
 
   it('shows the sentence of a refusal where the user is working', () => {
@@ -71,9 +72,9 @@ describe('the canvas', () => {
 
   it('offers nothing that edits on a read-only view', () => {
     const view = { ...type.view(source, {}), readOnly: true };
-    canvas.receive({ v: 1, type: 'view', origin: type.origin, view, toolbox: [], actions: [], version: 8 });
-    expect((document.querySelector('.adp-toolbox') as HTMLElement).hidden).toBe(true);
-    drag(group('radio').querySelector('.ghg-phase')!, [230, 128], [330, 128]);
+    canvas.receive({ v: 1, type: 'view', origin: type.origin, view, actions: [], version: 8 });
+    canvas.receive({ v: 1, type: 'addAtCentre', entry: 'ghg.add.note' });
+    drag(group('radio').querySelector('.adp-segment')!, [230, 128], [330, 128]);
     expect(requests()).toEqual([]);
   });
 });
@@ -81,20 +82,32 @@ describe('the canvas', () => {
 describe('gestures', () => {
   it('moves an element by whole steps and rows, and asks for the move with its new top-left', () => {
     // The radio is at 216,112; a press in its middle, away from its edges, moves it.
-    drag(group('radio').querySelector('.ghg-phase')!, [230, 128], [241, 190]);
+    drag(group('radio').querySelector('.adp-segment')!, [230, 128], [241, 190]);
     expect(requests()).toEqual([{ kind: 'move', id: 'radio', x: 228, y: 168 }]);
     expect(sent.at(-1)).toMatchObject({ type: 'edit', version: 7 });
   });
 
+  it('draws an influence again while an end of it is dragged, so it stays attached, and as it was once the view answers', () => {
+    const end = (): number[] => group('i-13').querySelector('.adp-relation-line')!.getAttribute('d')!.split(/[ ,]+/).slice(-2).map(Number);
+    const before = end();
+    pointer(group('radio').querySelector('.adp-segment')!, 'pointerdown', 230, 128);
+    pointer(window, 'pointermove', 241, 190);
+    expect(group('radio').getAttribute('transform')).toBe('translate(12 56)');
+    expect(end()).toEqual([before[0] + 12, before[1] + 56]);
+    pointer(window, 'pointerup', 241, 190);
+    canvas.receive({ v: 1, type: 'outcome', seq: 1, result: 'applied' });
+    expect(end()).toEqual(before);
+  });
+
   it('does not ask for anything when a press is let go where it began', () => {
-    const phase = group('radio').querySelector('.ghg-phase')!;
+    const phase = group('radio').querySelector('.adp-segment')!;
     pointer(phase, 'pointerdown', 230, 128);
     pointer(window, 'pointerup', 230, 128);
     expect(requests()).toEqual([]);
   });
 
   it('gives a gesture up when a newer view arrives while it runs', () => {
-    pointer(group('radio').querySelector('.ghg-phase')!, 'pointerdown', 230, 128);
+    pointer(group('radio').querySelector('.adp-segment')!, 'pointerdown', 230, 128);
     pointer(window, 'pointermove', 260, 128);
     canvas.receive(viewMessage());
     pointer(window, 'pointerup', 300, 128);
@@ -102,7 +115,7 @@ describe('gestures', () => {
   });
 
   it('shows a handle on each drawn boundary of a selected trend, and asks to move the one that is dragged', () => {
-    pointer(group('transistors').querySelector('.ghg-phase')!, 'click', 210, 72);
+    pointer(group('transistors').querySelector('.adp-segment')!, 'click', 210, 72);
     const handles = [...document.querySelectorAll('.adp-overlay [data-handle]')];
     expect(handles.map((handle) => [handle.getAttribute('data-handle'), handle.getAttribute('cx')])).toEqual([['0', '240'], ['1', '280'], ['2', '320']]);
     drag(handles[0], [240, 72], [253, 72]);
@@ -110,7 +123,7 @@ describe('gestures', () => {
   });
 
   it('resizes a trend by its left or right side to a step, and a note by any side', () => {
-    pointer(group('radio').querySelector('.ghg-phase')!, 'click', 230, 128);
+    pointer(group('radio').querySelector('.adp-segment')!, 'click', 230, 128);
     expect([...document.querySelectorAll('.adp-overlay [data-resize]')].map((handle) => handle.getAttribute('data-resize'))).toEqual(['left', 'right']);
     drag(document.querySelector('[data-resize="right"]')!, [300, 128], [322, 128]);
     expect(requests()).toEqual([{ kind: 'resize', id: 'radio', side: 'right', bounds: { x: 216, y: 112, width: 108, height: 32 } }]);
@@ -122,21 +135,21 @@ describe('gestures', () => {
   });
 
   it('draws an influence from a press on a trend\'s edge to the trend it is let go over, with where it attaches on each', () => {
-    const target = group('radio').querySelector('.ghg-phase')!;
+    const target = group('radio').querySelector('.adp-segment')!;
     document.elementFromPoint = () => target;
     // The bottom edge of the transistors' Peak, to the top edge of the radio.
-    drag(group('transistors').querySelector('.ghg-phase')!, [212, 87], [222, 113]);
+    drag(group('transistors').querySelector('.adp-segment')!, [212, 87], [222, 113]);
     expect(requests()).toEqual([{ kind: 'connect', from: 'transistors', to: 'radio', fromEnd: 'peak/bottom/0.5', toEnd: 'peak/top/0.5' }]);
   });
 
   it('draws nothing when an influence is let go over empty canvas', () => {
     document.elementFromPoint = () => null;
-    drag(group('transistors').querySelector('.ghg-phase')!, [212, 87], [228, 500]);
+    drag(group('transistors').querySelector('.adp-segment')!, [212, 87], [228, 500]);
     expect(requests()).toEqual([]);
   });
 
   it('opens the text of what is double-clicked for editing in place, and asks to rename on Enter', () => {
-    pointer(group('radio').querySelector('.ghg-phase')!, 'dblclick', 230, 128);
+    pointer(group('radio').querySelector('.adp-segment')!, 'dblclick', 230, 128);
     const box = document.querySelector('.adp-inline-editor') as HTMLInputElement;
     expect(box.value).toBe('Transistor radio');
     expect(sent).toContainEqual({ v: 1, type: 'editing', active: true });
@@ -158,7 +171,7 @@ describe('gestures', () => {
 
 describe('the menu and the panel', () => {
   it('opens the context menu with the actions for what was pointed at, once the extension has sent them', () => {
-    pointer(group('radio').querySelector('.ghg-phase')!, 'contextmenu', 230, 128, 2);
+    pointer(group('radio').querySelector('.adp-segment')!, 'contextmenu', 230, 128, 2);
     expect(sent.at(-1)).toEqual({ v: 1, type: 'selection', ids: ['radio'] });
     canvas.receive(viewMessage(['radio']));
     const items = [...document.querySelectorAll('.adp-menu-item')];

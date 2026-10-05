@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rungFor, rungLabel, ticksOf, type Rung } from '../../../src/webview/canvas/ruler';
+import { rungFor, rungLabel, ticksOf, type Rung } from '../../../src/webview/diagram/ruler';
 
 const rungs: Rung[] = [
   { months: 1, every: 'month', label: 'MMM yyyy' },

@@ -1,4 +1,4 @@
-import { packRows, type RowItem } from '../frame/rowPacking';
+import { packRows, type RowItem } from '../diagram/layout/rowPacked';
 import { widthOfText } from '../text/textMetric';
 import { hasSpan, isPlaceable, monthsOf, type Model } from './model';
 import { formatWhen, rowStep, triggerSize, widthOf, xOf } from './scale';

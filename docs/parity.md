@@ -8,7 +8,7 @@ Where this host differs from a tool's definition in [etalii.adp](https://github.
 
 | Difference | Why |
 |---|---|
-| The ADP Toolbox is docked inside each diagram's editor, not shown as a view of its own. | Visual Studio Code does not carry a drag from one webview to another, and dragging an entry onto the canvas is the toolbox's main use. ADP Properties needs no drag and is a view. |
+| The ADP Toolbox is a view of its own, beside ADP Properties, and adds an entry at the centre of what the diagram shows when it is clicked or activated with Enter or Space. | A view can be put wherever the user wants it, which a toolbox docked in the editor could not. |
 | A file with mixed line endings is saved with one kind. | Visual Studio Code's text document keeps one line ending per file and normalises the others when it reads the file; the diagram edits that document. A file with one kind of line ending, with or without a final newline, is kept byte for byte. |
 | A read-only diagram hides the toolbox and offers no handles, rather than showing them disabled. | Nothing that edits is offered (FR-037); what is not there cannot be mistaken for something that works. |
 | A refusal is shown on a line at the bottom left of the canvas for eight seconds, and at its field in ADP Properties. | The standalone host has one refusal line around its canvas; this is its place here. |
@@ -34,7 +34,6 @@ Where this host differs from a tool's definition in [etalii.adp](https://github.
 | Difference | Why |
 |---|---|
 | A drag that only moves a row, and Arrange diagram, are undone and redone with the Undo and Redo shortcuts in the diagram and with "ADP: Undo (Diagram)" and "ADP: Redo (Diagram)", and not from the Edit menu. | Both change the registration alone and leave the Markdown untouched, as the definition requires, so the Markdown's own undo history has nothing to take back. The plug-in keeps those steps itself, each in its turn among the edits of the Markdown, and binds the shortcuts to them only while one is next in line; the Edit menu's Undo is always the document's. A step is kept for as long as the diagram is open. |
-| While a node is dragged, the lines to what is moving are dimmed rather than redrawn. | The dragged node carries its subtree, its row follows it up and down, and the siblings it has passed step aside to where the new order would put them, as the definition says; the lines are drawn again at the drop. |
 | The registration is created when a row is first dragged. | In the standalone host a document is added to a project through its registration, so one always exists. Here a Markdown file is opened as a behavior model directly, and the `.adp` is written only when there is a position to keep. |
 | "Edit notes…" takes the focus to the Notes row of ADP Properties. | The standalone host asks for notes in a dialog; Visual Studio Code has no multi-line input dialog, and the property grid has the room. |
 | A node's label is shown on at most two lines, ending in an ellipsis. | The standalone canvas draws one line; two fit the node's height and show more of an instruction. |

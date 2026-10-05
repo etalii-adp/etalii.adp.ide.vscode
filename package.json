@@ -127,6 +127,11 @@
         "category": "ADP"
       },
       {
+        "command": "etalii.adp.focusToolbox",
+        "title": "Focus on ADP Toolbox",
+        "category": "ADP"
+      },
+      {
         "command": "etalii.adp.new.etalii.agent-behavior-modelling",
         "title": "New Agent Behavior Model",
         "category": "ADP"
@@ -233,6 +238,11 @@
     },
     "views": {
       "etalii-adp": [
+        {
+          "type": "webview",
+          "id": "etalii.adp.toolbox",
+          "name": "ADP Toolbox"
+        },
         {
           "type": "webview",
           "id": "etalii.adp.properties",

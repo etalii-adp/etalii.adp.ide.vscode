@@ -7,6 +7,7 @@ import { diagramTypes } from './diagramTypes';
 import { Findings } from './findings';
 import { PropertiesView } from './propertiesView';
 import { RegistrationEditorProvider } from './registrationEditor';
+import { ToolboxView } from './toolboxView';
 import { watchSuggestions } from './suggestions';
 
 /** What activation hands back, so tests can see what was registered. */
@@ -29,7 +30,7 @@ export function activate(context: vscode.ExtensionContext): AdpApi {
   for (const type of diagramTypes) {
     context.subscriptions.push(DiagramEditorProvider.register(context, type, diagrams));
   }
-  context.subscriptions.push(PropertiesView.register(context, diagrams), RegistrationEditorProvider.register(diagramTypes));
+  context.subscriptions.push(ToolboxView.register(context, diagrams), PropertiesView.register(context, diagrams), RegistrationEditorProvider.register(diagramTypes));
   watchSuggestions(context, diagramTypes);
 
   // A registration is only a document's visualization: it is saved with its document, and a

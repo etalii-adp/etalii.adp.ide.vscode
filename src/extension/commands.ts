@@ -3,6 +3,7 @@ import type { DiagramType, EditRequest } from '../core/frame/diagramType';
 import { viewTypeOf } from '../core/frame/diagramType';
 import type { Diagrams, OpenDiagram } from './diagramEditor';
 import { PropertiesView } from './propertiesView';
+import { entriesOf, ToolboxView } from './toolboxView';
 
 /** The commands the plug-in adds, all in the category "ADP". */
 export function registerCommands(context: vscode.ExtensionContext, diagrams: Diagrams, types: readonly DiagramType[]): void {
@@ -53,6 +54,7 @@ export function registerCommands(context: vscode.ExtensionContext, diagrams: Dia
 
   register('etalii.adp.toggleCompact', () => diagrams.active?.post({ v: 1, type: 'command', command: 'toggleCompact' }));
   register('etalii.adp.focusProperties', () => vscode.commands.executeCommand(`${PropertiesView.viewId}.focus`));
+  register('etalii.adp.focusToolbox', () => vscode.commands.executeCommand(`${ToolboxView.viewId}.focus`));
 
   register('etalii.adp.openAsText', async (uri?: unknown) => {
     const target = uri instanceof vscode.Uri ? uri : diagrams.active?.document.uri;
@@ -94,6 +96,7 @@ export function registerCommands(context: vscode.ExtensionContext, diagrams: Dia
       const active = diagrams.active;
       return active ? diagrams.perform(active, request as EditRequest) : undefined;
     });
+    register('etalii.adp.test.toolbox', () => entriesOf(diagrams.active));
     register('etalii.adp.test.layoutSteps', () => ({ undo: diagrams.layoutStepNext('undo'), redo: diagrams.layoutStepNext('redo') }));
     register('etalii.adp.test.select', (ids: unknown) => {
       const active = diagrams.active;
