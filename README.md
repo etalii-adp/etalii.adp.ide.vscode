@@ -61,4 +61,4 @@ Every change starts as a specification, using GitHub Spec Kit. See `CLAUDE.md` a
 
 ## Licence
 
-[Apache License 2.0](LICENSE). The plug-in ships no third-party library.
+[Apache License 2.0](LICENSE). The plug-in ships one third-party library, bundled into it: [yaml](https://github.com/eemeli/yaml) (ISC), which reads YAML documents and never writes them.
