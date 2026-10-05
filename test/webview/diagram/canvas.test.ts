@@ -15,7 +15,7 @@ let canvas: Canvas;
 let sent: FromCanvas[];
 
 const viewMessage = (selection: string[] = [], options = {}): ToCanvas => ({
-  v: 1, type: 'view', origin: type.origin, view: type.view(source, options), toolbox: type.toolbox(source), actions: type.actions(source, selection), version: 7,
+  v: 1, type: 'view', origin: type.origin, view: type.view(source, options), actions: type.actions(source, selection), version: 7,
 });
 const requests = (): EditRequest[] => sent.filter((message) => message.type === 'edit').map((message) => (message as Extract<FromCanvas, { type: 'edit' }>).request);
 const group = (id: string): Element => document.querySelector(`.adp-content [data-id="${id}"]`)!;
@@ -51,13 +51,16 @@ describe('the canvas', () => {
     expect(sent[sent.length - 1]).toEqual({ v: 1, type: 'selection', ids: [] });
   });
 
-  it('shows the toolbox it is sent, and adds an entry at the centre of the view when it is activated', () => {
-    const entries = [...document.querySelectorAll('.adp-toolbox-entry')];
-    expect(entries.map((entry) => entry.textContent)).toEqual(['Trend', 'Trigger', 'Note']);
-    expect(entries[0].getAttribute('title')).toBe('A trend through the hype cycle. Drop it where it starts; it is a year long with all four phases.');
-    expect(entries[0].getAttribute('draggable')).toBe('true');
-    (entries[2] as HTMLElement).click();
+  it('adds an ADP Toolbox entry activated in its view at the centre of what it shows', () => {
+    canvas.receive({ v: 1, type: 'addAtCentre', entry: 'ghg.add.note' });
     expect(requests()).toEqual([{ kind: 'drop', entry: 'ghg.add.note', x: 0, y: 0 }]);
+  });
+
+  it('adds an ADP Toolbox entry dropped on it where it was dropped', () => {
+    const drop = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent;
+    Object.assign(drop, { clientX: 120, clientY: 64, dataTransfer: { getData: (kind: string) => (kind === 'application/x-adp-toolbox' ? 'ghg.add.trend' : '') } });
+    document.querySelector('.adp-surface')!.dispatchEvent(drop);
+    expect(requests()).toEqual([{ kind: 'drop', entry: 'ghg.add.trend', x: 120, y: 64 }]);
   });
 
   it('shows the sentence of a refusal where the user is working', () => {
@@ -69,8 +72,8 @@ describe('the canvas', () => {
 
   it('offers nothing that edits on a read-only view', () => {
     const view = { ...type.view(source, {}), readOnly: true };
-    canvas.receive({ v: 1, type: 'view', origin: type.origin, view, toolbox: [], actions: [], version: 8 });
-    expect((document.querySelector('.adp-toolbox') as HTMLElement).hidden).toBe(true);
+    canvas.receive({ v: 1, type: 'view', origin: type.origin, view, actions: [], version: 8 });
+    canvas.receive({ v: 1, type: 'addAtCentre', entry: 'ghg.add.note' });
     drag(group('radio').querySelector('.adp-segment')!, [230, 128], [330, 128]);
     expect(requests()).toEqual([]);
   });

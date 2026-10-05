@@ -55,7 +55,7 @@ Open this folder in Visual Studio Code and start **Run ADP** (F5). A second wind
 |---|---|
 | `src/core` | Files, models, rules and edits. It knows nothing of Visual Studio Code or a browser, and the lint rules keep it so. |
 | `src/extension` | The part that runs in the extension host: editors, commands, findings. |
-| `src/webview` | The part that runs in webviews: the canvas, the ADP Toolbox, ADP Properties. `npm run look` draws one example in a page outside Visual Studio Code, for a quick look at the drawing. |
+| `src/webview` | The part that runs in webviews: the diagram library that draws every diagram type (`src/webview/diagram`, with its geometry in `src/core/diagram`), each diagram type's definition, the ADP Toolbox and ADP Properties views. `npm run look` draws one example in a page outside Visual Studio Code, for a quick look at the drawing. |
 | `examples`, `fixtures` | Example documents and test fixtures, copied unchanged from etalii.adp.ide.standalone; see [their provenance](examples/PROVENANCE.md). |
 | `test/core`, `test/webview`, `test/vscode` | The three test levels. |
 

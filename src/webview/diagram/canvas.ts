@@ -1,7 +1,7 @@
 import { boundsOf, moved as movedBy } from '../../core/diagram/geometry';
 import type { Action, Box, EditRequest, ViewElement, ViewModel, ViewOptions, ViewRelation } from '../../core/frame/diagramType';
 import type { FromCanvas, ToCanvas } from '../../core/frame/protocol';
-import { Toolbox, toolboxMime } from '../toolbox/toolbox';
+import { toolboxMime } from '../toolbox/toolbox';
 import { html, svg } from './dom';
 import { InlineEditor } from './inlineEditor';
 import { Menu } from './menu';
@@ -32,7 +32,6 @@ export class Canvas {
   private readonly status = html('div', { class: 'adp-status', role: 'alert' });
   private readonly panel: Panel;
   private readonly ruler: Ruler;
-  private readonly toolbox: Toolbox;
   private readonly menu: Menu;
   private readonly editor: InlineEditor;
   private view: ViewModel | undefined;
@@ -54,7 +53,6 @@ export class Canvas {
 
   constructor(host: HTMLElement, private readonly send: (message: FromCanvas) => void) {
     const frame = html('div', { class: 'adp-canvas' });
-    this.toolbox = new Toolbox(frame, (entry) => this.addAtCentre(entry));
     this.stage = html('div', { class: 'adp-stage' });
     frame.append(this.stage);
     host.append(frame);
@@ -100,7 +98,6 @@ export class Canvas {
         this.notation = notationFor(message.origin);
         this.actions = message.actions;
         this.version = message.version;
-        this.toolbox.show(message.toolbox);
         this.draw();
         if (this.pendingMenu) {
           const at = this.pendingMenu;
@@ -124,6 +121,9 @@ export class Canvas {
       }
       case 'command':
         if (message.command === 'toggleCompact') this.panel.toggleCompact();
+        return;
+      case 'addAtCentre':
+        if (this.view && !this.view.readOnly) this.addAtCentre(message.entry);
         return;
     }
   }
@@ -280,7 +280,7 @@ export class Canvas {
     this.send({ v: 1, type: 'edit', seq: this.seq, request, version: this.version });
   }
 
-  // ---- the toolbox ----
+  // ---- the ADP Toolbox: an entry dragged from its view and dropped, or activated there ----
 
   private dropped(event: DragEvent): void {
     const entry = event.dataTransfer?.getData(toolboxMime);

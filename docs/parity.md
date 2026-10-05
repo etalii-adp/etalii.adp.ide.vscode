@@ -8,7 +8,7 @@ Where this host differs from a tool's definition in [etalii.adp](https://github.
 
 | Difference | Why |
 |---|---|
-| The ADP Toolbox is docked inside each diagram's editor, not shown as a view of its own. | Visual Studio Code does not carry a drag from one webview to another, and dragging an entry onto the canvas is the toolbox's main use. ADP Properties needs no drag and is a view. |
+| The ADP Toolbox is a view of its own, beside ADP Properties, and adds an entry at the centre of what the diagram shows when it is clicked or activated with Enter or Space. | A view can be put wherever the user wants it, which a toolbox docked in the editor could not. |
 | A file with mixed line endings is saved with one kind. | Visual Studio Code's text document keeps one line ending per file and normalises the others when it reads the file; the diagram edits that document. A file with one kind of line ending, with or without a final newline, is kept byte for byte. |
 | A read-only diagram hides the toolbox and offers no handles, rather than showing them disabled. | Nothing that edits is offered (FR-037); what is not there cannot be mistaken for something that works. |
 | A refusal is shown on a line at the bottom left of the canvas for eight seconds, and at its field in ADP Properties. | The standalone host has one refusal line around its canvas; this is its place here. |

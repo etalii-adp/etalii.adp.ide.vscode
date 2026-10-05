@@ -87,6 +87,16 @@ suite('Editing a hype cycle graph in Visual Studio Code', () => {
     assert.strictEqual(saved, onDisk.replace('    tags: [energy, industry]', '    tags: [saved]'));
   });
 
+  test('the ADP Toolbox view lists the diagram\'s entries, and still does once it has the focus', async () => {
+    await open('fixtures', 'gartner-hypecycle-graph', 'rules-clean.ghg');
+    const labels = async (): Promise<string[]> => ((await vscode.commands.executeCommand<{ entries: { label: string }[] }>('etalii.adp.test.toolbox')).entries.map((entry) => entry.label));
+    assert.deepStrictEqual(await labels(), ['Trend', 'Trigger', 'Note']);
+    await vscode.commands.executeCommand('etalii.adp.focusToolbox');
+    // An entry activated in the view is added to the diagram that had the focus before it.
+    await until('the diagram to stay active', async () => (await state())?.origin === 'gartner/hypecycle-graph');
+    assert.deepStrictEqual(await labels(), ['Trend', 'Trigger', 'Note']);
+  });
+
   test('a new element dropped from the toolbox is added to the file and selected', async () => {
     const { document } = await open('fixtures', 'gartner-hypecycle-graph', 'rules-clean.ghg');
     const before = (await drawn()).view!.elements.length;

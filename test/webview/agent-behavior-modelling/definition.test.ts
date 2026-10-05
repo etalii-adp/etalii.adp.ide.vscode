@@ -71,7 +71,7 @@ describe('gestures on a behavior model', () => {
     document.body.replaceChildren();
     sent = [];
     const canvas = new Canvas(document.body, (message) => sent.push(message));
-    canvas.receive({ v: 1, type: 'view', origin: type.origin, view: research, toolbox: type.toolbox(source), actions: [], version: 1 });
+    canvas.receive({ v: 1, type: 'view', origin: type.origin, view: research, actions: [], version: 1 });
   });
 
   it('carries the subtree with a dragged node, and its row up and down only', () => {
@@ -147,9 +147,5 @@ describe('gestures on a behavior model', () => {
     pointer(window, 'pointermove', leaf.x + 300, leaf.y + 30, 2);
     pointer(window, 'pointerup', leaf.x + 300, leaf.y + 30, 2);
     expect(requests()).toEqual([]);
-  });
-
-  it('lists the eleven kinds in the toolbox', () => {
-    expect(document.querySelectorAll('.adp-toolbox-entry')).toHaveLength(11);
   });
 });
