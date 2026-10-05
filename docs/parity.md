@@ -27,3 +27,15 @@ Where this host differs from a tool's definition in [etalii.adp](https://github.
 | Moving the Phases slider makes one edit, and one undo step, for every stop passed. | As in the standalone host, where each stop passed is its own command. |
 | A new id is 25 characters of base 36. | That is what the standalone host mints today; the definition's companion still says 22 characters of base 64, and is to be corrected there. |
 | Dates and sizes typed in ADP Properties are committed when the field loses the focus or Enter is pressed. | A property grid's usual behaviour; the standalone grid previews a drag in these rows, which this host does not. |
+
+## Agent Behavior Modelling
+
+| Difference | Why |
+|---|---|
+| A drag that only moves a row, and Arrange diagram, are not undone by Undo in the diagram. | Both change the registration alone, which is a file of its own with its own undo history in Visual Studio Code; the Markdown, whose history the diagram's Undo walks, is untouched, as the definition requires. A drag that also reorders the Markdown is one edit across both files and one Undo puts both back. Arranging again, or dragging the row back, restores a layout. |
+| The registration is created when a row is first dragged. | In the standalone host a document is added to a project through its registration, so one always exists. Here a Markdown file is opened as a behavior model directly, and the `.adp` is written only when there is a position to keep. |
+| While a node is dragged its siblings do not step aside to show where it will land. | The dragged node carries its subtree, and its row follows it up and down, as the definition says; the lines to what is moving are dimmed until the drop. The preview of the new order is not built yet. |
+| "Edit notes…" takes the focus to the Notes row of ADP Properties. | The standalone host asks for notes in a dialog; Visual Studio Code has no multi-line input dialog, and the property grid has the room. |
+| A node's label is shown on at most two lines, ending in an ellipsis. | The standalone canvas draws one line; two fit the node's height and show more of an instruction. |
+| The Explorer offers "Open as Agent Behavior Model" only once the plug-in has read the workspace's Markdown files. | Whether a file has a Behavior heading is in its text, which a menu's condition cannot read; the plug-in starts with Visual Studio Code, looks at up to 2,000 Markdown files of at most 512 KB, and keeps the list up to date. "Open With" and the Command Palette offer it for every Markdown file at once. |
+| A Do is grey and an Ask the user and a Delegate are teal. | That is what the standalone host draws; the definition's companion states the two the other way round, and is to be corrected there. |

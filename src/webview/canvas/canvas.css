@@ -466,3 +466,83 @@ body {
 .adp-menu-shortcut {
   color: var(--vscode-descriptionForeground);
 }
+
+/* Agent Behavior Modelling: the fill of each family of node, as the definition's theme tokens. */
+:root {
+  --adp-abm-composite: #aaed92;
+  --adp-abm-decorator: #fcf281;
+  --adp-abm-check: #9edcfa;
+  --adp-abm-action: #ededed;
+  --adp-abm-other: #86e6d9;
+  --adp-abm-text: #1c2333;
+  --adp-abm-stroke: #475569;
+}
+
+body.vscode-dark,
+body.vscode-high-contrast:not(.vscode-high-contrast-light) {
+  --adp-abm-composite: #2e7814;
+  --adp-abm-decorator: #736a03;
+  --adp-abm-check: #086fa1;
+  --adp-abm-action: #696969;
+  --adp-abm-other: #187569;
+  --adp-abm-text: #f1f5f9;
+  --adp-abm-stroke: #e2e8f0;
+}
+
+.abm-shape {
+  stroke: var(--adp-abm-stroke);
+  stroke-width: 1;
+  pointer-events: all;
+}
+
+.abm-shape.abm-composite { fill: var(--adp-abm-composite); }
+.abm-shape.abm-decorator { fill: var(--adp-abm-decorator); }
+.abm-shape.abm-check { fill: var(--adp-abm-check); }
+.abm-shape.abm-action { fill: var(--adp-abm-action); }
+.abm-shape.abm-other { fill: var(--adp-abm-other); }
+
+/* An item without a keyword, read as a Do. */
+.abm-implicit .abm-shape {
+  stroke-dasharray: 4 3;
+}
+
+.adp-element.adp-selected .abm-shape {
+  stroke: var(--vscode-focusBorder);
+  stroke-width: 2;
+}
+
+.abm-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 4px 28px;
+  color: var(--adp-abm-text);
+  text-align: center;
+  pointer-events: none;
+}
+
+.abm-keyword {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.abm-label {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+/* A parent line cannot be pointed at: it is the child's place in the tree, not a thing of its own. */
+.abm-child {
+  pointer-events: none;
+}

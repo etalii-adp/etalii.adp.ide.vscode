@@ -6,11 +6,12 @@ The ADP tools as a Visual Studio Code extension, "ADP: A Different Perspective".
 
 ADP, A Different Perspective, is a range of task-focused tools: diagrams, designers and editors (see the [ADP terminology](https://github.com/etalii-adp/etalii.adp/blob/develop/docs/terminology.md)). The site is at <https://etalii.net/adp/>.
 
-**Where it stands.** The plug-in brings one diagram, and a second is being built, as [spec 006 in etalii.adp](https://github.com/etalii-adp/etalii.adp/tree/develop/specs/006-vscode-plugin) specifies them:
+**Where it stands.** The plug-in brings two diagrams, as [spec 006 in etalii.adp](https://github.com/etalii-adp/etalii.adp/tree/develop/specs/006-vscode-plugin) specifies them:
 
-- **Gartner hype cycle graph** (`.ghg`). A `.ghg` file opens in the diagram: trends on a time axis as banners in the phases they have reached, triggers, notes, and the influences between them. Drop elements from the ADP Toolbox, rename them in place, move and resize them, drag a phase boundary, draw an influence from one trend's edge to another's, filter by tags, switch to Compact, and arrange the diagram. ADP Properties shows and edits the selection.
-- **Agent Behavior Modelling** (a behavior tree kept in a Markdown file) is next.
+- **Gartner hype cycle graph** (`.ghg`). A `.ghg` file opens in the diagram: trends on a time axis as banners in the phases they have reached, triggers, notes, and the influences between them. Drop elements from the ADP Toolbox, rename them in place, move and resize them, drag a phase boundary, draw an influence from one trend's edge to another's, filter by tags, switch to Compact, and arrange the diagram.
+- **Agent Behavior Modelling** (Markdown). A chat agent's instructions as a behavior tree, kept as a bullet list under the `Behavior` heading of the Markdown file the agent reads. A Markdown file keeps opening as text; right-click one that has a Behavior heading and choose **Open as Agent Behavior Model**, or use **Open With**. Drop one of the eleven kinds of node under the node it belongs to, drag a node past a sibling to reorder the list, lower a row, right-drag from a node to another to move it under it, and change a node's kind in ADP Properties. Where rows were dragged to is kept in an `.adp` file beside the Markdown, never in it; opening that `.adp` opens the diagram.
 
+ADP Properties, in the ADP container of the activity bar, shows and edits what is selected in the diagram that has the focus.
 Each diagram is an editor on the file's own text: every change is one step in Visual Studio Code's undo, edits only the lines it concerns, and leaves the rest of the file byte for byte as it was. **Open as Text** shows the same document beside the diagram, and problems in the file are listed in the Problems panel. The tool types are catalogued in [docs/tools.md](docs/tools.md), and where this host differs from their definitions is recorded in [docs/parity.md](docs/parity.md).
 ## Install from a file
 

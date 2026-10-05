@@ -1,0 +1,121 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { agentBehaviorModelling as type } from '../../../src/core/agent-behavior-modelling/index';
+import type { EditRequest, Source } from '../../../src/core/frame/diagramType';
+import type { FromCanvas } from '../../../src/core/frame/protocol';
+import { Canvas } from '../../../src/webview/canvas/canvas';
+import { registerNotation, type DrawContext } from '../../../src/webview/canvas/notation';
+import { agentBehaviorModellingNotation as notation, diode, parentLine, superellipse } from '../../../src/webview/agent-behavior-modelling/notation';
+import { read } from '../../core/files';
+
+registerNotation(notation);
+
+const text = '## Behavior\n\n- **Do in order:** Root\n  - **Retry up to 2 times:** Wrapped\n    - **Check:** Is it so\n  - **Ask the user:** What now\n  - **Delegate:** Hand over\n  - plain item\n  - **Do:** Work\n    Use the tool.\n';
+const view = type.view({ text }, {});
+const context: DrawContext = { view, elements: new Map(view.elements.map((element) => [element.id, element])) };
+const draw = (id: string): SVGGElement => notation.element(context.elements.get(id)!, context);
+
+describe('a node', () => {
+  it('is drawn in the shape of its kind and the colour of its family', () => {
+    const shape = (id: string): [string, string] => {
+      const outline = draw(id).querySelector('.abm-shape')!;
+      return [outline.tagName, outline.getAttribute('class')!.replace('abm-shape adp-outline ', '')];
+    };
+    expect(shape('1')).toEqual(['polygon', 'abm-composite']);
+    expect(shape('1.1')).toEqual(['polygon', 'abm-decorator']);
+    expect(shape('1.1.1')).toEqual(['rect', 'abm-check']);
+    expect(shape('1.2')).toEqual(['polygon', 'abm-other']);
+    expect(shape('1.3')).toEqual(['polygon', 'abm-other']);
+    expect(shape('1.5')).toEqual(['rect', 'abm-action']);
+    // A wrapper is a hexagon, a pill is rounded by half its height.
+    expect(draw('1.1').querySelector('.abm-shape')!.getAttribute('points')!.split(' ')).toHaveLength(6);
+    expect(draw('1.1.1').querySelector('.abm-shape')!.getAttribute('rx')).toBe('30');
+  });
+
+  it('shows its keyword above its label, a Retry with its count', () => {
+    const wrapped = draw('1.1');
+    expect(wrapped.querySelector('.abm-keyword')?.textContent).toBe('Retry up to 2 times');
+    expect(wrapped.querySelector('.abm-label')?.textContent).toBe('Wrapped');
+  });
+
+  it('is dashed when its item has no keyword, and carries its notes as a tooltip', () => {
+    expect(draw('1.4').classList.contains('abm-implicit')).toBe(true);
+    expect(draw('1.5').classList.contains('abm-implicit')).toBe(false);
+    expect(draw('1.5').querySelector('title')?.textContent).toBe('Use the tool.');
+  });
+
+  it('has a superellipse that touches the middle of each side, and a diode closed by a semicircle', () => {
+    const box = { x: 0, y: 0, width: 200, height: 60 };
+    const squircle = superellipse(box);
+    expect(squircle).toHaveLength(64);
+    expect(squircle[0]).toEqual({ x: 200, y: 30 });
+    expect(Math.max(...squircle.map((point) => point.y))).toBeCloseTo(60, 9);
+    const shape = diode(box);
+    expect(shape[0]).toEqual({ x: 0, y: 0 });
+    expect(Math.max(...shape.map((point) => point.x))).toBeCloseTo(200, 9);
+    expect(shape[shape.length - 1]).toEqual({ x: 0, y: 60 });
+  });
+});
+
+describe('a parent line', () => {
+  it('runs from the parent\'s bottom down, across and down to the child\'s top, with an arrow', () => {
+    expect(parentLine({ x: 100, y: 0, width: 200, height: 60 }, { x: 0, y: 116, width: 200, height: 60 })).toBe('M 200 60 V 88 H 100 V 116');
+    const line = notation.relation(view.relations[0], context)!;
+    expect(line.getAttribute('data-id')).toBe('child:1.1');
+    expect(line.querySelector('path')?.getAttribute('marker-end')).toBe('url(#adp-arrow)');
+  });
+});
+
+describe('gestures on a behavior model', () => {
+  const source: Source = { text: read('examples/agent-behavior-modelling/research-assistant/research-assistant.md') };
+  const research = type.view(source, {});
+  let sent: FromCanvas[];
+  const requests = (): EditRequest[] => sent.filter((message) => message.type === 'edit').map((message) => (message as Extract<FromCanvas, { type: 'edit' }>).request);
+  const group = (id: string): Element => document.querySelector(`.adp-content [data-id="${id}"]`)!;
+  const pointer = (target: EventTarget, kind: string, x: number, y: number, button = 0): void => {
+    target.dispatchEvent(new MouseEvent(kind, { bubbles: true, cancelable: true, clientX: x, clientY: y, button }));
+  };
+  const at = (id: string) => research.elements.find((element) => element.id === id)!;
+
+  beforeEach(() => {
+    document.body.replaceChildren();
+    sent = [];
+    const canvas = new Canvas(document.body, (message) => sent.push(message));
+    canvas.receive({ v: 1, type: 'view', origin: type.origin, view: research, toolbox: type.toolbox(source), actions: [], version: 1 });
+  });
+
+  it('carries the subtree with a dragged node, and its row up and down only', () => {
+    const node = at('1.2');
+    pointer(group('1.2').querySelector('.abm-shape')!, 'pointerdown', node.x + 100, node.y + 30);
+    pointer(window, 'pointermove', node.x + 130, node.y + 80);
+    expect(group('1.2').getAttribute('transform')).toBe('translate(30 50)');
+    expect(group('1.2.3').getAttribute('transform')).toBe('translate(30 50)');
+    // The rest of the row, and what hangs under it, follows down and not across.
+    expect(group('1.1').getAttribute('transform')).toBe('translate(0 50)');
+    expect(group('1.3.1.2').getAttribute('transform')).toBe('translate(0 50)');
+    expect(group('1').getAttribute('transform')).toBeNull();
+    pointer(window, 'pointerup', node.x + 130, node.y + 80);
+    expect(requests()).toEqual([{ kind: 'move', id: '1.2', x: node.x + 30, y: node.y + 50 }]);
+  });
+
+  it('puts a node under another by a right-button drag from the new parent to it', () => {
+    const target = group('1.4').querySelector('.abm-shape')!;
+    document.elementFromPoint = () => target;
+    const parent = at('1.2');
+    pointer(group('1.2').querySelector('.abm-shape')!, 'pointerdown', parent.x + 100, parent.y + 30, 2);
+    pointer(window, 'pointermove', parent.x + 300, parent.y + 30, 2);
+    pointer(window, 'pointerup', at('1.4').x + 100, at('1.4').y + 30, 2);
+    expect(requests()).toEqual([{ kind: 'connect', from: '1.2', to: '1.4' }]);
+  });
+
+  it('starts no parent line from a leaf', () => {
+    const leaf = at('1.4');
+    pointer(group('1.4').querySelector('.abm-shape')!, 'pointerdown', leaf.x + 100, leaf.y + 30, 2);
+    pointer(window, 'pointermove', leaf.x + 300, leaf.y + 30, 2);
+    pointer(window, 'pointerup', leaf.x + 300, leaf.y + 30, 2);
+    expect(requests()).toEqual([]);
+  });
+
+  it('lists the eleven kinds in the toolbox', () => {
+    expect(document.querySelectorAll('.adp-toolbox-entry')).toHaveLength(11);
+  });
+});

@@ -6,6 +6,8 @@ import { DiagramEditorProvider, Diagrams } from './diagramEditor';
 import { diagramTypes } from './diagramTypes';
 import { Findings } from './findings';
 import { PropertiesView } from './propertiesView';
+import { RegistrationEditorProvider } from './registrationEditor';
+import { watchSuggestions } from './suggestions';
 
 /** What activation hands back, so tests can see what was registered. */
 export interface AdpApi {
@@ -27,7 +29,17 @@ export function activate(context: vscode.ExtensionContext): AdpApi {
   for (const type of diagramTypes) {
     context.subscriptions.push(DiagramEditorProvider.register(context, type, diagrams));
   }
-  context.subscriptions.push(PropertiesView.register(context, diagrams));
+  context.subscriptions.push(PropertiesView.register(context, diagrams), RegistrationEditorProvider.register(diagramTypes));
+  watchSuggestions(context, diagramTypes);
+
+  // A registration is only a document's visualization: it is saved with its document, and a
+  // change of it on disk is followed by the diagram it belongs to.
+  const registrations = vscode.workspace.createFileSystemWatcher('**/*.adp');
+  const follow = (uri: vscode.Uri): void => void diagrams.refreshRegistration(uri);
+  context.subscriptions.push(
+    registrations, registrations.onDidChange(follow), registrations.onDidCreate(follow), registrations.onDidDelete(follow),
+    vscode.workspace.onDidSaveTextDocument((document) => void diagrams.saved(document)),
+  );
   registerCommands(context, diagrams, diagramTypes);
 
   // Findings follow the text, whoever changed it and whichever editor shows it.

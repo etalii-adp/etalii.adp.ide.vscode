@@ -1,4 +1,5 @@
 import type { FromCanvas, ToCanvas } from '../../core/frame/protocol';
+import { agentBehaviorModellingNotation } from '../agent-behavior-modelling/notation';
 import { gartnerHypecycleGraphNotation } from '../gartner-hypecycle-graph/notation';
 import { Canvas } from './canvas';
 import './canvas.css';
@@ -10,6 +11,7 @@ import { registerNotation } from './notation';
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 
 registerNotation(gartnerHypecycleGraphNotation);
+registerNotation(agentBehaviorModellingNotation);
 
 const vscode = acquireVsCodeApi();
 const canvas = new Canvas(document.body, (message: FromCanvas) => vscode.postMessage(message));

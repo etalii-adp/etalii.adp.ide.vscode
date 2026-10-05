@@ -21,7 +21,8 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onLanguage:ghg"
+    "onLanguage:ghg",
+    "onStartupFinished"
   ],
   "capabilities": {
     "untrustedWorkspaces": {
@@ -48,6 +49,26 @@
         "selector": [
           {
             "filenamePattern": "*.ghg"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "etalii.adp.etalii.agent-behavior-modelling",
+        "displayName": "Agent Behavior Modelling",
+        "selector": [
+          {
+            "filenamePattern": "*.md"
+          }
+        ],
+        "priority": "option"
+      },
+      {
+        "viewType": "etalii.adp.registration",
+        "displayName": "ADP registration",
+        "selector": [
+          {
+            "filenamePattern": "*.adp"
           }
         ],
         "priority": "default"
@@ -104,6 +125,16 @@
         "command": "etalii.adp.focusProperties",
         "title": "Focus on ADP Properties",
         "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.new.etalii.agent-behavior-modelling",
+        "title": "New Agent Behavior Model",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
+        "title": "Open as Agent Behavior Model",
+        "category": "ADP"
       }
     ],
     "menus": {
@@ -112,11 +143,19 @@
           "command": "etalii.adp.openAsText",
           "when": "activeCustomEditorId =~ /^etalii\\.adp\\./",
           "group": "navigation"
+        },
+        {
+          "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
+          "when": "resourceLangId == markdown && !activeCustomEditorId && resourcePath in etalii.adp.suggested",
+          "group": "navigation"
         }
       ],
       "file/newFile": [
         {
           "command": "etalii.adp.new.gartner.hypecycle-graph"
+        },
+        {
+          "command": "etalii.adp.new.etalii.agent-behavior-modelling"
         }
       ],
       "commandPalette": [
@@ -151,6 +190,17 @@
         {
           "command": "etalii.adp.toggleCompact",
           "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
+          "when": "resourceLangId == markdown"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
+          "when": "resourceExtname == .md && resourcePath in etalii.adp.suggested",
+          "group": "navigation@90"
         }
       ]
     },
