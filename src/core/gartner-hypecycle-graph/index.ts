@@ -10,7 +10,7 @@ import { parse } from './parser';
 import { boundariesOf } from './phases';
 import { findingsOf } from './rules';
 import { formatMonth, nearestMonthAt, rowStep } from './scale';
-import { tagsOf, viewOf } from './view';
+import { tagsOf, trueTimeX, viewOf } from './view';
 import { formatSize } from './writer';
 
 // The Gartner hype cycle graph as the frame sees it: the definition's toolbox, forms and actions as
@@ -201,7 +201,7 @@ function fieldEdit(model: Model, id: string, field: string, value: string): Edit
 
 const round = (value: number): string => String(Math.round(value * 100) / 100);
 
-function editOf(source: Source, request: EditRequest, confirmed: boolean): EditOutcome {
+function editOf(source: Source, request: EditRequest, options: ViewOptions, confirmed: boolean): EditOutcome {
   const model = read(source);
   if (!model.readable) return { kind: 'refused', sentence: unreadable };
   const dateAt = (x: number): string => formatMonth(nearestMonthAt(x, model.unit));
@@ -214,10 +214,12 @@ function editOf(source: Source, request: EditRequest, confirmed: boolean): EditO
   switch (request.kind) {
     case 'drop': {
       const id = newShortGuid();
-      if (request.entry === actionIds.addTrend) return run({ kind: 'addTrend', x: request.x, y: request.y, id }, { select: id });
-      if (request.entry === actionIds.addTrigger) return run({ kind: 'addTrigger', x: request.x, y: request.y, id }, { select: id });
+      // A compact x is no date, so a drop in Compact is first taken back to the true-time x it stands for.
+      const x = options.compact === true ? trueTimeX(model, options, request.x) : request.x;
+      if (request.entry === actionIds.addTrend) return run({ kind: 'addTrend', x, y: request.y, id }, { select: id });
+      if (request.entry === actionIds.addTrigger) return run({ kind: 'addTrigger', x, y: request.y, id }, { select: id });
       // A note is added empty, and its editor opens at once.
-      if (request.entry === actionIds.addNote) return run({ kind: 'addNote', x: request.x, y: request.y, id }, { select: id, editLabel: true, multiline: true });
+      if (request.entry === actionIds.addNote) return run({ kind: 'addNote', x, y: request.y, id }, { select: id, editLabel: true, multiline: true });
       return { kind: 'refused', sentence: 'A trend is added by dropping it where it starts.' };
     }
     case 'move':
@@ -285,7 +287,7 @@ export const gartnerHypecycleGraph: DiagramType = {
   toolbox: (): ToolboxEntry[] => toolboxEntries,
   fields: (source: Source, selection: readonly string[]): Field[] => (selection.length === 1 ? fieldsOf(read(source), selection[0]) : []),
   actions: (source: Source, selection: readonly string[]): Action[] => actionsOf(read(source), selection.length === 1 ? selection[0] : undefined),
-  edit: (source: Source, request: EditRequest, _options: ViewOptions, confirmed: boolean): EditOutcome => editOf(source, request, confirmed),
+  edit: (source: Source, request: EditRequest, options: ViewOptions, confirmed: boolean): EditOutcome => editOf(source, request, options, confirmed),
   // CRLF, as every ADP host writes a new document.
   newDocument: (): string => [`${headerKey}: ${currentVersion}`, 'trends: []', 'influences: []', ''].join('\r\n'),
 };

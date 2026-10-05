@@ -247,3 +247,31 @@ function packed(elements: ViewElement[], relations: ViewRelation[]): { elements:
 
   return { elements: elements.map((element) => ({ ...element, x: placedLeft.get(element.id) ?? element.x, width: width(element) })), relations };
 }
+
+/**
+ * The true-time x a compact x stands for: the compact placement run backwards. Between two placed
+ * elements the date runs evenly from the one's start to the other's; left of the first and right
+ * of the last it runs at the true-time scale. This is what lets a toolbox drop in Compact land on
+ * a date.
+ */
+export function trueTimeX(model: Model, options: ViewOptions, x: number): number {
+  const { viewport: _viewport, ...rest } = options;
+  void _viewport;
+  const trueTime = viewOf(model, { ...rest, compact: false }).elements;
+  if (trueTime.length === 0) return x;
+  const compact = new Map(viewOf(model, { ...rest, compact: true }).elements.map((element) => [element.id, element.x]));
+  const placed = trueTime.map((element) => ({ manualLeft: element.x, placedLeft: compact.get(element.id) ?? element.x })).sort((a, b) => a.placedLeft - b.placedLeft);
+  let before: (typeof placed)[number] | undefined;
+  let after: (typeof placed)[number] | undefined;
+  for (const entry of placed) {
+    if (entry.placedLeft <= x) {
+      before = entry;
+    } else {
+      after = entry;
+      break;
+    }
+  }
+  if (!before) return (after as (typeof placed)[number]).manualLeft - ((after as (typeof placed)[number]).placedLeft - x);
+  if (!after || after.placedLeft === before.placedLeft) return before.manualLeft + (x - before.placedLeft);
+  return before.manualLeft + ((x - before.placedLeft) / (after.placedLeft - before.placedLeft)) * (after.manualLeft - before.manualLeft);
+}

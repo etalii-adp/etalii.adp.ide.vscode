@@ -20,7 +20,6 @@ Where this host differs from a tool's definition in [etalii.adp](https://github.
 | Difference | Why |
 |---|---|
 | The sentence of "The document could not be read as YAML: ..." ends differently, and a file one reader accepts the other may refuse. | This host reads YAML with the `yaml` library and the standalone host with YamlDotNet. Both report the problem as `ghg.unreadable-entry` with its line and open the diagram empty and read-only. |
-| A toolbox drop while Compact is on lands at the date of the true-time x under the pointer, not at the date the compact position stands for. | The definition approximates this by running the compact placement backwards; that is not built yet. |
 | Empty canvas offers "Arrange diagram" and not "Add trend here", "Add trigger here" and "Add note here". | The toolbox adds all three, by drag or at the centre of the view. |
 | A trigger's influence leaves from whichever of its top, right and bottom is nearest the point it arrives at. | The definition says the line leaves facing its target; nearest of the three is this host's reading of it. |
 | An influence can also be drawn with a right-button drag from anywhere on a trend or trigger. | The frame offers it for every diagram type, since Agent Behavior Modelling draws its relation that way; a press on a trend's top or bottom edge draws one as the definition says. |
