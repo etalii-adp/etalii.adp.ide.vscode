@@ -15,7 +15,9 @@ const minimumSize = 4;
 
 type Side = 'left' | 'right' | 'top' | 'bottom' | 'corner';
 
-const snapTo = (value: number, step: number): number => (step > 0 ? Math.sign(value) * Math.round(Math.abs(value) / step) * step : value);
+// A distance on its step, a half rounding away from zero; without a step, on whole canvas units, so
+// a drop made at any zoom is stored as a whole number.
+const snapTo = (value: number, step: number): number => Math.sign(value) * Math.round(Math.abs(value) / (step > 0 ? step : 1)) * (step > 0 ? step : 1);
 
 /**
  * The canvas of one diagram. It draws the view it is sent with that diagram type's notation, keeps

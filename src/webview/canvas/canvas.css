@@ -454,6 +454,10 @@ body {
   color: var(--vscode-menu-selectionForeground, inherit);
 }
 
+.adp-menu-item:hover:not([aria-disabled]) .adp-menu-shortcut {
+  color: inherit;
+}
+
 .adp-menu-item[aria-disabled] {
   opacity: 0.5;
   cursor: default;
