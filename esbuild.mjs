@@ -32,6 +32,7 @@ const builds = [
     platform: 'browser',
     target: 'es2022',
     format: 'iife',
+    loader: { '.css': 'css' },
   },
 ];
 

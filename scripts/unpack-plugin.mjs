@@ -13,4 +13,5 @@ rmSync('.vscode-test/examples', { recursive: true, force: true });
 mkdirSync('.vscode-test/plugin', { recursive: true });
 new AdmZip(vsix).extractAllTo('.vscode-test/plugin', true);
 cpSync('examples', '.vscode-test/examples', { recursive: true });
+cpSync('fixtures', '.vscode-test/examples/fixtures', { recursive: true });
 console.log(`Unpacked ${vsix} to .vscode-test/plugin`);
