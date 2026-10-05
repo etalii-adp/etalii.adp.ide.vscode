@@ -5,6 +5,7 @@ import { registerCommands } from './commands';
 import { DiagramEditorProvider, Diagrams } from './diagramEditor';
 import { diagramTypes } from './diagramTypes';
 import { Findings } from './findings';
+import { PropertiesView } from './propertiesView';
 
 /** What activation hands back, so tests can see what was registered. */
 export interface AdpApi {
@@ -26,6 +27,7 @@ export function activate(context: vscode.ExtensionContext): AdpApi {
   for (const type of diagramTypes) {
     context.subscriptions.push(DiagramEditorProvider.register(context, type, diagrams));
   }
+  context.subscriptions.push(PropertiesView.register(context, diagrams));
   registerCommands(context, diagrams, diagramTypes);
 
   // Findings follow the text, whoever changed it and whichever editor shows it.

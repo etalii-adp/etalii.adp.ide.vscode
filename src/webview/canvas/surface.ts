@@ -12,6 +12,10 @@ const maxScale = 8;
 export class Surface {
   readonly root: SVGSVGElement;
   readonly world: SVGGElement;
+  /** What the notation draws. */
+  readonly content: SVGGElement;
+  /** What the canvas draws over it: handles and the preview of a gesture. */
+  readonly overlay: SVGGElement;
   readonly defs: SVGDefsElement;
   private tx = 0;
   private ty = 0;
@@ -21,7 +25,9 @@ export class Surface {
 
   constructor(host: HTMLElement) {
     this.defs = svg('defs');
-    this.world = svg('g', { class: 'adp-world' });
+    this.content = svg('g', { class: 'adp-content' });
+    this.overlay = svg('g', { class: 'adp-overlay' });
+    this.world = svg('g', { class: 'adp-world' }, this.content, this.overlay);
     this.root = svg('svg', { class: 'adp-surface', tabindex: 0 }, this.defs, this.world);
     host.append(this.root);
     this.root.addEventListener('wheel', (event) => this.wheel(event), { passive: false });
@@ -49,9 +55,9 @@ export class Surface {
     return { x: (clientX - bounds.left - this.tx) / this.scale, y: (clientY - bounds.top - this.ty) / this.scale };
   }
 
-  /** A canvas x as pixels from the surface's left edge. */
-  toScreenX(x: number): number {
-    return x * this.scale + this.tx;
+  /** A canvas point as pixels from the surface's top-left corner. */
+  toScreen(x: number, y: number): { x: number; y: number } {
+    return { x: x * this.scale + this.tx, y: y * this.scale + this.ty };
   }
 
   /** Brings a box into view, once: the first drawing of a document shows its content. */
@@ -118,13 +124,12 @@ export class Surface {
       this.apply();
     };
     const stop = (): void => {
-      this.root.removeEventListener('pointermove', move);
-      this.root.removeEventListener('pointerup', stop);
-      this.root.removeEventListener('pointercancel', stop);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
+      window.removeEventListener('pointercancel', stop);
     };
-    this.root.addEventListener('pointermove', move);
-    this.root.addEventListener('pointerup', stop);
-    this.root.addEventListener('pointercancel', stop);
-    this.root.setPointerCapture?.(event.pointerId);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+    window.addEventListener('pointercancel', stop);
   }
 }

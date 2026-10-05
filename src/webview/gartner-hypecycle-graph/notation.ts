@@ -1,20 +1,28 @@
 import type { Box, ViewElement, ViewRelation } from '../../core/frame/diagramType';
-import { attachmentPoint, bannerOf, evenFractions, type Attachment, type Point } from '../../core/gartner-hypecycle-graph/geometry';
+import { attachmentPoint, bannerOf, boundaryLanding, evenFractions, nearestAttachment, type Attachment, type Point } from '../../core/gartner-hypecycle-graph/geometry';
 import { phaseNames } from '../../core/gartner-hypecycle-graph/model';
+import { unitsPerStep } from '../../core/gartner-hypecycle-graph/scale';
 import { html, points, svg } from '../canvas/dom';
-import type { DrawContext, Notation } from '../canvas/notation';
+import { isRelation, type CanvasPoint, type DrawContext, type Handle, type HandleDrag, type Notation } from '../canvas/notation';
 
 // The Gartner hype cycle graph's notation: a trend as a right-pointing banner cut into the phases
 // it has reached, a trigger as a circle with its name and date before it, a note as a box of
 // wrapped text, and an influence as a curve that meets a trend's edge at a right angle.
 
 const labelGap = 8;
+/** How near a trend's top or bottom edge a press starts an influence rather than a move. */
+const edgeBand = 6;
 
 /** The banner of a trend element: its phases at the boundaries the view gives, or spread evenly. */
 export function bannerOfElement(element: ViewElement): ReturnType<typeof bannerOf> {
   const phases = element.data.phases as number;
   const given = element.data.boundaries as number[] | undefined;
   return bannerOf(element, phases, given && given.length === phases - 1 ? given : evenFractions(phases));
+}
+
+/** An attachment as the document writes one: `phase/edge/at`, such as `plateau/bottom/0.3`. */
+export function endText(attachment: Attachment): string {
+  return `${phaseNames[attachment.region] ?? phaseNames[0]}/${attachment.edge}/${Math.round(attachment.at * 100) / 100}`;
 }
 
 function labelBefore(element: Box, text: string): SVGTextElement {
@@ -64,7 +72,7 @@ function trendEnd(element: ViewElement, attachment: Attachment): EndPoint {
 }
 
 // A trigger offers three places to leave from: top, right and bottom. The line takes the one
-// facing its target, so the document stores nothing for that end.
+// nearest its target, so the document stores nothing for that end.
 function triggerEnd(element: ViewElement, toward: Point): EndPoint {
   const radius = element.width / 2;
   const centre = { x: element.x + radius, y: element.y + radius };
@@ -108,6 +116,74 @@ function influence(relation: ViewRelation, context: DrawContext): SVGGElement | 
     svg('path', { class: 'adp-relation-line', d, 'marker-end': 'url(#adp-arrow)' }));
 }
 
+// A selected trend shows a handle on each drawn boundary; a selected influence one on each end
+// that sits on a trend.
+function handles(selected: ViewElement | ViewRelation, context: DrawContext): Handle[] {
+  if (isRelation(selected)) {
+    const ends = influenceEnds(selected, context);
+    if (!ends || selected.data.hidden === true) return [];
+    const list: Handle[] = [];
+    if (selected.data.source !== undefined) list.push({ id: 'from', x: ends.from.point.x, y: ends.from.point.y, cursor: 'move', title: 'Drag along the trend to move where the influence leaves' });
+    list.push({ id: 'to', x: ends.to.point.x, y: ends.to.point.y, cursor: 'move', title: 'Drag along the trend to move where the influence arrives' });
+    return list;
+  }
+  if (selected.type !== 'trend' || selected.data.movable !== true) return [];
+  return bannerOfElement(selected).dividers.map((divider) => ({
+    id: String(divider.index), x: divider.x, y: selected.y + selected.height / 2, cursor: 'ew-resize', title: 'Drag to move where this phase ends',
+  }));
+}
+
+function dragHandle(selected: ViewElement | ViewRelation, handle: string, point: CanvasPoint, context: DrawContext): HandleDrag {
+  if (isRelation(selected)) {
+    const element = context.elements.get(handle === 'from' ? selected.from : selected.to);
+    if (!element || element.type !== 'trend') return {};
+    const attachment = nearestAttachment(point, element, bannerOfElement(element));
+    return {
+      relation: { ...selected, data: { ...selected.data, [handle === 'from' ? 'source' : 'target']: attachment } },
+      request: { kind: 'moveEnd', id: selected.id, end: handle === 'from' ? 'from' : 'to', value: endText(attachment) },
+    };
+  }
+  // A boundary lands on a step, at least one step from its neighbours.
+  const index = Number(handle);
+  const banner = bannerOfElement(selected);
+  const x = boundaryLanding(banner, selected, index, point.x, unitsPerStep);
+  const boundaries = banner.dividers.map((divider) => (divider.index === index ? x : divider.x)).map((at) => (at - selected.x) / selected.width);
+  return { element: { ...selected, data: { ...selected.data, boundaries } }, request: { kind: 'handle', id: selected.id, handle: index, x } };
+}
+
+// The whole of a trend's top and bottom edge starts an influence; so do the top, right and bottom
+// of a trigger. A note takes part in no influence.
+function connectFrom(element: ViewElement, point: CanvasPoint): string | undefined {
+  if (element.type === 'trend') {
+    const nearEdge = Math.min(Math.abs(point.y - element.y), Math.abs(point.y - (element.y + element.height))) <= edgeBand;
+    return nearEdge ? endText(nearestAttachment(point, element, bannerOfElement(element))) : undefined;
+  }
+  if (element.type === 'trigger') {
+    const radius = element.width / 2;
+    const centre = { x: element.x + radius, y: element.y + radius };
+    const compass = [{ x: centre.x, y: centre.y - radius }, { x: centre.x + radius, y: centre.y }, { x: centre.x, y: centre.y + radius }];
+    return compass.some((handle) => Math.hypot(handle.x - point.x, handle.y - point.y) <= radius / 2) ? '' : undefined;
+  }
+  return undefined;
+}
+
+function connectTo(element: ViewElement, point: CanvasPoint): string | undefined {
+  return element.type === 'trend' ? endText(nearestAttachment(point, element, bannerOfElement(element))) : undefined;
+}
+
+function connecting(from: ViewElement, fromEnd: string, to: CanvasPoint): SVGElement {
+  let start: EndPoint;
+  if (from.type === 'trend' && fromEnd.length > 0) {
+    const [phase, edge, at] = fromEnd.split('/');
+    start = trendEnd(from, { edge: edge === 'top' ? 'top' : 'bottom', region: Math.max(0, phaseNames.indexOf(phase as (typeof phaseNames)[number])), at: Number(at) });
+  } else {
+    start = triggerEnd(from, to);
+  }
+  // The loose end has no edge yet, so it arrives along the line from where it left.
+  const d = influencePath(start, { point: to, normal: { x: 0, y: to.y >= start.point.y ? -1 : 1 } });
+  return svg('path', { class: 'adp-relation-line adp-connecting', d, 'marker-end': 'url(#adp-arrow)' });
+}
+
 export const gartnerHypecycleGraphNotation: Notation = {
   origin: 'gartner/hypecycle-graph',
   label: 'Gartner hype cycle graph',
@@ -119,4 +195,9 @@ export const gartnerHypecycleGraphNotation: Notation = {
     }
   },
   relation: influence,
+  handles,
+  dragHandle,
+  connectFrom,
+  connectTo,
+  connecting,
 };

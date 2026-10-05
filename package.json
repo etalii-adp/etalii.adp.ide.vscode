@@ -64,6 +64,46 @@
         "title": "Open as Text",
         "category": "ADP",
         "icon": "$(go-to-file)"
+      },
+      {
+        "command": "etalii.adp.arrangeDiagram",
+        "title": "Arrange Diagram",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.rename",
+        "title": "Rename",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.remove",
+        "title": "Remove",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.evenPhases",
+        "title": "Even Phases",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.moveEarlier",
+        "title": "Move Earlier",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.moveLater",
+        "title": "Move Later",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.toggleCompact",
+        "title": "Toggle Compact",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.focusProperties",
+        "title": "Focus on ADP Properties",
+        "category": "ADP"
       }
     ],
     "menus": {
@@ -83,9 +123,77 @@
         {
           "command": "etalii.adp.openAsText",
           "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.arrangeDiagram",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.rename",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.remove",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.evenPhases",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.moveEarlier",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.moveLater",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.toggleCompact",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
         }
       ]
-    }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "etalii-adp",
+          "title": "ADP",
+          "icon": "media/adp.svg"
+        }
+      ]
+    },
+    "views": {
+      "etalii-adp": [
+        {
+          "type": "webview",
+          "id": "etalii.adp.properties",
+          "name": "ADP Properties"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "etalii.adp.rename",
+        "key": "f2",
+        "when": "activeCustomEditorId =~ /^etalii\\.adp\\./ && !etalii.adp.editingText && !focusedView"
+      },
+      {
+        "command": "etalii.adp.remove",
+        "key": "delete",
+        "when": "activeCustomEditorId =~ /^etalii\\.adp\\./ && !etalii.adp.editingText && !focusedView"
+      },
+      {
+        "command": "etalii.adp.moveEarlier",
+        "key": "alt+up",
+        "when": "activeCustomEditorId =~ /^etalii\\.adp\\./ && !etalii.adp.editingText && !focusedView"
+      },
+      {
+        "command": "etalii.adp.moveLater",
+        "key": "alt+down",
+        "when": "activeCustomEditorId =~ /^etalii\\.adp\\./ && !etalii.adp.editingText && !focusedView"
+      }
+    ]
   },
   "scripts": {
     "build": "node esbuild.mjs",
@@ -100,6 +208,7 @@
     "look": "npm run build && node scripts/harness.mjs"
   },
   "devDependencies": {
+    "@mdi/js": "^7.4.47",
     "@types/adm-zip": "^0.5.8",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.20.5",
