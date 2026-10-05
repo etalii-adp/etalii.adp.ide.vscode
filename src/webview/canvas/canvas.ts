@@ -46,6 +46,8 @@ export class Canvas {
   private abandon: (() => void) | undefined;
   private pendingMenu: { x: number; y: number } | undefined;
   private suppressMenu = false;
+  /** Puts a dropped drawing back where the view has it, once the extension has answered the drop. */
+  private settleOnOutcome: (() => void) | undefined;
 
   constructor(host: HTMLElement, private readonly send: (message: FromCanvas) => void) {
     const frame = html('div', { class: 'adp-canvas' });
@@ -101,6 +103,8 @@ export class Canvas {
         }
         return;
       case 'outcome':
+        this.settleOnOutcome?.();
+        this.settleOnOutcome = undefined;
         if (message.result === 'refused' && message.sentence) this.say(message.sentence);
         return;
       case 'reveal': {
@@ -373,21 +377,41 @@ export class Canvas {
   }
 
   private move(event: PointerEvent, element: ViewElement): void {
-    const group = this.group(element.id);
     const snap = this.snap();
+    // What follows the drag: by default the element alone; a notation may name more, such as the
+    // subtree that goes wherever its node goes and the row that follows it up and down only.
+    const subtree = (element.data.subtree as string[] | undefined) ?? [element.id];
+    const row = ((element.data.row as string[] | undefined) ?? []).filter((id) => !subtree.includes(id));
+    const carried = subtree.map((id) => this.group(id)).filter((group): group is Element => group !== null);
+    const lifted = row.map((id) => this.group(id)).filter((group): group is Element => group !== null);
+    const moving = new Set([...subtree, ...row]);
+    // A line to something that moves is not redrawn while it moves; it is dimmed until the drop.
+    const lines = (this.view?.relations ?? []).filter((relation) => moving.has(relation.from) || moving.has(relation.to))
+      .map((relation) => this.group(relation.id)).filter((group): group is Element => group !== null);
+    const settle = (): void => {
+      for (const group of [...carried, ...lifted]) group.removeAttribute('transform');
+      for (const group of lines) group.classList.remove('adp-ghost');
+    };
     let at = { x: element.x, y: element.y };
     this.track(event, {
       move: (_point, delta) => {
         at = { x: element.x + snapTo(delta.x, snap.x), y: element.y + snapTo(delta.y, snap.y) };
-        group?.setAttribute('transform', `translate(${at.x - element.x} ${at.y - element.y})`);
+        for (const group of carried) group.setAttribute('transform', `translate(${at.x - element.x} ${at.y - element.y})`);
+        for (const group of lifted) group.setAttribute('transform', `translate(0 ${at.y - element.y})`);
+        for (const group of lines) group.classList.add('adp-ghost');
         this.surface.overlay.replaceChildren();
       },
       end: () => {
         this.select([element.id]);
-        if (at.x === element.x && at.y === element.y) group?.removeAttribute('transform');
-        else this.request({ kind: 'move', id: element.id, x: at.x, y: at.y });
+        if (at.x === element.x && at.y === element.y) {
+          settle();
+          return;
+        }
+        // The drawing stays where it was dropped until the view that follows replaces it.
+        this.request({ kind: 'move', id: element.id, x: at.x, y: at.y });
+        this.settleOnOutcome = settle;
       },
-      cancel: () => group?.removeAttribute('transform'),
+      cancel: settle,
     });
   }
 

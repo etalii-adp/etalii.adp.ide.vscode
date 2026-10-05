@@ -49,10 +49,16 @@ export function registerCommands(context: vscode.ExtensionContext, diagrams: Dia
     if (target) await vscode.commands.executeCommand('vscode.openWith', target, 'default', vscode.ViewColumn.Beside);
   });
 
-  // One "New ..." command per diagram type that owns its extension: a new file of that type,
-  // with what the definition gives a new document, opened in its diagram.
+  // One "New ..." command per diagram type: a new file of that type, with what the definition
+  // gives a new document, opened in its diagram. And for a type whose extension is shared, a
+  // command that opens a file as that diagram, since such a file is one only by choice.
   for (const type of types) {
-    if (type.shared) continue;
+    if (type.shared) {
+      register(`etalii.adp.openAs.${type.origin.replace('/', '.')}`, async (uri?: unknown) => {
+        const target = uri instanceof vscode.Uri ? uri : vscode.window.activeTextEditor?.document.uri;
+        if (target) await vscode.commands.executeCommand('vscode.openWith', target, viewTypeOf(type));
+      });
+    }
     register(`etalii.adp.new.${type.origin.replace('/', '.')}`, async () => {
       const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
       const target = await vscode.window.showSaveDialog({
