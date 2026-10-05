@@ -380,27 +380,53 @@ export class Canvas {
 
   private move(event: PointerEvent, element: ViewElement): void {
     const snap = this.snap();
-    // What follows the drag: by default the element alone; a notation may name more, such as the
-    // subtree that goes wherever its node goes and the row that follows it up and down only.
-    const subtree = (element.data.subtree as string[] | undefined) ?? [element.id];
-    const row = ((element.data.row as string[] | undefined) ?? []).filter((id) => !subtree.includes(id));
-    const carried = subtree.map((id) => this.group(id)).filter((group): group is Element => group !== null);
-    const lifted = row.map((id) => this.group(id)).filter((group): group is Element => group !== null);
-    const moving = new Set([...subtree, ...row]);
-    // A line to something that moves is not redrawn while it moves; it is dimmed until the drop.
-    const lines = (this.view?.relations ?? []).filter((relation) => moving.has(relation.from) || moving.has(relation.to))
-      .map((relation) => this.group(relation.id)).filter((group): group is Element => group !== null);
+    const context = this.context;
+    const groups = new Map<string, Element>();
+    for (const group of this.surface.content.querySelectorAll('.adp-element[data-id]')) groups.set(group.getAttribute('data-id') ?? '', group);
+    const relations = this.view?.relations ?? [];
+    let moved: Element[] = [];
+    let dimmed: Element[] = [];
     const settle = (): void => {
-      for (const group of [...carried, ...lifted]) group.removeAttribute('transform');
-      for (const group of lines) group.classList.remove('adp-ghost');
+      for (const group of moved) group.removeAttribute('transform');
+      for (const group of dimmed) group.classList.remove('adp-ghost');
+      moved = [];
+      dimmed = [];
     };
+
+    // How far each element is drawn from its place while this one is dragged to `at`. A notation
+    // may say it for the whole drawing, such as a tree whose siblings step aside; otherwise the
+    // element moves, with whatever its view says goes with it and whatever follows it up and down.
+    const offsetsAt = (at: CanvasPoint): Map<string, CanvasPoint> => {
+      const given = context ? this.notation?.dragging?.(element, at, context) : undefined;
+      if (given) return given;
+      const offsets = new Map<string, CanvasPoint>();
+      const subtree = (element.data.subtree as string[] | undefined) ?? [element.id];
+      for (const id of (element.data.row as string[] | undefined) ?? []) offsets.set(id, { x: 0, y: at.y - element.y });
+      for (const id of subtree) offsets.set(id, { x: at.x - element.x, y: at.y - element.y });
+      return offsets;
+    };
+
     let at = { x: element.x, y: element.y };
     this.track(event, {
       move: (_point, delta) => {
         at = { x: element.x + snapTo(delta.x, snap.x), y: element.y + snapTo(delta.y, snap.y) };
-        for (const group of carried) group.setAttribute('transform', `translate(${at.x - element.x} ${at.y - element.y})`);
-        for (const group of lifted) group.setAttribute('transform', `translate(0 ${at.y - element.y})`);
-        for (const group of lines) group.classList.add('adp-ghost');
+        const offsets = offsetsAt(at);
+        settle();
+        for (const [id, offset] of offsets) {
+          const group = groups.get(id);
+          if (!group || (offset.x === 0 && offset.y === 0)) continue;
+          group.setAttribute('transform', `translate(${offset.x} ${offset.y})`);
+          moved.push(group);
+        }
+        // A line to something that moves is not redrawn while it moves; it is dimmed until the drop.
+        const moving = new Set(moved.map((group) => group.getAttribute('data-id')));
+        for (const relation of relations) {
+          if (!moving.has(relation.from) && !moving.has(relation.to)) continue;
+          const line = this.group(relation.id);
+          if (!line) continue;
+          line.classList.add('adp-ghost');
+          dimmed.push(line);
+        }
         this.surface.overlay.replaceChildren();
       },
       end: () => {

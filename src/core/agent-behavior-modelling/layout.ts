@@ -119,7 +119,11 @@ export interface Drop {
  * moves by what the node moved, never closer to the parent than the minimum gap.
  */
 export function dropOf(model: Model, stored: ReadonlyMap<string, Position>, node: Node, x: number, y: number): Drop {
-  const positions = arrange(model, stored);
+  return dropAmong(model, arrange(model, stored), node, x, y);
+}
+
+/** What a drop means, given where every node is drawn now. */
+export function dropAmong(model: Model, positions: ReadonlyMap<string, Position>, node: Node, x: number, y: number): Drop {
   const siblings = siblingsOf(model, node);
   const from = siblings.findIndex((sibling) => sibling.id === node.id);
   const middle = x + nodeWidth / 2;
@@ -129,6 +133,41 @@ export function dropOf(model: Model, stored: ReadonlyMap<string, Position>, node
   return { from, to, dy: Math.max(y, floor) - (positions.get(node.id)?.y ?? 0) };
 }
 
+/**
+ * Where every node is drawn while one is dragged with its top-left at a point, before anything is
+ * written. The dragged node carries everything beneath it; the rest of its row, and what hangs
+ * under that, follows it up and down; and when it has passed a sibling's middle, the others are
+ * drawn where the new order would put them, so they step aside to show where it will land.
+ */
+export function dragPreview(model: Model, now: ReadonlyMap<string, Position>, node: Node, x: number, y: number): Map<string, Position> {
+  const drop = dropAmong(model, now, node, x, y);
+  const at = now.get(node.id) ?? { x: 0, y: 0 };
+  const across = drop.from === drop.to ? undefined : compute(reordered(model, node, drop));
+  const lifted = new Set(rowAndBeneath(model, node).map((member) => member.id));
+  const preview = new Map<string, Position>();
+  for (const other of model.nodes) {
+    const was = now.get(other.id);
+    if (!was) continue;
+    if (isWithin(other.id, node.id)) {
+      preview.set(other.id, { x: was.x + (x - at.x), y: was.y + drop.dy });
+    } else {
+      preview.set(other.id, { x: across?.get(other.id)?.x ?? was.x, y: was.y + (lifted.has(other.id) ? drop.dy : 0) });
+    }
+  }
+  return preview;
+}
+
+// The tree with a node at its new place among its siblings, every node keeping its id: what the
+// layout is computed from for a preview, before the Markdown is touched.
+function reordered(model: Model, node: Node, drop: Drop): Model {
+  const order = siblingsOf(model, node).map((sibling) => sibling.id).filter((id) => id !== node.id);
+  order.splice(drop.to, 0, node.id);
+  if (node.parentId === undefined) {
+    // The roots are in the order of the list, so their subtrees change places in it.
+    return { ...model, nodes: order.flatMap((root) => model.nodes.filter((candidate) => isWithin(candidate.id, root))) };
+  }
+  return { ...model, nodes: model.nodes.map((candidate) => (candidate.id === node.parentId ? { ...candidate, childIds: order } : candidate)) };
+}
 /** Whether a drop changes nothing: the same place, and the same height. */
 export const isNothing = (drop: Drop): boolean => drop.from === drop.to && Math.abs(drop.dy) < 0.5;
 

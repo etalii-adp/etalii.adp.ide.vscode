@@ -68,12 +68,55 @@ function replaceBetween(edit: vscode.WorkspaceEdit, document: vscode.TextDocumen
 }
 
 /**
+ * One change of a registration alone: a row dragged, or a diagram arranged. Such a change leaves
+ * the document untouched, so Visual Studio Code's undo history of the document has nothing to take
+ * back; the step is kept here instead, with how many edits of the document were on that history
+ * when it was made, so Undo takes steps back in the order they were made.
+ */
+interface LayoutStep {
+  /** The registration's text before the step; undefined when the step created the file. */
+  readonly before: string | undefined;
+  readonly after: string;
+  readonly depth: number;
+}
+
+/** The layout steps of one document, beside how deep its own undo history is since it was opened. */
+class LayoutHistory {
+  depth = 0;
+  readonly undo: LayoutStep[] = [];
+  readonly redo: LayoutStep[] = [];
+
+  /** Whether the next thing to undo is a layout step rather than an edit of the document. */
+  get canUndo(): boolean {
+    return this.undo.length > 0 && this.undo[this.undo.length - 1].depth === this.depth;
+  }
+
+  /** Whether the next thing to redo is a layout step: it was made before any edit that can be redone. */
+  get canRedo(): boolean {
+    return this.redo.length > 0 && this.redo[this.redo.length - 1].depth === this.depth;
+  }
+
+  /** The document changed: by an undo, a redo, or a new edit, which ends what could be redone. */
+  documentChanged(reason: vscode.TextDocumentChangeReason | undefined): void {
+    if (reason === vscode.TextDocumentChangeReason.Undo) {
+      this.depth -= 1;
+    } else if (reason === vscode.TextDocumentChangeReason.Redo) {
+      this.depth += 1;
+    } else {
+      this.depth += 1;
+      this.redo.length = 0;
+    }
+  }
+}
+
+/**
  * Every diagram open in this window, and the one that has the focus. The custom text editor of each
  * diagram type registers its editors here; ADP Properties and the commands act on the active one.
  */
 export class Diagrams implements vscode.Disposable {
   private readonly open = new Set<OpenDiagram>();
   private current: OpenDiagram | undefined;
+  private readonly histories = new Map<string, LayoutHistory>();
   private readonly changed = new vscode.EventEmitter<void>();
   /** Fires when the active diagram, its selection or its document changes. */
   readonly onDidChange = this.changed.event;
@@ -90,6 +133,7 @@ export class Diagrams implements vscode.Disposable {
 
   add(diagram: OpenDiagram): void {
     this.open.add(diagram);
+    this.historyOf(diagram);
     if (diagram.panel.active) this.activate(diagram);
   }
 
@@ -99,10 +143,12 @@ export class Diagrams implements vscode.Disposable {
     // A file of a shared extension has findings only while it is open as a diagram.
     const stillOpen = [...this.open].some((other) => other.document === diagram.document);
     if (diagram.type.shared && !stillOpen) this.findings.clear(diagram.document.uri);
+    if (!stillOpen) this.histories.delete(diagram.document.uri.toString());
   }
 
   activate(diagram: OpenDiagram | undefined): void {
     this.current = diagram;
+    this.publishHistory();
     this.changed.fire();
   }
 
@@ -154,6 +200,70 @@ export class Diagrams implements vscode.Disposable {
     }
   }
 
+  private historyOf(diagram: OpenDiagram): LayoutHistory {
+    const key = diagram.document.uri.toString();
+    let history = this.histories.get(key);
+    if (!history) {
+      history = new LayoutHistory();
+      this.histories.set(key, history);
+    }
+    return history;
+  }
+
+  // Undo and Redo go to a layout step only while one is next in line; otherwise they are the
+  // platform's own, on the document.
+  private publishHistory(): void {
+    const history = this.current ? this.historyOf(this.current) : undefined;
+    void vscode.commands.executeCommand('setContext', 'etalii.adp.layoutUndo', history?.canUndo === true);
+    void vscode.commands.executeCommand('setContext', 'etalii.adp.layoutRedo', history?.canRedo === true);
+  }
+
+  /** A document was edited, or an edit of it undone or redone: its layout steps keep their place in line. */
+  documentChanged(event: vscode.TextDocumentChangeEvent): void {
+    if (event.contentChanges.length === 0) return;
+    const history = this.histories.get(event.document.uri.toString());
+    if (!history) return;
+    history.documentChanged(event.reason);
+    this.publishHistory();
+  }
+
+  /** Whether Undo, or Redo, on the active diagram is a layout step now. */
+  layoutStepNext(direction: 'undo' | 'redo'): boolean {
+    const history = this.current ? this.historyOf(this.current) : undefined;
+    return direction === 'undo' ? history?.canUndo === true : history?.canRedo === true;
+  }
+
+  /** Takes the active diagram's last layout step back, or makes the last one taken back again. */
+  async stepLayout(direction: 'undo' | 'redo'): Promise<boolean> {
+    const diagram = this.current;
+    if (!diagram) return false;
+    const history = this.historyOf(diagram);
+    if (direction === 'undo' ? !history.canUndo : !history.canRedo) return false;
+    const step = (direction === 'undo' ? history.undo.pop() : history.redo.pop()) as LayoutStep;
+    await this.writeRegistration(diagram, direction === 'undo' ? step.before : step.after);
+    (direction === 'undo' ? history.redo : history.undo).push(step);
+    this.refresh(diagram);
+    this.publishHistory();
+    return true;
+  }
+
+  // Writes a registration's text, creating or removing the file as the text asks, and saves it:
+  // it is only its document's visualization and is never left modified by itself.
+  private async writeRegistration(diagram: OpenDiagram, text: string | undefined): Promise<void> {
+    const edit = new vscode.WorkspaceEdit();
+    if (text === undefined) {
+      edit.deleteFile(diagram.registrationUri, { ignoreIfNotExists: true });
+    } else if (diagram.registration === undefined) {
+      edit.createFile(diagram.registrationUri, { contents: new TextEncoder().encode(text), overwrite: true });
+    } else {
+      replaceBetween(edit, await vscode.workspace.openTextDocument(diagram.registrationUri), text);
+    }
+    if (edit.size > 0) await vscode.workspace.applyEdit(edit);
+    diagram.registration = text;
+    const registration = vscode.workspace.textDocuments.find((candidate) => candidate.uri.toString() === diagram.registrationUri.toString());
+    if (registration?.isDirty) await registration.save();
+  }
+
   /**
    * Carries out one edit request on a diagram's document, as one undoable edit: of the document, of
    * the registration beside it, or of both together. A request made on an older version of the
@@ -183,6 +293,8 @@ export class Diagrams implements vscode.Disposable {
         return { result: 'cancelled' };
       case 'applied': {
         const edit = new vscode.WorkspaceEdit();
+        const documentChanges = outcome.text !== diagram.document.getText();
+        const registrationBefore = diagram.registration;
         replaceBetween(edit, diagram.document, outcome.text);
 
         let registrationChanged = false;
@@ -201,6 +313,13 @@ export class Diagrams implements vscode.Disposable {
         }
         if (registrationChanged) {
           diagram.registration = outcome.registration as string;
+          if (!documentChanges) {
+            // The registration alone changed: the step is this history's to take back, in its turn.
+            const history = this.historyOf(diagram);
+            history.undo.push({ before: registrationBefore, after: outcome.registration as string, depth: history.depth });
+            history.redo.length = 0;
+            this.publishHistory();
+          }
           // A change of the registration alone leaves the document clean, so nothing would save
           // the registration later: it is saved now. With the document changed too, it is saved
           // when the document is.

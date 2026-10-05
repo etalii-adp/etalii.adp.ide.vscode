@@ -41,6 +41,16 @@ export function registerCommands(context: vscode.ExtensionContext, diagrams: Dia
   runAction('etalii.adp.moveLater', { shortcut: 'Alt+Down' });
   runAction('etalii.adp.arrangeDiagram', { label: /^Arrange diagram$/ }, true);
 
+  // Undo and Redo of a change that touched the registration alone, such as a row dragged or a
+  // diagram arranged. Their shortcuts are bound to these only while such a step is next in line;
+  // run when none is, they are the platform's own Undo and Redo.
+  register('etalii.adp.undoLayout', async () => {
+    if (!(await diagrams.stepLayout('undo'))) await vscode.commands.executeCommand('undo');
+  });
+  register('etalii.adp.redoLayout', async () => {
+    if (!(await diagrams.stepLayout('redo'))) await vscode.commands.executeCommand('redo');
+  });
+
   register('etalii.adp.toggleCompact', () => diagrams.active?.post({ v: 1, type: 'command', command: 'toggleCompact' }));
   register('etalii.adp.focusProperties', () => vscode.commands.executeCommand(`${PropertiesView.viewId}.focus`));
 
@@ -84,6 +94,7 @@ export function registerCommands(context: vscode.ExtensionContext, diagrams: Dia
       const active = diagrams.active;
       return active ? diagrams.perform(active, request as EditRequest) : undefined;
     });
+    register('etalii.adp.test.layoutSteps', () => ({ undo: diagrams.layoutStepNext('undo'), redo: diagrams.layoutStepNext('redo') }));
     register('etalii.adp.test.select', (ids: unknown) => {
       const active = diagrams.active;
       if (!active) return;
