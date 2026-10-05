@@ -96,6 +96,21 @@ describe('gestures on a behavior model', () => {
     expect(requests()).toEqual([{ kind: 'move', id: '1.2', x: node.x + 31, y: node.y + 50 }]);
   });
 
+  it('draws the lines to what moves again while it is dragged, and puts them back when the drag is given up', () => {
+    const node = at('1.2');
+    const parent = at('1');
+    const line = (id: string): string => group(id).querySelector('.adp-relation-line')!.getAttribute('d')!;
+    const before = line('child:1.2');
+    pointer(group('1.2').querySelector('.adp-node')!, 'pointerdown', node.x + 100, node.y + 30);
+    pointer(window, 'pointermove', node.x + 130, node.y + 80);
+    // From the parent's bottom to the dragged node's top where it is drawn now; and to its child, which moves with it.
+    expect(line('child:1.2')).toBe(`M ${parent.x + 100} ${parent.y + 60} V ${(parent.y + 60 + node.y + 50) / 2} H ${node.x + 130} V ${node.y + 50}`);
+    const child = at('1.2.1');
+    expect(line('child:1.2.1')).toBe(`M ${node.x + 130} ${node.y + 110} V ${(node.y + 110 + child.y + 50) / 2} H ${child.x + 130} V ${child.y + 50}`);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(line('child:1.2')).toBe(before);
+  });
+
   it('makes the siblings a dragged node has passed step aside to where the new order would put them', () => {
     const first = at('1.1');
     const second = at('1.2');

@@ -84,6 +84,18 @@ describe('gestures', () => {
     expect(sent.at(-1)).toMatchObject({ type: 'edit', version: 7 });
   });
 
+  it('draws an influence again while an end of it is dragged, so it stays attached, and as it was once the view answers', () => {
+    const end = (): number[] => group('i-13').querySelector('.adp-relation-line')!.getAttribute('d')!.split(/[ ,]+/).slice(-2).map(Number);
+    const before = end();
+    pointer(group('radio').querySelector('.adp-segment')!, 'pointerdown', 230, 128);
+    pointer(window, 'pointermove', 241, 190);
+    expect(group('radio').getAttribute('transform')).toBe('translate(12 56)');
+    expect(end()).toEqual([before[0] + 12, before[1] + 56]);
+    pointer(window, 'pointerup', 241, 190);
+    canvas.receive({ v: 1, type: 'outcome', seq: 1, result: 'applied' });
+    expect(end()).toEqual(before);
+  });
+
   it('does not ask for anything when a press is let go where it began', () => {
     const phase = group('radio').querySelector('.adp-segment')!;
     pointer(phase, 'pointerdown', 230, 128);

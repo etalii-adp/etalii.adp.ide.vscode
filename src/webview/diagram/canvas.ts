@@ -1,4 +1,4 @@
-import { boundsOf } from '../../core/diagram/geometry';
+import { boundsOf, moved as movedBy } from '../../core/diagram/geometry';
 import type { Action, Box, EditRequest, ViewElement, ViewModel, ViewOptions, ViewRelation } from '../../core/frame/diagramType';
 import type { FromCanvas, ToCanvas } from '../../core/frame/protocol';
 import { Toolbox, toolboxMime } from '../toolbox/toolbox';
@@ -389,14 +389,16 @@ export class Canvas {
     const context = this.context;
     const groups = new Map<string, Element>();
     for (const group of this.surface.content.querySelectorAll('.adp-element[data-id]')) groups.set(group.getAttribute('data-id') ?? '', group);
+    const lines = new Map<string, { group: Element; drawn: Node[] }>();
+    for (const group of this.surface.content.querySelectorAll('.adp-relation[data-id]')) lines.set(group.getAttribute('data-id') ?? '', { group, drawn: [...group.childNodes] });
     const relations = this.view?.relations ?? [];
     let moved: Element[] = [];
-    let dimmed: Element[] = [];
+    let redrawn: { group: Element; drawn: Node[] }[] = [];
     const settle = (): void => {
       for (const group of moved) group.removeAttribute('transform');
-      for (const group of dimmed) group.classList.remove('adp-ghost');
+      for (const line of redrawn) line.group.replaceChildren(...line.drawn);
       moved = [];
-      dimmed = [];
+      redrawn = [];
     };
 
     // How far each element is drawn from its place while this one is dragged to `at`. A notation
@@ -418,20 +420,25 @@ export class Canvas {
         at = { x: element.x + snapTo(delta.x, snap.x), y: element.y + snapTo(delta.y, snap.y) };
         const offsets = offsetsAt(at);
         settle();
+        const shifted = new Map(context?.elements);
         for (const [id, offset] of offsets) {
           const group = groups.get(id);
-          if (!group || (offset.x === 0 && offset.y === 0)) continue;
+          const drawn = context?.elements.get(id);
+          if (!group || !drawn || (offset.x === 0 && offset.y === 0)) continue;
           group.setAttribute('transform', `translate(${offset.x} ${offset.y})`);
           moved.push(group);
+          shifted.set(id, movedBy(drawn, offset));
         }
-        // A line to something that moves is not redrawn while it moves; it is dimmed until the drop.
+        // A line to something that moves is drawn again from where that is drawn now, so it
+        // follows the drag; the view that answers the drop draws it for good.
         const moving = new Set(moved.map((group) => group.getAttribute('data-id')));
         for (const relation of relations) {
           if (!moving.has(relation.from) && !moving.has(relation.to)) continue;
-          const line = this.group(relation.id);
-          if (!line) continue;
-          line.classList.add('adp-ghost');
-          dimmed.push(line);
+          const line = lines.get(relation.id);
+          if (!line || !this.notation || !this.view) continue;
+          const drawn = this.notation.relation(relation, { view: this.view, elements: shifted });
+          line.group.replaceChildren(...(drawn ? [...drawn.childNodes] : []));
+          redrawn.push(line);
         }
         this.surface.overlay.replaceChildren();
       },
