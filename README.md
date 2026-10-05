@@ -61,7 +61,7 @@ Open this folder in Visual Studio Code and start **Run ADP** (F5). A second wind
 
 ## How work is done here
 
-Every change starts as a specification, using GitHub Spec Kit. See `CLAUDE.md` and [the constitution](.specify/memory/constitution.md).
+Every change starts as a specification, using GitHub Spec Kit in [etalii.adp](https://github.com/etalii-adp/etalii.adp), which also holds [this repository's principles](https://github.com/etalii-adp/etalii.adp/blob/develop/.specify/memory/repositories/etalii.adp.ide.vscode.md). See `CLAUDE.md`.
 
 ## Licence
 
