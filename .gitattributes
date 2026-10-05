@@ -3,3 +3,8 @@
 
 # Shell scripts must stay LF everywhere, or bash fails on the carriage returns.
 *.sh text eol=lf
+
+# Vendored examples and fixtures are compared byte for byte (line endings included), so Git must never convert them.
+examples/** -text
+fixtures/** -text
+examples/PROVENANCE.md text

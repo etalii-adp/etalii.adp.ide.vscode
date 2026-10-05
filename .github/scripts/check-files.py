@@ -1,7 +1,9 @@
-"""Checks the files this repository holds while it has no plug-in code yet.
+"""Checks the files this repository holds beside its plug-in code.
 
 Every tracked JSON and YAML file must parse, and every relative link in a tracked markdown file must
-point at a file or folder that exists. Prints one line per problem and exits 1 when there is any.
+point at a file or folder that exists. The vendored examples and fixtures are left out: they are another
+repository's files, kept byte for byte, and some are malformed on purpose. Prints one line per problem and exits 1
+when there is any.
 """
 import json
 import re
@@ -16,6 +18,8 @@ problems = []
 
 files = subprocess.run(["git", "ls-files"], capture_output=True, text=True, check=True).stdout.splitlines()
 for name in files:
+    if name.startswith(("examples/", "fixtures/")) and name != "examples/PROVENANCE.md":
+        continue
     path = Path(name)
     if not path.is_file():
         continue

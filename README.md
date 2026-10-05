@@ -2,10 +2,63 @@
 
 [![Build](https://github.com/etalii-adp/etalii.adp.ide.vscode/actions/workflows/build.yml/badge.svg?branch=develop)](https://github.com/etalii-adp/etalii.adp.ide.vscode/actions/workflows/build.yml?query=branch%3Adevelop)
 
-The ADP tools as a Visual Studio Code extension. There is no extension code yet; once there is, the Build workflow offers the packaged extension as a download from each run.
+The ADP tools as a Visual Studio Code extension, "ADP: A Different Perspective".
 
-ADP, A Different Perspective, is a range of task-focused tools: diagrams, designers and editors. The site is at <https://etalii.net/adp/>.
+ADP, A Different Perspective, is a range of task-focused tools: diagrams, designers and editors (see the [ADP terminology](https://github.com/etalii-adp/etalii.adp/blob/develop/docs/terminology.md)). The site is at <https://etalii.net/adp/>.
+
+**Where it stands.** The plug-in installs and brings no tool yet. Two diagrams are being built, as [spec 006 in etalii.adp](https://github.com/etalii-adp/etalii.adp/tree/develop/specs/006-vscode-plugin) specifies them: the Gartner hype cycle graph (`.ghg`) and Agent Behavior Modelling (a behavior tree kept in a Markdown file). Each will open in an editor on the file's own text, with Visual Studio Code's undo, redo, save and text view.
+
+## Install from a file
+
+1. Download `etalii-adp-<version>.vsix` from the [Releases page](https://github.com/etalii-adp/etalii.adp.ide.vscode/releases): the **Development build** pre-release is the plug-in from the current `develop` after it passed every check.
+2. In Visual Studio Code, open the Extensions view, choose **...** and **Install from VSIX...**, and pick the file.
+
+To try a pull request before it is merged, open its **Build** run under **Actions**: the run offers that pull request's `etalii-adp-<version>.vsix`.
+
+The plug-in needs Visual Studio Code 1.140 or later, and nothing else installed or running. It makes no network access.
+
+## Build
+
+You need [Node.js](https://nodejs.org) 22 or later. Nothing else: the tests download the Visual Studio Code they run in.
+
+```sh
+npm ci
+npm run check        # types and lint
+npm test             # check, then every test at the three levels below
+npm run package      # writes etalii-adp-<version>.vsix
+```
+
+| Command | What it tests |
+|---|---|
+| `npm run test:unit` | The core (files, models, rules, edits) without Visual Studio Code, and the webview (canvas, toolbox, property grid) in a simulated browser. |
+| `npm run test:vscode` | The packaged plug-in, unpacked and run in a real Visual Studio Code, on a copy of the examples. A window opens while it runs. |
+
+Reports are written to `reports/`. On Windows, keep the clone at a short path: the Visual Studio Code the tests download does not start from a path near the 260-character limit.
+
+Every pull request into `develop` and every change to `develop` is checked by the Build workflow (`.github/workflows/build.yml`), which runs the same commands. Its summary lists the tests that were skipped and why, and its test reports are kept with the run.
+
+## Debug
+
+Open this folder in Visual Studio Code and start **Run ADP** (F5). A second window opens with the plug-in loaded on `.debug/examples`, a copy of `examples/` that is refreshed on every start, so nothing you edit there changes what the tests read.
+
+- Breakpoints work in the original TypeScript in both halves: the code that runs in the extension host (`src/extension`, `src/core`) and the code that runs in a webview (`src/webview`).
+- The build runs in watch mode while you debug. After a change, run **Developer: Reload Window** in the second window. Build and type errors show in the Problems panel as you type.
+- **Debug core and webview tests** runs the test file that is open under the debugger. **Debug tests in Visual Studio Code** does the same for the tests under `test/vscode`.
+
+## Layout
+
+| Path | What it is |
+|---|---|
+| `src/core` | Files, models, rules and edits. It knows nothing of Visual Studio Code or a browser, and the lint rules keep it so. |
+| `src/extension` | The part that runs in the extension host: editors, commands, findings. |
+| `src/webview` | The part that runs in webviews: the canvas, the ADP Toolbox, ADP Properties. |
+| `examples`, `fixtures` | Example documents and test fixtures, copied unchanged from etalii.adp.ide.standalone; see [their provenance](examples/PROVENANCE.md). |
+| `test/core`, `test/webview`, `test/vscode` | The three test levels. |
+
+## How work is done here
+
+Every change starts as a specification, using GitHub Spec Kit. See `CLAUDE.md` and [the constitution](.specify/memory/constitution.md).
 
 ## Licence
 
-[Apache License 2.0](LICENSE).
+[Apache License 2.0](LICENSE). The plug-in ships no third-party library.
