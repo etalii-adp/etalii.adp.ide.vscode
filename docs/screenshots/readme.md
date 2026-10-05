@@ -9,7 +9,7 @@ The images of the ADP tools in Visual Studio Code, and how each was taken, preci
 - **Window**: viewport **1600×900 CSS px, device pixel ratio 1, zoom level 0**, the whole window.
 - **Theme**: Default Dark Modern, unless the image's name ends in `-light`, which uses Default Light Modern.
 - **Layout**: the ADP side bar open with ADP Toolbox above ADP Properties, the panel closed, no notifications, the document in the editor.
-- **Selection**: one element selected, so ADP Properties shows its properties rather than its empty message.
+- **Selection**: one element selected, after the drawing is centred, so ADP Properties shows its properties rather than its empty message.
 - **Centred**: the middle of the drawing in the middle of the editor, at the size the editor first draws it. A drawing that fits the editor at a readable size is drawn whole; a hype cycle, whose year axis spans decades, is drawn at that readable size and only its middle is in view.
 - **Known artefact**: the window title begins with `[Extension Development Host]`, because the extension is loaded from source, and the status bar has the purple colour VS Code gives such a window. A user of the installed extension sees neither.
 - **Format and budget**: PNG; each image ≤ 300 KB.
@@ -21,4 +21,4 @@ The whole procedure is executable: [`capture.mjs`](capture.mjs) drives all of th
 | Image | Document opened | What must be visible |
 |---|---|---|
 | `agent-behavior-modelling.png` | `agent-behavior-modelling/research-assistant/` → `research-assistant.adp` | The research assistant's behavior tree centred in its tab, each node in the shape and colour of its kind with its keyword above its label, parents joined to children by elbowed arrows; ADP Toolbox listing the behavior kinds; the Do together node selected, with its properties in ADP Properties. |
-| `gartner-hypecycle-graph-light.png` | `gartner-hypecycle-graph/digital-trends/` → `digital-trends.ghg` | The digital trends as banners on the year axis, coloured by phase, with the Peak/Trough/Slope/Plateau key and the tag filter above; ADP Toolbox showing Trend, Trigger and Note; one trend selected, with its properties in ADP Properties. Light theme. |
+| `gartner-hypecycle-graph-light.png` | `gartner-hypecycle-graph/digital-trends/` → `digital-trends.ghg` | The digital trends as banners on the year axis, coloured by phase, with the Peak/Trough/Slope/Plateau key and the tag filter above; ADP Toolbox showing Trend, Trigger and Note; the trend nearest the middle selected, with its properties in ADP Properties. Light theme. |

@@ -28,7 +28,7 @@ const port = 9333;
 /** Every image: the document it opens, under examples/, its theme and the element it selects. */
 const images = [
   { file: 'agent-behavior-modelling.png', document: 'agent-behavior-modelling/research-assistant/research-assistant.adp', theme: 'dark', select: '1.2' },
-  { file: 'gartner-hypecycle-graph-light.png', document: 'gartner-hypecycle-graph/digital-trends/digital-trends.ghg', theme: 'light', select: 'first-trend' },
+  { file: 'gartner-hypecycle-graph-light.png', document: 'gartner-hypecycle-graph/digital-trends/digital-trends.ghg', theme: 'light', select: 'middle-trend' },
 ];
 
 const themes = { dark: 'Default Dark Modern', light: 'Default Light Modern' };
@@ -126,15 +126,6 @@ async function capture(executable, image) {
     const drawn = await canvas.$$eval('.adp-content [data-id]', (groups) => groups.length);
     if (drawn === 0) throw new Error(`${image.document} drew nothing`);
 
-    // One element selected, so ADP Properties shows its rows.
-    const selector = image.select === 'first-trend'
-      ? '.adp-content [data-id]:not(.adp-relation) .adp-node-segmented'
-      : `.adp-content [data-id="${image.select}"] .adp-node`;
-    const element = await canvas.waitForSelector(selector);
-    await element.click();
-    const properties = await frameWith(page, '.adp-properties');
-    await until('properties of the selection', () => properties.$eval('.adp-properties', (root) => root.childElementCount > 0 && !root.querySelector('.adp-properties-empty')));
-
     // The drawing's middle in the middle of the editor, at the size the editor first drew it.
     await canvas.evaluate(() => {
       const surface = document.querySelector('.adp-surface');
@@ -145,6 +136,23 @@ async function capture(executable, image) {
       surface.dispatchEvent(new WheelEvent('wheel', { deltaX: dx, deltaY: dy, bubbles: true, cancelable: true }));
     });
     await sleep(800);
+
+    // One element selected, so ADP Properties shows its rows: a named one, or the one of a kind
+    // nearest the middle of the editor, so the selection is in view.
+    const element = image.select === 'middle-trend'
+      ? await canvas.evaluateHandle(() => {
+        const view = document.querySelector('.adp-surface').getBoundingClientRect();
+        const distance = (node) => {
+          const box = node.getBoundingClientRect();
+          return Math.hypot(box.left + box.width / 2 - (view.left + view.width / 2), box.top + box.height / 2 - (view.top + view.height / 2));
+        };
+        return [...document.querySelectorAll('.adp-content .adp-node-segmented')].reduce((best, node) => (distance(node) < distance(best) ? node : best));
+      })
+      : await canvas.waitForSelector(`.adp-content [data-id="${image.select}"] .adp-node`);
+    await element.click();
+    const properties = await frameWith(page, '.adp-properties');
+    await until('properties of the selection', () => properties.$eval('.adp-properties', (root) => root.childElementCount > 0 && !root.querySelector('.adp-properties-empty')));
+    await sleep(500);
 
     await page.screenshot({ path: join(here, image.file), clip: { x: 0, y: 0, ...viewport } });
     console.log(`${image.file}: ${drawn} things drawn`);
