@@ -1,0 +1,95 @@
+/* ADP Properties: a property grid in the side bar, drawn with the theme's own form colours. */
+body {
+  margin: 0;
+  padding: 0 8px 8px;
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+.adp-properties-empty {
+  margin: 12px 4px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.adp-group {
+  margin: 8px 0 0;
+  padding: 4px 8px 8px;
+  border: 1px solid var(--vscode-widget-border, var(--vscode-contrastBorder, transparent));
+}
+
+.adp-group legend {
+  padding: 0 4px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.adp-field {
+  display: grid;
+  grid-template-columns: minmax(72px, 34%) 1fr;
+  gap: 2px 8px;
+  align-items: start;
+  margin-top: 6px;
+}
+
+.adp-field label {
+  padding-top: 3px;
+  overflow-wrap: anywhere;
+}
+
+.adp-field input[type='text'],
+.adp-field input[type='number'],
+.adp-field textarea,
+.adp-field select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 2px 4px;
+  border: 1px solid var(--vscode-input-border, var(--vscode-contrastBorder, transparent));
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+}
+
+.adp-field textarea {
+  resize: vertical;
+}
+
+.adp-field input:read-only,
+.adp-field textarea:read-only {
+  border-color: transparent;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+}
+
+.adp-field input:focus,
+.adp-field textarea:focus,
+.adp-field select:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+/* The slider keeps one width at every stop: its caption sits under it, not beside it. */
+.adp-slider {
+  display: flex;
+  flex-direction: column;
+}
+
+.adp-slider input {
+  width: 100%;
+  margin: 2px 0;
+  accent-color: var(--vscode-focusBorder);
+}
+
+.adp-slider-caption {
+  color: var(--vscode-descriptionForeground);
+}
+
+.adp-field-refusal {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 2px 4px;
+  border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-contrastBorder, transparent));
+  background: var(--vscode-inputValidation-errorBackground, transparent);
+  color: var(--vscode-inputValidation-errorForeground, var(--vscode-errorForeground));
+}

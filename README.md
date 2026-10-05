@@ -6,8 +6,12 @@ The ADP tools as a Visual Studio Code extension, "ADP: A Different Perspective".
 
 ADP, A Different Perspective, is a range of task-focused tools: diagrams, designers and editors (see the [ADP terminology](https://github.com/etalii-adp/etalii.adp/blob/develop/docs/terminology.md)). The site is at <https://etalii.net/adp/>.
 
-**Where it stands.** The plug-in installs and brings no tool yet. Two diagrams are being built, as [spec 006 in etalii.adp](https://github.com/etalii-adp/etalii.adp/tree/develop/specs/006-vscode-plugin) specifies them: the Gartner hype cycle graph (`.ghg`) and Agent Behavior Modelling (a behavior tree kept in a Markdown file). Each will open in an editor on the file's own text, with Visual Studio Code's undo, redo, save and text view.
+**Where it stands.** The plug-in brings one diagram, and a second is being built, as [spec 006 in etalii.adp](https://github.com/etalii-adp/etalii.adp/tree/develop/specs/006-vscode-plugin) specifies them:
 
+- **Gartner hype cycle graph** (`.ghg`). A `.ghg` file opens in the diagram: trends on a time axis as banners in the phases they have reached, triggers, notes, and the influences between them. Drop elements from the ADP Toolbox, rename them in place, move and resize them, drag a phase boundary, draw an influence from one trend's edge to another's, filter by tags, switch to Compact, and arrange the diagram. ADP Properties shows and edits the selection.
+- **Agent Behavior Modelling** (a behavior tree kept in a Markdown file) is next.
+
+Each diagram is an editor on the file's own text: every change is one step in Visual Studio Code's undo, edits only the lines it concerns, and leaves the rest of the file byte for byte as it was. **Open as Text** shows the same document beside the diagram, and problems in the file are listed in the Problems panel. The tool types are catalogued in [docs/tools.md](docs/tools.md), and where this host differs from their definitions is recorded in [docs/parity.md](docs/parity.md).
 ## Install from a file
 
 1. Download `etalii-adp-<version>.vsix` from the [Releases page](https://github.com/etalii-adp/etalii.adp.ide.vscode/releases): the **Development build** pre-release is the plug-in from the current `develop` after it passed every check.
@@ -51,7 +55,7 @@ Open this folder in Visual Studio Code and start **Run ADP** (F5). A second wind
 |---|---|
 | `src/core` | Files, models, rules and edits. It knows nothing of Visual Studio Code or a browser, and the lint rules keep it so. |
 | `src/extension` | The part that runs in the extension host: editors, commands, findings. |
-| `src/webview` | The part that runs in webviews: the canvas, the ADP Toolbox, ADP Properties. |
+| `src/webview` | The part that runs in webviews: the canvas, the ADP Toolbox, ADP Properties. `npm run look` draws one example in a page outside Visual Studio Code, for a quick look at the drawing. |
 | `examples`, `fixtures` | Example documents and test fixtures, copied unchanged from etalii.adp.ide.standalone; see [their provenance](examples/PROVENANCE.md). |
 | `test/core`, `test/webview`, `test/vscode` | The three test levels. |
 
@@ -61,4 +65,4 @@ Every change starts as a specification, using GitHub Spec Kit. See `CLAUDE.md` a
 
 ## Licence
 
-[Apache License 2.0](LICENSE). The plug-in ships one third-party library, bundled into it: [yaml](https://github.com/eemeli/yaml) (ISC), which reads YAML documents and never writes them.
+[Apache License 2.0](LICENSE). The plug-in ships two third-party libraries, bundled into it: [yaml](https://github.com/eemeli/yaml) (ISC), which reads YAML documents and never writes them, and the icons the tool definitions name from [Material Design Icons](https://github.com/Templarian/MaterialDesign-JS) (Apache-2.0).

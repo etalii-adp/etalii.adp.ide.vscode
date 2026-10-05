@@ -46,6 +46,10 @@ export interface Chrome {
   /** Every tag in use on trends and triggers, once each, in order of first use. */
   readonly tags: readonly string[];
   readonly legend: readonly { caption: string; phase: string }[];
+  /** The tag filter as it is set for this view; it is never saved. */
+  readonly filter: { readonly label: string; readonly tags: readonly string[]; readonly mode: 'any' | 'all' };
+  /** The steps a drag is previewed on; where a drop lands is the document's to say. */
+  readonly snap: { readonly x: number; readonly y: number };
 }
 
 export function tagsOf(model: Model): string[] {
@@ -104,7 +108,7 @@ export function viewOf(model: Model, options: ViewOptions): ViewModel {
       label: trend.name,
       data: {
         phases, boundaries: compact ? [] : fractionsOf(trend), tags: trend.tags, labelText: trend.name,
-        phaseTooltips: gartnerNames.slice(0, phases), movable: !compact, resizable: !compact,
+        phaseTooltips: gartnerNames.slice(0, phases), movable: !compact, resize: compact ? 'none' : 'horizontal', connectable: true,
       },
     });
   }
@@ -128,7 +132,7 @@ export function viewOf(model: Model, options: ViewOptions): ViewModel {
     if (!isPlaceable(note) || !take(note.id)) continue;
     elements.push({
       id: note.id, type: elementTypes.note, x: xOf(note.at, unit), y: topOf(note.row), width: note.width, height: note.height,
-      label: note.text, tooltip: note.text, data: { movable: !compact, resizable: !compact },
+      label: note.text, tooltip: note.text, data: { movable: !compact, resize: compact ? 'none' : 'both', connectable: false, multiline: true },
     });
   }
 
@@ -153,6 +157,8 @@ export function viewOf(model: Model, options: ViewOptions): ViewModel {
     ruler: compact ? [] : rulerRungs.filter((rung) => rung.months >= unit.months),
     tags: tagsOf(model),
     legend: phaseNames.map((phase, index) => ({ caption: phaseTitles[index], phase })),
+    filter: { label: 'Filter by tags', tags: options.filterTags ?? [], mode: options.filterMode ?? 'any' },
+    snap: { x: unitsPerStep, y: rowStep },
   };
   return {
     ...placed,

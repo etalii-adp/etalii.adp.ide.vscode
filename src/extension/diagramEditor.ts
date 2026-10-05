@@ -197,6 +197,9 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
         diagram.selection = message.ids;
         this.diagrams.refresh(diagram);
         return;
+      case 'editing':
+        void vscode.commands.executeCommand('setContext', 'etalii.adp.editingText', message.active);
+        return;
       case 'edit': {
         const performed = await this.diagrams.perform(diagram, message.request, message.version);
         diagram.post({ v: 1, type: 'outcome', seq: message.seq, ...performed });

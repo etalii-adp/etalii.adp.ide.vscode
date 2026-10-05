@@ -22,6 +22,8 @@ export type FromCanvas =
   | { readonly v: 1; readonly type: 'ready' }
   | { readonly v: 1; readonly type: 'viewOptions'; readonly options: ViewOptions }
   | { readonly v: 1; readonly type: 'selection'; readonly ids: readonly string[] }
+  /** Text is being edited in place, or no longer is, so shortcuts such as Delete are the text box's. */
+  | { readonly v: 1; readonly type: 'editing'; readonly active: boolean }
   /** An edit, with the document version the gesture began on. */
   | { readonly v: 1; readonly type: 'edit'; readonly seq: number; readonly request: EditRequest; readonly version: number };
 
