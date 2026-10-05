@@ -23,6 +23,10 @@ export class Surface {
   private ty = 0;
   private scale = 1;
   private placed = false;
+  /** What was placed first, kept so a resize before the user moves the view can place it again. */
+  private placedContent: Box | undefined;
+  /** Whether the user has panned or zoomed since the document was placed. */
+  private moved = false;
   private readonly listeners: (() => void)[] = [];
 
   constructor(host: HTMLElement) {
@@ -34,6 +38,15 @@ export class Surface {
     host.append(this.root);
     this.root.addEventListener('wheel', (event) => this.wheel(event), { passive: false });
     this.root.addEventListener('pointerdown', (event) => this.startPan(event));
+    // Until the user moves the view, a resize, such as a side bar opened beside the editor, places
+    // the document again, so it stays whole and centred in what is left.
+    if (typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(() => {
+        if (!this.placedContent || this.moved) return;
+        this.placed = false;
+        this.placeOnce(this.placedContent);
+      }).observe(this.root);
+    }
   }
 
   /** Calls back whenever the part of the canvas in view changes. */
@@ -72,6 +85,7 @@ export class Surface {
     const { width, height } = this.size();
     if (width === 0 || height === 0) return;
     this.placed = true;
+    this.placedContent = content;
     const margin = 48;
     const fit = Math.min(1, (width - 2 * margin) / Math.max(1, content.width), (height - 2 * margin) / Math.max(1, content.height));
     if (fit >= readableScale) {
@@ -96,6 +110,7 @@ export class Surface {
     const view = this.viewport();
     const inside = box.x >= view.x && box.y >= view.y && box.x + box.width <= view.x + view.width && box.y + box.height <= view.y + view.height;
     if (!fit && inside) return;
+    if (!fit) this.moved = true;
     this.tx = width / 2 - (box.x + box.width / 2) * this.scale;
     this.ty = height / 2 - (box.y + box.height / 2) * this.scale;
     this.apply();
@@ -113,6 +128,7 @@ export class Surface {
   // Ctrl or a pinch zooms about the pointer; a plain wheel scrolls, sideways with Shift.
   private wheel(event: WheelEvent): void {
     event.preventDefault();
+    this.moved = true;
     if (event.ctrlKey || event.metaKey) {
       const bounds = this.root.getBoundingClientRect();
       const px = event.clientX - bounds.left;
@@ -136,6 +152,7 @@ export class Surface {
     if (!(event.button === 1 || (event.button === 0 && onBackground))) return;
     const start = { x: event.clientX, y: event.clientY, tx: this.tx, ty: this.ty };
     const move = (moved: PointerEvent): void => {
+      this.moved = true;
       this.tx = start.tx + moved.clientX - start.x;
       this.ty = start.ty + moved.clientY - start.y;
       this.apply();
