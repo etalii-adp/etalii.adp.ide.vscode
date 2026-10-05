@@ -6,13 +6,8 @@
       "version": "1.0.1",
       "description": "Runs specify \u2192 plan \u2192 tasks \u2192 implement with review gates",
       "source": "bundled",
-<<<<<<< HEAD
       "installed_at": "2026-10-05T10:35:05.976902+00:00",
       "updated_at": "2026-10-05T10:35:05.976902+00:00"
-=======
-      "installed_at": "2026-09-24T12:18:57.473208+00:00",
-      "updated_at": "2026-09-24T12:18:57.473208+00:00"
->>>>>>> b00ccca2568e0bd4c6853b64b5664fbb56ecfb05
     }
   }
 }

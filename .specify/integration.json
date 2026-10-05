@@ -1,9 +1,5 @@
 {
-<<<<<<< HEAD
   "version": "1.0.13",
-=======
-  "version": "1.0.12.dev0",
->>>>>>> b00ccca2568e0bd4c6853b64b5664fbb56ecfb05
   "integration_state_schema": 1,
   "installed_integrations": [
     "claude"
