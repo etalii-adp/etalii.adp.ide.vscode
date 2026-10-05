@@ -26,10 +26,22 @@ export class RegistrationEditorProvider implements vscode.CustomTextEditorProvid
 <p>Use <strong>Reopen Editor With...</strong> and choose the text editor to see the registration itself.</p></body></html>`;
       return;
     }
-    // The body opens where the registration would have, and the registration's own tab goes.
+    // The body opens where the registration would have, and the registration's own tab goes. Both
+    // wait until this call has returned: Visual Studio Code still has to show the panel it handed
+    // over, and reports "OverlayWebview has been disposed" when the panel is gone by then.
+    panel.webview.html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'"></head><body></body></html>';
     const column = panel.viewColumn;
-    panel.dispose();
-    await vscode.commands.executeCommand('vscode.openWith', target.body, viewTypeOf(target.type), column);
+    setTimeout(() => void this.follow(document.uri, target, column), 0);
+  }
+
+  /** Opens the diagram a registration registers, then closes the registration's own tab. */
+  private async follow(registration: vscode.Uri, target: { body: vscode.Uri; type: DiagramType }, column: vscode.ViewColumn | undefined): Promise<void> {
+    // Not as a preview: a preview would take the place of the registration's tab while that is still being shown.
+    await vscode.commands.executeCommand('vscode.openWith', target.body, viewTypeOf(target.type), { viewColumn: column, preview: false });
+    const own = vscode.window.tabGroups.all
+      .flatMap((group) => group.tabs)
+      .filter((tab) => tab.input instanceof vscode.TabInputCustom && tab.input.viewType === RegistrationEditorProvider.viewType && tab.input.uri.toString() === registration.toString());
+    if (own.length > 0) await vscode.window.tabGroups.close(own, true);
   }
 
   /** The body and tool type a registration names, or the sentence that says why it cannot be followed. */

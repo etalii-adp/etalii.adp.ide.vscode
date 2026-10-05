@@ -122,5 +122,25 @@ suite('A behavior model in Visual Studio Code', () => {
     });
     assert.ok((tab.input as vscode.TabInputCustom).uri.path.endsWith('/customer-support.md'));
     assert.strictEqual((await drawn()).origin, 'etalii/agent-behavior-modelling');
+    await until('the registration tab to be closed', () => registrationTabs().length === 0);
+  });
+
+  test('opening the registration of a hype cycle graph opens that graph, and opening it again shows the same tab', async () => {
+    const registration = example('gartner-hypecycle-graph', 'coal-technologies', 'coal-technologies.adp');
+    for (let time = 0; time < 2; time++) {
+      await vscode.commands.executeCommand('vscode.open', registration);
+      await until('the diagram tab', () => {
+        const active = vscode.window.tabGroups.activeTabGroup.activeTab;
+        return active?.input instanceof vscode.TabInputCustom && active.input.uri.path.endsWith('/coal-technologies.ghg');
+      });
+      assert.strictEqual((await drawn()).origin, 'gartner/hypecycle-graph');
+      await until('the registration tab to be closed', () => registrationTabs().length === 0);
+    }
+    assert.strictEqual(vscode.window.tabGroups.all.flatMap((group) => group.tabs).length, 1);
   });
 });
+
+/** The tabs a registration itself is shown in: there is one only for as long as it takes to open its diagram. */
+function registrationTabs(): vscode.Tab[] {
+  return vscode.window.tabGroups.all.flatMap((group) => group.tabs).filter((tab) => tab.input instanceof vscode.TabInputCustom && tab.input.viewType === 'etalii.adp.registration');
+}
