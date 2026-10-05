@@ -11,3 +11,14 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# Node, build output and test downloads
+node_modules/
+dist/
+out/
+reports/
+.vscode-test/
+*.vsix
+
+# The copy of the examples a debug session edits
+.debug/

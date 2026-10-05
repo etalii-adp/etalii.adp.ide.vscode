@@ -1,0 +1,58 @@
+{
+  "name": "adp",
+  "publisher": "etalii",
+  "displayName": "ADP: A Different Perspective",
+  "description": "Specialized tools for text-based files: diagrams, designers and editors, each tuned for one task.",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "homepage": "https://etalii.net/adp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/etalii-adp/etalii.adp.ide.vscode.git"
+  },
+  "engines": {
+    "vscode": "^1.140.0",
+    "node": ">=22"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
+  "contributes": {},
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "check": "tsc --noEmit -p tsconfig.json && eslint .",
+    "test": "npm run check && npm run test:unit && npm run test:vscode",
+    "test:unit": "vitest run",
+    "test:vscode": "npm run package && node scripts/unpack-plugin.mjs && tsc -p test/vscode/tsconfig.json && vscode-test",
+    "package": "npm run build -- --production && node scripts/package.mjs",
+    "sync-examples": "node scripts/sync-examples.mjs",
+    "prepare-debug-examples": "node scripts/prepare-debug-examples.mjs"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.20.5",
+    "@types/vscode": "^1.140.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.0.0",
+    "adm-zip": "^0.6.1",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.12.0",
+    "jsdom": "^30.1.2",
+    "mocha": "^12.0.3",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.0",
+    "vitest": "^5.0.3"
+  }
+}
