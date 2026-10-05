@@ -3,6 +3,8 @@ import { svg } from './dom';
 
 const minScale = 0.05;
 const maxScale = 8;
+/** The smallest zoom a document is first shown at: below it, names and phases cannot be read. */
+const readableScale = 0.6;
 
 /**
  * The drawing surface: one SVG whose world group is panned and zoomed. Everything a notation draws
@@ -60,13 +62,28 @@ export class Surface {
     return { x: x * this.scale + this.tx, y: y * this.scale + this.ty };
   }
 
-  /** Brings a box into view, once: the first drawing of a document shows its content. */
+  /**
+   * Shows a document's content when it is first drawn: all of it when that leaves it readable, and
+   * otherwise its top-left corner at a readable size, since a graph of three centuries fitted into
+   * one screen shows nothing that can be read or pointed at.
+   */
   placeOnce(content: Box | undefined): void {
     if (this.placed || !content) return;
+    const { width, height } = this.size();
+    if (width === 0 || height === 0) return;
     this.placed = true;
-    this.reveal(content, true);
+    const margin = 48;
+    const fit = Math.min(1, (width - 2 * margin) / Math.max(1, content.width), (height - 2 * margin) / Math.max(1, content.height));
+    if (fit >= readableScale) {
+      this.reveal(content, true);
+      return;
+    }
+    this.scale = readableScale;
+    // Room on the left for the names written before the first elements.
+    this.tx = Math.min(width / 3, 240) - content.x * this.scale;
+    this.ty = margin - content.y * this.scale;
+    this.apply();
   }
-
   /** Scrolls so a box is in view; `fit` also zooms out until it fits. */
   reveal(box: Box, fit = false): void {
     const { width, height } = this.size();

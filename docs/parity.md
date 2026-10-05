@@ -13,6 +13,8 @@ Where this host differs from a tool's definition in [etalii.adp](https://github.
 | A read-only diagram hides the toolbox and offers no handles, rather than showing them disabled. | Nothing that edits is offered (FR-037); what is not there cannot be mistaken for something that works. |
 | A refusal is shown on a line at the bottom left of the canvas for eight seconds, and at its field in ADP Properties. | The standalone host has one refusal line around its canvas; this is its place here. |
 | A tooltip appears after the browser's own delay. | Tooltips are SVG titles, which Visual Studio Code's webviews show as any page does. |
+| A file named on the command line when Visual Studio Code starts opens as text; opened any other way, from the Explorer, Quick Open, or the command line into a window that is already running, it opens in its diagram. | Seen with a `.ghg` file on Visual Studio Code 1.140: the editor for a file given at start-up is chosen before the editors that plug-ins bring are known. `Reopen Editor With...` shows the diagram; the plug-in does not reopen the tab by itself, since a text tab may be what the user chose. |
+| A document is first shown whole when that leaves it readable, and otherwise from its top-left corner at 60 percent. | A graph of three centuries fitted into one screen shows nothing that can be read or pointed at. |
 | The time ruler shows one rung at a time. | The finest rung whose labels are 64 pixels apart is shown, as the definition says; the standalone ruler also draws the next coarser rung above it. |
 
 ## Gartner hype cycle graph

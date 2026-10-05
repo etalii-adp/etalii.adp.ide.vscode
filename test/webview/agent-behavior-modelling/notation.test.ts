@@ -97,6 +97,14 @@ describe('gestures on a behavior model', () => {
     expect(requests()).toEqual([{ kind: 'move', id: '1.2', x: node.x + 30, y: node.y + 50 }]);
   });
 
+  it('stores a drop on whole canvas units, whatever the zoom made of the pointer\'s travel', () => {
+    const node = at('1.2');
+    pointer(group('1.2').querySelector('.abm-shape')!, 'pointerdown', node.x + 100, node.y + 30);
+    pointer(window, 'pointermove', node.x + 130.6, node.y + 80.4);
+    pointer(window, 'pointerup', node.x + 130.6, node.y + 80.4);
+    expect(requests()).toEqual([{ kind: 'move', id: '1.2', x: node.x + 31, y: node.y + 50 }]);
+  });
+
   it('puts a node under another by a right-button drag from the new parent to it', () => {
     const target = group('1.4').querySelector('.abm-shape')!;
     document.elementFromPoint = () => target;
