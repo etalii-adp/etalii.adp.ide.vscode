@@ -120,13 +120,15 @@ export type EditRequest =
 /** What an edit request came to. */
 export type EditOutcome =
   /** The document's new text, and the registration's when the edit changed it (null removes it). */
-  | { readonly kind: 'applied'; readonly text: string; readonly registration?: string | null; readonly select?: string; readonly editLabel?: boolean }
+  | { readonly kind: 'applied'; readonly text: string; readonly registration?: string | null; readonly select?: string; readonly editLabel?: boolean; readonly multiline?: boolean }
   /** Nothing changed, and this is the sentence to show. */
   | { readonly kind: 'refused'; readonly sentence: string }
   /** Ask first; when confirmed, the same request is made again with `confirmed`. */
   | { readonly kind: 'confirm'; readonly title: string; readonly message: string; readonly confirmLabel: string; readonly danger: boolean }
   /** The request asks for text edited in place before anything is written. */
-  | { readonly kind: 'editInPlace'; readonly id: string; readonly multiline: boolean };
+  | { readonly kind: 'editInPlace'; readonly id: string; readonly multiline: boolean }
+  /** The request is answered in ADP Properties: the named field is where the user goes on. */
+  | { readonly kind: 'showField'; readonly field: string };
 
 /** A document as a diagram type reads it: its text and, where one exists, its registration's. */
 export interface Source {
