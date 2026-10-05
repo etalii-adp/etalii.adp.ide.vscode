@@ -12,7 +12,7 @@
 // picture. It exits non-zero naming any image whose diagram drew nothing, or whose toolbox or
 // properties stayed empty.
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -101,9 +101,10 @@ async function capture(executable, image) {
     await page.setViewport(viewport);
     await page.waitForSelector('.monaco-workbench', { visible: true });
 
-    // The ADP views in the side bar, nothing in the panel, no notifications.
+    // The ADP views in the side bar, no notifications. The panel is closed further down, and only
+    // when it is open: "View: Close Panel" is not offered while the panel is closed, and the
+    // command palette then runs its nearest match, which opens the panel with a terminal in it.
     await command(page, 'ADP: Focus on ADP Toolbox');
-    await command(page, 'View: Close Panel');
     await command(page, 'Notifications: Clear All Notifications');
 
     // Opened once the window is up: a file named on the command line of a fresh profile can open
@@ -115,6 +116,10 @@ async function capture(executable, image) {
     await page.keyboard.type(image.document.split('/').pop());
     await sleep(1000);
     await page.keyboard.press('Enter');
+
+    if (await page.$eval('.part.panel', (panel) => panel.offsetHeight > 0).catch(() => false)) {
+      await command(page, 'View: Close Panel');
+    }
 
     const canvas = await frameWith(page, '.adp-content [data-id]');
     await frameWith(page, '.adp-toolbox-entry');
@@ -145,7 +150,9 @@ async function capture(executable, image) {
     console.log(`${image.file}: ${drawn} things drawn`);
   } finally {
     await browser?.disconnect();
-    code.kill();
+    // The whole process tree on Windows: a child left running keeps the scratch folder locked.
+    if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(code.pid), '/T', '/F'], { stdio: 'ignore' });
+    else code.kill();
     await sleep(1000);
     rmSync(scratch, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
   }
