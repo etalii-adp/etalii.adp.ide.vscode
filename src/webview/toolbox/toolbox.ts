@@ -1,6 +1,6 @@
 import type { ToolboxEntry } from '../../core/frame/diagramType';
-import { html } from '../canvas/dom';
-import { icon } from '../canvas/icons';
+import { html } from '../diagram/dom';
+import { icon } from '../diagram/icons';
 
 /** The data a dragged toolbox entry carries, so the canvas knows a drop is one of its own. */
 export const toolboxMime = 'application/x-adp-toolbox';

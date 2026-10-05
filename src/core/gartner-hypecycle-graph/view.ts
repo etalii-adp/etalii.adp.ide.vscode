@@ -1,7 +1,7 @@
 import type { Box, ViewElement, ViewModel, ViewOptions, ViewRelation } from '../frame/diagramType';
 import { widthOfText } from '../text/textMetric';
 import { unreadable } from './edits';
-import type { Attachment } from './geometry';
+import type { Attachment } from '../diagram/shapes/segments';
 import { gartnerNames, hasSpan, isPlaceable, isReadableEnd, monthsOf, phaseCount, phaseIndexOf, phaseNames, phaseTitles, visiblePhases, type End, type Model } from './model';
 import { fractionsOf } from './phases';
 import { formatWhen, formatWhenLong, rowStep, topOf, trendHeight, triggerSize, unitsPerStep, widthOf, xOf } from './scale';
@@ -45,7 +45,7 @@ export interface Chrome {
   readonly ruler: readonly { months: number; every: string; label: string }[];
   /** Every tag in use on trends and triggers, once each, in order of first use. */
   readonly tags: readonly string[];
-  readonly legend: readonly { caption: string; phase: string }[];
+  readonly legend: readonly { caption: string; swatchClass: string }[];
   /** The tag filter as it is set for this view; it is never saved. */
   readonly filter: { readonly label: string; readonly tags: readonly string[]; readonly mode: 'any' | 'all' };
   /** The steps a drag is previewed on; where a drop lands is the document's to say. */
@@ -156,7 +156,7 @@ export function viewOf(model: Model, options: ViewOptions): ViewModel {
     compact,
     ruler: compact ? [] : rulerRungs.filter((rung) => rung.months >= unit.months),
     tags: tagsOf(model),
-    legend: phaseNames.map((phase, index) => ({ caption: phaseTitles[index], phase })),
+    legend: phaseNames.map((phase, index) => ({ caption: phaseTitles[index], swatchClass: `ghg-${phase}` })),
     filter: { label: 'Filter by tags', tags: options.filterTags ?? [], mode: options.filterMode ?? 'any' },
     snap: { x: unitsPerStep, y: rowStep },
   };

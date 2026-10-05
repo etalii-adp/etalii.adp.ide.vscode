@@ -1,18 +1,17 @@
-import type { Box } from '../frame/diagramType';
-import { roundAwayFromZero } from '../text/rounding';
+import type { Box } from '../../frame/diagramType';
+import { roundAwayFromZero } from '../../text/rounding';
+import type { Point } from '../geometry';
+import { arrowBannerPointDepth } from './outline';
 
-// The arrow banner a trend is drawn as, cut into phases by chevrons, and where an influence meets
-// it. Pure geometry, shared by the view model and the canvas, and the same as the standalone host's.
-
-export interface Point {
-  readonly x: number;
-  readonly y: number;
-}
+// A shape cut into segments, such as the arrow banner of a hype cycle trend cut into its phases by
+// chevrons, and where a relation attaches along its top or bottom edge. Pure geometry, shared by
+// the view models that place things and the canvas that draws them, and the same as the
+// standalone host's library (`canvas/library/shapes/segments.ts`).
 
 export interface Segment {
   readonly index: number;
   readonly polygon: readonly Point[];
-  /** The stretch of the top and bottom edge that belongs to this phase. */
+  /** The stretch of the top and bottom edge that belongs to this segment. */
   readonly from: number;
   readonly to: number;
 }
@@ -30,21 +29,16 @@ export interface Banner {
   readonly outline: readonly Point[];
 }
 
-/** Where one end of an influence attaches: an edge, the phase it is on and a fraction along it. */
+/** Where one end of a relation attaches: an edge, the segment it is on and a fraction along it. */
 export interface Attachment {
   readonly edge: 'top' | 'bottom';
   readonly region: number;
   readonly at: number;
 }
 
-/** How far the banner's point reaches back from its right edge. */
-export function pointDepth(bounds: Box): number {
-  return Math.max(0, Math.min(bounds.height / 2, bounds.width / 2));
-}
-
-/** A banner of `count` phases whose inner boundaries lie at `fractions` of its width. */
+/** An arrow banner of `count` segments whose inner boundaries lie at `fractions` of its width. */
 export function bannerOf(bounds: Box, count: number, fractions: readonly number[]): Banner {
-  const depth = pointDepth(bounds);
+  const depth = arrowBannerPointDepth(bounds);
   const left = bounds.x;
   const top = bounds.y;
   const bottom = bounds.y + bounds.height;
@@ -85,7 +79,7 @@ export function bannerOf(bounds: Box, count: number, fractions: readonly number[
   return { segments, dividers, outline };
 }
 
-/** Evenly spread boundaries for `count` phases. */
+/** Evenly spread boundaries for `count` segments. */
 export function evenFractions(count: number): number[] {
   return Array.from({ length: Math.max(0, count - 1) }, (_, index) => (index + 1) / count);
 }
@@ -101,7 +95,7 @@ export function attachmentPoint(attachment: Attachment, bounds: Box, banner: Ban
 
 const fraction = (value: number): number => Math.round(Math.min(1, Math.max(0, value)) * 100) / 100;
 
-/** The attachment nearest a point: the phase and edge it is closest to, and how far along. */
+/** The attachment nearest a point: the segment and edge it is closest to, and how far along. */
 export function nearestAttachment(point: Point, bounds: Box, banner: Banner): Attachment {
   let best: { attachment: Attachment; distance: number } | undefined;
   for (const edge of ['top', 'bottom'] as const) {
@@ -118,7 +112,7 @@ export function nearestAttachment(point: Point, bounds: Box, banner: Banner): At
 
 /**
  * Where a dragged boundary lands: on the nearest step, a half rounding away from zero, and at
- * least one step from its neighbouring boundaries or the trend's ends.
+ * least one step from its neighbouring boundaries or the shape's ends.
  */
 export function boundaryLanding(banner: Banner, bounds: Box, index: number, x: number, step: number): number {
   const unit = step > 0 ? step : 1;

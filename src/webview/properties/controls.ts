@@ -1,5 +1,5 @@
 import type { Field } from '../../core/frame/diagramType';
-import { html } from '../canvas/dom';
+import { html } from '../diagram/dom';
 
 /** The control of one field, wired to hand over its value when it is committed. */
 export function controlFor(field: Field, commit: (value: string) => void): HTMLElement {

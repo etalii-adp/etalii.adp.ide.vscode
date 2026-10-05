@@ -51,7 +51,7 @@ export class Panel {
   show(view: ViewModel): void {
     const chrome = view.chrome;
     const filter = chrome.filter as FilterChrome | undefined;
-    const legend = (chrome.legend as { caption: string; phase: string }[] | undefined) ?? [];
+    const legend = (chrome.legend as { caption: string; swatchClass: string }[] | undefined) ?? [];
     const hasCompact = typeof chrome.compact === 'boolean';
     this.element.hidden = !filter && legend.length === 0 && !hasCompact;
 
@@ -66,7 +66,7 @@ export class Panel {
     }
 
     this.legend.hidden = legend.length === 0;
-    this.legend.replaceChildren(...legend.map((entry) => html('li', {}, html('span', { class: `adp-legend-swatch ghg-${entry.phase}` }), entry.caption)));
+    this.legend.replaceChildren(...legend.map((entry) => html('li', {}, html('span', { class: `adp-legend-swatch ${entry.swatchClass}` }), entry.caption)));
 
     this.compactRow.hidden = !hasCompact;
     this.compact.checked = chrome.compact === true;

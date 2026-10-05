@@ -1,3 +1,4 @@
+import { boundsOf } from '../../core/diagram/geometry';
 import type { Action, Box, EditRequest, ViewElement, ViewModel, ViewOptions, ViewRelation } from '../../core/frame/diagramType';
 import type { FromCanvas, ToCanvas } from '../../core/frame/protocol';
 import { Toolbox, toolboxMime } from '../toolbox/toolbox';
@@ -59,8 +60,11 @@ export class Canvas {
     host.append(frame);
 
     this.surface = new Surface(this.stage);
-    this.surface.defs.append(svg('marker', { id: 'adp-arrow', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 8, markerHeight: 8, markerUnits: 'userSpaceOnUse', orient: 'auto-start-reverse' },
-      svg('path', { d: 'M 0 0 L 10 5 L 0 10 z' })));
+    // The arrowhead, and the same arrowhead in the highlight a selected relation takes.
+    for (const id of ['adp-arrow', 'adp-arrow-selected']) {
+      this.surface.defs.append(svg('marker', { id, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 8, markerHeight: 8, markerUnits: 'userSpaceOnUse', orient: 'auto-start-reverse' },
+        svg('path', { d: 'M 0 0 L 10 5 L 0 10 z' })));
+    }
     this.notice.hidden = true;
     this.status.hidden = true;
     this.stage.append(this.notice, this.status);
@@ -173,7 +177,9 @@ export class Canvas {
   private markSelection(): void {
     const selected = new Set(this.selection);
     for (const group of this.surface.content.querySelectorAll('[data-id]')) {
-      group.classList.toggle('adp-selected', selected.has(group.getAttribute('data-id') ?? ''));
+      const on = selected.has(group.getAttribute('data-id') ?? '');
+      group.classList.toggle('adp-selected', on);
+      for (const line of group.querySelectorAll('.adp-relation-line[marker-end]')) line.setAttribute('marker-end', on ? 'url(#adp-arrow-selected)' : 'url(#adp-arrow)');
     }
     this.drawHandles();
   }
@@ -198,7 +204,7 @@ export class Canvas {
           handles.push(svg('rect', { class: 'adp-handle adp-resize', 'data-resize': side, x: x - size / 2, y: y - size / 2, width: size, height: size, style: `cursor: ${cursor}` }));
         }
       }
-      for (const handle of this.notation?.handles?.(selected, this.context) ?? []) {
+      for (const handle of this.notation?.handles(selected, this.context) ?? []) {
         handles.push(svg('circle', { class: 'adp-handle', 'data-handle': handle.id, cx: handle.x, cy: handle.y, r: 4 / this.surface.zoom, style: `cursor: ${handle.cursor}` },
           svg('title', {}, handle.title)));
       }
@@ -317,11 +323,11 @@ export class Canvas {
     if (!element) return;
     if (event.button === 2) {
       // A right-button drag from an element draws a relation from it; a right click is the menu.
-      if (element.data.connectable === true) this.connect(event, element, this.notation?.connectFrom?.(element, point) ?? '', true);
+      if (element.data.connectable === true) this.connect(event, element, this.notation?.connectFrom(element, point) ?? '', true);
       return;
     }
     if (event.button !== 0) return;
-    const fromEnd = element.data.connectable === true ? this.notation?.connectFrom?.(element, point) : undefined;
+    const fromEnd = element.data.connectable === true ? this.notation?.connectFrom(element, point) : undefined;
     if (fromEnd !== undefined) this.connect(event, element, fromEnd, false);
     else if (element.data.movable === true) this.move(event, element);
   }
@@ -397,7 +403,7 @@ export class Canvas {
     // may say it for the whole drawing, such as a tree whose siblings step aside; otherwise the
     // element moves, with whatever its view says goes with it and whatever follows it up and down.
     const offsetsAt = (at: CanvasPoint): Map<string, CanvasPoint> => {
-      const given = context ? this.notation?.dragging?.(element, at, context) : undefined;
+      const given = context ? this.notation?.dragging(element, at, context) : undefined;
       if (given) return given;
       const offsets = new Map<string, CanvasPoint>();
       const subtree = (element.data.subtree as string[] | undefined) ?? [element.id];
@@ -478,7 +484,7 @@ export class Canvas {
     let request: EditRequest | undefined;
     this.track(event, {
       move: (point) => {
-        if (!this.notation?.dragHandle || !this.context) return;
+        if (!this.notation || !this.context) return;
         const drag = this.notation.dragHandle(selected, handle, point, this.context);
         request = drag.request;
         const drawing = drag.element ? this.notation.element(drag.element, this.context) : drag.relation ? this.notation.relation(drag.relation, this.context) : undefined;
@@ -495,8 +501,8 @@ export class Canvas {
   private connect(event: PointerEvent, from: ViewElement, fromEnd: string, rightButton: boolean): void {
     this.track(event, {
       move: (point) => {
-        const line = this.notation?.connecting && this.context
-          ? this.notation.connecting(from, fromEnd, point, this.context)
+        const line = this.notation
+          ? this.notation.connecting(from, fromEnd, point)
           : svg('line', { class: 'adp-relation-line adp-connecting', x1: from.x + from.width / 2, y1: from.y + from.height / 2, x2: point.x, y2: point.y });
         line.classList.add('adp-preview');
         this.surface.overlay.replaceChildren(line);
@@ -508,7 +514,7 @@ export class Canvas {
         const targetId = this.idAt(document.elementFromPoint(last.clientX, last.clientY));
         const target = targetId ? this.context?.elements.get(targetId) : undefined;
         if (!target) return;
-        const toEnd = this.notation?.connectTo?.(target, point);
+        const toEnd = this.notation?.connectTo(target, point);
         this.request({ kind: 'connect', from: from.id, to: target.id, ...(fromEnd.length > 0 ? { fromEnd } : {}), ...(toEnd ? { toEnd } : {}) });
       },
       cancel: () => {
@@ -543,14 +549,4 @@ export class Canvas {
     }
     this.send({ v: 1, type: 'viewOptions', options: this.options });
   }
-}
-
-/** The box around every element, or nothing for an empty diagram. */
-export function boundsOf(elements: readonly ViewElement[]): Box | undefined {
-  if (elements.length === 0) return undefined;
-  const left = Math.min(...elements.map((element) => element.x));
-  const top = Math.min(...elements.map((element) => element.y));
-  const right = Math.max(...elements.map((element) => element.x + element.width));
-  const bottom = Math.max(...elements.map((element) => element.y + element.height));
-  return { x: left, y: top, width: right - left, height: bottom - top };
 }

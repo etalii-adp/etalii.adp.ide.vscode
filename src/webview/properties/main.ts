@@ -1,6 +1,6 @@
 import type { Field } from '../../core/frame/diagramType';
 import type { FromProperties, ToProperties } from '../../core/frame/protocol';
-import { html } from '../canvas/dom';
+import { html } from '../diagram/dom';
 import { gridOf } from './controls';
 import './properties.css';
 

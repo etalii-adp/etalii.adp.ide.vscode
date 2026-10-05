@@ -1,36 +1,28 @@
 /*
- * The canvas, and the colours of each notation as theme tokens: one value per kind of colour theme,
- * switched by the class Visual Studio Code puts on the body. The phase, trigger and note colours are
- * the definitions' own, the same in every ADP host. High contrast keeps the fills and draws every
- * outline in the theme's contrast border.
+ * The diagram library's canvas and the appearance every diagram type shares: an element's outline,
+ * a relation's line, the one highlight a selection takes, segments and their dividers. The colours
+ * are theme tokens, one value per kind of colour theme, switched by the class Visual Studio Code
+ * puts on the body; high contrast draws every outline and line in the theme's contrast border. A
+ * diagram type's own stylesheet beside its definition only fills its own classes, as in the
+ * standalone host's library.
  */
 :root {
-  --adp-ghg-peak: #f7e7a1;
-  --adp-ghg-trough: #dfe3e8;
-  --adp-ghg-slope: #f6c99a;
-  --adp-ghg-plateau: #cde8a8;
-  --adp-ghg-chevron: #475569;
-  --adp-ghg-trigger: #7c3aed;
-  --adp-ghg-note: #fef9c3;
-  --adp-ghg-note-text: #0f172a;
-  --adp-outline: transparent;
+  --adp-node-fill: var(--vscode-editor-background);
+  --adp-node-stroke: #e2e8f0;
+  --adp-line: #64748b;
+  --adp-highlight: var(--vscode-focusBorder);
 }
 
 body.vscode-dark,
 body.vscode-high-contrast:not(.vscode-high-contrast-light) {
-  --adp-ghg-peak: #6b5a17;
-  --adp-ghg-trough: #475569;
-  --adp-ghg-slope: #7c4a1c;
-  --adp-ghg-plateau: #3f6212;
-  --adp-ghg-chevron: #e2e8f0;
-  --adp-ghg-trigger: #c4b5fd;
-  --adp-ghg-note: #423a10;
-  --adp-ghg-note-text: #f1f5f9;
+  --adp-node-stroke: #334155;
+  --adp-line: #94a3b8;
 }
 
 body.vscode-high-contrast,
 body.vscode-high-contrast-light {
-  --adp-outline: var(--vscode-contrastBorder);
+  --adp-node-stroke: var(--vscode-contrastBorder);
+  --adp-line: var(--vscode-contrastBorder);
 }
 
 html,
@@ -76,39 +68,83 @@ body {
   pointer-events: none;
 }
 
-.adp-outline {
+.adp-node {
+  fill: var(--adp-node-fill);
+  stroke: var(--adp-node-stroke);
+  stroke-width: 1.5;
+  pointer-events: all;
+}
+
+/* A segmented shape is filled segment by segment; its outline is the line around them all. */
+.adp-node.adp-node-segmented {
   fill: none;
-  stroke: var(--adp-outline);
-  stroke-width: 1;
   pointer-events: none;
 }
 
-.adp-element.adp-selected .adp-outline {
-  stroke: var(--vscode-focusBorder);
-  stroke-width: 2;
+.adp-segment {
+  fill: var(--adp-node-fill);
+  stroke: none;
 }
 
-.adp-relation-line {
+.adp-segment-divider {
   fill: none;
-  stroke: var(--vscode-editor-foreground);
+  stroke: var(--adp-node-stroke);
   stroke-width: 1.5;
   pointer-events: none;
 }
 
-/* A wide, invisible stroke, so a thin curve can be pointed at. */
+/* Text inside a shape: the labels stacked and centred, and never in the way of the pointer. */
+.adp-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 4px 6px;
+  overflow: hidden;
+  text-align: center;
+  pointer-events: none;
+}
+
+/*
+ * A selection is one colour on the outline and a heavier line, the fill untouched, for elements
+ * and relations alike, arrowhead included.
+ */
+.adp-element.adp-selected .adp-node {
+  stroke: var(--adp-highlight);
+  stroke-width: 3;
+}
+
+.adp-relation-line {
+  fill: none;
+  stroke: var(--adp-line);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+/* A wide, invisible stroke, so a thin line can be pointed at. */
 .adp-relation-hit {
   fill: none;
   stroke: transparent;
-  stroke-width: 10;
+  stroke-width: 14;
+  cursor: pointer;
+}
+
+.adp-relation.adp-unselectable {
+  pointer-events: none;
 }
 
 .adp-relation.adp-selected .adp-relation-line {
-  stroke: var(--vscode-focusBorder);
-  stroke-width: 2.5;
+  stroke: var(--adp-highlight);
+  stroke-width: 3;
 }
 
 #adp-arrow path {
-  fill: var(--vscode-editor-foreground);
+  fill: var(--adp-line);
+}
+
+#adp-arrow-selected path {
+  fill: var(--adp-highlight);
 }
 
 /* A notice over the canvas: why a diagram is empty or read-only. */
@@ -157,7 +193,7 @@ body {
 .adp-legend-swatch {
   width: 12px;
   height: 12px;
-  border: 1px solid var(--vscode-contrastBorder, var(--adp-ghg-chevron));
+  border: 1px solid var(--vscode-contrastBorder, var(--adp-node-stroke));
 }
 
 /* The time ruler, pinned to the bottom of the screen. */
@@ -183,46 +219,6 @@ body {
   padding: 3px 0 0 4px;
   border-left: 1px solid var(--vscode-editorWidget-border, currentColor);
   white-space: nowrap;
-}
-
-/* The Gartner hype cycle graph. */
-.ghg-phase { stroke: none; }
-.ghg-peak { fill: var(--adp-ghg-peak); background: var(--adp-ghg-peak); }
-.ghg-trough { fill: var(--adp-ghg-trough); background: var(--adp-ghg-trough); }
-.ghg-slope { fill: var(--adp-ghg-slope); background: var(--adp-ghg-slope); }
-.ghg-plateau { fill: var(--adp-ghg-plateau); background: var(--adp-ghg-plateau); }
-
-.ghg-chevron {
-  fill: none;
-  stroke: var(--adp-ghg-chevron);
-  stroke-width: 1;
-  pointer-events: none;
-}
-
-.ghg-trigger-circle {
-  fill: var(--adp-ghg-trigger);
-  stroke: var(--adp-ghg-trigger);
-  pointer-events: all;
-}
-
-.ghg-note-box {
-  fill: var(--adp-ghg-note);
-  stroke: var(--vscode-editorWidget-border, var(--adp-ghg-chevron));
-  pointer-events: all;
-}
-
-.ghg-note-text {
-  box-sizing: border-box;
-  height: 100%;
-  padding: 4px 6px;
-  overflow: hidden;
-  color: var(--adp-ghg-note-text);
-  font-size: 12px;
-  line-height: 1.3;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  text-overflow: ellipsis;
-  pointer-events: none;
 }
 
 /* The ADP Toolbox, docked beside the canvas. */
@@ -469,84 +465,4 @@ body {
 
 .adp-menu-shortcut {
   color: var(--vscode-descriptionForeground);
-}
-
-/* Agent Behavior Modelling: the fill of each family of node, as the definition's theme tokens. */
-:root {
-  --adp-abm-composite: #aaed92;
-  --adp-abm-decorator: #fcf281;
-  --adp-abm-check: #9edcfa;
-  --adp-abm-action: #ededed;
-  --adp-abm-other: #86e6d9;
-  --adp-abm-text: #1c2333;
-  --adp-abm-stroke: #475569;
-}
-
-body.vscode-dark,
-body.vscode-high-contrast:not(.vscode-high-contrast-light) {
-  --adp-abm-composite: #2e7814;
-  --adp-abm-decorator: #736a03;
-  --adp-abm-check: #086fa1;
-  --adp-abm-action: #696969;
-  --adp-abm-other: #187569;
-  --adp-abm-text: #f1f5f9;
-  --adp-abm-stroke: #e2e8f0;
-}
-
-.abm-shape {
-  stroke: var(--adp-abm-stroke);
-  stroke-width: 1;
-  pointer-events: all;
-}
-
-.abm-shape.abm-composite { fill: var(--adp-abm-composite); }
-.abm-shape.abm-decorator { fill: var(--adp-abm-decorator); }
-.abm-shape.abm-check { fill: var(--adp-abm-check); }
-.abm-shape.abm-action { fill: var(--adp-abm-action); }
-.abm-shape.abm-other { fill: var(--adp-abm-other); }
-
-/* An item without a keyword, read as a Do. */
-.abm-implicit .abm-shape {
-  stroke-dasharray: 4 3;
-}
-
-.adp-element.adp-selected .abm-shape {
-  stroke: var(--vscode-focusBorder);
-  stroke-width: 2;
-}
-
-.abm-text {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  box-sizing: border-box;
-  height: 100%;
-  padding: 4px 28px;
-  color: var(--adp-abm-text);
-  text-align: center;
-  pointer-events: none;
-}
-
-.abm-keyword {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.abm-label {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  font-size: 12px;
-  line-height: 1.25;
-}
-
-/* A parent line cannot be pointed at: it is the child's place in the tree, not a thing of its own. */
-.abm-child {
-  pointer-events: none;
 }
