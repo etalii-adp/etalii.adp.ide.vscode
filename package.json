@@ -281,10 +281,14 @@
     ]
   },
   "scripts": {
+    "prebuild": "node scripts/ensure-dependencies.mjs",
     "build": "node esbuild.mjs",
+    "prewatch": "node scripts/ensure-dependencies.mjs",
     "watch": "node esbuild.mjs --watch",
+    "precheck": "node scripts/ensure-dependencies.mjs",
     "check": "tsc --noEmit -p tsconfig.json && eslint .",
     "test": "npm run check && npm run test:unit && npm run test:vscode",
+    "pretest:unit": "node scripts/ensure-dependencies.mjs",
     "test:unit": "vitest run",
     "test:vscode": "npm run package && node scripts/unpack-plugin.mjs && tsc -p test/vscode/tsconfig.json && vscode-test",
     "package": "npm run build -- --production && node scripts/package.mjs",
