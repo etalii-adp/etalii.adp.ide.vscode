@@ -52,6 +52,7 @@ export function activate(context: vscode.ExtensionContext): AdpApi {
     vscode.workspace.onDidOpenTextDocument(show),
     vscode.workspace.onDidChangeTextDocument((event) => {
       show(event.document);
+      diagrams.documentChanged(event);
       diagrams.refreshDocument(event.document);
     }),
     vscode.workspace.onDidCloseTextDocument((document) => findings.clear(document.uri)),

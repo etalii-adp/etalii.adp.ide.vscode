@@ -100,7 +100,10 @@ function viewOf(source: Source, options: ViewOptions): ViewModel {
     data: { index: (nodeOf(model, child.parentId as string)?.childIds.indexOf(child.id) ?? 0) + 1 },
   }));
 
-  return { elements, relations, readOnly: false, chrome: { snap: { x: 0, y: 0 } } };
+  // The whole tree with where each node is drawn, in document order: what a canvas previews a drag from,
+  // whatever part of the tree is in view.
+  const tree = model.nodes.map((node) => ({ id: node.id, parent: node.parentId ?? null, ...(positions.get(node.id) ?? { x: 0, y: 0 }) }));
+  return { elements, relations, readOnly: false, chrome: { snap: { x: 0, y: 0 }, tree } };
 }
 
 function fieldsOf(model: Model, id: string): Field[] {

@@ -55,6 +55,12 @@ export interface Notation {
   connectFrom?(element: ViewElement, point: CanvasPoint): string | undefined;
   /** Where on an element a relation dropped at this point arrives, when the type has such a thing. */
   connectTo?(element: ViewElement, point: CanvasPoint): string | undefined;
+  /**
+   * How far every element is drawn from its place while one is dragged with its top-left at a point:
+   * the dragged element itself, and whatever moves with it or makes way for it. Without this the
+   * canvas moves the element alone, with what its view says goes with it.
+   */
+  dragging?(element: ViewElement, at: CanvasPoint, context: DrawContext): Map<string, CanvasPoint>;
   /** The line shown while a relation is being drawn from an element to a point. */
   connecting?(from: ViewElement, fromEnd: string, to: CanvasPoint, context: DrawContext): SVGElement;
 }

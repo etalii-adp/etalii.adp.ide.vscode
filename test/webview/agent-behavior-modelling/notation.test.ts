@@ -105,6 +105,26 @@ describe('gestures on a behavior model', () => {
     expect(requests()).toEqual([{ kind: 'move', id: '1.2', x: node.x + 31, y: node.y + 50 }]);
   });
 
+  it('makes the siblings a dragged node has passed step aside to where the new order would put them', () => {
+    const first = at('1.1');
+    const second = at('1.2');
+    pointer(group('1.1').querySelector('.abm-shape')!, 'pointerdown', first.x + 100, first.y + 30);
+    // Not yet past the middle of the next sibling: nothing else moves.
+    pointer(window, 'pointermove', first.x + 140, first.y + 30);
+    expect(group('1.2').getAttribute('transform')).toBeNull();
+    // Past it: the sibling, with what is under it, is drawn further left, making room.
+    pointer(window, 'pointermove', second.x + 110, first.y + 30);
+    const shift = Number(/translate\((-?[\d.]+) /.exec(group('1.2').getAttribute('transform') ?? '')?.[1]);
+    expect(shift).toBeLessThan(0);
+    expect(group('1.2.1').getAttribute('transform')).toBe(group('1.2').getAttribute('transform'));
+    expect(group('1.1').getAttribute('transform')).toBe(`translate(${second.x + 10 - first.x} 0)`);
+    // Back before the middle, they return.
+    pointer(window, 'pointermove', first.x + 140, first.y + 30);
+    expect(group('1.2').getAttribute('transform')).toBeNull();
+    pointer(window, 'pointerup', first.x + 140, first.y + 30);
+    expect(requests()).toEqual([{ kind: 'move', id: '1.1', x: first.x + 40, y: first.y }]);
+  });
+
   it('puts a node under another by a right-button drag from the new parent to it', () => {
     const target = group('1.4').querySelector('.abm-shape')!;
     document.elementFromPoint = () => target;

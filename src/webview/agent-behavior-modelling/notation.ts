@@ -2,10 +2,12 @@ import {
   mdiAccountArrowRightOutline, mdiAccountCheckOutline, mdiAccountQuestionOutline, mdiArrowLeft, mdiArrowRight, mdiArrowRightBoldOutline, mdiCallSplit,
   mdiHelpCircleOutline, mdiHelpRhombusOutline, mdiPlayOutline, mdiPlus, mdiRepeat, mdiReplay, mdiShieldOutline,
 } from '@mdi/js';
+import { dragPreview } from '../../core/agent-behavior-modelling/layout';
+import type { Model, Node } from '../../core/agent-behavior-modelling/model';
 import type { Box, ViewElement, ViewRelation } from '../../core/frame/diagramType';
 import { html, points, svg } from '../canvas/dom';
 import { registerIcons } from '../canvas/icons';
-import type { DrawContext, Notation } from '../canvas/notation';
+import type { CanvasPoint, DrawContext, Notation } from '../canvas/notation';
 
 // Agent Behavior Modelling's notation: the three composites as superellipses and the four wrappers
 // as hexagons, as behavior tree tools in games set the two families apart; a Check is a pill, a Do
@@ -108,11 +110,39 @@ function line(relation: ViewRelation, context: DrawContext): SVGGElement | undef
     svg('path', { class: 'adp-relation-line', d, 'marker-end': 'url(#adp-arrow)' }));
 }
 
+interface TreeEntry {
+  readonly id: string;
+  readonly parent: string | null;
+  readonly x: number;
+  readonly y: number;
+}
+
+// While a node is dragged it carries everything beneath it, its row follows it up and down, and
+// the siblings it has passed are drawn where the new order would put them: they step aside to show
+// where it will land. The tree and where each node is drawn come with the view, whole, so the
+// preview is right whatever part of the tree is in view.
+function dragging(element: ViewElement, at: CanvasPoint, context: DrawContext): Map<string, CanvasPoint> | undefined {
+  const tree = context.view.chrome.tree as TreeEntry[] | undefined;
+  if (!tree) return undefined;
+  const nodes = tree.map((entry) => ({ id: entry.id, parentId: entry.parent ?? undefined, childIds: tree.filter((other) => other.parent === entry.id).map((other) => other.id) })) as unknown as Node[];
+  const node = nodes.find((candidate) => candidate.id === element.id);
+  if (!node) return undefined;
+  const now = new Map(tree.map((entry) => [entry.id, { x: entry.x, y: entry.y }]));
+  const preview = dragPreview({ nodes } as unknown as Model, now, node, at.x, at.y);
+  const offsets = new Map<string, CanvasPoint>();
+  for (const [id, position] of preview) {
+    const was = now.get(id);
+    if (was) offsets.set(id, { x: position.x - was.x, y: position.y - was.y });
+  }
+  return offsets;
+}
+
 export const agentBehaviorModellingNotation: Notation = {
   origin: 'etalii/agent-behavior-modelling',
   label: 'Agent Behavior Modelling',
   element: node,
   relation: line,
+  dragging: (element, at, context) => dragging(element, at, context) ?? new Map([[element.id, { x: at.x - element.x, y: at.y - element.y }]]),
   // The line shown while a node is being put under another: from the new parent's bottom to the pointer.
   connecting(from, _fromEnd, to) {
     const start = { x: from.x + from.width / 2, y: from.y + from.height };

@@ -135,6 +135,16 @@
         "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
         "title": "Open as Agent Behavior Model",
         "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.undoLayout",
+        "title": "Undo (Diagram)",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.redoLayout",
+        "title": "Redo (Diagram)",
+        "category": "ADP"
       }
     ],
     "menus": {
@@ -194,6 +204,14 @@
         {
           "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
           "when": "resourceLangId == markdown"
+        },
+        {
+          "command": "etalii.adp.undoLayout",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.redoLayout",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
         }
       ],
       "explorer/context": [
@@ -242,6 +260,23 @@
         "command": "etalii.adp.moveLater",
         "key": "alt+down",
         "when": "activeCustomEditorId =~ /^etalii\\.adp\\./ && !etalii.adp.editingText && !focusedView"
+      },
+      {
+        "command": "etalii.adp.undoLayout",
+        "key": "ctrl+z",
+        "mac": "cmd+z",
+        "when": "activeCustomEditorId =~ /^etalii\\.adp\\./ && !etalii.adp.editingText && !focusedView && etalii.adp.layoutUndo"
+      },
+      {
+        "command": "etalii.adp.redoLayout",
+        "key": "ctrl+y",
+        "mac": "cmd+shift+z",
+        "when": "activeCustomEditorId =~ /^etalii\\.adp\\./ && !etalii.adp.editingText && !focusedView && etalii.adp.layoutRedo"
+      },
+      {
+        "command": "etalii.adp.redoLayout",
+        "key": "ctrl+shift+z",
+        "when": "activeCustomEditorId =~ /^etalii\\.adp\\./ && !etalii.adp.editingText && !focusedView && etalii.adp.layoutRedo"
       }
     ]
   },
