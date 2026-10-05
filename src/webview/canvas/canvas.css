@@ -1,0 +1,548 @@
+/*
+ * The canvas, and the colours of each notation as theme tokens: one value per kind of colour theme,
+ * switched by the class Visual Studio Code puts on the body. The phase, trigger and note colours are
+ * the definitions' own, the same in every ADP host. High contrast keeps the fills and draws every
+ * outline in the theme's contrast border.
+ */
+:root {
+  --adp-ghg-peak: #f7e7a1;
+  --adp-ghg-trough: #dfe3e8;
+  --adp-ghg-slope: #f6c99a;
+  --adp-ghg-plateau: #cde8a8;
+  --adp-ghg-chevron: #475569;
+  --adp-ghg-trigger: #7c3aed;
+  --adp-ghg-note: #fef9c3;
+  --adp-ghg-note-text: #0f172a;
+  --adp-outline: transparent;
+}
+
+body.vscode-dark,
+body.vscode-high-contrast:not(.vscode-high-contrast-light) {
+  --adp-ghg-peak: #6b5a17;
+  --adp-ghg-trough: #475569;
+  --adp-ghg-slope: #7c4a1c;
+  --adp-ghg-plateau: #3f6212;
+  --adp-ghg-chevron: #e2e8f0;
+  --adp-ghg-trigger: #c4b5fd;
+  --adp-ghg-note: #423a10;
+  --adp-ghg-note-text: #f1f5f9;
+}
+
+body.vscode-high-contrast,
+body.vscode-high-contrast-light {
+  --adp-outline: var(--vscode-contrastBorder);
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+.adp-canvas {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.adp-stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.adp-surface {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  outline: none;
+  cursor: default;
+  user-select: none;
+}
+
+.adp-label {
+  fill: var(--vscode-editor-foreground);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.adp-outline {
+  fill: none;
+  stroke: var(--adp-outline);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.adp-element.adp-selected .adp-outline {
+  stroke: var(--vscode-focusBorder);
+  stroke-width: 2;
+}
+
+.adp-relation-line {
+  fill: none;
+  stroke: var(--vscode-editor-foreground);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+/* A wide, invisible stroke, so a thin curve can be pointed at. */
+.adp-relation-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 10;
+}
+
+.adp-relation.adp-selected .adp-relation-line {
+  stroke: var(--vscode-focusBorder);
+  stroke-width: 2.5;
+}
+
+#adp-arrow path {
+  fill: var(--vscode-editor-foreground);
+}
+
+/* A notice over the canvas: why a diagram is empty or read-only. */
+.adp-notice {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 80%;
+  padding: 6px 12px;
+  border: 1px solid var(--vscode-inputValidation-warningBorder, var(--vscode-contrastBorder, transparent));
+  background: var(--vscode-inputValidation-warningBackground, var(--vscode-editorWidget-background));
+  color: var(--vscode-inputValidation-warningForeground, var(--vscode-editor-foreground));
+  z-index: 3;
+}
+
+/* The key to a notation's colours, and whatever else it shows beside the canvas. */
+.adp-panel {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-contrastBorder, transparent));
+  background: var(--vscode-editorWidget-background);
+  color: var(--vscode-editorWidget-foreground, var(--vscode-editor-foreground));
+  z-index: 2;
+}
+
+.adp-legend {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.adp-legend li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.adp-legend-swatch {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--vscode-contrastBorder, var(--adp-ghg-chevron));
+}
+
+/* The time ruler, pinned to the bottom of the screen. */
+.adp-ruler {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 22px;
+  overflow: hidden;
+  border-top: 1px solid var(--vscode-editorWidget-border, var(--vscode-contrastBorder, transparent));
+  background: var(--vscode-editorWidget-background);
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.adp-ruler-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding: 3px 0 0 4px;
+  border-left: 1px solid var(--vscode-editorWidget-border, currentColor);
+  white-space: nowrap;
+}
+
+/* The Gartner hype cycle graph. */
+.ghg-phase { stroke: none; }
+.ghg-peak { fill: var(--adp-ghg-peak); background: var(--adp-ghg-peak); }
+.ghg-trough { fill: var(--adp-ghg-trough); background: var(--adp-ghg-trough); }
+.ghg-slope { fill: var(--adp-ghg-slope); background: var(--adp-ghg-slope); }
+.ghg-plateau { fill: var(--adp-ghg-plateau); background: var(--adp-ghg-plateau); }
+
+.ghg-chevron {
+  fill: none;
+  stroke: var(--adp-ghg-chevron);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.ghg-trigger-circle {
+  fill: var(--adp-ghg-trigger);
+  stroke: var(--adp-ghg-trigger);
+  pointer-events: all;
+}
+
+.ghg-note-box {
+  fill: var(--adp-ghg-note);
+  stroke: var(--vscode-editorWidget-border, var(--adp-ghg-chevron));
+  pointer-events: all;
+}
+
+.ghg-note-text {
+  box-sizing: border-box;
+  height: 100%;
+  padding: 4px 6px;
+  overflow: hidden;
+  color: var(--adp-ghg-note-text);
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/* The ADP Toolbox, docked beside the canvas. */
+.adp-toolbox {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  width: 132px;
+  border-right: 1px solid var(--vscode-editorWidget-border, var(--vscode-contrastBorder, transparent));
+  background: var(--vscode-sideBar-background, var(--vscode-editorWidget-background));
+  color: var(--vscode-sideBar-foreground, var(--vscode-editor-foreground));
+  overflow-y: auto;
+}
+
+.adp-toolbox[hidden] {
+  display: none;
+}
+
+.adp-toolbox-title {
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  color: var(--vscode-sideBarTitle-foreground, inherit);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.adp-toolbox.adp-collapsed {
+  width: auto;
+}
+
+.adp-toolbox.adp-collapsed .adp-toolbox-entries {
+  display: none;
+}
+
+.adp-toolbox.adp-collapsed .adp-toolbox-title {
+  writing-mode: vertical-rl;
+}
+
+.adp-toolbox-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 4px 4px;
+}
+
+.adp-toolbox-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: grab;
+}
+
+.adp-toolbox-entry:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.adp-toolbox-entry:focus-visible,
+.adp-toolbox-title:focus-visible,
+.adp-menu-item:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.adp-icon path {
+  fill: currentColor;
+}
+
+/* The filter by tags, above the legend. */
+.adp-panel[hidden],
+.adp-filter[hidden],
+.adp-legend[hidden],
+.adp-compact[hidden] {
+  display: none;
+}
+
+.adp-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  max-width: 280px;
+}
+
+.adp-filter-input {
+  flex: 1;
+  min-width: 96px;
+  padding: 2px 4px;
+  border: 1px solid var(--vscode-input-border, var(--vscode-contrastBorder, transparent));
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+}
+
+.adp-filter-mode {
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-contrastBorder, transparent));
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+  font: inherit;
+}
+
+.adp-chips {
+  display: contents;
+}
+
+.adp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px 0 6px;
+  border-radius: 8px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.adp-chip-remove {
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.adp-compact {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Handles on a selection, and what a gesture shows while it runs. */
+.adp-handle {
+  fill: var(--vscode-editor-background);
+  stroke: var(--vscode-focusBorder);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.adp-ghost {
+  opacity: 0.25;
+}
+
+.adp-preview {
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.adp-connecting {
+  stroke-dasharray: 4 3;
+}
+
+.adp-element[data-id] {
+  cursor: move;
+}
+
+/* Text edited in place. */
+.adp-inline-editor {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 2px 4px;
+  border: 1px solid var(--vscode-focusBorder);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  font-size: 12px;
+  resize: none;
+  z-index: 4;
+}
+
+/* The sentence of a refusal, where the user is working. */
+.adp-status {
+  position: absolute;
+  left: 8px;
+  bottom: 30px;
+  max-width: 70%;
+  padding: 6px 10px;
+  border: 1px solid var(--vscode-inputValidation-warningBorder, var(--vscode-contrastBorder, transparent));
+  background: var(--vscode-inputValidation-warningBackground, var(--vscode-editorWidget-background));
+  color: var(--vscode-inputValidation-warningForeground, var(--vscode-editor-foreground));
+  z-index: 3;
+}
+
+.adp-status[hidden],
+.adp-notice[hidden],
+.adp-menu[hidden],
+.adp-ruler[hidden] {
+  display: none;
+}
+
+/* The context menu. */
+.adp-menu {
+  position: absolute;
+  margin: 0;
+  padding: 4px 0;
+  min-width: 180px;
+  border: 1px solid var(--vscode-menu-border, var(--vscode-contrastBorder, transparent));
+  background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+  color: var(--vscode-menu-foreground, var(--vscode-editor-foreground));
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, transparent);
+  list-style: none;
+  z-index: 5;
+}
+
+.adp-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 12px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.adp-menu-item:hover:not([aria-disabled]) {
+  background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
+  color: var(--vscode-menu-selectionForeground, inherit);
+}
+
+.adp-menu-item[aria-disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.adp-menu-label {
+  flex: 1;
+}
+
+.adp-menu-shortcut {
+  color: var(--vscode-descriptionForeground);
+}
+
+/* Agent Behavior Modelling: the fill of each family of node, as the definition's theme tokens. */
+:root {
+  --adp-abm-composite: #aaed92;
+  --adp-abm-decorator: #fcf281;
+  --adp-abm-check: #9edcfa;
+  --adp-abm-action: #ededed;
+  --adp-abm-other: #86e6d9;
+  --adp-abm-text: #1c2333;
+  --adp-abm-stroke: #475569;
+}
+
+body.vscode-dark,
+body.vscode-high-contrast:not(.vscode-high-contrast-light) {
+  --adp-abm-composite: #2e7814;
+  --adp-abm-decorator: #736a03;
+  --adp-abm-check: #086fa1;
+  --adp-abm-action: #696969;
+  --adp-abm-other: #187569;
+  --adp-abm-text: #f1f5f9;
+  --adp-abm-stroke: #e2e8f0;
+}
+
+.abm-shape {
+  stroke: var(--adp-abm-stroke);
+  stroke-width: 1;
+  pointer-events: all;
+}
+
+.abm-shape.abm-composite { fill: var(--adp-abm-composite); }
+.abm-shape.abm-decorator { fill: var(--adp-abm-decorator); }
+.abm-shape.abm-check { fill: var(--adp-abm-check); }
+.abm-shape.abm-action { fill: var(--adp-abm-action); }
+.abm-shape.abm-other { fill: var(--adp-abm-other); }
+
+/* An item without a keyword, read as a Do. */
+.abm-implicit .abm-shape {
+  stroke-dasharray: 4 3;
+}
+
+.adp-element.adp-selected .abm-shape {
+  stroke: var(--vscode-focusBorder);
+  stroke-width: 2;
+}
+
+.abm-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 4px 28px;
+  color: var(--adp-abm-text);
+  text-align: center;
+  pointer-events: none;
+}
+
+.abm-keyword {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.abm-label {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+/* A parent line cannot be pointed at: it is the child's place in the tree, not a thing of its own. */
+.abm-child {
+  pointer-events: none;
+}

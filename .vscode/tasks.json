@@ -1,0 +1,41 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "ADP: watch",
+      "type": "npm",
+      "script": "watch",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "esbuild",
+        "pattern": { "regexp": "^\\s*(.+):(\\d+):(\\d+): (error|warning): (.*)$", "file": 1, "line": 2, "column": 3, "severity": 4, "message": 5 },
+        "background": { "activeOnStart": true, "beginsPattern": "\\[watch\\] build started|build started", "endsPattern": "\\[watch\\] build finished|Done in|build finished" }
+      },
+      "presentation": { "reveal": "never" }
+    },
+    {
+      "label": "ADP: type check while editing",
+      "type": "shell",
+      "command": "npx tsc --noEmit --watch -p tsconfig.json",
+      "isBackground": true,
+      "problemMatcher": "$tsc-watch",
+      "presentation": { "reveal": "never" }
+    },
+    {
+      "label": "ADP: refresh the debug examples",
+      "type": "npm",
+      "script": "prepare-debug-examples",
+      "presentation": { "reveal": "never" }
+    },
+    {
+      "label": "ADP: prepare a debug session",
+      "dependsOn": ["ADP: refresh the debug examples", "ADP: watch", "ADP: type check while editing"]
+    },
+    {
+      "label": "ADP: prepare the tests in Visual Studio Code",
+      "type": "shell",
+      "command": "npm run package && node scripts/unpack-plugin.mjs && npx tsc -p test/vscode/tsconfig.json",
+      "presentation": { "reveal": "silent" }
+    }
+  ]
+}

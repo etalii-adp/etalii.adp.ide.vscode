@@ -1,0 +1,156 @@
+# Checks every pull request into develop and every change to develop (etalii.adp spec 001-ci-and-badges), and
+# offers the plug-in from what passed (etalii.adp spec 006-vscode-plugin, contracts/build-workflow.md).
+#
+# Triggers: a pull request into develop, a push to develop, and a manual run.
+#
+# The check job checks the files the repository holds. The plugin job builds the plug-in, runs the type and lint
+# checks and every test (the core, the webview, and the packaged plug-in in a real Visual Studio Code, which needs a
+# display, so under xvfb-run), packages etalii-adp-<version>.vsix and offers it as the installable file itself. It
+# writes the skipped tests and their reasons to the job summary and keeps its test reports on every run that was not
+# cancelled.
+#
+# One job publishes, and only it holds contents: write. development-build runs on develop, after both other jobs
+# passed, and keeps one "development" pre-release on the Releases page in step with it, moving only forward. It cannot
+# run for a pull request, whose ref is refs/pull/<n>/merge.
+name: Build
+
+on:
+  pull_request:
+    branches: [develop]
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - run: python -m pip install pyyaml
+      - name: Check JSON, YAML and markdown links
+        run: python .github/scripts/check-files.py
+
+  plugin:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install the build's dependencies
+        run: npm ci
+      - name: Check types and lint
+        run: npm run check
+      - name: Test the core and the webview
+        run: npm run test:unit
+      # Packages the plug-in, unpacks it and runs it in a real Visual Studio Code, which the runner downloads.
+      - name: Test the plug-in in Visual Studio Code
+        run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' npm run test:vscode
+      - name: Report the skipped tests
+        if: ${{ !cancelled() }}
+        run: node scripts/skipped-tests.mjs
+      - name: Keep the test reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: reports/
+          if-no-files-found: ignore
+      # Not archived, so the download is the installable etalii-adp-<version>.vsix itself, named after the file.
+      - name: Offer the plug-in for download
+        uses: actions/upload-artifact@v7
+        with:
+          path: etalii-adp-*.vsix
+          archive: false
+          if-no-files-found: error
+
+  # Keeps the "development" pre-release in step with develop: the plug-in the plugin job made, from a commit that
+  # passed every check. It only moves forward, so re-running an older run of develop leaves a newer build in place.
+  development-build:
+    needs: [check, plugin]
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      DEVELOPMENT_TAG: development
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Take the plug-in the plugin job made
+        uses: actions/download-artifact@v8
+        with:
+          pattern: etalii-adp-*.vsix
+          merge-multiple: true
+          # The artifact is the .vsix itself; without this it would be unpacked.
+          skip-decompress: true
+          path: plugin
+      - name: Publish the development build
+        run: |
+          vsix=$(find plugin -type f -name 'etalii-adp-*.vsix' | head -n 1)
+          [ -n "$vsix" ] || { echo "::error::The plugin job's plug-in was not found among the downloaded artifacts."; exit 1; }
+          file=$(basename "$vsix")
+          version=${file#etalii-adp-}
+          version=${version%.vsix}
+          if gh release view "$DEVELOPMENT_TAG" >/dev/null 2>&1; then
+            exists=1
+            status=$(gh api "repos/$GH_REPO/compare/$DEVELOPMENT_TAG...$GITHUB_SHA" --jq .status)
+            if [ "$status" != "ahead" ]; then
+              echo "::notice::The development build is already at $GITHUB_SHA or a newer commit ($status), so it is left as it is."
+              exit 0
+            fi
+          else
+            exists=0
+          fi
+          date=$(date -u +%Y-%m-%d)
+          subject=$(gh api "repos/$GH_REPO/commits/$GITHUB_SHA" --jq '.commit.message | split("\n")[0]')
+          title="Development build $version (${GITHUB_SHA:0:7}, $date)"
+          {
+            echo "The plug-in from \`develop\` at [$GITHUB_SHA]($GITHUB_SERVER_URL/$GH_REPO/commit/$GITHUB_SHA), built and tested on $date (UTC)."
+            echo
+            echo "> $subject"
+            echo
+            echo "Checked by [this run]($GITHUB_SERVER_URL/$GH_REPO/actions/runs/$GITHUB_RUN_ID). Every merge into develop replaces this build."
+          } > notes.md
+          if [ "$exists" = 0 ]; then
+            gh release create "$DEVELOPMENT_TAG" "$vsix" --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "$title" --notes-file notes.md
+          else
+            gh release upload "$DEVELOPMENT_TAG" "$vsix" --clobber
+            gh release view "$DEVELOPMENT_TAG" --json assets --jq '.assets[].name' | while read -r asset; do
+              if [ "$asset" != "$file" ]; then gh release delete-asset "$DEVELOPMENT_TAG" "$asset" --yes; fi
+            done
+            gh release edit "$DEVELOPMENT_TAG" --prerelease --latest=false --title "$title" --notes-file notes.md
+            # The tag moves last, so a job that stopped half-way is not taken for "already published" when re-run.
+            gh api -X PATCH "repos/$GH_REPO/git/refs/tags/$DEVELOPMENT_TAG" -f sha="$GITHUB_SHA" -F force=true >/dev/null
+          fi
+
+  # Flags a retired use of the ADP vocabulary (etalii.adp spec 002, FR-017). The runner and its list of retired
+  # patterns and allowances live in etalii.adp and are read from its develop branch, so every repository is checked
+  # against the same list.
+  terminology:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Check the vocabulary against the glossary
+        env:
+          SOURCE: https://raw.githubusercontent.com/etalii-adp/etalii.adp/develop
+        run: |
+          curl -fsSL "$SOURCE/.github/scripts/terminology-check.py" -o "$RUNNER_TEMP/terminology-check.py"
+          python "$RUNNER_TEMP/terminology-check.py" --name "${{ github.event.repository.name }}" --config "$SOURCE/docs/terminology-check.json"

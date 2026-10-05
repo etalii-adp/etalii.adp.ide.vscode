@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run ADP",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "${workspaceFolder}/.debug/examples"
+      ],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "debugWebviews": true,
+      "sourceMaps": true,
+      "preLaunchTask": "ADP: prepare a debug session"
+    },
+    {
+      "name": "Debug core and webview tests",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/vitest/vitest.mjs",
+      "args": ["run", "${relativeFile}"],
+      "autoAttachChildProcesses": true,
+      "smartStep": true,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Debug tests in Visual Studio Code",
+      "type": "extensionHost",
+      "request": "launch",
+      "testConfiguration": "${workspaceFolder}/.vscode-test.mjs",
+      "outFiles": ["${workspaceFolder}/out/**/*.js", "${workspaceFolder}/.vscode-test/plugin/extension/dist/**/*.js"],
+      "preLaunchTask": "ADP: prepare the tests in Visual Studio Code"
+    }
+  ]
+}

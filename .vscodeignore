@@ -1,0 +1,8 @@
+**
+!dist/**
+!package.json
+!language/**
+!media/**
+!README.md
+!LICENSE
+dist/**/*.map

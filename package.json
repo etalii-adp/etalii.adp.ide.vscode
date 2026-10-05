@@ -1,0 +1,279 @@
+{
+  "name": "adp",
+  "publisher": "etalii",
+  "displayName": "ADP: A Different Perspective",
+  "description": "Specialized tools for text-based files: diagrams, designers and editors, each tuned for one task.",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "homepage": "https://etalii.net/adp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/etalii-adp/etalii.adp.ide.vscode.git"
+  },
+  "engines": {
+    "vscode": "^1.140.0",
+    "node": ">=22"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:ghg",
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "ghg",
+        "aliases": [
+          "Gartner hype cycle graph"
+        ],
+        "extensions": [
+          ".ghg"
+        ],
+        "configuration": "./language/ghg.language-configuration.json"
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "etalii.adp.gartner.hypecycle-graph",
+        "displayName": "Gartner hype cycle graph",
+        "selector": [
+          {
+            "filenamePattern": "*.ghg"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "etalii.adp.etalii.agent-behavior-modelling",
+        "displayName": "Agent Behavior Modelling",
+        "selector": [
+          {
+            "filenamePattern": "*.md"
+          }
+        ],
+        "priority": "option"
+      },
+      {
+        "viewType": "etalii.adp.registration",
+        "displayName": "ADP registration",
+        "selector": [
+          {
+            "filenamePattern": "*.adp"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "etalii.adp.new.gartner.hypecycle-graph",
+        "title": "New Gartner Hype Cycle Graph",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.openAsText",
+        "title": "Open as Text",
+        "category": "ADP",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "etalii.adp.arrangeDiagram",
+        "title": "Arrange Diagram",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.rename",
+        "title": "Rename",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.remove",
+        "title": "Remove",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.evenPhases",
+        "title": "Even Phases",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.moveEarlier",
+        "title": "Move Earlier",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.moveLater",
+        "title": "Move Later",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.toggleCompact",
+        "title": "Toggle Compact",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.focusProperties",
+        "title": "Focus on ADP Properties",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.new.etalii.agent-behavior-modelling",
+        "title": "New Agent Behavior Model",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
+        "title": "Open as Agent Behavior Model",
+        "category": "ADP"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "etalii.adp.openAsText",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./",
+          "group": "navigation"
+        },
+        {
+          "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
+          "when": "resourceLangId == markdown && !activeCustomEditorId && resourcePath in etalii.adp.suggested",
+          "group": "navigation"
+        }
+      ],
+      "file/newFile": [
+        {
+          "command": "etalii.adp.new.gartner.hypecycle-graph"
+        },
+        {
+          "command": "etalii.adp.new.etalii.agent-behavior-modelling"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "etalii.adp.openAsText",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.arrangeDiagram",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.rename",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.remove",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.evenPhases",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.moveEarlier",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.moveLater",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.toggleCompact",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
+          "when": "resourceLangId == markdown"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
+          "when": "resourceExtname == .md && resourcePath in etalii.adp.suggested",
+          "group": "navigation@90"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "etalii-adp",
+          "title": "ADP",
+          "icon": "media/adp.svg"
+        }
+      ]
+    },
+    "views": {
+      "etalii-adp": [
+        {
+          "type": "webview",
+          "id": "etalii.adp.properties",
+          "name": "ADP Properties"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "etalii.adp.rename",
+        "key": "f2",
+        "when": "activeCustomEditorId =~ /^etalii\\.adp\\./ && !etalii.adp.editingText && !focusedView"
+      },
+      {
+        "command": "etalii.adp.remove",
+        "key": "delete",
+        "when": "activeCustomEditorId =~ /^etalii\\.adp\\./ && !etalii.adp.editingText && !focusedView"
+      },
+      {
+        "command": "etalii.adp.moveEarlier",
+        "key": "alt+up",
+        "when": "activeCustomEditorId =~ /^etalii\\.adp\\./ && !etalii.adp.editingText && !focusedView"
+      },
+      {
+        "command": "etalii.adp.moveLater",
+        "key": "alt+down",
+        "when": "activeCustomEditorId =~ /^etalii\\.adp\\./ && !etalii.adp.editingText && !focusedView"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "check": "tsc --noEmit -p tsconfig.json && eslint .",
+    "test": "npm run check && npm run test:unit && npm run test:vscode",
+    "test:unit": "vitest run",
+    "test:vscode": "npm run package && node scripts/unpack-plugin.mjs && tsc -p test/vscode/tsconfig.json && vscode-test",
+    "package": "npm run build -- --production && node scripts/package.mjs",
+    "sync-examples": "node scripts/sync-examples.mjs",
+    "prepare-debug-examples": "node scripts/prepare-debug-examples.mjs",
+    "look": "npm run build && node scripts/harness.mjs"
+  },
+  "devDependencies": {
+    "@mdi/js": "^7.4.47",
+    "@types/adm-zip": "^0.5.8",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.20.5",
+    "@types/vscode": "^1.140.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.0.0",
+    "adm-zip": "^0.6.1",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.12.0",
+    "jsdom": "^30.1.2",
+    "mocha": "^12.0.3",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.0",
+    "vitest": "^5.0.3",
+    "yaml": "^2.9.1"
+  }
+}
