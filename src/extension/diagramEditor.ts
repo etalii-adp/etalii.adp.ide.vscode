@@ -117,6 +117,9 @@ export class Diagrams implements vscode.Disposable {
         return { result: 'applied' };
       case 'confirm':
         return { result: 'cancelled' };
+      case 'showField':
+        void vscode.commands.executeCommand('etalii.adp.properties.focus');
+        return { result: 'applied' };
       case 'applied': {
         const before = diagram.document.getText();
         const splice = spliceBetween(before, outcome.text);
@@ -131,7 +134,7 @@ export class Diagrams implements vscode.Disposable {
           }
         }
         if (outcome.select !== undefined) {
-          diagram.post({ v: 1, type: 'reveal', id: outcome.select, ...(outcome.editLabel ? { editLabel: true, multiline: true } : {}) });
+          diagram.post({ v: 1, type: 'reveal', id: outcome.select, ...(outcome.editLabel ? { editLabel: true, multiline: outcome.multiline === true } : {}) });
         }
         return { result: 'applied' };
       }

@@ -205,7 +205,7 @@ function editOf(source: Source, request: EditRequest, confirmed: boolean): EditO
   const model = read(source);
   if (!model.readable) return { kind: 'refused', sentence: unreadable };
   const dateAt = (x: number): string => formatMonth(nearestMonthAt(x, model.unit));
-  const run = (edit: Edit, extra: { select?: string; editLabel?: boolean } = {}): EditOutcome => {
+  const run = (edit: Edit, extra: { select?: string; editLabel?: boolean; multiline?: boolean } = {}): EditOutcome => {
     const outcome = apply(source.text, edit);
     return outcome.refusal !== undefined ? { kind: 'refused', sentence: outcome.refusal } : { kind: 'applied', text: outcome.text, ...extra };
   };
@@ -217,7 +217,7 @@ function editOf(source: Source, request: EditRequest, confirmed: boolean): EditO
       if (request.entry === actionIds.addTrend) return run({ kind: 'addTrend', x: request.x, y: request.y, id }, { select: id });
       if (request.entry === actionIds.addTrigger) return run({ kind: 'addTrigger', x: request.x, y: request.y, id }, { select: id });
       // A note is added empty, and its editor opens at once.
-      if (request.entry === actionIds.addNote) return run({ kind: 'addNote', x: request.x, y: request.y, id }, { select: id, editLabel: true });
+      if (request.entry === actionIds.addNote) return run({ kind: 'addNote', x: request.x, y: request.y, id }, { select: id, editLabel: true, multiline: true });
       return { kind: 'refused', sentence: 'A trend is added by dropping it where it starts.' };
     }
     case 'move':
