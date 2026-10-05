@@ -20,13 +20,73 @@
     "Other"
   ],
   "main": "./dist/extension.js",
-  "activationEvents": [],
+  "activationEvents": [
+    "onLanguage:ghg"
+  ],
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": true
     }
   },
-  "contributes": {},
+  "contributes": {
+    "languages": [
+      {
+        "id": "ghg",
+        "aliases": [
+          "Gartner hype cycle graph"
+        ],
+        "extensions": [
+          ".ghg"
+        ],
+        "configuration": "./language/ghg.language-configuration.json"
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "etalii.adp.gartner.hypecycle-graph",
+        "displayName": "Gartner hype cycle graph",
+        "selector": [
+          {
+            "filenamePattern": "*.ghg"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "etalii.adp.new.gartner.hypecycle-graph",
+        "title": "New Gartner Hype Cycle Graph",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.openAsText",
+        "title": "Open as Text",
+        "category": "ADP",
+        "icon": "$(go-to-file)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "etalii.adp.openAsText",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./",
+          "group": "navigation"
+        }
+      ],
+      "file/newFile": [
+        {
+          "command": "etalii.adp.new.gartner.hypecycle-graph"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "etalii.adp.openAsText",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        }
+      ]
+    }
+  },
   "scripts": {
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
@@ -36,7 +96,8 @@
     "test:vscode": "npm run package && node scripts/unpack-plugin.mjs && tsc -p test/vscode/tsconfig.json && vscode-test",
     "package": "npm run build -- --production && node scripts/package.mjs",
     "sync-examples": "node scripts/sync-examples.mjs",
-    "prepare-debug-examples": "node scripts/prepare-debug-examples.mjs"
+    "prepare-debug-examples": "node scripts/prepare-debug-examples.mjs",
+    "look": "npm run build && node scripts/harness.mjs"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",
