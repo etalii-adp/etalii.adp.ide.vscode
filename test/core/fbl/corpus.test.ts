@@ -13,6 +13,9 @@ interface Source {
 
 const manifest = JSON.parse(new TextDecoder().decode(bytesOf('fixtures/fbl/manifest.json'))) as { sources: Source[] };
 
+// Hundreds of files are read; on a machine that scans each file as it is opened that takes a while.
+const slow = 60_000;
+
 describe('the copied FBL files', () => {
   it('come from two sources, each with its commit and licence', () => {
     expect(manifest.sources.map((source) => source.name)).toEqual(['conformance', 'real-files']);
@@ -31,5 +34,5 @@ describe('the copied FBL files', () => {
     expect(listed.filter((file) => !found.includes(file)), 'listed files that are missing').toEqual([]);
     const changed = listed.filter((file) => createHash('sha256').update(bytesOf(source.to + file)).digest('hex') !== source.files[file]);
     expect(changed, 'files whose bytes differ from the copy the manifest records').toEqual([]);
-  });
+  }, slow);
 });

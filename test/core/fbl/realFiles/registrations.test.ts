@@ -141,5 +141,5 @@ describe('the registrations among the real files', () => {
       return found.length !== 1 || found[0] !== turtle;
     });
     expect(misrouted.map((file) => file.name), 'Turtle and N-Triples files not routed to the turtle binding alone').toEqual([]);
-  });
+  }, 60_000);
 });

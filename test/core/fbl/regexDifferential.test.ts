@@ -87,5 +87,5 @@ describe('the library\'s regular expression matcher and the platform\'s', () => 
       if (differences.length === 5) break;
     }
     expect(differences).toEqual([]);
-  });
+  }, 60_000);
 });
