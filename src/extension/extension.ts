@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { DiagramType } from '../core/frame/diagramType';
 import { viewTypeOf } from '../core/frame/diagramType';
+import * as fbl from '../core/fbl';
 import { registerCommands } from './commands';
 import { DiagramEditorProvider, Diagrams } from './diagramEditor';
 import { diagramTypes } from './diagramTypes';
@@ -13,6 +14,8 @@ import { watchSuggestions } from './suggestions';
 /** What activation hands back, so tests can see what was registered. */
 export interface AdpApi {
   readonly viewTypes: readonly string[];
+  /** The plug-in's FBL implementation. No tool uses it yet (etalii.adp spec 009). */
+  readonly fbl: typeof import('../core/fbl');
 }
 
 // The type whose own extension a document has; a shared extension, such as Markdown, names none,
@@ -59,7 +62,7 @@ export function activate(context: vscode.ExtensionContext): AdpApi {
     vscode.workspace.onDidCloseTextDocument((document) => findings.clear(document.uri)),
   );
 
-  return { viewTypes: diagramTypes.map(viewTypeOf) };
+  return { viewTypes: diagramTypes.map(viewTypeOf), fbl };
 }
 
 export function deactivate(): void {

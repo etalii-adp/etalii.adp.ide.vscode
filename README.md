@@ -13,6 +13,9 @@ ADP, A Different Perspective, is a range of task-focused tools: diagrams, design
 
 ADP Properties, in the ADP container of the activity bar, shows and edits what is selected in the diagram that has the focus.
 Each diagram is an editor on the file's own text: every change is one step in Visual Studio Code's undo, edits only the lines it concerns, and leaves the rest of the file byte for byte as it was. **Open as Text** shows the same document beside the diagram, and problems in the file are listed in the Problems panel. The tool types are catalogued in [docs/tools.md](docs/tools.md), and where this host differs from their definitions is recorded in [docs/parity.md](docs/parity.md).
+
+The plug-in also carries a generic implementation of [FBL](https://github.com/etalii-adp/etalii.adp/blob/develop/specifications/fbl/FBL-specification.md) 0.1, the language that binds a tool to a format it does not own. No tool uses it yet, and nothing you see has changed because of it: it is there for the tool types to come. What it implements, what it leaves out and where it differs from standalone's is in [docs/fbl.md](docs/fbl.md).
+
 ## Install from a file
 
 1. Download `etalii-adp-<version>.vsix` from the [Releases page](https://github.com/etalii-adp/etalii.adp.ide.vscode/releases): the **Development build** pre-release is the plug-in from the current `develop` after it passed every check.
@@ -54,9 +57,11 @@ Open this folder in Visual Studio Code and start **Run ADP** (F5). A second wind
 | Path | What it is |
 |---|---|
 | `src/core` | Files, models, rules and edits. It knows nothing of Visual Studio Code or a browser, and the lint rules keep it so. |
+| `src/core/fbl` | The FBL implementation: bodies and registrations read and written through FBL bindings, by splices on bytes. Reached from the rest of the plug-in only through what `activate` returns; see [docs/fbl.md](docs/fbl.md). |
 | `src/extension` | The part that runs in the extension host: editors, commands, findings. |
 | `src/webview` | The part that runs in webviews: the diagram library that draws every diagram type (`src/webview/diagram`, with its geometry in `src/core/diagram`), each diagram type's definition, the ADP Toolbox and ADP Properties views. `npm run look` draws one example in a page outside Visual Studio Code, for a quick look at the drawing. |
 | `examples`, `fixtures` | Example documents and test fixtures, copied unchanged from etalii.adp.ide.standalone; see [their provenance](examples/PROVENANCE.md). |
+| `fixtures/fbl` | What the FBL implementation is tested on, copied unchanged from two sources: FBL's example bindings, fixtures and registrations from etalii.adp, and the real files standalone's FBL tests read from etalii.adp.ide.standalone; see [their provenance](fixtures/fbl/PROVENANCE.md). `npm run sync-fbl` refreshes them. |
 | `test/core`, `test/webview`, `test/vscode` | The three test levels. |
 
 ## How work is done here
