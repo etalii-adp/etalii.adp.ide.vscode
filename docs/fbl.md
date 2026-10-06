@@ -108,3 +108,4 @@ The unit tests may take at most twice as long as before the library came (spec 0
 | When | "Test the core and the webview" (`npm run test:unit`) | Build run |
 |---|---|---|
 | Before, on `develop` at `f0f9cf1` | 7 seconds | [37384430774](https://github.com/etalii-adp/etalii.adp.ide.vscode/actions/runs/37384430774) |
+| After, on pull request 21 at `4c6f830` | 12 seconds | [37542183510](https://github.com/etalii-adp/etalii.adp.ide.vscode/actions/runs/37542183510) |
