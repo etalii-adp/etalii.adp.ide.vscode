@@ -81,7 +81,22 @@ console.log(`etalii.adp.ide.standalone at ${standaloneCommit}`);
 for (const binding of minimums.bindings) {
   take(binding.key, source.filter((file) => has(file, ...binding.extensions) && (!binding.contains || contains(file, binding.contains))), binding.minimum);
 }
-take('registrations', source.filter((file) => has(file, '.adp')), minimums.registrations);
+const registrations = source.filter((file) => has(file, '.adp'));
+take('registrations', registrations, minimums.registrations);
+// The body a registration names in its `body` header, which the registration tests open, whatever its kind.
+const inSource = new Set(source);
+const named = new Set();
+for (const registration of registrations) {
+  const header = /^body: (.+?)\s*$/m.exec(standaloneGit('show', `${standaloneCommit}:${registration}`).toString('utf8').split(/^(?:layout|identities):/m)[0]);
+  if (!header) continue;
+  const segments = registration.split('/').slice(0, -1);
+  for (const segment of header[1].split('/')) {
+    if (segment === '..') segments.pop();
+    else if (segment !== '.' && segment !== '') segments.push(segment);
+  }
+  if (inSource.has(segments.join('/'))) named.add(segments.join('/'));
+}
+take('bodies registrations name', [...named].filter((file) => !selected.has(file)));
 take('legacy sidecars', source.filter((file) => has(file, '.layout.json', '.identities.json')));
 take('Turtle and N-Triples', source.filter((file) => has(file, '.ttl', '.nt')), minimums.turtle);
 const chartFolders = source.filter((file) => file.endsWith('/Chart.yaml')).map((file) => file.slice(0, -'Chart.yaml'.length));
