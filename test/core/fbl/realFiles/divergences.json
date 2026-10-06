@@ -1,0 +1,208 @@
+{
+  "doc": "Where a copied binding and a real file disagree (etalii.adp spec 009, FR-021). Each entry is checked by the real-file tests: an unlisted disagreement fails, and so does a listed one that has changed or no longer occurs. Never edit a copied binding, skip a file or weaken an assertion instead. A file is named by its path under fixtures/fbl/real-files, which is its path in etalii.adp.ide.standalone, so this record and standalone's can be compared line by line; it starts from standalone's entries at 25fc7b4a that are not cross-checks with its own parsers.",
+  "divergences": [
+    {
+      "property": "registration-layout",
+      "binding": "cld",
+      "file": "src/examples/diagrams/causal-loop-diagram/on-call/on-call.adp",
+      "observed": "10 layout entries name no element: variable:Test, variable:attrition, variable:automation, variable:fatigue, variable:incidents, …",
+      "reason": "The causal loop module stores positions under its wire ids ('variable:<name>'), while causal-loop-diagram.fbl reads a variable's id as its bare name, so these positions name no element of the reading and would be pruned as stale at the next write of the registration. Candidate follow-up for etalii.adp: give the binding's variables the module's 'variable:' prefix through the DISL id strategy, or migrate the registrations."
+    },
+    {
+      "property": "registration-layout",
+      "binding": "cld",
+      "file": "src/examples/diagrams/causal-loop-diagram/reference/reference.adp",
+      "observed": "6 layout entries name no element: variable:births, variable:crowding, variable:deaths, variable:foodPerCapita, variable:population, …",
+      "reason": "The causal loop module stores positions under its wire ids ('variable:<name>'), while causal-loop-diagram.fbl reads a variable's id as its bare name, so these positions name no element of the reading and would be pruned as stale at the next write of the registration. Candidate follow-up for etalii.adp: give the binding's variables the module's 'variable:' prefix through the DISL id strategy, or migrate the registrations."
+    },
+    {
+      "property": "registration-resource",
+      "binding": "settings",
+      "file": "src/diagrams/databricks/examples/lakehouse/databricks.pipeline.adp",
+      "observed": "no resource 'bronze_to_gold' among []",
+      "reason": "This registration points the databricks/pipeline reading at the bundle file databricks.yml and selects the pipeline with 'resource: bronze_to_gold', but databricks-pipeline.fbl reads a pipeline settings document from its root and declares no registration.resource capture, so it finds no pipeline in the bundle. Candidate follow-up for etalii.adp: a resource capture over resources.pipelines.{pipeline} in databricks-pipeline.fbl."
+    },
+    {
+      "property": "registration-resource",
+      "binding": "settings",
+      "file": "src/examples/diagrams/databricks/lakehouse/databricks.pipeline.adp",
+      "observed": "no resource 'bronze_to_gold' among []",
+      "reason": "This registration points the databricks/pipeline reading at the bundle file databricks.yml and selects the pipeline with 'resource: bronze_to_gold', but databricks-pipeline.fbl reads a pipeline settings document from its root and declares no registration.resource capture, so it finds no pipeline in the bundle. Candidate follow-up for etalii.adp: a resource capture over resources.pipelines.{pipeline} in databricks-pipeline.fbl."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/diagrams/c4/examples/industrial-plant/architecture/bottling-mes.adp",
+      "observed": "no view 'SystemContext' among Every system in the Northgate plant estate, OT and IT., The MES in its world., What the MES is made of, and which part crosses into the control network., Inside the Order Service., Releasing a finished batch, from last pallet to ERP confirmation.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/diagrams/c4/examples/industrial-plant/architecture/bottling-mes.batch-release.adp",
+      "observed": "no view 'BatchRelease' among Every system in the Northgate plant estate, OT and IT., The MES in its world., What the MES is made of, and which part crosses into the control network., Inside the Order Service., Releasing a finished batch, from last pallet to ERP confirmation.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/diagrams/c4/examples/industrial-plant/architecture/bottling-mes.mes-containers.adp",
+      "observed": "no view 'Containers' among Every system in the Northgate plant estate, OT and IT., The MES in its world., What the MES is made of, and which part crosses into the control network., Inside the Order Service., Releasing a finished batch, from last pallet to ERP confirmation.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/diagrams/c4/examples/industrial-plant/architecture/bottling-mes.order-service-components.adp",
+      "observed": "no view 'OrderServiceComponents' among Every system in the Northgate plant estate, OT and IT., The MES in its world., What the MES is made of, and which part crosses into the control network., Inside the Order Service., Releasing a finished batch, from last pallet to ERP confirmation.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/diagrams/c4/examples/industrial-plant/architecture/bottling-mes.plant-deployment.adp",
+      "observed": "no view 'PlantDeployment' among Every system in the Northgate plant estate, OT and IT., The MES in its world., What the MES is made of, and which part crosses into the control network., Inside the Order Service., Releasing a finished batch, from last pallet to ERP confirmation.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/diagrams/c4/examples/industrial-plant/architecture/bottling-mes.plant-landscape.adp",
+      "observed": "no view 'Landscape' among Every system in the Northgate plant estate, OT and IT., The MES in its world., What the MES is made of, and which part crosses into the control network., Inside the Order Service., Releasing a finished batch, from last pallet to ERP confirmation.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/diagrams/c4/examples/reference/architecture/courier.adp",
+      "observed": "no view 'SystemContext' among Every system in the delivery estate., Courier Tracking in its world., What Courier Tracking is made of., Inside the API application., What happens when a courier scans a parcel.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/diagrams/c4/examples/reference/architecture/courier.api-components.adp",
+      "observed": "no view 'ApiComponents' among Every system in the delivery estate., Courier Tracking in its world., What Courier Tracking is made of., Inside the API application., What happens when a courier scans a parcel.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/diagrams/c4/examples/reference/architecture/courier.containers.adp",
+      "observed": "no view 'Containers' among Every system in the delivery estate., Courier Tracking in its world., What Courier Tracking is made of., Inside the API application., What happens when a courier scans a parcel.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/diagrams/c4/examples/reference/architecture/courier.landscape.adp",
+      "observed": "no view 'Landscape' among Every system in the delivery estate., Courier Tracking in its world., What Courier Tracking is made of., Inside the API application., What happens when a courier scans a parcel.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/diagrams/c4/examples/reference/architecture/courier.parcel-scanned.adp",
+      "observed": "no view 'ParcelScanned' among Every system in the delivery estate., Courier Tracking in its world., What Courier Tracking is made of., Inside the API application., What happens when a courier scans a parcel.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/diagrams/c4/examples/reference/architecture/courier.production.adp",
+      "observed": "no view 'ProductionDeployment' among Every system in the delivery estate., Courier Tracking in its world., What Courier Tracking is made of., Inside the API application., What happens when a courier scans a parcel.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/examples/diagrams/c4/industrial-plant/architecture/bottling-mes.adp",
+      "observed": "no view 'SystemContext' among Every system in the Northgate plant estate, OT and IT., The MES in its world., What the MES is made of, and which part crosses into the control network., Inside the Order Service., Releasing a finished batch, from last pallet to ERP confirmation.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/examples/diagrams/c4/industrial-plant/architecture/bottling-mes.batch-release.adp",
+      "observed": "no view 'BatchRelease' among Every system in the Northgate plant estate, OT and IT., The MES in its world., What the MES is made of, and which part crosses into the control network., Inside the Order Service., Releasing a finished batch, from last pallet to ERP confirmation.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/examples/diagrams/c4/industrial-plant/architecture/bottling-mes.mes-containers.adp",
+      "observed": "no view 'Containers' among Every system in the Northgate plant estate, OT and IT., The MES in its world., What the MES is made of, and which part crosses into the control network., Inside the Order Service., Releasing a finished batch, from last pallet to ERP confirmation.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/examples/diagrams/c4/industrial-plant/architecture/bottling-mes.order-service-components.adp",
+      "observed": "no view 'OrderServiceComponents' among Every system in the Northgate plant estate, OT and IT., The MES in its world., What the MES is made of, and which part crosses into the control network., Inside the Order Service., Releasing a finished batch, from last pallet to ERP confirmation.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/examples/diagrams/c4/industrial-plant/architecture/bottling-mes.plant-deployment.adp",
+      "observed": "no view 'PlantDeployment' among Every system in the Northgate plant estate, OT and IT., The MES in its world., What the MES is made of, and which part crosses into the control network., Inside the Order Service., Releasing a finished batch, from last pallet to ERP confirmation.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/examples/diagrams/c4/industrial-plant/architecture/bottling-mes.plant-landscape.adp",
+      "observed": "no view 'Landscape' among Every system in the Northgate plant estate, OT and IT., The MES in its world., What the MES is made of, and which part crosses into the control network., Inside the Order Service., Releasing a finished batch, from last pallet to ERP confirmation.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/examples/diagrams/c4/reference/architecture/courier.adp",
+      "observed": "no view 'SystemContext' among Every system in the delivery estate., Courier Tracking in its world., What Courier Tracking is made of., Inside the API application., What happens when a courier scans a parcel.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/examples/diagrams/c4/reference/architecture/courier.api-components.adp",
+      "observed": "no view 'ApiComponents' among Every system in the delivery estate., Courier Tracking in its world., What Courier Tracking is made of., Inside the API application., What happens when a courier scans a parcel.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/examples/diagrams/c4/reference/architecture/courier.containers.adp",
+      "observed": "no view 'Containers' among Every system in the delivery estate., Courier Tracking in its world., What Courier Tracking is made of., Inside the API application., What happens when a courier scans a parcel.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/examples/diagrams/c4/reference/architecture/courier.landscape.adp",
+      "observed": "no view 'Landscape' among Every system in the delivery estate., Courier Tracking in its world., What Courier Tracking is made of., Inside the API application., What happens when a courier scans a parcel.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/examples/diagrams/c4/reference/architecture/courier.parcel-scanned.adp",
+      "observed": "no view 'ParcelScanned' among Every system in the delivery estate., Courier Tracking in its world., What Courier Tracking is made of., Inside the API application., What happens when a courier scans a parcel.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "registration-view",
+      "binding": "workspace",
+      "file": "src/examples/diagrams/c4/reference/architecture/courier.production.adp",
+      "observed": "no view 'ProductionDeployment' among Every system in the delivery estate., Courier Tracking in its world., What Courier Tracking is made of., Inside the API application., What happens when a courier scans a parcel.",
+      "reason": "structurizr.fbl's view block rule takes the last quoted string before '{' as the key, with an optional environment string before it. These views carry a key and a description ('systemContext mes \"SystemContext\" \"The MES in its world.\" {'), so the description is read as the key and the registration's view header selects no view. Candidate follow-up for etalii.adp: capture the first quoted string after the scope as the key, and the environment only in deployment views."
+    },
+    {
+      "property": "unreadable",
+      "binding": "structurizr",
+      "file": "src/diagrams/c4/backend/EtAlii.Adp.Diagram.C4.Tests/Fixtures/comments-everywhere.dsl",
+      "observed": "offset 200: The braces of the body do not balance on this line.",
+      "reason": "FBL section 4.7 opens a block only when a statement's last non-whitespace character is '{', so 'model { // trailing a brace is legal' opens none and the matching '}' leaves the braces unbalanced, which makes the body unreadable. Structurizr accepts a comment after the brace, and the module reads this fixture. Candidate follow-up for etalii.adp: let FBL section 4.7 ignore a trailing comment matching the binding's comment expression before looking for '{'."
+    }
+  ]
+}

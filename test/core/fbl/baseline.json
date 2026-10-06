@@ -1,0 +1,524 @@
+{
+  "baseline": {
+    "repository": "etalii.adp.ide.standalone",
+    "commit": "25fc7b4a",
+    "tests": 86
+  },
+  "tests": [
+    {
+      "source": "Bytes/BodyText.Tests.cs",
+      "test": "AColumnCountsCodePointsNotBytesOrUtf16Units",
+      "file": "test/core/fbl/bodyText.test.ts",
+      "title": "a column counts code points not bytes or UTF-16 units"
+    },
+    {
+      "source": "Bytes/BodyText.Tests.cs",
+      "test": "TheByteOrderMarkBelongsToNoColumn",
+      "file": "test/core/fbl/bodyText.test.ts",
+      "title": "the byte order mark belongs to no column"
+    },
+    {
+      "source": "Bytes/BodyText.Tests.cs",
+      "test": "CrlfLfAndALoneCrEachEndALine",
+      "file": "test/core/fbl/bodyText.test.ts",
+      "title": "CRLF LF and a lone CR each end a line"
+    },
+    {
+      "source": "Bytes/BodyText.Tests.cs",
+      "test": "ABodyOfOnlyALoneCrIsOneEmptyLineEndedByCr",
+      "file": "test/core/fbl/bodyText.test.ts",
+      "title": "a body of only a lone CR is one empty line ended by CR"
+    },
+    {
+      "source": "Bytes/BodyText.Tests.cs",
+      "test": "CrlfWinsATieAndALoneCrCountsAsNeither",
+      "file": "test/core/fbl/bodyText.test.ts",
+      "title": "CRLF wins a tie and a lone CR counts as neither"
+    },
+    {
+      "source": "Bytes/BodyText.Tests.cs",
+      "test": "AnInvalidUtf8SequenceIsFoundWithItsOffset",
+      "file": "test/core/fbl/bodyText.test.ts",
+      "title": "an invalid UTF-8 sequence is found with its offset"
+    },
+    {
+      "source": "Conformance/ConformanceFixtures.Tests.cs",
+      "test": "TheFixturesAreFound",
+      "file": "test/core/fbl/conformanceFixtures.test.ts",
+      "title": "the fixtures are found"
+    },
+    {
+      "source": "Conformance/ConformanceFixtures.Tests.cs",
+      "test": "TheFixturePasses",
+      "file": "test/core/fbl/conformanceFixtures.test.ts",
+      "title": "the fixture passes"
+    },
+    {
+      "source": "Conformance/ConformanceFixtures.Tests.cs",
+      "test": "EveryByteOfTheInputBelongsToTheReading",
+      "file": "test/core/fbl/conformanceFixtures.test.ts",
+      "title": "every byte of the input belongs to the reading"
+    },
+    {
+      "source": "Expressions/Expressions.Tests.cs",
+      "test": "AConstructOutsideTheSubsetIsRejectedByName",
+      "file": "test/core/fbl/expressions.test.ts",
+      "title": "a construct outside the subset is rejected by name"
+    },
+    {
+      "source": "Expressions/Expressions.Tests.cs",
+      "test": "AnExpressionInTheSubsetIsAccepted",
+      "file": "test/core/fbl/expressions.test.ts",
+      "title": "an expression in the subset is accepted"
+    },
+    {
+      "source": "Expressions/Expressions.Tests.cs",
+      "test": "DigitsAndWordCharactersAreAsciiOnly",
+      "file": "test/core/fbl/expressions.test.ts",
+      "title": "digits and word characters are ASCII only"
+    },
+    {
+      "source": "Expressions/Expressions.Tests.cs",
+      "test": "ACelExpressionEvaluatesOnAnEntry",
+      "file": "test/core/fbl/expressions.test.ts",
+      "title": "a CEL expression evaluates on an entry"
+    },
+    {
+      "source": "Expressions/Expressions.Tests.cs",
+      "test": "AnExpressionOutsideTheSubsetFailsToCompile",
+      "file": "test/core/fbl/expressions.test.ts",
+      "title": "an expression outside the subset fails to compile"
+    },
+    {
+      "source": "History/History.Tests.cs",
+      "test": "ASnapshotUndoEqualsAnInverseSpliceUndo",
+      "file": "test/core/fbl/history.test.ts",
+      "title": "a snapshot undo equals an inverse splice undo"
+    },
+    {
+      "source": "History/History.Tests.cs",
+      "test": "RedoRepeatsTheEditAndIsRefusedOnDrift",
+      "file": "test/core/fbl/history.test.ts",
+      "title": "redo repeats the edit and is refused on drift"
+    },
+    {
+      "source": "History/History.Tests.cs",
+      "test": "AReloadClearsTheHistory",
+      "file": "test/core/fbl/history.test.ts",
+      "title": "a reload clears the history"
+    },
+    {
+      "source": "History/History.Tests.cs",
+      "test": "ASaveHandsTheHostsWriterTheEditedBytes",
+      "file": "test/core/fbl/history.test.ts",
+      "title": "a save hands the hosts writer the edited bytes"
+    },
+    {
+      "source": "History/History.Tests.cs",
+      "test": "AnUnreadableBodyIsNeverSaved",
+      "file": "test/core/fbl/history.test.ts",
+      "title": "an unreadable body is never saved"
+    },
+    {
+      "source": "Loading/Loading.Tests.cs",
+      "test": "AValidDocumentLoadsWithoutAProblem",
+      "file": "test/core/fbl/loading.test.ts",
+      "title": "a valid document loads without a problem"
+    },
+    {
+      "source": "Loading/Loading.Tests.cs",
+      "test": "ADuplicateKeyAnywhereIsRejectedAtItsPointer",
+      "file": "test/core/fbl/loading.test.ts",
+      "title": "a duplicate key anywhere is rejected at its pointer"
+    },
+    {
+      "source": "Loading/Loading.Tests.cs",
+      "test": "AnotherMajorVersionIsRefused",
+      "file": "test/core/fbl/loading.test.ts",
+      "title": "another major version is refused"
+    },
+    {
+      "source": "Loading/Loading.Tests.cs",
+      "test": "ANewerMinorVersionLoadsWithAWarning",
+      "file": "test/core/fbl/loading.test.ts",
+      "title": "a newer minor version loads with a warning"
+    },
+    {
+      "source": "Loading/Loading.Tests.cs",
+      "test": "ANameThatDoesNotResolveIsRejectedAtItsPointer",
+      "file": "test/core/fbl/loading.test.ts",
+      "title": "a name that does not resolve is rejected at its pointer"
+    },
+    {
+      "source": "Loading/Loading.Tests.cs",
+      "test": "AStepSixCheckIsApplied",
+      "file": "test/core/fbl/loading.test.ts",
+      "title": "a step six check is applied"
+    },
+    {
+      "source": "Loading/Loading.Tests.cs",
+      "test": "ASharedClaimWithAMarkerIsAccepted",
+      "file": "test/core/fbl/loading.test.ts",
+      "title": "a shared claim with a marker is accepted"
+    },
+    {
+      "source": "Loading/Loading.Tests.cs",
+      "test": "EveryProblemIsReportedRatherThanTheFirst",
+      "file": "test/core/fbl/loading.test.ts",
+      "title": "every problem is reported rather than the first"
+    },
+    {
+      "source": "Loading/Loading.Tests.cs",
+      "test": "AReferenceResolvesAgainstTheReferringDocument",
+      "file": "test/core/fbl/loading.test.ts",
+      "title": "a reference resolves against the referring document"
+    },
+    {
+      "source": "Plugins/PluginBody.Tests.cs",
+      "test": "AMissingPluginOpensTheBodyReadOnlyWithAFinding",
+      "file": "test/core/fbl/pluginBody.test.ts",
+      "title": "a missing plugin opens the body read only with a finding"
+    },
+    {
+      "source": "Plugins/PluginBody.Tests.cs",
+      "test": "APluginWithAnotherIdCountsAsMissing",
+      "file": "test/core/fbl/pluginBody.test.ts",
+      "title": "a plugin with another id counts as missing"
+    },
+    {
+      "source": "Plugins/PluginBody.Tests.cs",
+      "test": "ThePluginsSplicesAreAppliedRecordedAndUndone",
+      "file": "test/core/fbl/pluginBody.test.ts",
+      "title": "the plugins splices are applied recorded and undone"
+    },
+    {
+      "source": "Plugins/PluginBody.Tests.cs",
+      "test": "APluginsRefusalWritesNothing",
+      "file": "test/core/fbl/pluginBody.test.ts",
+      "title": "a plugins refusal writes nothing"
+    },
+    {
+      "source": "Plugins/PluginBody.Tests.cs",
+      "test": "AReadOnlyBindingsPluginIsNeverAskedToPlan",
+      "file": "test/core/fbl/pluginBody.test.ts",
+      "title": "a read only bindings plugin is never asked to plan"
+    },
+    {
+      "source": "Reading/Reading.Tests.cs",
+      "test": "TheFirstRuleInBindingOrderTakesAnEntryAndAnEntryBecomesOneElement",
+      "file": "test/core/fbl/reading.test.ts",
+      "title": "the first rule in binding order takes an entry and an entry becomes one element"
+    },
+    {
+      "source": "Reading/Reading.Tests.cs",
+      "test": "AnEntryWithoutAnIdIsAddressedByItsPlaceAndMarkedNotStored",
+      "file": "test/core/fbl/reading.test.ts",
+      "title": "an entry without an id is addressed by its place and marked not stored"
+    },
+    {
+      "source": "Reading/Reading.Tests.cs",
+      "test": "ASidecarIdIsTakenFromTheRegistrationsIdentities",
+      "file": "test/core/fbl/reading.test.ts",
+      "title": "a sidecar id is taken from the registrations identities"
+    },
+    {
+      "source": "Reading/Reading.Tests.cs",
+      "test": "TheSecondOfTwoEqualIdsIsReportedAndNotStored",
+      "file": "test/core/fbl/reading.test.ts",
+      "title": "the second of two equal ids is reported and not stored"
+    },
+    {
+      "source": "Reading/Reading.Tests.cs",
+      "test": "AMissingHeaderMarkIsReportedAndTheBodyIsStillRead",
+      "file": "test/core/fbl/reading.test.ts",
+      "title": "a missing header mark is reported and the body is still read"
+    },
+    {
+      "source": "Reading/Reading.Tests.cs",
+      "test": "ARequiredHeaderThatIsMissingMakesTheBodyUnreadableWithOneFinding",
+      "file": "test/core/fbl/reading.test.ts",
+      "title": "a required header that is missing makes the body unreadable with one finding"
+    },
+    {
+      "source": "Reading/Reading.Tests.cs",
+      "test": "AnEntryARuleMatchesButCannotReadIsReportedAndKept",
+      "file": "test/core/fbl/reading.test.ts",
+      "title": "an entry a rule matches but cannot read is reported and kept"
+    },
+    {
+      "source": "Reading/Reading.Tests.cs",
+      "test": "AStatementNoRuleReadsIsReportedWhenTheBindingAsksForIt",
+      "file": "test/core/fbl/reading.test.ts",
+      "title": "a statement no rule reads is reported when the binding asks for it"
+    },
+    {
+      "source": "Reading/Reading.Tests.cs",
+      "test": "PlanningIsDeterministic",
+      "file": "test/core/fbl/reading.test.ts",
+      "title": "planning is deterministic"
+    },
+    {
+      "source": "Reading/Reading.Tests.cs",
+      "test": "AnUnknownRegistrationHeaderIsKeptAndReported",
+      "file": "test/core/fbl/reading.test.ts",
+      "title": "an unknown registration header is kept and reported"
+    },
+    {
+      "source": "Reading/Reading.Tests.cs",
+      "test": "AStaleLayoutEntryIsReportedAndRemovedAtTheNextWrite",
+      "file": "test/core/fbl/reading.test.ts",
+      "title": "a stale layout entry is reported and removed at the next write"
+    },
+    {
+      "source": "RealFiles/DeclaredBodies.Tests.cs",
+      "test": "TheEnumerationFindsTheFiles",
+      "file": "test/core/fbl/realFiles/declaredBodies.test.ts",
+      "title": "the enumeration finds the files"
+    },
+    {
+      "source": "RealFiles/DeclaredBodies.Tests.cs",
+      "test": "TheFileReads",
+      "file": "test/core/fbl/realFiles/declaredBodies.test.ts",
+      "title": "the file reads"
+    },
+    {
+      "source": "RealFiles/DeclaredBodies.Tests.cs",
+      "test": "ASaveWithoutAnEditWritesTheBytesThatWereRead",
+      "file": "test/core/fbl/realFiles/declaredBodies.test.ts",
+      "title": "a save without an edit writes the bytes that were read"
+    },
+    {
+      "source": "RealFiles/DeclaredBodies.Tests.cs",
+      "test": "AnEditChangesOnlyItsSplicesAndItsUndoRestoresTheFile",
+      "file": "test/core/fbl/realFiles/declaredBodies.test.ts",
+      "title": "an edit changes only its splices and its undo restores the file"
+    },
+    {
+      "source": "RealFiles/DeclaredBodies.Tests.cs",
+      "test": "ARemovalChangesOnlyItsSplicesAndItsUndoRestoresTheFile",
+      "file": "test/core/fbl/realFiles/declaredBodies.test.ts",
+      "title": "a removal changes only its splices and its undo restores the file"
+    },
+    {
+      "source": "RealFiles/DeclaredBodies.Tests.cs",
+      "test": "AnUndoAfterTheFileChangedIsRefused",
+      "file": "test/core/fbl/realFiles/declaredBodies.test.ts",
+      "title": "an undo after the file changed is refused"
+    },
+    {
+      "source": "RealFiles/DeclaredBodies.Tests.cs",
+      "test": "EveryListedDivergenceNamesAFileOfTheSuite",
+      "file": "test/core/fbl/realFiles/declaredBodies.test.ts",
+      "title": "every listed divergence names a file of the suite"
+    },
+    {
+      "source": "RealFiles/ModuleCrossCheck.Tests.cs",
+      "test": "TheBindingReadsTheIdsTheModuleReads",
+      "notApplicable": "It compares what a binding reads with what standalone's own C# parsers for the timeline, the causal loop diagram, C4 and the mind map read. This host has no such parsers: its two diagrams are the hype cycle graph and Agent Behavior Modelling, and neither has an example binding."
+    },
+    {
+      "source": "RealFiles/Registrations.Tests.cs",
+      "test": "TheEnumerationFindsTheRegistrations",
+      "file": "test/core/fbl/realFiles/registrations.test.ts",
+      "title": "the enumeration finds the registrations"
+    },
+    {
+      "source": "RealFiles/Registrations.Tests.cs",
+      "test": "TheRegistrationParsesAndSavesUnchanged",
+      "file": "test/core/fbl/realFiles/registrations.test.ts",
+      "title": "the registration parses and saves unchanged"
+    },
+    {
+      "source": "RealFiles/Registrations.Tests.cs",
+      "test": "ADeclaredBindingsRegistrationOpensItsBody",
+      "file": "test/core/fbl/realFiles/registrations.test.ts",
+      "title": "a declared bindings registration opens its body"
+    },
+    {
+      "source": "RealFiles/Registrations.Tests.cs",
+      "test": "AW3CReadingsSuggestMatchesItsBody",
+      "file": "test/core/fbl/realFiles/registrations.test.ts",
+      "title": "a W3C readings suggest matches its body"
+    },
+    {
+      "source": "RealFiles/Registrations.Tests.cs",
+      "test": "AC4RegistrationReadsItsLegacyLayout",
+      "file": "test/core/fbl/realFiles/registrations.test.ts",
+      "title": "a C4 registration reads its legacy layout"
+    },
+    {
+      "source": "RealFiles/Registrations.Tests.cs",
+      "test": "TheC4LegacyLayoutsArePositionedThroughTheirRegistrations",
+      "file": "test/core/fbl/realFiles/registrations.test.ts",
+      "title": "the C4 legacy layouts are positioned through their registrations"
+    },
+    {
+      "source": "RealFiles/Registrations.Tests.cs",
+      "test": "EveryChartFolderIsRecognisedAndEveryTurtleFileRoutesToTheTurtleBinding",
+      "file": "test/core/fbl/realFiles/registrations.test.ts",
+      "title": "every chart folder is recognised and every turtle file routes to the turtle binding"
+    },
+    {
+      "source": "Registration/Registration.Tests.cs",
+      "test": "TheBodyIsTheSiblingWithTheRegistrationsBaseName",
+      "file": "test/core/fbl/registration.test.ts",
+      "title": "the body is the sibling with the registrations base name"
+    },
+    {
+      "source": "Registration/Registration.Tests.cs",
+      "test": "AMissingBodyOpensAsMissing",
+      "file": "test/core/fbl/registration.test.ts",
+      "title": "a missing body opens as missing"
+    },
+    {
+      "source": "Registration/Registration.Tests.cs",
+      "test": "ABodyOutsideTheWorkspaceIsRefused",
+      "file": "test/core/fbl/registration.test.ts",
+      "title": "a body outside the workspace is refused"
+    },
+    {
+      "source": "Registration/Registration.Tests.cs",
+      "test": "ABodyReachedThroughALinkIsRefused",
+      "file": "test/core/fbl/registration.test.ts",
+      "title": "a body reached through a link is refused"
+    },
+    {
+      "source": "Registration/Registration.Tests.cs",
+      "test": "AnIdentityIsStoredInOrderAfterTheLayout",
+      "file": "test/core/fbl/registration.test.ts",
+      "title": "an identity is stored in order after the layout"
+    },
+    {
+      "source": "Registration/Registration.Tests.cs",
+      "test": "ALegacyLayoutIsReadForItsViewIgnoringCase",
+      "file": "test/core/fbl/registration.test.ts",
+      "title": "a legacy layout is read for its view ignoring case"
+    },
+    {
+      "source": "Registration/Registration.Tests.cs",
+      "test": "ALegacyLayoutIsWrittenBySplicesAndUndone",
+      "file": "test/core/fbl/registration.test.ts",
+      "title": "a legacy layout is written by splices and undone"
+    },
+    {
+      "source": "Registration/Registration.Tests.cs",
+      "test": "LegacyIdentitiesAreReadAndWritten",
+      "file": "test/core/fbl/registration.test.ts",
+      "title": "legacy identities are read and written"
+    },
+    {
+      "source": "Registration/Registration.Tests.cs",
+      "test": "TheSidecarPathIsBesideTheBodyWithItsBaseName",
+      "file": "test/core/fbl/registration.test.ts",
+      "title": "the sidecar path is beside the body with its base name"
+    },
+    {
+      "source": "Routing/Routing.Tests.cs",
+      "test": "APatternMarkerLooksAtItsFirstLines",
+      "file": "test/core/fbl/routing.test.ts",
+      "title": "a pattern marker looks at its first lines"
+    },
+    {
+      "source": "Routing/Routing.Tests.cs",
+      "test": "ARootKeyMarkerReadsYamlAndJsonWithoutABinding",
+      "file": "test/core/fbl/routing.test.ts",
+      "title": "a root key marker reads YAML and JSON without a binding"
+    },
+    {
+      "source": "Routing/Routing.Tests.cs",
+      "test": "AFirstLineMarkerIsMatchedAfterAByteOrderMark",
+      "file": "test/core/fbl/routing.test.ts",
+      "title": "a first line marker is matched after a byte order mark"
+    },
+    {
+      "source": "Routing/Routing.Tests.cs",
+      "test": "ARegistrationOnlyBindingIsNeverACandidate",
+      "file": "test/core/fbl/routing.test.ts",
+      "title": "a registration only binding is never a candidate"
+    },
+    {
+      "source": "Routing/Routing.Tests.cs",
+      "test": "AnExtensionIsMatchedIgnoringCase",
+      "file": "test/core/fbl/routing.test.ts",
+      "title": "an extension is matched ignoring case"
+    },
+    {
+      "source": "Routing/Routing.Tests.cs",
+      "test": "SeveralCandidatesAreAllReturned",
+      "file": "test/core/fbl/routing.test.ts",
+      "title": "several candidates are all returned"
+    },
+    {
+      "source": "Routing/Routing.Tests.cs",
+      "test": "AReadingWhoseSuggestMatchesIsOfferedFirst",
+      "file": "test/core/fbl/routing.test.ts",
+      "title": "a reading whose suggest matches is offered first"
+    },
+    {
+      "source": "Routing/Routing.Tests.cs",
+      "test": "AGlobMatchesAsFblDefinesIt",
+      "file": "test/core/fbl/routing.test.ts",
+      "title": "a glob matches as FBL defines it"
+    },
+    {
+      "source": "Routing/Routing.Tests.cs",
+      "test": "AFolderIsRecognisedAndItsFilesSelectedWithoutFollowingLinks",
+      "file": "test/core/fbl/routing.test.ts",
+      "title": "a folder is recognised and its files selected without following links"
+    },
+    {
+      "source": "Routing/Templates.Tests.cs",
+      "test": "EveryDeclaredTemplateReadsBackWithoutAWarning",
+      "file": "test/core/fbl/templates.test.ts",
+      "title": "every declared template reads back without a warning"
+    },
+    {
+      "source": "Routing/Templates.Tests.cs",
+      "test": "ATemplateByOriginWinsOverTheBindingsText",
+      "file": "test/core/fbl/templates.test.ts",
+      "title": "a template by origin wins over the bindings text"
+    },
+    {
+      "source": "Routing/Templates.Tests.cs",
+      "test": "TheKeyPlaceholderIsSanitisedExactly",
+      "file": "test/core/fbl/templates.test.ts",
+      "title": "the key placeholder is sanitised exactly"
+    },
+    {
+      "source": "Routing/Templates.Tests.cs",
+      "test": "OnlyTheFourPlaceholdersAreReplaced",
+      "file": "test/core/fbl/templates.test.ts",
+      "title": "only the four placeholders are replaced"
+    },
+    {
+      "source": "Routing/Templates.Tests.cs",
+      "test": "APluginWithoutTemplateTextIsAskedForOne",
+      "file": "test/core/fbl/templates.test.ts",
+      "title": "a plugin without template text is asked for one"
+    },
+    {
+      "source": "Yaml/YamlScalars.Tests.cs",
+      "test": "APlainSafeStringIsWrittenPlain",
+      "file": "test/core/fbl/yamlScalars.test.ts",
+      "title": "a plain safe string is written plain"
+    },
+    {
+      "source": "Yaml/YamlScalars.Tests.cs",
+      "test": "ADateIsPlainSafeWhenTheAttributeIsADate",
+      "file": "test/core/fbl/yamlScalars.test.ts",
+      "title": "a date is plain safe when the attribute is a date"
+    },
+    {
+      "source": "Yaml/YamlScalars.Tests.cs",
+      "test": "ADoubleQuotedStringEscapesBackslashQuoteAndControlCharacters",
+      "file": "test/core/fbl/yamlScalars.test.ts",
+      "title": "a double quoted string escapes backslash quote and control characters"
+    },
+    {
+      "source": "Yaml/YamlScalars.Tests.cs",
+      "test": "ASingleQuotedStringDoublesItsQuotes",
+      "file": "test/core/fbl/yamlScalars.test.ts",
+      "title": "a single quoted string doubles its quotes"
+    }
+  ]
+}

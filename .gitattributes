@@ -8,3 +8,5 @@
 examples/** -text
 fixtures/** -text
 examples/PROVENANCE.md text
+fixtures/fbl/PROVENANCE.md text
+fixtures/fbl/manifest.json text

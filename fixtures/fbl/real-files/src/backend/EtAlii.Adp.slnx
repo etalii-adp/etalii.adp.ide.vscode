@@ -1,0 +1,148 @@
+﻿<Solution>
+  <Folder Name="/_Globals/">
+    <File Path="../../.gitignore" />
+    <File Path="../../CLAUDE.md" />
+    <File Path="../../readme.md" />
+    <File Path="../../tests.md" />
+    <File Path="../../version.json" />
+    <File Path="../.editorconfig" />
+    <File Path="../Directory.Build.props" />
+    <File Path="../Directory.Packages.props" />
+    <File Path="../global.json" />
+  </Folder>
+  <Project Path="EtAlii.Adp/EtAlii.Adp.csproj" />
+  <Project Path="EtAlii.Adp.Diagram/EtAlii.Adp.Diagram.csproj" />
+  <Project Path="EtAlii.Adp.Documents/EtAlii.Adp.Documents.csproj" />
+  <Project Path="EtAlii.Adp.Documents.Tests/EtAlii.Adp.Documents.Tests.csproj" />
+  <Project Path="EtAlii.Adp.Editor/EtAlii.Adp.Editor.csproj" />
+  <Project Path="EtAlii.Adp.Editor.Tests/EtAlii.Adp.Editor.Tests.csproj" />
+  <Folder Name="/editors/">
+    <Project Path="../editors/plain/backend/EtAlii.Adp.Editor.Plain/EtAlii.Adp.Editor.Plain.csproj" />
+    <Project Path="../editors/plain/backend/EtAlii.Adp.Editor.Plain.Tests/EtAlii.Adp.Editor.Plain.Tests.csproj" />
+    <Project Path="../editors/markdown/backend/EtAlii.Adp.Editor.Markdown/EtAlii.Adp.Editor.Markdown.csproj" />
+    <Project Path="../editors/markdown/backend/EtAlii.Adp.Editor.Markdown.Tests/EtAlii.Adp.Editor.Markdown.Tests.csproj" />
+  </Folder>
+  <Project Path="EtAlii.Adp.Diagram.Tests/EtAlii.Adp.Diagram.Tests.csproj" />
+  <Project Path="EtAlii.Adp.Tests/EtAlii.Adp.Tests.csproj" />
+  <Project Path="EtAlii.Adp.Client.Tests/EtAlii.Adp.Client.Tests.csproj" />
+  <Project Path="EtAlii.Adp.Backend.Service/EtAlii.Adp.Backend.Service.csproj" />
+  <Project Path="EtAlii.Adp.Backend.Tests/EtAlii.Adp.Backend.Tests.csproj" />
+  <Project Path="EtAlii.Adp.HostLogging.Tests/EtAlii.Adp.HostLogging.Tests.csproj" />
+  <Project Path="EtAlii.Adp.Authentication/EtAlii.Adp.Authentication.csproj" />
+  <Project Path="EtAlii.Adp.Authentication.Tests/EtAlii.Adp.Authentication.Tests.csproj" />
+  <Project Path="EtAlii.Adp.Sessions/EtAlii.Adp.Sessions.csproj" />
+  <Project Path="EtAlii.Adp.Context/EtAlii.Adp.Context.csproj" />
+  <Project Path="EtAlii.Adp.Context.Tests/EtAlii.Adp.Context.Tests.csproj" />
+  <Project Path="EtAlii.Adp.Problems/EtAlii.Adp.Problems.csproj" />
+  <Project Path="EtAlii.Adp.History/EtAlii.Adp.History.csproj" />
+  <Project Path="EtAlii.Adp.History.Tests/EtAlii.Adp.History.Tests.csproj" />
+  <Project Path="EtAlii.Adp.TestSupport/EtAlii.Adp.TestSupport.csproj" />
+  <Project Path="EtAlii.Adp.Projects.Tests/EtAlii.Adp.Projects.Tests.csproj" />
+  <Project Path="EtAlii.Adp.Sessions.Tests/EtAlii.Adp.Sessions.Tests.csproj" />
+  <Project Path="EtAlii.Adp.Repository.Tests/EtAlii.Adp.Repository.Tests.csproj" />
+  <Project Path="EtAlii.Adp.Problems.Tests/EtAlii.Adp.Problems.Tests.csproj" />
+  <Project Path="EtAlii.Adp.Specification.Fbl/EtAlii.Adp.Specification.Fbl.csproj" />
+  <Project Path="EtAlii.Adp.Specification.Fbl.Tests/EtAlii.Adp.Specification.Fbl.Tests.csproj" />
+  <Project Path="EtAlii.Adp.Hierarchy/EtAlii.Adp.Hierarchy.csproj" />
+  <Project Path="EtAlii.Adp.Hierarchy.Tests/EtAlii.Adp.Hierarchy.Tests.csproj" />
+  <Project Path="EtAlii.Adp.Projects/EtAlii.Adp.Projects.csproj" />
+  <Project Path="EtAlii.Adp.Backend/EtAlii.Adp.Backend.csproj" />
+  <Folder Name="/Diagrams/">
+    <Project Path="../diagrams/ansible-structure/backend/EtAlii.Adp.Diagram.AnsibleStructure/EtAlii.Adp.Diagram.AnsibleStructure.csproj" />
+    <Project Path="../diagrams/ansible-structure/backend/EtAlii.Adp.Diagram.AnsibleStructure.Tests/EtAlii.Adp.Diagram.AnsibleStructure.Tests.csproj" />
+    <Project Path="../diagrams/mindmap/backend/EtAlii.Adp.Diagram.Mindmap/EtAlii.Adp.Diagram.Mindmap.csproj" />
+    <Project Path="../diagrams/mindmap/backend/EtAlii.Adp.Diagram.Mindmap.Tests/EtAlii.Adp.Diagram.Mindmap.Tests.csproj" />
+    <!-- All seven C4 notations: one engine, one assembly, one Definitions array. -->
+    <Project Path="../diagrams/c4/backend/EtAlii.Adp.Diagram.C4/EtAlii.Adp.Diagram.C4.csproj" />
+    <Project Path="../diagrams/c4/backend/EtAlii.Adp.Diagram.C4.Tests/EtAlii.Adp.Diagram.C4.Tests.csproj" />
+    <!-- Azure DevOps pipelines: a document the repository already owns, not one ADP creates. -->
+    <Project Path="../diagrams/azure-devops-pipeline/backend/EtAlii.Adp.Diagram.AzureDevOpsPipeline/EtAlii.Adp.Diagram.AzureDevOpsPipeline.csproj" />
+    <Project Path="../diagrams/azure-devops-pipeline/backend/EtAlii.Adp.Diagram.AzureDevOpsPipeline.Tests/EtAlii.Adp.Diagram.AzureDevOpsPipeline.Tests.csproj" />
+    <!-- Databricks asset bundles, jobs and declarative pipelines: three MIME types, one engine. -->
+    <Project Path="../diagrams/databricks/backend/EtAlii.Adp.Diagram.Databricks/EtAlii.Adp.Diagram.Databricks.csproj" />
+    <Project Path="../diagrams/databricks/backend/EtAlii.Adp.Diagram.Databricks.Tests/EtAlii.Adp.Diagram.Databricks.Tests.csproj" />
+    <!-- Helm charts: a folder-subject reading of the chart directory a repository already has. -->
+    <Project Path="../diagrams/helm-chart/backend/EtAlii.Adp.Diagram.HelmChart/EtAlii.Adp.Diagram.HelmChart.csproj" />
+    <Project Path="../diagrams/helm-chart/backend/EtAlii.Adp.Diagram.HelmChart.Tests/EtAlii.Adp.Diagram.HelmChart.Tests.csproj" />
+    <!-- The W3C RDF family: one store and one Turtle/N-Triples parser, several readings over it. -->
+    <Project Path="../diagrams/rdf/backend/EtAlii.Adp.Diagram.Rdf/EtAlii.Adp.Diagram.Rdf.csproj" />
+    <Project Path="../diagrams/rdf/backend/EtAlii.Adp.Diagram.Rdf.Tests/EtAlii.Adp.Diagram.Rdf.Tests.csproj" />
+    <!-- SPARQL queries: the RDF family's deliberate sibling - its own parser, no writer at all. -->
+    <Project Path="../diagrams/causal-loop-diagram/backend/EtAlii.Adp.Diagram.CausalLoopDiagram/EtAlii.Adp.Diagram.CausalLoopDiagram.csproj" />
+    <Project Path="../diagrams/causal-loop-diagram/backend/EtAlii.Adp.Diagram.CausalLoopDiagram.Tests/EtAlii.Adp.Diagram.CausalLoopDiagram.Tests.csproj" />
+    <Project Path="../diagrams/sparql/backend/EtAlii.Adp.Diagram.Sparql/EtAlii.Adp.Diagram.Sparql.csproj" />
+    <Project Path="../diagrams/sparql/backend/EtAlii.Adp.Diagram.Sparql.Tests/EtAlii.Adp.Diagram.Sparql.Tests.csproj" />
+    <Project Path="../diagrams/archimate-application/backend/EtAlii.Adp.Diagram.ArchimateApplication/EtAlii.Adp.Diagram.ArchimateApplication.csproj" />
+    <Project Path="../diagrams/archimate-business/backend/EtAlii.Adp.Diagram.ArchimateBusiness/EtAlii.Adp.Diagram.ArchimateBusiness.csproj" />
+    <Project Path="../diagrams/archimate-implementation-migration/backend/EtAlii.Adp.Diagram.ArchimateImplementationMigration/EtAlii.Adp.Diagram.ArchimateImplementationMigration.csproj" />
+    <Project Path="../diagrams/archimate-motivation/backend/EtAlii.Adp.Diagram.ArchimateMotivation/EtAlii.Adp.Diagram.ArchimateMotivation.csproj" />
+    <Project Path="../diagrams/archimate-strategy/backend/EtAlii.Adp.Diagram.ArchimateStrategy/EtAlii.Adp.Diagram.ArchimateStrategy.csproj" />
+    <Project Path="../diagrams/archimate-technology/backend/EtAlii.Adp.Diagram.ArchimateTechnology/EtAlii.Adp.Diagram.ArchimateTechnology.csproj" />
+    <Project Path="../diagrams/aws-architecture/backend/EtAlii.Adp.Diagram.AwsArchitecture/EtAlii.Adp.Diagram.AwsArchitecture.csproj" />
+    <Project Path="../diagrams/azure-architecture/backend/EtAlii.Adp.Diagram.AzureArchitecture/EtAlii.Adp.Diagram.AzureArchitecture.csproj" />
+    <Project Path="../diagrams/bpmn-process/backend/EtAlii.Adp.Diagram.BpmnProcess/EtAlii.Adp.Diagram.BpmnProcess.csproj" />
+    <Project Path="../diagrams/cmap-concept-map/backend/EtAlii.Adp.Diagram.CmapConceptMap/EtAlii.Adp.Diagram.CmapConceptMap.csproj" />
+    <Project Path="../diagrams/contextmapper-context-map/backend/EtAlii.Adp.Diagram.ContextmapperContextMap/EtAlii.Adp.Diagram.ContextmapperContextMap.csproj" />
+    <Project Path="../diagrams/d2-diagram/backend/EtAlii.Adp.Diagram.D2Diagram/EtAlii.Adp.Diagram.D2Diagram.csproj" />
+    <Project Path="../diagrams/ddd-context-map/backend/EtAlii.Adp.Diagram.DddContextMap/EtAlii.Adp.Diagram.DddContextMap.csproj" />
+    <Project Path="../diagrams/ddd-event-storming/backend/EtAlii.Adp.Diagram.DddEventStorming/EtAlii.Adp.Diagram.DddEventStorming.csproj" />
+    <!-- The timeline minus time, plus directed edges: a fork, and its own module. -->
+    <Project Path="../diagrams/dependency-graph/backend/EtAlii.Adp.Diagram.DependencyGraph/EtAlii.Adp.Diagram.DependencyGraph.csproj" />
+    <Project Path="../diagrams/dependency-graph/backend/EtAlii.Adp.Diagram.DependencyGraph.Tests/EtAlii.Adp.Diagram.DependencyGraph.Tests.csproj" />
+    <Project Path="../diagrams/dfd-data-flow/backend/EtAlii.Adp.Diagram.DfdDataFlow/EtAlii.Adp.Diagram.DfdDataFlow.csproj" />
+    <Project Path="../diagrams/diagrams-python-cloud-infrastructure/backend/EtAlii.Adp.Diagram.DiagramsPythonCloudInfrastructure/EtAlii.Adp.Diagram.DiagramsPythonCloudInfrastructure.csproj" />
+    <!-- The authored dependency graph's derived twin: a solution's projects and packages, read not drawn. -->
+    <Project Path="../diagrams/dotnet-dependency-graph/backend/EtAlii.Adp.Diagram.DotNetDependencyGraph/EtAlii.Adp.Diagram.DotNetDependencyGraph.csproj" />
+    <Project Path="../diagrams/dotnet-dependency-graph/backend/EtAlii.Adp.Diagram.DotNetDependencyGraph.Tests/EtAlii.Adp.Diagram.DotNetDependencyGraph.Tests.csproj" />
+    <Project Path="../diagrams/erd-entity-relationship/backend/EtAlii.Adp.Diagram.ErdEntityRelationship/EtAlii.Adp.Diagram.ErdEntityRelationship.csproj" />
+    <!-- Agent Behavior Modelling: a chat agent's instructions as a behavior tree, stored as the Markdown the agent reads. -->
+    <Project Path="../diagrams/agent-behavior-modelling/backend/EtAlii.Adp.Diagram.AgentBehaviorModelling/EtAlii.Adp.Diagram.AgentBehaviorModelling.csproj" />
+    <Project Path="../diagrams/agent-behavior-modelling/backend/EtAlii.Adp.Diagram.AgentBehaviorModelling.Tests/EtAlii.Adp.Diagram.AgentBehaviorModelling.Tests.csproj" />
+    <!-- The functional decomposition graph: UI elements, data, actions and functions, and what owns what. -->
+    <Project Path="../diagrams/functional-decomposition-graph/backend/EtAlii.Adp.Diagram.FunctionalDecompositionGraph/EtAlii.Adp.Diagram.FunctionalDecompositionGraph.csproj" />
+    <Project Path="../diagrams/functional-decomposition-graph/backend/EtAlii.Adp.Diagram.FunctionalDecompositionGraph.Tests/EtAlii.Adp.Diagram.FunctionalDecompositionGraph.Tests.csproj" />
+    <!-- The Gartner hype cycle graph: trends on a time axis, their phases, and the influences between them. -->
+    <Project Path="../diagrams/gartner-hype-cycle-graph/backend/EtAlii.Adp.Diagram.GartnerHypeCycleGraph/EtAlii.Adp.Diagram.GartnerHypeCycleGraph.csproj" />
+    <Project Path="../diagrams/gartner-hype-cycle-graph/backend/EtAlii.Adp.Diagram.GartnerHypeCycleGraph.Tests/EtAlii.Adp.Diagram.GartnerHypeCycleGraph.Tests.csproj" />
+    <Project Path="../diagrams/gcp-architecture/backend/EtAlii.Adp.Diagram.GcpArchitecture/EtAlii.Adp.Diagram.GcpArchitecture.csproj" />
+    <Project Path="../diagrams/generic-swimlane/backend/EtAlii.Adp.Diagram.GenericSwimlane/EtAlii.Adp.Diagram.GenericSwimlane.csproj" />
+    <Project Path="../diagrams/iso-flowchart/backend/EtAlii.Adp.Diagram.IsoFlowchart/EtAlii.Adp.Diagram.IsoFlowchart.csproj" />
+    <Project Path="../diagrams/mermaid-architecture/backend/EtAlii.Adp.Diagram.MermaidArchitecture/EtAlii.Adp.Diagram.MermaidArchitecture.csproj" />
+    <Project Path="../diagrams/mermaid-c4/backend/EtAlii.Adp.Diagram.MermaidC4/EtAlii.Adp.Diagram.MermaidC4.csproj" />
+    <Project Path="../diagrams/mermaid-class/backend/EtAlii.Adp.Diagram.MermaidClass/EtAlii.Adp.Diagram.MermaidClass.csproj" />
+    <Project Path="../diagrams/mermaid-er/backend/EtAlii.Adp.Diagram.MermaidEr/EtAlii.Adp.Diagram.MermaidEr.csproj" />
+    <Project Path="../diagrams/mermaid-flowchart/backend/EtAlii.Adp.Diagram.MermaidFlowchart/EtAlii.Adp.Diagram.MermaidFlowchart.csproj" />
+    <Project Path="../diagrams/mermaid-gantt/backend/EtAlii.Adp.Diagram.MermaidGantt/EtAlii.Adp.Diagram.MermaidGantt.csproj" />
+    <Project Path="../diagrams/mermaid-sequence/backend/EtAlii.Adp.Diagram.MermaidSequence/EtAlii.Adp.Diagram.MermaidSequence.csproj" />
+    <Project Path="../diagrams/mermaid-state/backend/EtAlii.Adp.Diagram.MermaidState/EtAlii.Adp.Diagram.MermaidState.csproj" />
+    <Project Path="../diagrams/network-topology/backend/EtAlii.Adp.Diagram.NetworkTopology/EtAlii.Adp.Diagram.NetworkTopology.csproj" />
+    <Project Path="../diagrams/plantuml-c4/backend/EtAlii.Adp.Diagram.PlantumlC4/EtAlii.Adp.Diagram.PlantumlC4.csproj" />
+    <Project Path="../diagrams/plantuml-uml/backend/EtAlii.Adp.Diagram.PlantumlUml/EtAlii.Adp.Diagram.PlantumlUml.csproj" />
+    <Project Path="../diagrams/structurizr-c4/backend/EtAlii.Adp.Diagram.StructurizrC4/EtAlii.Adp.Diagram.StructurizrC4.csproj" />
+    <Project Path="../diagrams/supply-chain/backend/EtAlii.Adp.Diagram.SupplyChain/EtAlii.Adp.Diagram.SupplyChain.csproj" />
+    <Project Path="../diagrams/supply-chain/backend/EtAlii.Adp.Diagram.SupplyChain.Tests/EtAlii.Adp.Diagram.SupplyChain.Tests.csproj" />
+    <!-- The Sankey diagram: quantities flowing between nodes, each band as thick as its value. -->
+    <Project Path="../diagrams/sankey/backend/EtAlii.Adp.Diagram.Sankey/EtAlii.Adp.Diagram.Sankey.csproj" />
+    <Project Path="../diagrams/sankey/backend/EtAlii.Adp.Diagram.Sankey.Tests/EtAlii.Adp.Diagram.Sankey.Tests.csproj" />
+    <Project Path="../diagrams/timeline/backend/EtAlii.Adp.Diagram.Timeline/EtAlii.Adp.Diagram.Timeline.csproj" />
+    <Project Path="../diagrams/timeline/backend/EtAlii.Adp.Diagram.Timeline.Tests/EtAlii.Adp.Diagram.Timeline.Tests.csproj" />
+    <Project Path="../diagrams/togaf-adm/backend/EtAlii.Adp.Diagram.TogafAdm/EtAlii.Adp.Diagram.TogafAdm.csproj" />
+    <Project Path="../diagrams/uml-activity/backend/EtAlii.Adp.Diagram.UmlActivity/EtAlii.Adp.Diagram.UmlActivity.csproj" />
+    <Project Path="../diagrams/uml-class/backend/EtAlii.Adp.Diagram.UmlClass/EtAlii.Adp.Diagram.UmlClass.csproj" />
+    <Project Path="../diagrams/uml-communication/backend/EtAlii.Adp.Diagram.UmlCommunication/EtAlii.Adp.Diagram.UmlCommunication.csproj" />
+    <Project Path="../diagrams/uml-component/backend/EtAlii.Adp.Diagram.UmlComponent/EtAlii.Adp.Diagram.UmlComponent.csproj" />
+    <Project Path="../diagrams/uml-composite-structure/backend/EtAlii.Adp.Diagram.UmlCompositeStructure/EtAlii.Adp.Diagram.UmlCompositeStructure.csproj" />
+    <Project Path="../diagrams/uml-deployment/backend/EtAlii.Adp.Diagram.UmlDeployment/EtAlii.Adp.Diagram.UmlDeployment.csproj" />
+    <Project Path="../diagrams/uml-interaction-overview/backend/EtAlii.Adp.Diagram.UmlInteractionOverview/EtAlii.Adp.Diagram.UmlInteractionOverview.csproj" />
+    <Project Path="../diagrams/uml-object/backend/EtAlii.Adp.Diagram.UmlObject/EtAlii.Adp.Diagram.UmlObject.csproj" />
+    <Project Path="../diagrams/uml-package/backend/EtAlii.Adp.Diagram.UmlPackage/EtAlii.Adp.Diagram.UmlPackage.csproj" />
+    <Project Path="../diagrams/uml-profile/backend/EtAlii.Adp.Diagram.UmlProfile/EtAlii.Adp.Diagram.UmlProfile.csproj" />
+    <Project Path="../diagrams/uml-sequence/backend/EtAlii.Adp.Diagram.UmlSequence/EtAlii.Adp.Diagram.UmlSequence.csproj" />
+    <Project Path="../diagrams/uml-state-machine/backend/EtAlii.Adp.Diagram.UmlStateMachine/EtAlii.Adp.Diagram.UmlStateMachine.csproj" />
+    <Project Path="../diagrams/uml-timing/backend/EtAlii.Adp.Diagram.UmlTiming/EtAlii.Adp.Diagram.UmlTiming.csproj" />
+    <Project Path="../diagrams/uml-use-case/backend/EtAlii.Adp.Diagram.UmlUseCase/EtAlii.Adp.Diagram.UmlUseCase.csproj" />
+    <Project Path="../diagrams/wardley-map/backend/EtAlii.Adp.Diagram.WardleyMap/EtAlii.Adp.Diagram.WardleyMap.csproj" />
+    <Project Path="../diagrams/wardley-map/backend/EtAlii.Adp.Diagram.WardleyMap.Tests/EtAlii.Adp.Diagram.WardleyMap.Tests.csproj" />
+    <Project Path="../diagrams/zachman-matrix/backend/EtAlii.Adp.Diagram.ZachmanMatrix/EtAlii.Adp.Diagram.ZachmanMatrix.csproj" />
+  </Folder>
+</Solution>

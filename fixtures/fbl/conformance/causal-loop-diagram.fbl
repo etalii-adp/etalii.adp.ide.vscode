@@ -1,0 +1,67 @@
+{
+  "$schema": "https://etalii.net/adp/fbl/schema/0.1/fbl.schema.json#/$defs/Document",
+  "fbl": "0.1",
+  "doc": "The causal loop diagram's .cld body (definitions/diagrams/causal-loop-diagram.dis, causal-loop-diagram.md): the lines family. One statement per line; the words after a link's arrow come in any order, so they are bound as words of one group; a renamed variable is rewritten in every link and loop that names it.",
+  "bindings": {
+    "cld": {
+      "title": "Causal loop diagram",
+      "claims": { "extensions": [".cld"], "origins": ["systems/causal-loop-diagram"] },
+      "body": { "kind": "file", "family": "lines" },
+      "reader": "declared",
+      "text": { "newline": "crlf", "finalNewline": true },
+      "header": { "line": "^causal-loop(\\s|$)" },
+      "comment": "^\\s*#",
+      "unmatched": "report",
+      "elements": [
+        {
+          "name": "variable",
+          "type": "Variable",
+          "line": "^variable\\s+(?<name>[^\\s\"]+)(?:\\s+\"(?<label>[^\"]*)\")?\\s*$",
+          "id": { "from": { "group": "name" } },
+          "attributes": {
+            "name": { "group": "name", "empty": "refuse", "reference": { "to": ["variable"], "by": "name" } },
+            "label": { "group": "label", "empty": "remove" }
+          },
+          "insert": { "place": "after-last", "emit": "variable {name}[ \"{label}\"]" },
+          "remove": { "cascade": ["link"] }
+        },
+        {
+          "name": "loop",
+          "type": "Loop",
+          "line": "^loop\\s+(?<identifier>[^\\s\"]+)\\s+\"(?<title>[^\"]*)\"(?<members>(?:\\s+[^\\s\"]+)+)\\s*$",
+          "attributes": {
+            "identifier": { "group": "identifier", "empty": "refuse" },
+            "title": { "group": "title", "empty": "keep" },
+            "members": { "group": "members", "reference": { "to": ["variable"], "by": "name" } }
+          },
+          "insert": { "place": "after-last", "emit": "loop {identifier} \"{title}\" {members}" },
+          "remove": {}
+        }
+      ],
+      "relations": [
+        {
+          "name": "link",
+          "type": "CausalLink",
+          "line": "^link\\s+(?<from>[^\\s\"]+)\\s+->\\s+(?<to>[^\\s\"]+)(?<tail>(?:\\s+(?:\"[^\"]*\"|[^\\s\"]+))*)\\s*$",
+          "source": { "group": "from" },
+          "target": { "group": "to" },
+          "attributes": {
+            "polarity": { "group": "tail", "word": "^[+\\-so]$", "map": { "+": "positive", "s": "positive", "-": "negative", "o": "negative" } },
+            "delayed": { "group": "tail", "word": "^delayed$", "flag": true },
+            "flipped": { "group": "tail", "word": "^flipped$", "flag": true },
+            "weight": { "group": "tail", "word": "^weight=(?<value>.+)$", "number": "shortest", "empty": "remove" },
+            "note": { "group": "tail", "word": "^\".*\"$", "empty": "remove" }
+          },
+          "insert": {
+            "place": "after-last",
+            "emit": "link {source} -> {target}[ {polarity}][ {delayed}][ {flipped}][ weight={weight}][ \"{note}\"]"
+          },
+          "remove": {}
+        }
+      ],
+      "template": {
+        "text": "causal-loop 1\r\n\r\n# One statement per line: variable, link, loop.\r\nvariable a \"A\"\r\nvariable b \"B\"\r\n\r\nlink a -> b +\r\n"
+      }
+    }
+  }
+}
