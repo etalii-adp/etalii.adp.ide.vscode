@@ -9,7 +9,7 @@ import { markerMatches } from '../../../src/core/fbl/routing/markerEvaluator';
 import { bare, candidates, readings } from '../../../src/core/fbl/routing/router';
 import { allBindings, bindingOf } from './support/bindings';
 import { utf8 } from './support/repository';
-import { linkFolder, linkRefusal, withFolders } from './support/temporaryFolder';
+import { linkFolder, skipWithoutLinks, withFolders } from './support/temporaryFolder';
 
 // Markers (FBL 12.2), candidates (FBL 12.3), readings (FBL 9.4) and globs (FBL 10.1). Counterparts
 // of standalone's Routing/Routing.Tests.cs.
@@ -85,8 +85,7 @@ describe('routing a file to its bindings', () => {
 
   // Needs a symbolic link, which some systems refuse to make; the test is then skipped with that reason.
   it('a folder is recognised and its files selected without following links', (context) => {
-    const refused = linkRefusal();
-    if (refused) context.skip(refused);
+    skipWithoutLinks(context);
     const chart = bindingOf('helm-chart.fbl', 'chart');
     withFolders(2, (folder, outside) => {
       folder.write('Chart.yaml', 'apiVersion: v2\n');

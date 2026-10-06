@@ -7,7 +7,7 @@ import { OpenRegistration } from '../../../src/core/fbl/registration/openRegistr
 import { RegistrationDocument } from '../../../src/core/fbl/registration/registrationDocument';
 import { bindingOf } from './support/bindings';
 import { textOf, utf8 } from './support/repository';
-import { linkFolder, linkRefusal, withFolders } from './support/temporaryFolder';
+import { linkFolder, skipWithoutLinks, withFolders } from './support/temporaryFolder';
 
 // Finding the body (FBL 8.2), identities (FBL 8.6) and legacy sidecars (FBL 8.7). Counterparts of
 // standalone's Registration/Registration.Tests.cs.
@@ -44,8 +44,7 @@ describe('a registration and its body', () => {
 
   // Needs a symbolic link, which some systems refuse to make; the test is then skipped with that reason.
   it('a body reached through a link is refused', (context) => {
-    const refused = linkRefusal();
-    if (refused) context.skip(refused);
+    skipWithoutLinks(context);
     withFolders(2, (folder, outside) => {
       outside.write('plan.tml', 'elements: []\n');
       expect(linkFolder(outside.path, join(folder.path, 'linked'))).toBeUndefined();

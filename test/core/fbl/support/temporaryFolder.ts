@@ -1,6 +1,6 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 
 /** A folder under the system's temporary folder, removed by `dispose`. */
 export class TemporaryFolder {
@@ -30,12 +30,13 @@ export function withFolders<T>(count: number, body: (...folders: TemporaryFolder
 }
 
 /**
- * Creates a symbolic link to a folder. Returns nothing when it was made, and otherwise the reason
- * the system refused, for a test to be skipped with (Windows refuses without the privilege).
+ * Creates a link to a folder. Returns nothing when it was made, and otherwise the reason
+ * the system refused, for a test to be skipped with (a system may refuse to make one).
  */
 export function linkFolder(target: string, link: string): string | undefined {
   try {
-    symlinkSync(target, link, 'dir');
+    // On Windows a junction, which needs no privilege and is a link all the same; elsewhere a symbolic link.
+    symlinkSync(target, link, 'junction');
     return undefined;
   } catch (error) {
     return `this system refuses to create a symbolic link: ${(error as NodeJS.ErrnoException).code ?? String(error)}`;
@@ -50,4 +51,17 @@ export function linkRefusal(): string | undefined {
     refusal = withFolders(2, (folder, outside) => linkFolder(outside.path, join(folder.path, 'linked')));
   }
   return refusal;
+}
+
+/**
+ * Skips the running test, with the reason, on a system that makes no symbolic link. The JUnit report
+ * keeps no reason for a skipped test, so the reason is also written beside the reports, where
+ * scripts/skipped-tests.mjs finds it for the list of skipped tests.
+ */
+export function skipWithoutLinks(context: { task: { name: string; file: { name: string } }; skip: (note?: string) => void }): void {
+  const reason = linkRefusal();
+  if (reason === undefined) return;
+  mkdirSync('reports', { recursive: true });
+  appendFileSync(join('reports', 'skip-reasons.jsonl'), `${JSON.stringify({ file: context.task.file.name.split(sep).join('/'), name: context.task.name, reason })}\n`);
+  context.skip(reason);
 }

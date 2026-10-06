@@ -38,3 +38,20 @@ export { OpenRegistration } from './registration/openRegistration';
 // ---- files ----
 export type { FblFiles } from './files/fblFiles';
 export { nodeFiles } from './files/nodeFiles';
+export { locateBody } from './registration/bodyLocator';
+export type { BodyLocation } from './registration/bodyLocator';
+export { LegacySidecar } from './registration/legacySidecar';
+
+// ---- routing and templates (FBL 10.1, 12, 13) ----
+export { bare, candidates, readings, suggests, suggestsReading } from './routing/router';
+export { markerMatches } from './routing/markerEvaluator';
+export { globMatches } from './routing/glob';
+export { folderFiles, recogniseFolder } from './routing/folderSubject';
+export type { FolderFile } from './routing/folderSubject';
+export { produceTemplate, replacePlaceholders, templateKey } from './routing/templateWriter';
+
+// ---- plugins (FBL 11.1 to 11.3, the host's side) ----
+export { PluginBody } from './plugins/pluginBody';
+export type {
+  PersistencePlugin, PluginFile, PluginPlanRequest, PluginPlanResult, PluginReadRequest, PluginReadResult, PluginSplice, PluginTemplateRequest,
+} from './plugins/persistencePlugin';
