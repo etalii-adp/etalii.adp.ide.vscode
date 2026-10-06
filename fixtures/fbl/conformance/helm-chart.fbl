@@ -1,0 +1,36 @@
+{
+  "$schema": "https://etalii.net/adp/fbl/schema/0.1/fbl.schema.json#/$defs/Document",
+  "fbl": "0.1",
+  "doc": "A Helm chart folder (definitions/diagrams/helm-chart.dis, helm-chart.md): a folder subject (section 10) read by a persistence plugin, never written. Recognition, the files read, the settle delay and the registration inside the chart root are declared; resolving templates, includes and conditions stays in the plugin.",
+  "bindings": {
+    "chart": {
+      "title": "Helm chart",
+      "claims": {
+        "names": ["Chart.yaml"],
+        "origins": ["helm/chart"],
+        "registrationOnly": true,
+        "suggest": { "contains": ["apiVersion:"] }
+      },
+      "body": {
+        "kind": "folder",
+        "recognise": { "all": ["Chart.yaml"] },
+        "files": [
+          { "name": "chart", "glob": "Chart.yaml", "family": "yaml" },
+          { "name": "values", "glob": "values*.yaml", "family": "yaml" },
+          { "name": "schema", "glob": "values.schema.json", "family": "json" },
+          { "name": "templates", "glob": "templates/**", "family": "lines" },
+          { "name": "crds", "glob": "crds/**" },
+          { "name": "subcharts", "glob": "charts/*/Chart.yaml", "family": "yaml" },
+          { "name": "archives", "glob": "charts/*.tgz" },
+          { "name": "lock", "glob": "Chart.lock", "family": "yaml" },
+          { "name": "requirements", "glob": "requirements.yaml", "family": "yaml" }
+        ],
+        "ignore": [".git/**", "**/.helmignore"],
+        "settle": 400
+      },
+      "reader": { "plugin": "net.etalii.adp.helm.chartFolder", "version": "^0.1.0" },
+      "readOnly": "A chart is read, never written: change it in its files.",
+      "registration": { "createOnFirstPlacement": true }
+    }
+  }
+}

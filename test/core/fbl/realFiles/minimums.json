@@ -1,0 +1,13 @@
+{
+  "bindings": [
+    { "key": "timeline", "document": "timeline.fbl", "binding": "timeline", "extensions": [".tml"], "minimum": 15 },
+    { "key": "causal-loop", "document": "causal-loop-diagram.fbl", "binding": "cld", "extensions": [".cld"], "minimum": 4 },
+    { "key": "mindmap", "document": "mindmap.fbl", "binding": "freeplane", "extensions": [".mm"], "minimum": 5 },
+    { "key": "structurizr", "document": "structurizr.fbl", "binding": "workspace", "extensions": [".dsl"], "minimum": 16 },
+    { "key": "databricks-job", "document": "databricks-job.fbl", "binding": "job", "extensions": [".yml", ".yaml"], "contains": "task_key", "minimum": 4 },
+    { "key": "databricks-pipeline", "document": "databricks-pipeline.fbl", "binding": "settings", "extensions": [".json"], "contains": "\"libraries\"", "minimum": 2 }
+  ],
+  "registrations": 181,
+  "chartFolders": 13,
+  "turtle": 33
+}
