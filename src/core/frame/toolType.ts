@@ -62,6 +62,10 @@ export interface ViewOptions {
   readonly filterTags?: readonly string[];
   readonly filterMode?: 'any' | 'all';
   readonly compact?: boolean;
+  /** The viewpoint to draw, by its name; the default one when absent. */
+  readonly viewpoint?: string;
+  /** The value of each filter that is not at its default, by the filter's id. */
+  readonly filters?: Readonly<Record<string, { readonly value?: unknown; readonly match?: 'any' | 'all' }>>;
 }
 
 export interface ToolboxEntry {
@@ -117,7 +121,7 @@ export type EditRequest =
   /** A property edited in ADP Properties. */
   | { readonly kind: 'setField'; readonly id: string; readonly field: string; readonly value: string }
   /** An action invoked on an element or relation, or on the diagram when there is no id. */
-  | { readonly kind: 'action'; readonly action: string; readonly id?: string }
+  | { readonly kind: 'action'; readonly action: string; readonly id?: string; readonly x?: number; readonly y?: number }
   /** A node dragged onto another node, to become its child, at a position among its children when given. */
   | { readonly kind: 'reparent'; readonly id: string; readonly parent: string; readonly index?: number }
   /** The children of a node hidden or shown. */
