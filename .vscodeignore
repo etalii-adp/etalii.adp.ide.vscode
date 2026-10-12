@@ -3,6 +3,7 @@
 !package.json
 !language/**
 !media/**
+!definitions/**
 !README.md
 !LICENSE
 dist/**/*.map

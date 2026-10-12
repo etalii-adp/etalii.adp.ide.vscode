@@ -3,9 +3,9 @@
 #
 # Triggers: a pull request into develop, a push to develop, and a manual run.
 #
-# The check job checks the files the repository holds. The plugin job builds the plug-in, runs the type and lint
-# checks and every test (the core, the webview, and the packaged plug-in in a real Visual Studio Code, which needs a
-# display, so under xvfb-run), packages etalii-adp-<version>.vsix and offers it as the installable file itself. It
+# The check job checks the files the repository holds. The plugin job holds the copied definitions to their records,
+# builds the plug-in, runs the type and lint checks and every test (the core, the webview, and the packaged plug-in in
+# a real Visual Studio Code, which needs a display, so under xvfb-run), packages etalii-adp-<version>.vsix and offers it as the installable file itself. It
 # writes the skipped tests and their reasons to the job summary and keeps its test reports on every run that was not
 # cancelled.
 #
@@ -51,6 +51,9 @@ jobs:
           cache: npm
       - name: Install the build's dependencies
         run: npm ci
+      # The copied definitions are what their records say, and package.json offers what they give (etalii.adp spec 027).
+      - name: Check the copied definitions
+        run: npm run sync-definitions -- --check
       - name: Check types and lint
         run: npm run check
       - name: Test the core and the webview
