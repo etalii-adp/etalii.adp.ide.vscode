@@ -14,5 +14,5 @@
     "noEmit": true,
     "types": ["node", "vscode"]
   },
-  "include": ["src", "test/core", "test/webview", "scripts", "*.mjs", "*.ts", "*.mts"]
+  "include": ["src", "test/core", "test/scripts", "test/webview", "scripts", "*.mjs", "*.ts", "*.mts"]
 }
