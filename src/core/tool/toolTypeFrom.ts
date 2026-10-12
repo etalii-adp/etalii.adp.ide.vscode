@@ -4,7 +4,7 @@
 // interpreter; a request is one intent of the interpreted behavior, whose changes the library plans
 // as splices of the text. Every method is a function of its arguments.
 
-import { baseCoordinate, interpretBehavior, type EndPlace, type Outcome, type Point, type Situation } from '../disl/behavior';
+import { applyChanges, baseCoordinate, interpretBehavior, type EndPlace, type Outcome, type Point, type Situation } from '../disl/behavior';
 import { interpretConstraints } from '../disl/constraints';
 import { interpretCoordinates, rulerRows } from '../disl/coordinates';
 import { createExpressions } from '../disl/expressions';
@@ -13,7 +13,7 @@ import { interpretLayout } from '../disl/layout';
 import { defaultOf, interpretMetamodel } from '../disl/metamodel';
 import { emptyModel, type Finding as Found, type Model, type Value } from '../disl/model';
 import { edgeNotation, interpretNotation, nodeNotation, styleOf, type Paint } from '../disl/notation';
-import { interpretPersistence, readModel } from '../disl/persistence';
+import { foldsOf, interpretPersistence, readModel } from '../disl/persistence';
 import { isCel, isObject, loadSpecification } from '../disl/specification';
 import { groupsIn, interpretToolbox, type ToolGroup } from '../disl/toolbox';
 import { interpretViewpoints } from '../disl/viewpoints';
@@ -28,6 +28,7 @@ import type { Edit } from '../fbl/splice';
 import { decode, encode } from '../fbl/text/utf8';
 import type { Action, Control, DiagramToolType, EditOutcome, EditRequest, Field, Finding, Severity, Source, ToolboxEntry, ViewOptions } from '../frame/toolType';
 import { arrangedRows, createScene, type Scene, type SceneChrome, type SceneOptions, type SceneRuler, type SceneTool, type SceneToken } from '../scene/scene';
+import { widthOfText } from '../text/textMetric';
 import { claimingBinding, claimsOf, suggests } from './claims';
 import { readDefinitionFolder, type Definition } from './definitionFolder';
 import { composedSplices, modelChangesOf } from './modelChanges';
@@ -75,7 +76,6 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
 
   const missing = missingPlugins(pluginReferences(definition.specification, bindings), plugins);
   const needed = missing.filter((reference) => reference.required);
-  // simplified: a layout plugin the registry has is not run yet; the first definition that carries one calls `LayoutPlugin.place` from the scene.
   const fallbacks = new Map(missing.flatMap((reference) => (!reference.required && reference.fallback.layout !== undefined ? [[reference.id, reference.fallback.layout] as const] : [])));
 
   const loaded = loadSpecification(withFallbacks(definition.specification, fallbacks));
@@ -90,11 +90,13 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
   const constraints = interpretConstraints(specification, metamodel.value, expressions);
   const forms = interpretForms(specification, metamodel.value, expressions);
   const toolbox = interpretToolbox(specification, metamodel.value);
-  const sceneTool: SceneTool = { metamodel: metamodel.value, expressions, coordinates: coordinates.value, viewpoints: viewpoints.value };
+  const sceneTool: SceneTool = { metamodel: metamodel.value, expressions, coordinates: coordinates.value, viewpoints: viewpoints.value, layouts: (id) => plugins.layout(id) };
+  // The core has no browser to measure a text with: for a definition whose text metric is the host's, it is the estimate every ADP host shares.
+  const measured: SceneOptions = { textWidth: widthOfText };
   const behavior = interpretBehavior(specification, metamodel.value, expressions, {
     constraints: constraints.value, layout: layout.value, coordinates: coordinates.value, persistence: persistence.value, toolbox: toolbox.value,
     notation: notation.value, viewpoints: viewpoints.value,
-    rows: (config, model) => arrangedRows(sceneTool, model, createScene(sceneTool, model), config),
+    rows: (config, model) => arrangedRows(sceneTool, model, createScene(sceneTool, model, measured), config),
   });
   const texts = createTexts(specification, expressions);
 
@@ -135,7 +137,7 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
     const typed = readModel(read, binding, metamodel.value, persistence.value);
     const model = read.unreadable ? emptyModel : typed.value;
     // The reader of a binding says itself that its plugin is missing; it is said once, with the others.
-    const found = constraints.value.check(model, typed.findings).filter((finding) => finding.code !== findingCodes.pluginMissing).map(framed);
+    const found = constraints.value.check(model, typed.findings, { file: source.fileName.slice(Math.max(source.fileName.lastIndexOf('/'), source.fileName.lastIndexOf('\\')) + 1) }).filter((finding) => finding.code !== findingCodes.pluginMissing).map(framed);
     const gate = needed.length > 0 ? messages.pluginMissing(needed[0].id) : body.isReadOnly && !read.unreadable ? binding.readOnly || messages.readOnlyFile : undefined;
     const open: Open = read.unreadable
       ? { binding, read, model, findings: found, unreadable: true, refusal: behavior.value.message('std.readOnly', emptyModel) ?? found[0]?.message ?? UNREADABLE, notice: found[0]?.message ?? UNREADABLE }
@@ -148,15 +150,20 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
     (options.viewpoint !== undefined && Object.hasOwn(viewpoints.value.all, options.viewpoint) ? options.viewpoint : viewpoints.value.default);
 
   const sceneOf = (open: Open, options: ViewOptions): Scene => {
+    // Which nodes are folded for this viewer: what the options hold, else what the definition seeds a fold from (DISL 11.6).
+    const folded = foldsOf(persistence.value, expressions, open.model, options.collapsed);
     const settings: SceneOptions = {
+      ...measured,
       viewpoint: viewpointOf(options),
       filters: options.filters as SceneOptions['filters'],
+      collapsed: Object.fromEntries(open.model.elements.map((element) => [element.id, folded(element.id)])),
       ...(open.refusal === undefined ? {} : { env: { readOnly: true } }),
     };
     return createScene(sceneTool, open.model, settings);
   };
 
-  const situationOf = (open: Open, options: ViewOptions): Situation => ({ env: { viewpoint: viewpointOf(options), ...(open.refusal === undefined ? {} : { readOnly: true }) } });
+  const situationOf = (open: Open, options: ViewOptions): Situation =>
+    ({ env: { viewpoint: viewpointOf(options), ...(open.refusal === undefined ? {} : { readOnly: true }) }, ...(options.collapsed === undefined ? {} : { collapsed: options.collapsed }) });
   const elementOf = (model: Model, id: string) => [...model.elements, ...model.relations].find((element) => element.id === id);
 
   // ---- what a scene carries beside its nodes and edges ----
@@ -275,11 +282,13 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
     });
   }
 
-  function actions(source: Source, selection: readonly string[]): Action[] {
+  function actions(source: Source, selection: readonly string[], options: ViewOptions = {}): Action[] {
     const open = opened(source);
-    if (open.refusal !== undefined) return [];
     const target = selection.length === 1 && elementOf(open.model, selection[0]) ? selection[0] : undefined;
-    return behavior.value.menu(open.model, target, situationOf(open, {})).groups.flat().map((entry): Action => ({
+    // In a document that cannot be edited, what is left is what changes nothing of it: a fold, a link followed.
+    const offered = behavior.value.menu(open.model, target, situationOf(open, options)).groups.flat()
+      .filter((entry) => open.refusal === undefined || (!open.unreadable && behavior.value.operations.find((operation) => operation.id === entry.operation)?.viewOnly === true));
+    return offered.map((entry): Action => ({
       id: entry.operation ?? entry.kind, label: entry.label,
       ...(entry.icon === undefined ? {} : { icon: entry.icon }), ...(entry.shortcut === undefined ? {} : { shortcut: entry.shortcut }),
       enabled: entry.enabled, ...(entry.reason === undefined ? {} : { disabledReason: entry.reason }),
@@ -288,19 +297,31 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
 
   // ---- an edit ----
 
-  /** The first label of an element that is edited in place, as its notation declares it. */
-  const editedLabel = (model: Model, id: string, viewpoint: string): 'inline' | 'multiline' | 'form' | undefined => {
+  /** The first label of an element that is edited, as its notation declares it: how, and the attribute it shows. */
+  const editedLabel = (model: Model, id: string, viewpoint: string): { readonly how: 'inline' | 'multiline' | 'form'; readonly attribute?: string } | undefined => {
     const element = elementOf(model, id);
     if (!element) return undefined;
     const drawn = viewpoints.value.all[viewpoint].notation;
     const labels = 'source' in element ? edgeNotation(drawn, metamodel.value, element.type).labels : nodeNotation(drawn, metamodel.value, element.type).labels;
     const label = labels.find((candidate) => candidate.editable !== false && (candidate.editable !== undefined || isObject(candidate.text)));
-    return label ? label.editable || 'inline' : undefined;
+    const shown = label && ([label.editText, label.text] as readonly unknown[]).find((text): text is { readonly attribute: string } => isObject(text) && typeof text.attribute === 'string');
+    return label ? { how: label.editable || 'inline', ...(shown ? { attribute: shown.attribute } : {}) } : undefined;
+  };
+
+  /** The row of ADP Properties that edits an attribute of an element, by its id. */
+  const rowOf = (open: Open, situation: Situation, id: string, attribute: string | undefined): string | undefined => {
+    const element = attribute === undefined ? undefined : elementOf(open.model, id);
+    if (!element) return undefined;
+    const on: Subject = { model: open.model, element: id, env: situation.env };
+    const row = rowsOf(on, element.type).find(({ item }) => item.attribute === attribute);
+    return row?.item.rowId(on);
   };
 
   /** What an intent came to, as the outcome of the request: its changes planned by the library as splices of the text. */
-  function carriedOut(source: Source, open: Open, outcome: Outcome, viewpoint: string): EditOutcome {
+  function carriedOut(source: Source, open: Open, outcome: Outcome, viewpoint: string, options: ViewOptions): EditOutcome {
     if (outcome.refused !== undefined) return { kind: 'refused', sentence: outcome.refused };
+    const link = outcome.effects.find((effect) => effect.kind === 'open' && effect.message !== undefined);
+    if (link && outcome.changes.length === 0) return { kind: 'open', path: link.message! };
     const steps = modelChangesOf(outcome.changes, { binding: open.binding, metamodel: metamodel.value, persistence: persistence.value, read: open.read }, open.model);
     if ('refused' in steps) return { kind: 'refused', sentence: steps.refused };
     // Each step is planned against the body the one before left; FBL's own history is not used (research R5).
@@ -312,23 +333,35 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
       edits.push(planned.planned);
     }
     const asked = outcome.effects.find((effect) => (effect.kind === 'select' || effect.kind === 'editLabel') && effect.elements.length > 0);
-    const editing = asked?.kind === 'editLabel' ? editedLabel(outcome.after, asked.elements[0], viewpoint) : undefined;
+    const labelled = outcome.effects.find((effect) => effect.kind === 'editLabel' && effect.elements.length > 0);
+    const editing = labelled ? editedLabel(outcome.after, labelled.elements[0], viewpoint)?.how : undefined;
+    // What the viewer holds after the request: the folds it changed, and every folded node that hides what it selects, opened (DISL 11.6, `revealExpands`).
+    // simplified: `revealExpands: false` is not read; read it in `interpretPersistence` when a definition states it.
+    const folds: Record<string, boolean> = { ...outcome.collapsed };
+    if (asked) {
+      const folded = foldsOf(persistence.value, expressions, outcome.after, { ...options.collapsed, ...folds });
+      const parents = new Map(outcome.after.elements.map((element) => [element.id, element.parent]));
+      for (let parent = parents.get(asked.elements[0]), seen = 0; parent !== undefined && seen < parents.size; parent = parents.get(parent), seen++) if (folded(parent)) folds[parent] = false;
+    }
     return {
       kind: 'applied', splices: edits.length === 0 ? [] : composedSplices(edits),
       ...(asked ? { select: asked.elements[0] } : {}),
       ...(editing === undefined ? {} : { editLabel: true, multiline: editing === 'multiline' }),
+      ...(Object.keys(folds).length === 0 ? {} : { viewOptions: { ...options, collapsed: { ...options.collapsed, ...folds } } }),
     };
   }
 
   function edit(source: Source, request: EditRequest, options: ViewOptions, confirmed: boolean): EditOutcome {
     const open = opened(source);
-    if (open.refusal !== undefined) return { kind: 'refused', sentence: open.refusal };
     const { model } = open;
     const intents = behavior.value;
+    // What changes nothing of the document is not an edit: a fold, and an operation of viewer state, are answered in a read-only document too (DISL 9.4).
+    const viewing = request.kind === 'fold' || request.kind === 'openLink' || (request.kind === 'action' && intents.operations.find((operation) => operation.id === request.action)?.viewOnly === true);
+    if (open.refusal !== undefined && (open.unreadable || !viewing)) return { kind: 'refused', sentence: open.refusal };
     const situation = situationOf(open, options);
     const viewpoint = viewpointOf(options);
     const refused = (sentence: string): EditOutcome => ({ kind: 'refused', sentence });
-    const done = (outcome: Outcome): EditOutcome => carriedOut(source, open, outcome, viewpoint);
+    const done = (outcome: Outcome): EditOutcome => carriedOut(source, open, outcome, viewpoint, options);
     const nodeOf = (id: string) => sceneOf(open, options).nodes.find((node) => node.id === id);
 
     // A point of a viewpoint that places by layout, on the axes of the viewpoint it varies: what is created is placed there.
@@ -342,8 +375,14 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
     };
 
     switch (request.kind) {
-      case 'drop':
-        return done(intents.create(model, request.entry, inBase({ x: request.x, y: request.y }), situation));
+      case 'drop': {
+        // A tool that runs an operation runs it on the element the point is on, the topmost there. Where the
+        // operation needs an element and there is none, nothing happens: a host rule, see docs/disl-support.md.
+        const operation = Object.hasOwn(toolbox.value.tools, request.entry) ? toolbox.value.tools[request.entry].operation : undefined;
+        const under = operation === undefined ? undefined : [...sceneOf(open, options).nodes].reverse().find((node) => request.x >= node.box.x && request.x <= node.box.x + node.box.width && request.y >= node.box.y && request.y <= node.box.y + node.box.height)?.id;
+        if (operation !== undefined && under === undefined && !intents.availability(model, operation, [], situation).offered) return { kind: 'applied', splices: [] };
+        return done(intents.create(model, request.entry, inBase({ x: request.x, y: request.y }), situation, under));
+      }
       case 'move': {
         const node = nodeOf(request.id);
         return node ? done(intents.move(model, [request.id], { x: request.x - node.box.x, y: request.y - node.box.y }, situation)) : refused(GONE);
@@ -390,9 +429,19 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
         const selection = id === undefined ? [] : [id];
         const asking = (question: { readonly title: string; readonly message: string; readonly confirmLabel: string; readonly danger: boolean }): EditOutcome =>
           ({ kind: 'confirm', title: question.title, message: question.message, confirmLabel: question.confirmLabel, danger: question.danger });
-        if (intents.operations.some((operation) => operation.id === request.action)) {
+        const operation = intents.operations.find((candidate) => candidate.id === request.action);
+        if (operation) {
           const state = intents.availability(model, request.action, selection, situation);
           if (state.offered && state.available && state.confirm && !confirmed) return asking(state.confirm);
+          if (state.offered && state.available && operation.plugin !== undefined) {
+            // The operation is a plugin's: what it answers is the outcome, and changes it makes are planned as any other.
+            const result = plugins.action(operation.plugin)?.run({ source, model, selection });
+            if (!result) return { kind: 'applied', splices: [] };
+            return result.kind === 'changes' ? done({ changes: result.changes, after: applyChanges(model, result.changes), created: [], effects: [], collapsed: {} }) : result;
+          }
+          // A request carries no parameters, and this host has no dialog to ask them in: the value is asked in ADP Properties, at the row of the attribute the operation sets.
+          const field = state.offered && state.available && id !== undefined ? rowOf(open, situation, id, operation.asks) : undefined;
+          if (field !== undefined) return { kind: 'showField', field };
           // Where the request names no point, the middle of what is shown is the point.
           const shown = options.viewport;
           const at = request.x !== undefined && request.y !== undefined ? { x: request.x, y: request.y } : shown ? { x: shown.x + shown.width / 2, y: shown.y + shown.height / 2 } : undefined;
@@ -405,12 +454,31 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
         }
         if (request.action === 'editLabel' && id !== undefined) {
           const editing = editedLabel(model, id, viewpoint);
-          return editing ? { kind: 'editInPlace', id, multiline: editing === 'multiline' } : refused(NO_TEXT);
+          if (editing?.how !== 'form') return editing ? { kind: 'editInPlace', id, multiline: editing.how === 'multiline' } : refused(NO_TEXT);
+          // A label the definition edits in a form is edited in ADP Properties, at the row of the attribute it shows.
+          const field = rowOf(open, situation, id, editing.attribute);
+          return field === undefined ? refused(NO_TEXT) : { kind: 'showField', field };
         }
         return refused(intents.message('std.notApplicable', model, situation) ?? 'This cannot be done with what is selected.');
       }
+      case 'reparent':
+        return done(intents.reparent(model, request.id, request.parent, request.index, situation));
+      case 'fold': {
+        if (!elementOf(model, request.id)) return refused(GONE);
+        // Viewer state (DISL 11.6): nothing is written, so there are no splices and no undo step.
+        return nodeOf(request.id)?.fold === undefined ? refused(NOT_HERE) : { kind: 'applied', splices: [], viewOptions: { ...options, collapsed: { ...options.collapsed, [request.id]: request.folded } } };
+      }
+      case 'openLink': {
+        if (!elementOf(model, request.id)) return refused(GONE);
+        // The link is what the first operation offered on the element that opens one gives (DISL 9.4, `open`).
+        const opening = intents.operations.find((operation) => {
+          const state = operation.opens ? intents.availability(model, operation.id, [request.id], situation) : undefined;
+          return state?.offered === true && state.available;
+        });
+        return opening ? done(intents.operate(model, opening.id, [request.id], situation)) : refused(NOT_HERE);
+      }
       default:
-        // simplified: reparenting, folding, pinning and following a link are refused; each is built with the first definition that states it.
+        // simplified: pinning is refused; it is built with the first definition that stores `pinned`.
         return refused(NOT_HERE);
     }
   }
@@ -425,7 +493,7 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
     suggests: (fileName, text) => suggests(bindings, fileName, text),
     findings: (source) => {
       const open = opened(source);
-      return [...open.findings, ...(open.unreadable ? [] : createScene(sceneTool, open.model).findings.map(framed)), ...ofDefinition, ...ofPlugins];
+      return [...open.findings, ...(open.unreadable ? [] : createScene(sceneTool, open.model, measured).findings.map(framed)), ...ofDefinition, ...ofPlugins];
     },
     view,
     toolbox: tools,

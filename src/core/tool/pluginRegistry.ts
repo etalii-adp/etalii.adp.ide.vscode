@@ -3,25 +3,15 @@
 // what a definition and its bindings name of them.
 
 import type { Change } from '../disl/behavior';
+import type { LayoutPlugin } from '../disl/layout';
 import type { Model } from '../disl/model';
 import { isObject } from '../disl/specification';
 import type { FblBinding } from '../fbl/documents/types';
 import type { PersistencePlugin } from '../fbl/plugins/persistencePlugin';
 import type { EditOutcome, Source } from '../frame/toolType';
 
-export interface LayoutRequest {
-  readonly model: Model;
-  /** The size of each drawn node, by its id. */
-  readonly sizes: Readonly<Record<string, { readonly width: number; readonly height: number }>>;
-  /** The layout's own options, as the definition states them. */
-  readonly options: Readonly<Record<string, unknown>>;
-}
-
-export interface LayoutPlugin {
-  readonly id: string;
-  /** Where each node goes: its top-left by id, in canvas units. A node it names no place for stays where it is. */
-  place(request: LayoutRequest): Readonly<Record<string, { readonly x: number; readonly y: number }>>;
-}
+// A layout plugin is called by the scene, which does not import this folder: its interface is the interpreter's.
+export type { LayoutPlugin, LayoutRequest } from '../disl/layout';
 
 export interface ActionRequest {
   readonly source: Source;

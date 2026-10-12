@@ -43,9 +43,8 @@ describe('the specification of another tool type', () => {
 
   it('has every feature the interpreter does not support as a finding that names it', () => {
     const { findings } = interpret(mindmap);
-    // Its layout is a plugin's, which no add-on runs: the one thing of it that is reported.
-    expect(findings.map((finding) => [finding.code, finding.severity])).toEqual([['disl.layout', 'warning']]);
-    expect(findings[0].message).toContain('`plugin:net.etalii.adp.freeplane.mindmapLayout`');
+    // Its layout is a plugin's, which is read as written: whether the plugin is carried is the tool type's to say.
+    expect(findings.map((finding) => [finding.code, finding.severity])).toEqual([]);
 
     const asking = { ...mindmap, language: { ...mindmap.language, requires: { features: ['layout.tidyTree', 'form.embedded'], conformance: 'full' as const } } };
     const more = interpret(asking).findings.filter((finding) => finding.code.startsWith('disl.unsupported'));

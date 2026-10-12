@@ -235,7 +235,7 @@ export function interpretConstraints(specification: Specification, metamodel: Me
     readonly file: string;
   }
   const contextOf = (model: Model, file: string): Context =>
-    ({ model, world: expressions.over(model), byId: new Map([...model.relations, ...model.elements].map((element) => [element.id, element])), file });
+    ({ model, world: expressions.over(model, { file }), byId: new Map([...model.relations, ...model.elements].map((element) => [element.id, element])), file });
   const scopeFor = (context: Context, self: ModelElement | undefined, more: Scope = {}): Scope =>
     (self ? context.world.scope(self.id, more) : context.world.scope(undefined, { self: context.world.diagram, ...more }));
   const at = (context: Context, element: ModelElement | undefined): Finding['location'] =>

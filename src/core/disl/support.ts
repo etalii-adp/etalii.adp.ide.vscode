@@ -19,6 +19,7 @@ export const supportedFeatures: readonly string[] = [
   'edge.bezier',
   'label.parse',
   'persistence.fbl',
+  'view.viewer',
 ];
 
 /** The conformance class this interpreter states (DISL 15.1). */

@@ -9,7 +9,9 @@
 // `actions`), `deletion` (`relations`, `children`, `references: "unset"`, `confirm`), the actions
 // `set`, `unset`, `create`, `connect`, `delete`, `let`, `if`, `forEach`, `layout` (the `rows`
 // algorithm), `abort`, `call`, and those that only ask the host for something (`select`, `reveal`,
-// `highlight`, `editLabel`, `openForm`, `notify`). Parent placements, the clipboard, retyping and
+// `highlight`, `editLabel`, `openForm`, `notify`, `open`), the `view` action for a viewer's folds,
+// a `create` placed `after` or `before` a sibling, and a node moved under another parent. The
+// `clipboard` is read and kept, and nothing is done with it. Parent placements, retyping and
 // simulations are not read, and an action of another kind is reported and skipped.
 
 import type { Constraints, Gesture } from './constraints';
@@ -20,7 +22,7 @@ import type { Layout, LayoutConfig } from './layout';
 import { attributesOf, defaultOf, defaultsOf, isA, isRelation, parseYearMonth, valueKind, type Metamodel } from './metamodel';
 import { finding, type Attributes, type Finding, type Loaded, type Model, type ModelElement, type ModelRelation, type Value } from './model';
 import { edgeNotation, interpretNotation, nodeNotation, type EndAnchor, type Label, type Notation } from './notation';
-import { newId, type InterpretedPersistence } from './persistence';
+import { foldsOf, newId, type InterpretedPersistence } from './persistence';
 import { isCel, isObject, labelOf, localized, type Attribute, type CelValue, type Doc, type Expression, type Message, type NeighbourBounds, type Reason, type Specification } from './specification';
 import { setsFor, type ContextSet, type Toolbox } from './toolbox';
 import type { Viewpoints } from './viewpoints';
@@ -62,7 +64,18 @@ export interface OperationDeclaration {
   readonly unavailable?: readonly Reason[];
   readonly confirm?: Message | Confirmation;
   readonly actions?: readonly unknown[];
+  readonly params?: Readonly<Record<string, unknown>>;
+  /** A plugin that is the operation (DISL 13.1): its name, or an object with its `name`. */
+  readonly plugin?: unknown;
   readonly doc?: Doc;
+}
+
+/** `behavior.clipboard` (DISL 9.5), as it is written. */
+export interface Clipboard {
+  readonly relations?: 'internal' | 'all' | 'none';
+  readonly ids?: 'regenerate';
+  readonly names?: 'keep' | 'suffix';
+  readonly [name: string]: unknown;
 }
 
 /** `$defs/DeletionPolicy` (DISL 9.5). */
@@ -78,6 +91,7 @@ export interface BehaviorSection {
   readonly hooks?: readonly HookDeclaration[];
   readonly operations?: Readonly<Record<string, OperationDeclaration>>;
   readonly deletion?: Readonly<Record<string, DeletionPolicy>>;
+  readonly clipboard?: Clipboard;
   readonly maxHookDepth?: number;
   readonly editGate?: readonly Reason[];
   readonly messages?: Readonly<Record<string, Message>>;
@@ -95,27 +109,42 @@ export interface BehaviorSection {
  * - `set`: values of attributes of one element or relation; null empties an attribute. The id `''`
  *   is the diagram itself.
  * - `remove`: an element or a relation. What goes with it is in the list as changes of its own, before it.
+ * - `move`: an element, with what it holds, under another parent (the top level without one), at a
+ *   place among that parent's children: after the last without a `position`. An index counts the
+ *   children without the element itself.
+ *
+ * The `position` of an `add` is the sibling it goes directly after or before; without one it goes after the last.
  */
 export type Change =
-  | { readonly kind: 'add'; readonly id: string; readonly type: string; readonly attributes: Attributes; readonly source?: string; readonly target?: string; readonly parent?: string }
+  | { readonly kind: 'add'; readonly id: string; readonly type: string; readonly attributes: Attributes; readonly source?: string; readonly target?: string; readonly parent?: string; readonly position?: Beside }
   | { readonly kind: 'set'; readonly id: string; readonly attributes: Readonly<Record<string, Value | null>> }
-  | { readonly kind: 'remove'; readonly id: string };
+  | { readonly kind: 'remove'; readonly id: string }
+  | { readonly kind: 'move'; readonly id: string; readonly parent?: string; readonly position?: Beside | { readonly index: number } };
 
-/** What an action asks of the host beside the change: nothing of it is part of the model. */
+/** A place next to a sibling, by the sibling's id. */
+export type Beside = { readonly after: string } | { readonly before: string };
+
+/** What an action asks of the host beside the change: nothing of it is part of the model. `open` carries the link in `message`. */
 export interface Effect {
-  readonly kind: 'select' | 'editLabel' | 'openForm' | 'reveal' | 'highlight' | 'notify';
+  readonly kind: 'select' | 'editLabel' | 'openForm' | 'reveal' | 'highlight' | 'notify' | 'open';
   readonly elements: readonly string[];
   readonly message?: string;
 }
 
-/** What one intent comes to: the changes in order and the model after them, or the sentence that refuses it. */
+/**
+ * What one intent comes to: the changes in order and the model after them, or the sentence that
+ * refuses it. `collapsed` holds the folds the intent changed for this viewer, by element: viewer
+ * state, which is no change of the model (DISL 11.6).
+ */
 export type Outcome =
-  | { readonly changes: readonly Change[]; readonly after: Model; readonly created: readonly string[]; readonly effects: readonly Effect[]; readonly refused?: undefined }
+  | { readonly changes: readonly Change[]; readonly after: Model; readonly created: readonly string[]; readonly effects: readonly Effect[]; readonly collapsed: Readonly<Record<string, boolean>>; readonly refused?: undefined }
   | { readonly refused: string };
 
-/** Where an intent takes place: the members of `env` (DISL 12.2), of which `viewpoint` and `readOnly` are read here. */
+/** Where an intent takes place: the members of `env` (DISL 12.2), of which `viewpoint` and `readOnly` are read here, and what this viewer folded. */
 export interface Situation {
   readonly env?: Scope;
+  /** The folds this viewer holds, by element (DISL 11.6). An element that is not named is as `persistence.view.initial` says. */
+  readonly collapsed?: Readonly<Record<string, boolean>>;
 }
 
 /** A point of the canvas, in canvas units at zoom 1, in the coordinate system of the viewpoint. */
@@ -148,6 +177,14 @@ export interface Operation {
   readonly for: readonly string[];
   /** Its own shortcut, and those of the tools and context entries that run it. */
   readonly keys: readonly string[];
+  /** The plugin that is the operation, by its id: the host runs it. */
+  readonly plugin?: string;
+  /** For an operation with parameters whose first action sets one attribute: that attribute, which is where a host without a dialog asks the value. */
+  readonly asks?: string;
+  /** Whether one of its actions opens a link (DISL 9.4, `open`). */
+  readonly opens: boolean;
+  /** Whether it changes nothing of the model: viewer state, the selection, a link opened. It is then no edit, and is run in a read-only document too. */
+  readonly viewOnly: boolean;
 }
 
 export interface Availability {
@@ -188,6 +225,8 @@ export interface Behavior {
   /** One of them as text, or nothing when the specification does not give it. */
   message(id: string, model: Model, situation?: Situation, more?: Scope): string | undefined;
   readonly operations: readonly Operation[];
+  /** `behavior.clipboard` as it is written, when it is. Nothing is done with it here. */
+  readonly clipboard?: Clipboard;
   availability(model: Model, operation: string, selection: readonly string[], situation?: Situation): Availability;
   /**
    * The entries offered on a target, in groups that are shown apart: an element, the empty canvas
@@ -197,8 +236,8 @@ export interface Behavior {
   /** What removing a selection takes with it, and the question to ask first when there is one. */
   deletion(model: Model, selection: readonly string[], situation?: Situation): { readonly removes: readonly string[]; readonly confirm?: Question; readonly refused?: string };
 
-  /** A tool used at a point: the element it creates there, or the operation it runs. */
-  create(model: Model, tool: string, at: Point, situation?: Situation): Outcome;
+  /** A tool used at a point: the element it creates there, or the operation it runs, on the element the point is on when one is given. */
+  create(model: Model, tool: string, at: Point, situation?: Situation, on?: string): Outcome;
   /** A relation of a type drawn from one element to another; an end that is not given attaches where the notation's default says. */
   connect(model: Model, type: string, source: string, target: string, ends?: { readonly source?: EndPlace; readonly target?: EndPlace }, situation?: Situation): Outcome;
   /** Attributes of an element (the diagram when none is named) set to values; null empties one. */
@@ -216,6 +255,8 @@ export interface Behavior {
   /** An end of a relation dragged to another place on the element it is on. */
   reattach(model: Model, relation: string, side: 'source' | 'target', end: EndPlace, situation?: Situation): Outcome;
   remove(model: Model, selection: readonly string[], situation?: Situation): Outcome;
+  /** A node put under another node, with what it holds, at a place among that node's children: after the last when none is given. */
+  reparent(model: Model, element: string, parent: string, index?: number, situation?: Situation): Outcome;
   /** An operation run on a selection, at the point it was invoked at when there is one. */
   operate(model: Model, operation: string, selection: readonly string[], situation?: Situation, at?: Point, args?: Readonly<Record<string, Value>>): Outcome;
 }
@@ -250,6 +291,14 @@ const merged = (attributes: Attributes, values: Readonly<Record<string, Value | 
   return next;
 };
 
+// An element put into a list: directly after or before the sibling a position names, else at the end.
+// The order among the children of one parent is the order of the list.
+const beside = (elements: readonly ModelElement[], element: ModelElement, position: Beside | undefined): ModelElement[] => {
+  const sibling = position === undefined ? -1 : elements.findIndex((other) => other.id === ('after' in position ? position.after : position.before));
+  const at = sibling < 0 ? elements.length : position !== undefined && 'after' in position ? sibling + 1 : sibling;
+  return [...elements.slice(0, at), element, ...elements.slice(at)];
+};
+
 /** A model with changes applied, in order. A change that names nothing in the model is left out. */
 export function applyChanges(model: Model, changes: readonly Change[]): Model {
   let { diagram, elements, relations } = model;
@@ -258,7 +307,16 @@ export function applyChanges(model: Model, changes: readonly Change[]): Model {
       const line = Math.max(0, ...elements.map((element) => element.line), ...relations.map((relation) => relation.line)) + 1;
       const made: ModelElement = { id: change.id, type: change.type, attributes: change.attributes, host: {}, ephemeral: false, line, ...(change.parent === undefined ? {} : { parent: change.parent }) };
       if ('source' in change || 'target' in change) relations = [...relations, { ...made, source: change.source, target: change.target }];
-      else elements = [...elements, made];
+      else elements = beside(elements, made, change.position);
+    } else if (change.kind === 'move') {
+      const moved = elements.find((element) => element.id === change.id);
+      if (!moved) continue;
+      const { parent: _old, ...rest } = moved;
+      void _old;
+      const others = elements.filter((element) => element.id !== change.id);
+      const position = change.position;
+      const next = position && 'index' in position ? others.filter((element) => element.parent === change.parent)[position.index] : undefined;
+      elements = beside(others, { ...rest, ...(change.parent === undefined ? {} : { parent: change.parent }) }, next ? { before: next.id } : position && !('index' in position) ? position : undefined);
     } else if (change.kind === 'remove') {
       elements = elements.filter((element) => element.id !== change.id);
       relations = relations.filter((relation) => relation.id !== change.id);
@@ -384,7 +442,9 @@ class Reference {
   constructor(readonly ids: string | readonly string[]) {}
 }
 
-const skips = ['move', 'resize', 'retype', 'reparent', 'reorder', 'view', 'plugin'];
+const skips = ['move', 'resize', 'retype', 'reparent', 'reorder', 'plugin'];
+// The actions that change nothing of the model: an operation of these alone is offered in a read-only document and is no undo step (DISL 9.4).
+const viewing = ['view', 'select', 'reveal', 'highlight', 'open'];
 const asks = ['select', 'reveal', 'highlight', 'editLabel', 'openForm'] as const;
 const defaultLabels: Readonly<Record<string, string>> = { delete: 'Delete', editLabel: 'Rename', duplicate: 'Duplicate', openForm: 'Properties', moveUp: 'Move up', moveDown: 'Move down' };
 
@@ -436,6 +496,24 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     unread(`the operation \`${id}\``, [operation.enabled, isCel(operation.label) ? operation.label : undefined]);
     inspect(`the operation \`${id}\``, operation.actions);
   }
+
+  // ---- what a viewer holds ----
+
+  // `self.view.collapsed` (DISL 11.6, 12.2) for the situation of an intent. The last one is kept: an intent asks it several times.
+  let viewed: { readonly model: Model; readonly held: Situation['collapsed']; readonly view: (id: string) => Scope } | undefined;
+  const viewFor = (model: Model, situation: Situation | undefined): ((id: string) => Scope) => {
+    if (viewed?.model !== model || viewed.held !== situation?.collapsed) {
+      const folded = foldsOf(parts.persistence, expressions, model, situation?.collapsed);
+      viewed = { model, held: situation?.collapsed, view: (id) => ({ collapsed: folded(id) }) };
+    }
+    return viewed.view;
+  };
+  let seen: { readonly model: Model; readonly situation: Situation | undefined; readonly world: World } | undefined;
+  const worldOf = (model: Model, situation: Situation | undefined): World => {
+    if (seen?.model !== model || seen.situation !== situation) seen = { model, situation, world: expressions.over(model, { env: situation?.env, view: viewFor(model, situation) }) };
+    return seen.world;
+  };
+  const free = (actions: readonly unknown[] | undefined): boolean => (actions ?? []).length > 0 && (actions ?? []).every((action) => isObject(action) && viewing.some((kind) => kind in action));
 
   // ---- the viewpoint an intent takes place in ----
 
@@ -499,9 +577,12 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
 
   // ---- one transaction ----
 
-  const open = (model: Model, situation: Situation | undefined, kind: 'change' | 'handle' | 'create') => {
+  const open = (model: Model, situation: Situation | undefined, kind: 'change' | 'handle' | 'create', ungated = false) => {
     const env = situation?.env;
-    const before = expressions.over(model, { env });
+    const collapsed: Record<string, boolean> = {};
+    // What the viewer holds, with what this transaction changed of it.
+    const view = (id: string): Scope => (Object.hasOwn(collapsed, id) ? { collapsed: collapsed[id] } : viewFor(model, situation)(id));
+    const before = expressions.over(model, { env, view });
     const changes: Change[] = [];
     const created: string[] = [];
     const effects: Effect[] = [];
@@ -510,12 +591,12 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     const touched = new Map<string, Set<string>>();
     let working = model;
     let world: { readonly model: Model; readonly world: World } = { model, world: before };
-    let refused = gate(model, situation);
+    let refused = ungated ? undefined : gate(model, situation);
     let lastGesture: Gesture | undefined;
 
     const refuse = (sentence: string): void => { refused ??= sentence; };
     const now = (): World => {
-      if (world.model !== working) world = { model: working, world: expressions.over(working, { env }) };
+      if (world.model !== working) world = { model: working, world: expressions.over(working, { env, view }) };
       return world.world;
     };
     const scopeOf = (self: string | undefined, variables: Readonly<Record<string, unknown>> = {}): Scope => {
@@ -609,7 +690,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       return { position, placed };
     };
 
-    const add = (type: string, attributes: Readonly<Record<string, Value | null>>, ends?: { readonly source: string; readonly target: string }, parent?: string): string | undefined => {
+    const add = (type: string, attributes: Readonly<Record<string, Value | null>>, ends?: { readonly source: string; readonly target: string }, parent?: string, position?: Beside): string | undefined => {
       const meta = metamodel.types[type];
       if (!meta || meta.abstract || isRelation(meta) !== (ends !== undefined)) {
         refuse(`This could not be done: \`${type}\` is not a type that can be created here.`);
@@ -618,7 +699,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       const id = mint(type);
       const fits: Record<string, Value | null> = {};
       for (const [name, value] of Object.entries({ ...defaultsOf(metamodel, type), ...attributes })) fits[name] = fitted(value, meta.attributes[name]);
-      apply({ kind: 'add', id, type, attributes: merged({}, fits), ...ends, ...(parent === undefined ? {} : { parent }) });
+      apply({ kind: 'add', id, type, attributes: merged({}, fits), ...ends, ...(parent === undefined ? {} : { parent }), ...(position === undefined ? {} : { position }) });
       created.push(id);
       fire(ends ? 'connect' : 'create', id, [], 'user');
       return id;
@@ -734,9 +815,19 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
           const at = action.create.at === undefined ? undefined : one(action.create.at)?.value;
           const parent = action.create.parent === undefined ? undefined : one(action.create.parent)?.value;
           if (typeof type !== 'string' || !values) continue;
+          // Next to a sibling (DISL 9.4, positional create). Where the definition names none and the new
+          // element goes under the parent of the element the action runs on, it goes directly after
+          // that element: a host rule, see docs/disl-support.md.
+          const sibling = (expression: unknown): string | undefined => {
+            const named = expression === undefined ? undefined : one(expression)?.value;
+            return typeof named === 'string' && named !== '' ? named : undefined;
+          };
+          const behind = sibling(action.create.after) ?? (action.create.before === undefined && self !== '' && typeof parent === 'string' && find(working, self)?.parent === parent ? self : undefined);
+          const ahead = sibling(action.create.before);
+          const next: Beside | undefined = behind !== undefined ? { after: behind } : ahead !== undefined ? { before: ahead } : undefined;
           const point = isObject(at) && typeof at.x === 'number' && typeof at.y === 'number' ? { x: at.x, y: at.y } : undefined;
           const { position, placed } = dropped(type, point);
-          if (check({ kind: 'create', values: { elementType: type, position, parent: null, dropTarget: null, tool: null } })) kept(action.as, add(type, { ...placed, ...values }, undefined, typeof parent === 'string' ? parent : undefined));
+          if (check({ kind: 'create', values: { elementType: type, position, parent: null, dropTarget: null, tool: null } })) kept(action.as, add(type, { ...placed, ...values }, undefined, typeof parent === 'string' ? parent : undefined, next));
         } else if (isObject(action.connect)) {
           const type = one(action.connect.type)?.value;
           const from = one(action.connect.source)?.value;
@@ -755,8 +846,8 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
             variables[name] = element ? new Reference(result.value as string) : result.raw;
           }
         } else if (action.if !== undefined) {
-          const branch = holds(action.if, scopeOf(self, variables), false) ? action.then : action.else;
-          if (Array.isArray(branch)) act(branch, self, variables, source);
+          const taken = holds(action.if, scopeOf(self, variables), false) ? action.then : action.else;
+          if (Array.isArray(taken)) act(taken, self, variables, source);
         } else if (action.forEach !== undefined) {
           const items = one(action.forEach);
           const name = typeof action.as === 'string' ? action.as : 'item';
@@ -772,6 +863,14 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
           refuse(said(action.abort.message, 'This is not possible here.'));
         } else if (typeof action.call === 'string' && Object.hasOwn(declared, action.call)) {
           act(declared[action.call].actions ?? [], self, { ...variables, p: each(action.args) ?? {} }, source);
+        } else if (isObject(action.view)) {
+          // Viewer state (DISL 9.4, 11.6): of it, the fold of the target is read.
+          const folded = action.view.collapsed === undefined ? undefined : one(action.view.collapsed)?.value;
+          if (typeof target === 'string' && target !== '' && typeof folded === 'boolean') collapsed[target] = folded;
+        } else if (action.open !== undefined) {
+          const link = one(action.open)?.value;
+          if (typeof link === 'string' && link !== '') effects.push({ kind: 'open', elements: [self].filter((id) => id !== ''), message: link });
+          else refuse('There is no link to open.');
         } else if (isObject(action.notify)) {
           effects.push({ kind: 'notify', elements: [], message: said(action.notify.message, '') });
         } else if (asked !== undefined) {
@@ -817,10 +916,10 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       // An invariant that prevents rejects the whole transaction (DISL 14.4).
       const broken = refused === undefined && changes.length > 0 && lastGesture ? constraints.refusals(lastGesture, model, working) : [];
       if (broken.length > 0) refuse(broken[0].message);
-      return refused === undefined ? { changes, after: working, created, effects } : { refused };
+      return refused === undefined ? { changes, after: working, created, effects, collapsed } : { refused };
     };
 
-    return { act, add, attached, check, dropped, drop, evaluated, finish, fire, refuse, related, scopeOf, write, effects };
+    return { act, add, apply, attached, check, dropped, drop, evaluated, finish, fire, refuse, related, scopeOf, write, effects };
   };
 
   // ---- operations ----
@@ -836,13 +935,17 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       ...Object.values(toolbox.tools).filter((tool) => tool.operation === id).map((tool) => tool.shortcut),
       ...[...toolbox.contextTools, ...toolbox.contextMenus].flatMap((set) => set.entries.filter((entry) => entry.operation === id).map((entry) => entry.shortcut)),
     ].filter((key): key is string => key !== undefined))],
+    ...(typeof operation.plugin === 'string' ? { plugin: operation.plugin } : isObject(operation.plugin) && typeof operation.plugin.name === 'string' ? { plugin: operation.plugin.name } : {}),
+    ...(isObject(operation.params) && isObject(operation.actions?.[0]) && isObject(operation.actions[0].set) && Object.keys(operation.actions[0].set).length === 1 ? { asks: Object.keys(operation.actions[0].set)[0] } : {}),
+    opens: (operation.actions ?? []).some((action) => isObject(action) && action.open !== undefined),
+    viewOnly: free(operation.actions),
   }));
 
   const availability = (model: Model, id: string, selection: readonly string[], situation?: Situation): Availability => {
     const operation = Object.hasOwn(declared, id) ? declared[id] : undefined;
     const known = operations.find((candidate) => candidate.id === id);
     if (!operation || !known) return { offered: false, available: false, label: labelOf(id) };
-    const over = texts.world(model, situation?.env);
+    const over = worldOf(model, situation);
     const first = selection.length > 0 ? find(model, selection[0]) : undefined;
     const target = first && known.for.some((name) => isA(metamodel, first.type, name)) ? first.id : undefined;
     const whole = known.for.includes('selection') && selection.length > 0;
@@ -850,7 +953,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       : over.scope(undefined, { self: over.diagram, position: null, ...(whole ? { selection: selection.map((entry) => over.element(entry)) } : {}) });
     const label = worded(known.label, scope, labelOf(id));
     if (target === undefined && !whole && !known.for.includes('diagram')) return { offered: false, available: false, label };
-    const reason = gate(model, situation) ?? applicable(operation.unavailable, scope);
+    const reason = (free(operation.actions) ? undefined : gate(model, situation)) ?? applicable(operation.unavailable, scope);
     return {
       offered: true, available: reason === undefined && given(operation.enabled, scope), reason, label, target,
       confirm: question(operation.confirm, scope, false, label),
@@ -869,7 +972,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     const position = at ? domain(model, viewOf(situation, true).system, at) : null;
     if (!state.offered) return { refused: message('std.notApplicable', model, situation, { operationId: id, position }) ?? 'This cannot be done with what is selected.' };
     if (!state.available) return { refused: state.reason ?? `${state.label} cannot be done now.` };
-    const run = open(model, situation, 'change');
+    const run = open(model, situation, 'change', free(declared[id].actions));
     const whole = state.target === undefined && selection.length > 0 ? { selection: new Reference(selection) } : {};
     run.act(declared[id].actions ?? [], state.target ?? '', { position, p: args ?? {}, ...whole }, 'operation');
     return run.finish();
@@ -877,9 +980,9 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
 
   // ---- intents ----
 
-  const create: Behavior['create'] = (model, id, at, situation) => {
+  const create: Behavior['create'] = (model, id, at, situation, on) => {
     const tool = Object.hasOwn(toolbox.tools, id) ? toolbox.tools[id] : undefined;
-    if (tool?.operation !== undefined) return operate(model, tool.operation, [], situation, at);
+    if (tool?.operation !== undefined) return operate(model, tool.operation, on === undefined ? [] : [on], situation, at);
     if (!tool?.creates || tool.relation) return { refused: 'This tool places nothing where it is dropped.' };
     const run = open(model, situation, 'create');
     const node = nodeNotation(viewOf(situation, true).notation, metamodel, tool.creates);
@@ -1067,10 +1170,24 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     return run.finish();
   };
 
+  const reparent: Behavior['reparent'] = (model, id, parent, index, situation) => {
+    const run = open(model, situation, 'change');
+    const element = find(model, id);
+    if (!element || !find(model, parent)) run.refuse('That is no longer in this diagram.');
+    else if (run.check({ kind: 'containment', self: id, elements: { child: id, parent }, values: { slot: null } })) {
+      // A node that is where it is asked to go is not moved.
+      const children = model.elements.filter((child) => child.parent === parent);
+      const others = children.filter((child) => child.id !== id);
+      const at = Math.min(Math.max(index ?? others.length, 0), others.length);
+      if (element.parent !== parent || children.findIndex((child) => child.id === id) !== at) run.apply({ kind: 'move', id, parent, ...(index === undefined ? {} : { position: { index: at } }) });
+    }
+    return run.finish();
+  };
+
   const deletion: Behavior['deletion'] = (model, selection, situation) => {
     const outcome = remove(model, selection, situation);
     if (!done(outcome)) return { removes: [], refused: outcome.refused };
-    const over = texts.world(model, situation?.env);
+    const over = worldOf(model, situation);
     const all = selection.map((id) => over.element(id)).filter((element) => element !== null);
     // One removal asks at most once: the first element of the selection whose confirmation asks (DISL 9.5).
     for (const id of selection) {
@@ -1082,7 +1199,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
   };
 
   const menu: Behavior['menu'] = (model, target, situation, sets = toolbox.contextMenus) => {
-    const over = texts.world(model, situation?.env);
+    const over = worldOf(model, situation);
     const pending = typeof target === 'object' ? target : undefined;
     const id = typeof target === 'string' ? target : undefined;
     const name = pending ? 'connection' : id === undefined ? 'diagram' : typeOf(model, id);
@@ -1114,5 +1231,11 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     return { groups: groups.filter((group) => group.length > 0), standardEntries: offered.some((set) => set.standardEntries), runSingle: offered.some((set) => set.runSingle) };
   };
 
-  return { value: { messages, message, operations, availability, menu, deletion, create, connect, change, edit, editLabel, move, resize, dragHandle, reattach, remove, operate }, findings };
+  return {
+    value: {
+      messages, message, operations, ...(isObject(section.clipboard) ? { clipboard: section.clipboard } : {}),
+      availability, menu, deletion, create, connect, change, edit, editLabel, move, resize, dragHandle, reattach, remove, reparent, operate,
+    },
+    findings,
+  };
 }

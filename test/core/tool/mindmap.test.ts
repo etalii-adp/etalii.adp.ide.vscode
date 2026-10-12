@@ -1,16 +1,10 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import type { PersistencePlugin } from '../../../src/core/fbl/plugins/persistencePlugin';
 import { decode, encode } from '../../../src/core/fbl/text/utf8';
 import { viewTypeOf, type Action, type DiagramToolType, type EditOutcome, type EditRequest, type Field, type Source, type TextSplice, type ViewOptions } from '../../../src/core/frame/toolType';
-// Until T081 registers them in src/core/plugins/index.ts, the three plugins are taken from their own
-// folders, each by what it is and not by the name it is exported under.
-import * as freeplane from '../../../src/core/plugins/freeplane-mm/index';
-import * as mindmapLayout from '../../../src/core/plugins/mindmap-layout/index';
-import * as linkPicker from '../../../src/core/plugins/project-link-picker/index';
+import { plugins as registry } from '../../../src/core/plugins/index';
 import type { Scene } from '../../../src/core/scene/scene';
-import { pluginRegistry, type ActionPlugin, type LayoutPlugin } from '../../../src/core/tool/pluginRegistry';
 import { altered, applied, array, at, definitionOf, diagramOf, linesChanged, object, refusal, specificationOf, spliced, type Json } from './support';
 
 // The mind map as a tool type made from its definition (etalii.adp spec 027, task T067), against
@@ -25,16 +19,7 @@ const folder = 'mindmap';
 const specification = specificationOf(folder);
 const read = definitionOf(folder);
 
-const exported = <T>(module: object, is: (value: Record<string, unknown>) => boolean, what: string): T => {
-  const found = Object.values(module).find((value) => typeof value === 'object' && value !== null && typeof (value as { id?: unknown }).id === 'string' && is(value as Record<string, unknown>));
-  if (!found) throw new Error(`No ${what} plugin is exported.`);
-  return found as T;
-};
-const registry = pluginRegistry({
-  persistence: [exported<PersistencePlugin>(freeplane, (value) => typeof value.read === 'function' && typeof value.plan === 'function', 'persistence')],
-  layout: [exported<LayoutPlugin>(mindmapLayout, (value) => typeof value.place === 'function', 'layout')],
-  action: [exported<ActionPlugin>(linkPicker, (value) => typeof value.run === 'function', 'action')],
-});
+// The registry is the one the plug-in starts with: the three plugins the definition names are in it.
 const type = diagramOf(read, registry);
 
 // ---- the transcript ----
@@ -558,9 +543,14 @@ describe('the rules of the definition', () => {
     expect(found(inline('empty-ordinary-node.mm', '<map version="freeplane 1.12.15"><node TEXT="root" ID="ID_1"><node TEXT="" ID="ID_2"/></node></map>'))).toEqual([]);
   });
 
-  it('two nodes with one id are an error on the later one, naming both, and both are drawn', () => {
+  // The transcript has "Two nodes share the id 'ID_2' ('first' and 'second')." here. The definition's rule
+  // asks `diagram.elementById(self.id) == self`, and its binding reads the later holder under an id of
+  // its own, so the rule as it is written holds for it and nothing is found (etalii.adp issue 152).
+  it('two nodes with one id are both drawn, and the rule as the definition writes it finds nothing', () => {
     const source = inline('duplicate-id.mm', '<map version="freeplane 1.12.15"><node TEXT="root" ID="ID_1"><node TEXT="first" ID="ID_2"/><node TEXT="second" ID="ID_2"/></node></map>');
-    expect(found(source)).toEqual(["error | mindmap.duplicate-id | Two nodes share the id 'ID_2' ('first' and 'second')."]);
-    expect(type.view(source, {}).nodes.map((node) => node.labels[0].text)).toEqual(['root', 'first', 'second']);
+    expect(found(source)).toEqual([]);
+    const scene = type.view(source, {});
+    expect(scene.nodes.map((node) => node.labels[0].text)).toEqual(['root', 'first', 'second']);
+    expect(new Set(scene.nodes.map((node) => node.id)).size).toBe(3);
   });
 });

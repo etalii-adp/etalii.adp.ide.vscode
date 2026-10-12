@@ -9,7 +9,7 @@ import {
 } from './geometry';
 import { scalesOf, type Coordinates, type PlacementSource } from '../disl/coordinates';
 import type { Expressions, Scope } from '../disl/expressions';
-import { assignRows, packAlongRows, type LayoutConfig, type PackedItem, type RowItem } from '../disl/layout';
+import { assignRows, packAlongRows, type LayoutConfig, type LayoutPlugin, type PackedItem, type RowItem } from '../disl/layout';
 import { allowsEnd, attributesOf, defaultOf, isA, isRelation, valueKind, type Metamodel } from '../disl/metamodel';
 import { finding, type Finding, type Model, type ModelElement, type ModelRelation, type Value } from '../disl/model';
 import {
@@ -29,6 +29,8 @@ export interface SceneTool {
   readonly coordinates: Coordinates;
   /** Each viewpoint with the notation and the layout it draws with. */
   readonly viewpoints: Viewpoints;
+  /** The layout plugin of an id, for a layout named `plugin:<id>` (DISL 13.1). */
+  layouts?(id: string): LayoutPlugin | undefined;
 }
 
 export interface SceneOptions {
@@ -38,6 +40,8 @@ export interface SceneOptions {
   readonly filters?: Readonly<Record<string, { readonly value?: Value; readonly match?: 'any' | 'all' }>>;
   /** Members of `env` (DISL 12.2), such as `mode`, `zoom` and `readOnly`. */
   readonly env?: Scope;
+  /** The nodes that are folded for this viewer, by id (DISL 11.6): the children of one are not drawn. */
+  readonly collapsed?: Readonly<Record<string, boolean>>;
   /** The host's measure of a text, for a specification whose text metric is `host`. */
   textWidth?(text: string, fontSize: number): number;
 }
@@ -110,6 +114,8 @@ export interface SceneNode {
   readonly deletable: boolean;
   /** A filter whose effect is `dim` filters the node out (DISL 6.13.1). */
   readonly dimmed: boolean;
+  /** The node has children it can hide: `folded` when they are hidden, `unfolded` when they are drawn. Absent on a node that cannot be folded. */
+  readonly fold?: 'folded' | 'unfolded';
 }
 
 export interface SceneEnd {
@@ -256,13 +262,59 @@ interface Placed {
 const number = (value: unknown): number | undefined => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);
 const fractions: Readonly<Record<string, number>> = { left: 0, top: 0, center: 0.5, right: 1, bottom: 1 };
 
+/** A padding as its four sides: top, right, bottom, left. */
+function sidesOf(padding: Style['padding']): readonly [number, number, number, number] {
+  const given = [padding ?? 0].flat() as number[];
+  return given.length === 1 ? [given[0], given[0], given[0], given[0]] : given.length === 2 ? [given[0], given[1], given[0], given[1]] : [given[0], given[1], given[2] ?? given[0], given[3] ?? given[1]];
+}
+
+/**
+ * An elliptical arc from a point to a point, as SVG's `A` states it, as cubic curves: one for each
+ * quarter turn or part of one. Radii too small to reach are scaled up, as SVG does.
+ */
+function arcCommands(from: Point, rx: number, ry: number, rotation: number, large: boolean, sweep: boolean, to: Point): PathCommand[] {
+  if (!(rx > 0) || !(ry > 0) || (from.x === to.x && from.y === to.y)) return [{ op: 'L', x: to.x, y: to.y }];
+  const phi = (rotation * Math.PI) / 180;
+  const cos = Math.cos(phi);
+  const sin = Math.sin(phi);
+  const dx = (from.x - to.x) / 2;
+  const dy = (from.y - to.y) / 2;
+  const x1 = cos * dx + sin * dy;
+  const y1 = -sin * dx + cos * dy;
+  const reach = Math.sqrt(Math.max(1, (x1 * x1) / (rx * rx) + (y1 * y1) / (ry * ry)));
+  const a = rx * reach;
+  const b = ry * reach;
+  const over = a * a * y1 * y1 + b * b * x1 * x1;
+  const k = (large === sweep ? -1 : 1) * Math.sqrt(Math.max(0, (a * a * b * b - over) / over));
+  const cx1 = (k * a * y1) / b;
+  const cy1 = (-k * b * x1) / a;
+  const centre = { x: cos * cx1 - sin * cy1 + (from.x + to.x) / 2, y: sin * cx1 + cos * cy1 + (from.y + to.y) / 2 };
+  const angle = (ux: number, uy: number, vx: number, vy: number): number => Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy);
+  const start = angle(1, 0, (x1 - cx1) / a, (y1 - cy1) / b);
+  let turn = angle((x1 - cx1) / a, (y1 - cy1) / b, (-x1 - cx1) / a, (-y1 - cy1) / b);
+  if (!sweep && turn > 0) turn -= 2 * Math.PI;
+  else if (sweep && turn < 0) turn += 2 * Math.PI;
+  const pieces = Math.max(1, Math.ceil(Math.abs(turn) / (Math.PI / 2) - 1e-9));
+  const step = turn / pieces;
+  const handle = (4 / 3) * Math.tan(step / 4);
+  const at = (t: number): Point => ({ x: centre.x + a * Math.cos(t) * cos - b * Math.sin(t) * sin, y: centre.y + a * Math.cos(t) * sin + b * Math.sin(t) * cos });
+  const along = (t: number): Point => ({ x: -a * Math.sin(t) * cos - b * Math.cos(t) * sin, y: -a * Math.sin(t) * sin + b * Math.cos(t) * cos });
+  return Array.from({ length: pieces }, (_, index): PathCommand => {
+    const t0 = start + index * step;
+    const t1 = t0 + step;
+    const end = index === pieces - 1 ? to : at(t1);
+    return { op: 'C', c1x: at(t0).x + handle * along(t0).x, c1y: at(t0).y + handle * along(t0).y, c2x: at(t1).x - handle * along(t1).x, c2y: at(t1).y - handle * along(t1).y, x: end.x, y: end.y };
+  });
+}
+
 /** Computes the scene of a model in a viewpoint. It never throws: what cannot be drawn is left out or drawn by a default, and found. */
 export function createScene(tool: SceneTool, model: Model, options: SceneOptions = {}): Scene {
   const { metamodel, expressions } = tool;
   const viewpoint = tool.viewpoints.all[options.viewpoint ?? ''] ?? tool.viewpoints.all[tool.viewpoints.default];
   const notation = viewpoint.notation;
   const views = new Map<string, Scope>();
-  const world = expressions.over(model, { env: { viewpoint: viewpoint.name, ...options.env }, view: (id) => views.get(id) });
+  // `self.view` (DISL 12.2): where the element is drawn, once that is known, and whether this viewer folded it.
+  const world = expressions.over(model, { env: { viewpoint: viewpoint.name, ...options.env }, view: (id) => ({ ...views.get(id), collapsed: options.collapsed?.[id] === true }) });
   const locale = typeof options.env?.locale === 'string' ? options.env.locale : undefined;
   const elements = new Map<string, ModelElement | ModelRelation>([...model.relations, ...model.elements].map((element) => [element.id, element]));
 
@@ -328,6 +380,20 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
 
   const diagram = { ...Object.fromEntries(Object.entries(metamodel.diagram).flatMap(([name, attribute]) => (defaultOf(attribute) === undefined ? [] : [[name, defaultOf(attribute)!]]))), ...model.diagram };
 
+  // The size of what a node holds (DISL 6.9, `autoSize`): its first label that stands inside it, by the text metric, and its padding around that.
+  const content = (own: NodeNotation, self: string): readonly [number, number] => {
+    const style = settled(styleOf(notation, own.style), self);
+    const label = own.labels.find((candidate) => typeof (candidate.position ?? 'center') === 'string' && !String(candidate.position ?? 'center').startsWith('outside'));
+    const within = label ? settled(styleOf(notation, { font: style.font }, label.style), self) : style;
+    const fontSize = number(within.font?.size) ?? defaultFontSize;
+    const lines = String((label && bound(label.text, self)) ?? '').split('\n');
+    const [top, right, bottom, left] = sidesOf(style.padding);
+    return [
+      Math.max(...lines.map((line) => textWidth(notation.textMetric, line, fontSize, options.textWidth))) + left + right,
+      lines.length * lineHeight(notation.textMetric, fontSize, within.font) + top + bottom,
+    ];
+  };
+
   const placed = (element: ModelElement, own: NodeNotation, defaultSystem: string): Placed | undefined => {
     const placement = own.placement;
     const system = tool.coordinates.systems[placement.system ?? defaultSystem] ?? tool.coordinates.systems[tool.coordinates.default];
@@ -364,7 +430,8 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
         const custom = customOf(own.shape);
         const stated = number(bound(axis === 'x' ? size.width : size.height, element.id));
         const limit = (value: number): number => Math.min(Math.max(value, size.min?.[index] ?? -Infinity), size.max?.[index] ?? Infinity);
-        extent = size.fixed?.[index] ?? limit(stated ?? size.default?.[index] ?? custom?.defaultSize?.[index] ?? defaultSize[index]);
+        const fitted = size.autoSize === 'fitContent' || size.autoSize === (axis === 'x' ? 'fitWidth' : 'fitHeight') ? content(own, element.id)[index] : undefined;
+        extent = size.fixed?.[index] ?? limit(fitted ?? stated ?? size.default?.[index] ?? custom?.defaultSize?.[index] ?? defaultSize[index]);
       }
       return { at, extent, layout: start === 'layout' };
     };
@@ -420,11 +487,40 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
   }
   for (const id of filtered) places.delete(id);
 
+  // ---- folds (DISL 6.9, 11.6) ----
+
+  // A node whose container can be collapsed and that holds something can be folded; what is under a folded one is not drawn.
+  const folds = new Map<string, 'folded' | 'unfolded'>();
+  for (const [id, place] of places) {
+    if (place.notation.container?.collapsible === true && model.elements.some((child) => child.parent === id && places.has(child.id))) folds.set(id, options.collapsed?.[id] === true ? 'folded' : 'unfolded');
+  }
+  for (const { element } of [...places.values()]) {
+    for (let parent = element.parent, seen = 0; parent !== undefined && seen < model.elements.length; parent = elements.get(parent)?.parent, seen++) {
+      if (folds.get(parent) === 'folded') places.delete(element.id);
+    }
+  }
+
   // ---- layout (DISL 10) ----
 
   const config = viewpoint.layout;
   const laid = [...places.values()].filter((place) => place.layout.x || place.layout.y);
-  if (laid.length > 0 && !(config?.rowPacked && config.direction === 'right')) {
+  const plugin = config?.plugin === undefined ? undefined : tool.layouts?.(config.plugin);
+  if (plugin && config) {
+    // The plugin is given what is drawn and nothing of a fold: it places, and may size, the nodes it names.
+    const drawn = (id: string | undefined): boolean => id !== undefined && places.has(id);
+    try {
+      const at = plugin.place({
+        model: { diagram: model.diagram, elements: model.elements.filter((element) => drawn(element.id)), relations: model.relations.filter((relation) => drawn(relation.source) && drawn(relation.target)) },
+        sizes: Object.fromEntries([...places].map(([id, place]) => [id, { width: place.box.width, height: place.box.height }])),
+        spacing: config.spacing, options: config.options,
+      });
+      for (const [id, place] of places) {
+        if (Object.hasOwn(at, id)) place.box = { x: at[id].x, y: at[id].y, width: at[id].width ?? place.box.width, height: at[id].height ?? place.box.height };
+      }
+    } catch (failure) {
+      report('layout', `The layout \`${config.name}\` failed, so the nodes stay where they are: ${failure instanceof Error ? failure.message : String(failure)}`);
+    }
+  } else if (laid.length > 0 && !(config?.rowPacked && config.direction === 'right')) {
     report('layout', `The viewpoint \`${viewpoint.name}\` leaves places to a layout, and ${config ? `its layout \`${config.name}\` is one this add-on does not run` : 'it names none'}; those nodes are placed at the origin.`);
   } else if (config?.rowPacked && laid.length > 0) {
     const options = config.rowPacked;
@@ -572,6 +668,7 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
         selectable: flag(own.selectable, self, true),
         deletable: flag(own.deletable, self, true),
         dimmed: dimmed.has(self),
+        ...(folds.has(self) ? { fold: folds.get(self) } : {}),
       },
     };
   };
@@ -610,6 +707,11 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
         case 'V': commands.push({ op: 'L', x: last.x, y: y(step.y) }); break;
         case 'Q': commands.push({ op: 'Q', cx: x(step.cx), cy: y(step.cy), x: x(step.x), y: y(step.y) }); break;
         case 'C': commands.push({ op: 'C', c1x: x(step.c1x), c1y: y(step.c1y), c2x: x(step.c2x), c2y: y(step.c2y), x: x(step.x), y: y(step.y) }); break;
+        case 'A': {
+          const radius = (value: unknown, of: number): number => (typeof value === 'number' || typeof value === 'string' ? geometry(value, of, self, scope) ?? 0 : 0);
+          commands.push(...arcCommands(last, radius(step.rx, within.width), radius(step.ry, within.height), typeof step.rotation === 'number' ? step.rotation : 0, step.largeArc === true, step.sweep === true, { x: x(step.x), y: y(step.y) }));
+          break;
+        }
         default:
           report(`path:${step.op}`, `A shape's path has a \`${step.op}\` step, which this add-on draws as a straight line.`);
           commands.push({ op: 'L', x: x(step.x), y: y(step.y) });
@@ -648,8 +750,7 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     const words = position.split('-');
     if (words[0] !== 'outside') {
       // Inside the node the text is laid out in the node less its padding, and held where the position says.
-      const padding = [nodeStyle.padding ?? 0].flat() as number[];
-      const [top, right, bottom, left] = padding.length === 1 ? [padding[0], padding[0], padding[0], padding[0]] : padding.length === 2 ? [padding[0], padding[1], padding[0], padding[1]] : [padding[0], padding[1], padding[2] ?? padding[0], padding[3] ?? padding[1]];
+      const [top, right, bottom, left] = sidesOf(nodeStyle.padding);
       const align = words.includes('left') ? 'start' : words.includes('right') ? 'end' : 'center';
       return { ...common, align, box: { x: box.x + left, y: box.y + top, width: Math.max(0, box.width - left - right), height: Math.max(0, box.height - top - bottom) } };
     }
@@ -730,8 +831,35 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
 
   const directions: Readonly<Record<string, Point>> = { up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } };
 
+  // The relations a type derives from the model (DISL 4.11.3): drawn, and no part of the model that is edited.
+  // simplified: a derived relation has its ends and the default id; its `id`, `attributes`, `key` and `owner` are not read, and an expression of its notation sees no `self`. Read them when a definition draws a derived relation from more than its two ends.
+  const derived: ModelRelation[] = [];
+  for (const type of Object.values(metamodel.types)) {
+    const rule = isRelation(type) && isObject(type.declared.derived) ? type.declared.derived : undefined;
+    if (!rule || (typeof rule.from !== 'string' && !isCel(rule.from))) continue;
+    const items = expressions.evaluate(rule.from, world.scope());
+    if (!items.ok || !Array.isArray(items.raw)) {
+      report(`derived:${type.name}`, `The relations of the type \`${type.name}\` could not be derived, so none is drawn: ${items.ok ? '`from` did not give a list' : items.error}`);
+      continue;
+    }
+    const repeats = new Map<string, number>();
+    for (const item of items.raw as unknown[]) {
+      const end = (expression: unknown): string | undefined => {
+        const result = typeof expression === 'string' || isCel(expression) ? expressions.evaluate(expression, world.scope(undefined, { item })) : undefined;
+        return result?.ok && typeof result.value === 'string' ? result.value : undefined;
+      };
+      const source = end(rule.source);
+      const target = end(rule.target);
+      if (source === undefined || target === undefined) continue;
+      const id = `${type.name}:${source}->${target}`;
+      const count = (repeats.get(id) ?? 0) + 1;
+      repeats.set(id, count);
+      derived.push({ id: count === 1 ? id : `${id}#${count}`, type: type.name, attributes: {}, host: {}, ephemeral: true, line: 0, source, target });
+    }
+  }
+
   const edges: SceneEdge[] = [];
-  for (const relation of model.relations) {
+  for (const relation of [...model.relations, ...derived]) {
     const type = metamodel.types[relation.type];
     if (!isRelation(type) || relation.source === undefined || relation.target === undefined) continue;
     const ends = [elements.get(relation.source), elements.get(relation.target)];

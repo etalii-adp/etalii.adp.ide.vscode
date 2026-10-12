@@ -74,8 +74,10 @@ export function interpretViewpoints(specification: Specification, metamodel: Met
   const report = (message: string): void => void findings.push(finding('disl.viewpoints', 'warning', message));
   const declared = specification.viewpoints ?? {};
   const names = Object.keys(declared).filter((name) => isObject(declared[name]));
+  // A layout that always runs places every viewpoint that names no layout of its own (DISL 10).
+  const always = parts.layout.trigger === 'always' && parts.layout.default !== undefined ? parts.layout.algorithms[parts.layout.default] : undefined;
   if (names.length === 0) {
-    const main: Viewpoint = { name: 'main', label: 'Main', variants: [], coordinateSystem: parts.coordinates.default, exclude: [], notation: parts.notation };
+    const main: Viewpoint = { name: 'main', label: 'Main', variants: [], coordinateSystem: parts.coordinates.default, layout: always, exclude: [], notation: parts.notation };
     return { value: { all: { main }, default: 'main' }, findings };
   }
 
@@ -103,7 +105,7 @@ export function interpretViewpoints(specification: Specification, metamodel: Met
     }
 
     const wanted = own.layout ?? (under === undefined ? undefined : declared[under].layout);
-    let layout: LayoutConfig | undefined;
+    let layout: LayoutConfig | undefined = always;
     if (typeof wanted === 'string') {
       layout = parts.layout.algorithms[wanted];
       if (!layout) report(`The viewpoint \`${name}\` names the layout \`${wanted}\`, which is not declared.`);

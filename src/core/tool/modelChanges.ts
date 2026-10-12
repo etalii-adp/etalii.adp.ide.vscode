@@ -4,7 +4,7 @@
 // for them, one after the other, become the splices of the text as it was before the request.
 
 import type { Change } from '../disl/behavior';
-import type { Metamodel } from '../disl/metamodel';
+import { attributesOf, type Metamodel } from '../disl/metamodel';
 import type { Model, Value } from '../disl/model';
 import { toBinding, type InterpretedPersistence } from '../disl/persistence';
 import { allRules, type FblBinding } from '../fbl/documents/types';
@@ -26,7 +26,7 @@ export interface Refused {
   readonly refused: string;
 }
 
-type Step = Extract<ModelChange, { kind: 'add' | 'set' | 'remove' }>;
+type Step = Extract<ModelChange, { kind: 'add' | 'set' | 'remove' | 'move' }>;
 
 const DIAGRAM = 'diagram';
 
@@ -40,7 +40,10 @@ const takes = (value: unknown): boolean => scalar(value) || (Array.isArray(value
  * nothing gives no step.
  *
  * - The values a change gives one entry are one step: a `set` after an `add` or a `set` of the same entry joins it.
- * - A removal the binding's own cascade makes is left out, so that nothing is removed twice.
+ * - A removal the binding's own cascade makes is left out, so that nothing is removed twice. So is
+ *   the removal of an element that lies in another one the request removes: it goes with that one.
+ * - A binding read by a plugin declares no rule: a type is named as `typeMap` reads it, an attribute
+ *   by the metamodel's name, and what the body can take is the plugin's to say when it plans.
  * - A `set` on the diagram (id `''`) is a `set` of the entry the binding reads as the diagram, or an `add` of it when the document has none.
  */
 export function modelChangesOf(changes: readonly Change[], context: ChangeContext, model: Model): readonly ModelChange[] | Refused {
@@ -59,7 +62,10 @@ export function modelChangesOf(changes: readonly Change[], context: ChangeContex
 
   function stored(type: string, id: string, attributes: Readonly<Record<string, Value | null | undefined>>): { type: string; attributes: Readonly<Record<string, unknown>> } | Refused {
     const named = type === DIAGRAM ? 'the diagram' : `\`${id}\``;
-    const found = toBinding(binding, metamodel, persistence, type, attributes as Readonly<Record<string, Value | undefined>>);
+    const found = toBinding(binding, metamodel, persistence, type, attributes as Readonly<Record<string, Value | undefined>>) ?? (binding.plugin && rules.length === 0 ? {
+      type: Object.entries(persistence.typeMap).find(([, entry]) => entry.as === type)?.[0] ?? type,
+      attributes: Object.fromEntries(Object.entries(attributes).map(([name, value]) => [name, value ?? null])),
+    } : undefined);
     if (!found) return { refused: `The document holds nothing of the kind of ${named}, so the change cannot be written.` };
     const reading = rules.filter((rule) => rule.type === found.type);
     // A binding read by a plugin declares no rule: what it takes is the plugin's to say when it plans.
@@ -75,6 +81,11 @@ export function modelChangesOf(changes: readonly Change[], context: ChangeContex
 
   // What the removal of `id` takes by the binding's own cascade: the entries of the rules it names that refer to it.
   const removed = new Set(changes.filter((change) => change.kind === 'remove').map((change) => change.id));
+  const parentOf = new Map(model.elements.map((element) => [element.id, element.parent]));
+  function held(id: string): boolean {
+    for (let parent = parentOf.get(id), seen = 0; parent !== undefined && seen < parentOf.size; parent = parentOf.get(parent), seen++) if (removed.has(parent)) return true;
+    return false;
+  }
   function cascaded(id: string): boolean {
     const mine = rulesOf(typeOf(id)).map((rule) => rule.name);
     return endsOf(id).some((end) => {
@@ -88,19 +99,24 @@ export function modelChangesOf(changes: readonly Change[], context: ChangeContex
   const merge = (id: string, attributes: Readonly<Record<string, unknown>>): boolean => {
     const index = steps.map((step) => step.id).lastIndexOf(id);
     const last = steps[index];
-    if (!last || last.kind === 'remove') return false;
+    if (!last || (last.kind !== 'add' && last.kind !== 'set')) return false;
     steps[index] = { ...last, attributes: { ...last.attributes, ...attributes } };
     return true;
   };
 
   for (const change of changes) {
     if (change.kind === 'remove') {
-      if (!cascaded(change.id)) steps.push({ kind: 'remove', id: change.id });
+      if (!cascaded(change.id) && !held(change.id)) steps.push({ kind: 'remove', id: change.id });
+    } else if (change.kind === 'move') {
+      steps.push({ kind: 'move', id: change.id, ...(change.parent === undefined ? {} : { parent: change.parent }), ...(change.position === undefined ? {} : { position: change.position }) });
     } else if (change.kind === 'add') {
       const ends = { ...(change.source === undefined ? {} : { source: change.source }), ...(change.target === undefined ? {} : { target: change.target }) };
-      const found = stored(change.type, change.id, { ...change.attributes, ...ends });
+      // An attribute the metamodel declares read-only is the file's to state, never written: a new element starts without it.
+      const declared = attributesOf(metamodel, change.type);
+      const written = Object.fromEntries(Object.entries(change.attributes).filter(([name]) => !Object.hasOwn(declared, name) || declared[name].readOnly !== true));
+      const found = stored(change.type, change.id, { ...written, ...ends });
       if ('refused' in found) return found;
-      steps.push({ kind: 'add', type: found.type, id: change.id, attributes: found.attributes, ...(change.parent === undefined ? {} : { parent: change.parent }) });
+      steps.push({ kind: 'add', type: found.type, id: change.id, attributes: found.attributes, ...(change.parent === undefined ? {} : { parent: change.parent }), ...(change.position === undefined ? {} : { position: change.position }) });
     } else if (change.id === '') {
       const found = stored(DIAGRAM, '', change.attributes);
       if ('refused' in found) return found;

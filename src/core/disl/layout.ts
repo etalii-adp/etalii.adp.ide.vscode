@@ -3,7 +3,7 @@
 // states. The algorithms work on plain items; the scene gives them the elements' places.
 
 import type { GeomExpr } from './notation';
-import { finding, type Finding, type Loaded } from './model';
+import { finding, type Finding, type Loaded, type Model } from './model';
 import { isObject, type Doc, type Expression, type Section, type Specification } from './specification';
 
 /** `$defs/RowPacked` (DISL 10.1), with its defaults filled in. */
@@ -33,7 +33,34 @@ export interface LayoutConfig {
   readonly scope: 'all' | 'selection' | 'component';
   readonly rowPacked?: RowPacked;
   readonly rows?: RowsLayout;
+  /** The id of the plugin that is the algorithm, for one named `plugin:<id>` (DISL 13.1). */
+  readonly plugin?: string;
+  /** `spacing` and `options` as they are written: a plugin's to read. */
+  readonly spacing: Readonly<Record<string, number>>;
+  readonly options: Readonly<Record<string, unknown>>;
   readonly doc?: Doc;
+}
+
+/** What a layout plugin is given. */
+export interface LayoutRequest {
+  /** What is drawn: the model without the elements a fold or a filter hides. A folded node is in it, its descendants are not. */
+  readonly model: Model;
+  /** The size the notation gives each drawn node, by its id. */
+  readonly sizes: Readonly<Record<string, { readonly width: number; readonly height: number }>>;
+  /** The configuration's `spacing`, as the definition states it. */
+  readonly spacing: Readonly<Record<string, number>>;
+  /** The configuration's `options`, as the definition states them. */
+  readonly options: Readonly<Record<string, unknown>>;
+}
+
+/** A layout a definition names as `plugin:<id>`. */
+export interface LayoutPlugin {
+  readonly id: string;
+  /**
+   * Where each node goes: its top-left by id, in canvas units, and its size where the layout
+   * measures the node itself. A node it names no place for stays where it is.
+   */
+  place(request: LayoutRequest): Readonly<Record<string, { readonly x: number; readonly y: number; readonly width?: number; readonly height?: number }>>;
 }
 
 export interface Layout {
@@ -54,7 +81,9 @@ const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback
 /** Reads one configuration; `report` is told what of it cannot be run. */
 export function readLayoutConfig(name: string, declared: Section, report: (message: string) => void = () => undefined): LayoutConfig {
   const algorithm = typeof declared.algorithm === 'string' ? declared.algorithm : 'none';
-  if (!standardAlgorithms.includes(algorithm)) report(`The layout \`${name}\` uses the algorithm \`${algorithm}\`, which this add-on does not run.`);
+  const plugin = algorithm.startsWith('plugin:') ? algorithm.slice(7) : undefined;
+  // Whether a plugin is carried is the tool type's to say: here its name is read as written.
+  if (plugin === undefined && !standardAlgorithms.includes(algorithm)) report(`The layout \`${name}\` uses the algorithm \`${algorithm}\`, which this add-on does not run.`);
   const options = (key: string): Record<string, unknown> | undefined => {
     const value = declared[key];
     if (algorithm === key && !isObject(value)) report(`The layout \`${name}\` gives the algorithm \`${algorithm}\` no options, so its defaults are used.`);
@@ -82,6 +111,9 @@ export function readLayoutConfig(name: string, declared: Section, report: (messa
       ties: oneOf(rows.ties, ['lower', 'upper'], 'lower'),
       swapPasses: number(rows.swapPasses, 0),
     },
+    ...(plugin === undefined ? {} : { plugin }),
+    spacing: Object.fromEntries(Object.entries(isObject(declared.spacing) ? declared.spacing : {}).filter((entry): entry is [string, number] => typeof entry[1] === 'number')),
+    options: isObject(declared.options) ? declared.options : {},
     doc: declared.doc as Doc | undefined,
   };
 }

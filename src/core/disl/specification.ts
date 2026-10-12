@@ -255,8 +255,8 @@ export function localized(text: LocalizedText | undefined, locale = 'en', defaul
 }
 
 /** The label of something that declares none: its identifier, split at camel case and underscores (DISL 2.4). */
-export function labelOf(identifier: string): string {
-  const words = identifier.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim().toLowerCase();
+export function labelOf(name: string): string {
+  const words = name.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim().toLowerCase();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 

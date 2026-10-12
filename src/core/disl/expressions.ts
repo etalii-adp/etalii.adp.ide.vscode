@@ -44,6 +44,8 @@ export interface WorldOptions {
   readonly env?: Scope;
   /** `self.view` of an element: its placement in the current view. Without it, `view` is null, as in a headless context. */
   view?(id: string): Scope | undefined;
+  /** `diagram.file`: the name of the file the model was read from (DISL 8.6). */
+  readonly file?: string;
 }
 
 export interface Expressions {
@@ -120,6 +122,14 @@ export function createExpressions(specification: Specification, metamodel: Metam
   register('Entity.nodesOfType(string): list<dyn>', (entity: Entity, type: string) => list(entity, 'nodes').filter(typed(type)));
   register('Entity.relationsOfType(string): list<dyn>', (entity: Entity, type: string) => list(entity, 'relations').filter(typed(type)));
   register('Entity.elementById(string): dyn', (entity: Entity, id: string) => factsOf(entity)?.find(id) ?? null);
+  // Every node under a node, a node before what is under it; and what a node is in, the nearest first (DISL 12.2).
+  const under = (entity: Entity): Entity[] => list(entity, 'children').flatMap((child) => [child, ...under(child)]);
+  register('Entity.descendants(): list<dyn>', under);
+  register('Entity.ancestors(): list<dyn>', (entity: Entity) => {
+    const above: Entity[] = [];
+    for (let parent = member(entity, 'parent'); parent instanceof Entity; parent = member(parent, 'parent')) above.push(parent);
+    return above;
+  });
   register('Entity.label(): string', (entity: Entity) => String(member(entity, metamodel.types[factsOf(entity)?.type ?? '']?.labelAttribute ?? '') ?? ''));
 
   // ---- the function library (DISL 12.1 and 12.4), as far as it is built ----
@@ -265,6 +275,7 @@ export function createExpressions(specification: Specification, metamodel: Metam
       switch (name) {
         case 'id': return '';
         case 'type': case 'kind': return 'diagram';
+        case 'file': return worldOptions.file ?? '';
         case 'nodes': return all(model.elements);
         case 'relations': return all(model.relations);
         case 'elements': return all([...model.elements, ...model.relations]);

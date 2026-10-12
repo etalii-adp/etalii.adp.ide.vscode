@@ -7,7 +7,8 @@ import { findingCodes } from '../fbl/finding';
 import type { FblElement, FblModel } from '../fbl/model';
 import { attributesOf, formatYearMonth, isRelation, parseYearMonth, valueKind, type Metamodel } from './metamodel';
 import { emptyModel, finding, type Finding, type Loaded, type Model, type ModelElement, type ModelRelation, type Value } from './model';
-import type { Attribute, IdStrategy, Specification, TypeMapEntry } from './specification';
+import type { Expressions } from './expressions';
+import { isCel, isObject, type Attribute, type IdStrategy, type Specification, type TypeMapEntry } from './specification';
 
 export interface InterpretedPersistence {
   readonly format: string;
@@ -17,7 +18,7 @@ export interface InterpretedPersistence {
   /** By the binding's type names. A type that is not listed keeps its name and its attributes' names. */
   readonly typeMap: Readonly<Record<string, TypeMapEntry>>;
   /** What of the view is stored, and what each viewer keeps (DISL 11.6). */
-  readonly view: { readonly store: readonly string[]; readonly viewer: readonly string[] };
+  readonly view: { readonly store: readonly string[]; readonly viewer: readonly string[]; readonly initial: Readonly<Record<string, unknown>> };
 }
 
 const outside = ['diagram', 'header', 'unreadable'];
@@ -47,7 +48,26 @@ export function interpretPersistence(specification: Specification, metamodel: Me
   if (ids.strategy !== 'uuid-v4') findings.push(finding('disl.persistence', 'warning', `New elements get an id by the strategy \`uuid-v4\`, not by \`${ids.strategy}\`, which this add-on does not support.`));
   if (ids.types) findings.push(finding('disl.persistence', 'warning', 'The id rules for single types are not supported; every type follows the one rule.'));
 
-  return { value: { format, binding, ids, typeMap, view: { store: declared.view?.store ?? [], viewer: declared.view?.viewer ?? [] } }, findings };
+  return { value: { format, binding, ids, typeMap, view: { store: declared.view?.store ?? [], viewer: declared.view?.viewer ?? [], initial: isObject(declared.view?.initial) ? declared.view.initial : {} } }, findings };
+}
+
+/**
+ * Whether an element is folded for one viewer (DISL 11.6): what the viewer holds for it, else what
+ * `view.initial.collapsed` gives for the element, else not. Viewer state is never part of the model.
+ */
+export function foldsOf(persistence: InterpretedPersistence, expressions: Expressions, model: Model, held: Readonly<Record<string, boolean>> = {}): (id: string) => boolean {
+  const initial = persistence.view.initial.collapsed;
+  const world = isCel(initial) ? expressions.over(model) : undefined;
+  const seeded = new Map<string, boolean>();
+  return (id) => {
+    if (Object.hasOwn(held, id)) return held[id];
+    if (!world || !isCel(initial)) return initial === true;
+    if (!seeded.has(id)) {
+      const result = expressions.evaluate(initial, world.scope(id));
+      seeded.set(id, result.ok && result.value === true);
+    }
+    return seeded.get(id)!;
+  };
 }
 
 /** The binding the specification names, in the FBL document that was loaded for it. */

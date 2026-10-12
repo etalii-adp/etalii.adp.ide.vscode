@@ -32,10 +32,17 @@ describe('a layout in general', () => {
   });
 
   it('reports an algorithm this add-on does not run, and keeps its configuration', () => {
-    const { value, findings } = interpret(mindmapJson());
-    const mindmap = Object.values(value.algorithms)[0];
-    expect(findings.map((finding) => finding.message)).toEqual([`The layout \`${mindmap.name}\` uses the algorithm \`${mindmap.algorithm}\`, which this add-on does not run.`]);
+    const { value, findings } = interpret({ disl: '0.3', language: { id: 'a.b', version: '1.0.0' }, metamodel: {}, layout: { algorithms: { tree: { algorithm: 'mrtree', direction: 'down' } } } });
+    expect(value.algorithms.tree).toMatchObject({ name: 'tree', algorithm: 'mrtree', direction: 'down' });
+    expect(findings.map((finding) => finding.message)).toEqual(['The layout `tree` uses the algorithm `mrtree`, which this add-on does not run.']);
     expect(findings[0]).toMatchObject({ code: 'disl.layout', severity: 'warning' });
+  });
+
+  it('reads a layout that is a plugin\'s as written, and reports nothing', () => {
+    const { value, findings } = interpret(mindmapJson());
+    const named = Object.values(value.algorithms)[0];
+    expect(named.algorithm).toBe(`plugin:${named.plugin}`);
+    expect(findings).toEqual([]);
   });
 
   it('fills in the defaults DISL gives the options', () => {

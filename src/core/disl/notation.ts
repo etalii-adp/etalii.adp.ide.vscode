@@ -144,6 +144,8 @@ export interface SizeSpec {
   readonly max?: Size;
   readonly fixed?: Size;
   readonly resizable?: boolean | 'horizontal' | 'vertical';
+  /** Whether the size follows the content, and along which of the two (DISL 6.9). */
+  readonly autoSize?: 'none' | 'fitContent' | 'fitWidth' | 'fitHeight' | 'grow';
   readonly width?: Bindable<number>;
   readonly height?: Bindable<number>;
   readonly [name: string]: unknown;
@@ -250,6 +252,8 @@ export interface NodeNotation {
   readonly snapping?: Snapping;
   readonly labels: readonly Label[];
   readonly anchors: AnchorSpec;
+  /** What holds the node's children (DISL 6.9); of it, whether they can be hidden is read. */
+  readonly container?: { readonly collapsible?: boolean; readonly [name: string]: unknown };
   readonly variants: readonly NodeVariant[];
   readonly tooltip?: Message;
   readonly connectable: Bindable<boolean>;
