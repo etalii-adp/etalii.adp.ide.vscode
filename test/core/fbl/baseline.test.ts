@@ -5,25 +5,36 @@ import baseline from './baseline.json';
 import { pathOf } from './support/repository';
 
 // The 86 tests of standalone's FBL library at 25fc7b4a (etalii.adp spec 009,
-// contracts/test-baseline.md), each with the test here that checks the same behaviour, or the
-// reason it does not apply. The names are fixed by their count for each of standalone's test files
+// contracts/test-baseline.md) and the 46 it gained up to 5756a07 (spec 027), each with the test
+// here that checks the same behaviour, or the reason it does not apply. Four tests of expressions
+// left standalone's library with its evaluator and are kept, because this library kept its own. The names are fixed by their count for each of standalone's test files
 // and by one digest over all of them, so an entry cannot be dropped, added or renamed unnoticed.
-const namesDigest = '178d139208d5a53b7e5856b5b27794366659a3010157e17fe9c464fe73fc42ba';
+const namesDigest = '4fb5f7b82bbc1d0f93aed9b2ee73428145ce7ce0454ed8f5c7d31ca1889209e8';
 const testsBySource: Record<string, number> = {
   'Bytes/BodyText.Tests.cs': 6,
   'Conformance/ConformanceFixtures.Tests.cs': 3,
+  'Conformance/InsertEmptyFixtures.Tests.cs': 3,
+  'Conformance/KnowledgeFixtures.Steps.Tests.cs': 1,
+  'Conformance/KnowledgeFixtures.Tests.cs': 6,
+  'Conformance/KnowledgeTemplates.Tests.cs': 2,
   'Expressions/Expressions.Tests.cs': 5,
-  'History/History.Tests.cs': 5,
-  'Loading/Loading.Tests.cs': 9,
+  'History/History.Tests.cs': 6,
+  'Loading/Loading.Tests.cs': 11,
+  'Measurements/LargeTable.Tests.cs': 1,
+  'Planning/InsertPlacement.Tests.cs': 1,
   'Plugins/PluginBody.Tests.cs': 5,
-  'Reading/Reading.Tests.cs': 11,
+  'Plugins/PluginOnlyChanges.Tests.cs': 5,
+  'Reading/Reading.Tests.cs': 13,
+  'Reading/TypedValue.Tests.cs': 3,
   'RealFiles/DeclaredBodies.Tests.cs': 7,
   'RealFiles/ModuleCrossCheck.Tests.cs': 1,
   'RealFiles/Registrations.Tests.cs': 7,
-  'Registration/Registration.Tests.cs': 9,
+  'Registration/Registration.Tests.cs': 15,
   'Routing/Routing.Tests.cs': 9,
   'Routing/Templates.Tests.cs': 5,
+  'Yaml/YamlLevels.Tests.cs': 5,
   'Yaml/YamlScalars.Tests.cs': 4,
+  'Yaml/YamlWriting.Tests.cs': 8,
 };
 
 interface Entry {
@@ -39,14 +50,14 @@ const nameOf = (entry: Entry): string => `${entry.source}#${entry.test}`;
 const escaped = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 describe('the test baseline', () => {
-  it('has exactly the 86 names', () => {
-    expect(baseline.baseline).toEqual({ repository: 'etalii.adp.ide.standalone', commit: '25fc7b4a', tests: 86 });
-    expect(entries).toHaveLength(86);
+  it('has exactly the 132 names', () => {
+    expect(baseline.baseline).toEqual({ repository: 'etalii.adp.ide.standalone', commit: '5756a07', tests: 132 });
+    expect(entries).toHaveLength(132);
     const counted: Record<string, number> = {};
     for (const entry of entries) counted[entry.source] = (counted[entry.source] ?? 0) + 1;
     expect(counted).toEqual(testsBySource);
     const names = entries.map(nameOf).sort();
-    expect(new Set(names).size).toBe(86);
+    expect(new Set(names).size).toBe(132);
     expect(createHash('sha256').update(names.join('\n')).digest('hex')).toBe(namesDigest);
   });
 
@@ -73,7 +84,13 @@ describe('the test baseline', () => {
     expect(missing).toEqual([]);
   });
 
-  it('the cross-check with standalone\'s own parsers is the only entry not applicable', () => {
-    expect(entries.filter((entry) => entry.notApplicable).map(nameOf)).toEqual(['RealFiles/ModuleCrossCheck.Tests.cs#TheBindingReadsTheIdsTheModuleReads']);
+  it('what does not apply is the cross-check, the recorded departures and the measurement', () => {
+    expect(entries.filter((entry) => entry.notApplicable).map(nameOf).sort()).toEqual([
+      'Conformance/InsertEmptyFixtures.Tests.cs#TheJsonFamilyDepartsFromTheFixtureOnlyAsRecorded',
+      'Conformance/InsertEmptyFixtures.Tests.cs#TheTwoFamiliesWriteDifferentKeysForTheSameAdd',
+      'Conformance/InsertEmptyFixtures.Tests.cs#TheYamlFamilyDepartsFromTheFixtureOnlyAsRecorded',
+      'Measurements/LargeTable.Tests.cs#ATableOfTenThousandRows_IsOpenedAndEditedThroughTheBinding',
+      'RealFiles/ModuleCrossCheck.Tests.cs#TheBindingReadsTheIdsTheModuleReads',
+    ]);
   });
 });
