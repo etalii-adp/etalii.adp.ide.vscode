@@ -23,7 +23,8 @@ const webview = [
     ],
     message: 'src/webview imports only src/core/frame and src/core/scene, so nothing that reads a definition.',
   },
-  { group: ['**/core/frame/**', '**/core/scene/**'], allowTypeImports: true, message: 'src/webview imports only types from src/core/frame and src/core/scene.' },
+  // geometry.ts is arithmetic on points and paths and reads nothing, so the webview may call it.
+  { group: ['**/core/frame/**', '**/core/scene/**', '!**/core/scene/geometry'], allowTypeImports: true, message: 'src/webview imports only types from src/core/frame and src/core/scene, and the functions of src/core/scene/geometry.' },
 ];
 
 export default tseslint.config(
