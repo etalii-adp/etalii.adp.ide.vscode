@@ -6,6 +6,7 @@ import type { Scene } from '../core/scene/scene';
 import { spliceRanges } from '../core/tool/spliceRanges';
 import type { Findings } from './findings';
 import { handBack } from './opening';
+import { pickLink } from './projectLinkPicker';
 import type { AnyToolType } from './toolTypes';
 import { webviewHtml } from './webviewHtml';
 
@@ -298,6 +299,13 @@ export class Tools implements vscode.Disposable {
         return { result: 'applied' };
       case 'confirm':
         return { result: 'cancelled' };
+      case 'pickPath': {
+        // The user picks a file or a folder, and the answer is an edit like any other: one undo step.
+        const picked = await pickLink(diagram.document.uri);
+        if (picked === undefined) return { result: 'cancelled' };
+        if ('refused' in picked) return { result: 'refused', sentence: picked.refused };
+        return this.perform(diagram, { kind: 'setField', id: outcome.id, field: outcome.field, value: picked.value });
+      }
       case 'open': {
         // simplified: a path is read against the document's folder, and anything with a scheme as
         // a URI; a link of another form needs the definition's own rule when one states it.
