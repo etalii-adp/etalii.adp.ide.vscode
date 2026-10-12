@@ -9,7 +9,7 @@ Where this host differs from a tool's definition in [etalii.adp](https://github.
 | Difference | Why |
 |---|---|
 | The ADP Toolbox is a view of its own, beside ADP Properties, and adds an entry at the centre of what the diagram shows when it is clicked or activated with Enter or Space. | A view can be put wherever the user wants it, which a toolbox docked in the editor could not. |
-| A file with mixed line endings is saved with one kind. | Visual Studio Code's text document keeps one line ending per file and normalises the others when it reads the file; the diagram edits that document. A file with one kind of line ending, with or without a final newline, is kept byte for byte. |
+| A file with mixed line endings is saved with one kind. This holds for every tool type, a diagram or a designer, hand-coded or read from its definition. | Visual Studio Code's text document keeps one line ending per file and normalises the others when it reads the file; every tool edits that document, and an edit read from a definition is FBL's splices of it. A file with one kind of line ending, with or without a final newline, is kept byte for byte. |
 | A read-only diagram hides the toolbox and offers no handles, rather than showing them disabled. | Nothing that edits is offered (FR-037); what is not there cannot be mistaken for something that works. |
 | A refusal is shown on a line at the bottom left of the canvas for eight seconds, and at its field in ADP Properties. | The standalone host has one refusal line around its canvas; this is its place here. |
 | A tooltip appears after the browser's own delay. | Tooltips are SVG titles, which Visual Studio Code's webviews show as any page does. |

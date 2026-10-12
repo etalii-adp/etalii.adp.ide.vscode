@@ -600,6 +600,18 @@ describe('what a scene carries beside its nodes and edges', () => {
     expect(scene.chrome?.legend).toEqual(Object.entries(values).map(([key, value]) => ({ id: `Phase.${key}`, label: at(value, 'label'), fill: at(value, 'color') })));
   });
 
+  it('the parts of a node an end of an edge may be anchored on, which are not the parts a pointer hits', () => {
+    const anchors = (id: string): string[] => scene.nodes.find((node) => node.id === id)!.parts.filter((part) => part.anchor === true).map((part) => part.id);
+    // The values of the enum the end's part is bound to, for as far as the node draws them.
+    const phases = Object.keys(object(at(specification, 'metamodel', 'enums', 'Phase', 'values')));
+    expect(anchors('transistors')).toEqual(phases);
+    expect(anchors('radio')).toEqual(phases.slice(0, 3));
+    expect(anchors('note-1')).toEqual([]);
+    const named = scene.edges.flatMap((edge) => [edge.from, edge.to]).flatMap((end) => (end?.part === undefined ? [] : [[end.node, end.part]]));
+    expect(named.length).toBeGreaterThan(0);
+    expect(named.filter(([node, part]) => !anchors(node).includes(part))).toEqual([]);
+  });
+
   it('no background where the definition states none', () => expect(scene.chrome?.background).toBeUndefined());
 
   it('is plain data: what crosses to the webview as JSON', () => {

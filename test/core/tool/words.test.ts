@@ -15,7 +15,7 @@ const schema = 'fixtures/disl/disl.schema.json';
 /**
  * A name of a definition that the folders may hold all the same, because it is not the tool type's
  * word there. `disl`: DISL's own schema has it as a property, a value or a definition, which this
- * test checks. `standard`: an identifier the DISL specification defines for every tool type.
+ * test checks. `standard`: an identifier the DISL specification, or the layout of a definition's folder, defines for every tool type.
  * `english`: an ordinary word the interpreter uses in a sense of its own, which the reason states.
  */
 interface Exempt {
@@ -44,6 +44,7 @@ const exempt: readonly Exempt[] = [
   { name: 'height', use: 'disl', reason: 'a property of Placement' },
   { name: 'id', use: 'disl', reason: 'a property of Reason' },
   { name: 'label', use: 'disl', reason: 'a property of Language' },
+  { name: '.md', use: 'standard', reason: 'the extension of the companion document every definition has beside its specification (etalii.adp spec 027, contracts/definitions.md)' },
   { name: 'month', use: 'disl', reason: 'a value of TimeUnit' },
   { name: 'name', use: 'disl', reason: 'a property of PluginCall' },
   { name: 'node', use: 'disl', reason: 'a property of Notation' },

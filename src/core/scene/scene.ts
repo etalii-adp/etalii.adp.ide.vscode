@@ -14,7 +14,7 @@ import { allowsEnd, attributesOf, defaultOf, isA, isRelation, valueKind, type Me
 import { finding, type Finding, type Model, type ModelElement, type ModelRelation, type Value } from '../disl/model';
 import {
   builtInShapes, defaultFontSize, defaultSize, edgeNotation, lineHeight, merged, nodeNotation, styleOf, textWidth,
-  type AnchorPoint, type CustomShape, type EdgeNotation, type EndAnchor, type GeomBox, type GeomExpr, type Label, type NodeNotation, type PathDef,
+  type AnchorPoint, type CustomShape, type EdgeNotation, type EndAnchor, type GeomBox, type GeomExpr, type Label, type NodeNotation, type Paint, type PathDef,
   type Position, type ShapeRef, type Stroke, type Style,
 } from '../disl/notation';
 import { isCel, isObject, localized, type Expression } from '../disl/specification';
@@ -56,6 +56,8 @@ export interface ScenePart {
   /** The part's style over the node's; a paint may still be a theme token. */
   readonly style: Style;
   readonly hit: boolean;
+  /** An end of an edge may be anchored on this part (DISL 6.10). */
+  readonly anchor?: boolean;
   readonly tooltip?: string;
 }
 
@@ -157,6 +159,85 @@ export interface Scene {
   readonly bounds?: Box;
   /** What could not be drawn as the specification says. */
   readonly findings: readonly Finding[];
+  // What follows is set by the tool type that shows the scene; `createScene` leaves it out.
+  /** True when nothing that edits may be offered. */
+  readonly readOnly?: boolean;
+  /** Why the diagram is read-only or empty, when there is something to say. */
+  readonly notice?: string;
+  /**
+   * Every token of the theme, with its value in each of the two modes (DISL 6.2). A paint
+   * `{ token }` in a style is looked up here, in the mode of the page that draws. A mode that is
+   * absent has no value for the token: the page's own colour for the role is used.
+   */
+  readonly tokens?: Readonly<Record<string, SceneToken>>;
+  /** What the notation shows around the drawing. */
+  readonly chrome?: SceneChrome;
+}
+
+export interface SceneToken {
+  readonly light?: string | number;
+  readonly dark?: string | number;
+}
+
+/** What is drawn outside the drawing and is no element (DISL 5.13, 6.13): it names nothing but ids. */
+export interface SceneChrome {
+  readonly rulers: readonly SceneRuler[];
+  readonly filters: readonly SceneFilter[];
+  /** One for each variant of the default viewpoint (DISL 3.5). */
+  readonly toggles: readonly SceneToggle[];
+  readonly legend: readonly SceneLegendEntry[];
+  /** The background of the canvas, only where the specification states one. */
+  readonly background?: Paint;
+}
+
+export interface SceneRuler {
+  /** The axis of the scene the ruler runs along. */
+  readonly axis: 'x' | 'y';
+  readonly position: 'top' | 'bottom' | 'left' | 'right';
+  /** The breadth of one row, in pixels. */
+  readonly size: number;
+  /** `view`: it stays at its edge of what is shown. `canvas`: it scrolls with the drawing. */
+  readonly attach: 'view' | 'canvas';
+  /** The levels, the finest first. The one drawn is the first whose `spacing` times the zoom is at least `minSpacing`, within `minZoom` and `maxZoom`. */
+  readonly levels: readonly SceneRulerLevel[];
+}
+
+export interface SceneRulerLevel {
+  /** Canvas units between two ticks. */
+  readonly spacing: number;
+  /** The fewest pixels of the screen between two ticks at which the level is drawn. */
+  readonly minSpacing: number;
+  readonly minZoom?: number;
+  readonly maxZoom?: number;
+  /** The ticks in the part in view, or within the scene's bounds when no part is named; 2000 at most. `at` is in canvas units along the axis. */
+  readonly ticks: readonly { readonly at: number; readonly label: string }[];
+}
+
+export interface SceneFilter {
+  readonly id: string;
+  readonly label: string;
+  readonly control: 'chips' | 'switch' | 'select' | 'search';
+  /** What there is to choose from. */
+  readonly options: readonly string[];
+  /** The value in use: the one the view keeps, else the specification's default. */
+  readonly value: Value;
+  readonly match: 'any' | 'all';
+  /** Whether the user may change `match`. */
+  readonly matchToggle: boolean;
+}
+
+export interface SceneToggle {
+  /** The viewpoint the toggle turns on: what the view is asked for by. */
+  readonly viewpoint: string;
+  readonly label: string;
+  readonly on: boolean;
+}
+
+export interface SceneLegendEntry {
+  /** `<enum>.<value>` for a value of an enum, or the name of a type. */
+  readonly id: string;
+  readonly label: string;
+  readonly fill?: Paint;
 }
 
 // ---- the scene ----
@@ -374,6 +455,21 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
 
   const measure = (text: string, fontSize: number): number => textWidth(notation.textMetric, text, fontSize, options.textWidth);
 
+  // The parts an end of an edge may name (DISL 6.10): the values of the enum its `part` is bound to, or any part where it is bound to none.
+  const anchorParts = new Set<string>();
+  let anchorsAny = false;
+  for (const type of Object.values(metamodel.types)) {
+    if (!isRelation(type)) continue;
+    const own = edgeNotation(notation, metamodel, type.name);
+    for (const anchor of [own.anchoring, ...own.variants.map((variant) => variant.anchoring)].flatMap((anchoring) => [anchoring?.source, anchoring?.target])) {
+      if (anchor?.mode !== 'part') continue;
+      const attribute = isObject(anchor.part) && 'attribute' in anchor.part ? attributesOf(metamodel, type.name)[anchor.part.attribute] : undefined;
+      const kind = attribute && valueKind(metamodel, attribute.type);
+      if (kind?.kind === 'enum') for (const value of kind.enum.values) anchorParts.add(value.key);
+      else anchorsAny = true;
+    }
+  }
+
   interface Drawn {
     readonly node: SceneNode;
     /** Every part the shape declares, drawn or not, and the node's notation. */
@@ -432,6 +528,7 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
         shape: shapeOf(part.shape, within, part.shape === undefined ? undefined : customOf(part.shape)),
         style: settled(styleOf(notation, style, part.style, own.partStyles[id]), self),
         hit: part.hit !== false,
+        ...(anchorsAny || anchorParts.has(id) ? { anchor: true } : {}),
         tooltip: message(part.tooltip, self, { p }),
       });
     }
