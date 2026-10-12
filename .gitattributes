@@ -10,3 +10,7 @@ fixtures/** -text
 examples/PROVENANCE.md text
 fixtures/fbl/PROVENANCE.md text
 fixtures/fbl/manifest.json text
+
+# The copied definitions are compared byte for byte with their source, so Git must never convert them.
+definitions/** -text
+definitions/**/PROVENANCE.md text
