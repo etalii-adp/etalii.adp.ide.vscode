@@ -1,15 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import { findingCodes } from '../../../src/core/fbl/finding';
 import { driftUndo } from '../../../src/core/fbl/history/splicedFile';
+import { loadDocument } from '../../../src/core/fbl/documents/documentLoader';
+import type { ModelChange } from '../../../src/core/fbl/planning/modelChange';
 import { PluginBody } from '../../../src/core/fbl/plugins/pluginBody';
 import { bindingOf } from './support/bindings';
 import { textOf, utf8 } from './support/repository';
-import { TestPlugin } from './support/testPlugin';
+import { RecordingPlugin, TestPlugin } from './support/testPlugin';
 
 // The host side of the plugin contract (FBL 11.3, 15.1), proved with a plugin written for the
-// tests, since no plugin is part of the library. Counterparts of standalone's Plugins/PluginBody.Tests.cs.
+// tests, since no plugin is part of the library. Counterparts of standalone's Plugins/PluginBody.Tests.cs
+// and, for the changes a plugin body hands on, of its Plugins/PluginOnlyChanges.Tests.cs.
 const turtleId = 'net.etalii.adp.w3c.turtle';
 const turtle = () => bindingOf('w3c-turtle.fbl', 'turtle');
+
+/**
+ * The changes a plugin is handed as they were made (FBL 11.2): a move among siblings, a move to
+ * another parent, a type change, and an add at a position among its siblings.
+ */
+const changes: Record<string, ModelChange> = {
+  'move': { kind: 'move', id: 'a', position: { index: 0 } },
+  'move to another parent': { kind: 'move', id: 'a', parent: 'a', position: { index: 0 } },
+  'retype': { kind: 'retype', id: 'a', type: 'Period', attributes: { end: '2026-02-01' } },
+  'add at an index': { kind: 'add', type: 'Moment', id: 'b', attributes: { label: 'Beta', start: '2026-02-01' }, position: { index: 0 } },
+};
 
 describe('a body read by a persistence plugin', () => {
   it('a missing plugin opens the body read only with a finding', () => {
@@ -56,5 +70,36 @@ describe('a body read by a persistence plugin', () => {
     const result = body.change({ kind: 'set', id: 'line1', attributes: { label: 'x' } });
     expect(result).toHaveProperty('refused');
     expect(plugin.plans).toBe(0);
+  });
+
+  it.each(Object.keys(changes))('a plugin body, hands the change to its plugin, as it was made: %s', (name) => {
+    const plugin = new RecordingPlugin(turtleId);
+    const body = PluginBody.open(utf8('label a\n'), turtle(), plugin);
+    const change = changes[name];
+    const result = body.plan(change);
+    expect(result).toHaveProperty('planned');
+    expect(plugin.received).toBe(change);
+  });
+
+  it('a plugin is asked without the args of its binding', () => {
+    // FBL 11.2 gives `plan` the files, the last reading and the change, and nothing else; `read`
+    // is given the files and the binding's `args`, of which this binding has none.
+    const plugin = new RecordingPlugin(turtleId);
+    const body = PluginBody.open(utf8('label a\n'), turtle(), plugin);
+    body.plan({ kind: 'remove', id: 'line1' });
+    expect(Object.keys(plugin.readRequest!)).toEqual(['files']);
+    expect(Object.keys(plugin.planRequest!).sort()).toEqual(['change', 'files', 'last']);
+  });
+
+  it('a plugin reads with the args of its binding and plans without them', () => {
+    // FBL 11.2: `read` receives "the binding's args"; `plan` receives the bytes, the last reading and one change.
+    const text = '{ "fbl": "0.2", "bindings": { "t": { "claims": { "extensions": [".t"] }, "body": { "kind": "file" }, "reader": { "plugin": "net.example.reader", "args": { "strict": true } } } } }';
+    const { document, problems } = loadDocument(utf8(text));
+    expect(problems).toEqual([]);
+    const plugin = new RecordingPlugin('net.example.reader');
+    const body = PluginBody.open(utf8('label a\n'), document!.bindings.get('t')!, plugin);
+    body.plan({ kind: 'remove', id: 'line1' });
+    expect(Object.keys(plugin.readRequest!).sort()).toEqual(['args', 'files']);
+    expect(Object.keys(plugin.planRequest!).sort()).toEqual(['change', 'files', 'last']);
   });
 });

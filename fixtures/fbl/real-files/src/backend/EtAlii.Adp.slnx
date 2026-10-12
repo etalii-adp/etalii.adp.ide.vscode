@@ -1,4 +1,4 @@
-﻿<Solution>
+<Solution>
   <Folder Name="/_Globals/">
     <File Path="../../.gitignore" />
     <File Path="../../CLAUDE.md" />
@@ -15,7 +15,13 @@
   <Project Path="EtAlii.Adp.Documents/EtAlii.Adp.Documents.csproj" />
   <Project Path="EtAlii.Adp.Documents.Tests/EtAlii.Adp.Documents.Tests.csproj" />
   <Project Path="EtAlii.Adp.Editor/EtAlii.Adp.Editor.csproj" />
+  <Project Path="EtAlii.Adp.Designer/EtAlii.Adp.Designer.csproj" />
+  <Project Path="EtAlii.Adp.Designer.Tests/EtAlii.Adp.Designer.Tests.csproj" />
   <Project Path="EtAlii.Adp.Editor.Tests/EtAlii.Adp.Editor.Tests.csproj" />
+  <Folder Name="/designers/">
+    <Project Path="../designers/knowledge/backend/EtAlii.Adp.Designer.Knowledge/EtAlii.Adp.Designer.Knowledge.csproj" />
+    <Project Path="../designers/knowledge/backend/EtAlii.Adp.Designer.Knowledge.Tests/EtAlii.Adp.Designer.Knowledge.Tests.csproj" />
+  </Folder>
   <Folder Name="/editors/">
     <Project Path="../editors/plain/backend/EtAlii.Adp.Editor.Plain/EtAlii.Adp.Editor.Plain.csproj" />
     <Project Path="../editors/plain/backend/EtAlii.Adp.Editor.Plain.Tests/EtAlii.Adp.Editor.Plain.Tests.csproj" />
@@ -37,10 +43,15 @@
   <Project Path="EtAlii.Adp.History/EtAlii.Adp.History.csproj" />
   <Project Path="EtAlii.Adp.History.Tests/EtAlii.Adp.History.Tests.csproj" />
   <Project Path="EtAlii.Adp.TestSupport/EtAlii.Adp.TestSupport.csproj" />
+  <Project Path="EtAlii.Adp.TestSupport.Host/EtAlii.Adp.TestSupport.Host.csproj" />
   <Project Path="EtAlii.Adp.Projects.Tests/EtAlii.Adp.Projects.Tests.csproj" />
   <Project Path="EtAlii.Adp.Sessions.Tests/EtAlii.Adp.Sessions.Tests.csproj" />
   <Project Path="EtAlii.Adp.Repository.Tests/EtAlii.Adp.Repository.Tests.csproj" />
   <Project Path="EtAlii.Adp.Problems.Tests/EtAlii.Adp.Problems.Tests.csproj" />
+  <Project Path="EtAlii.Adp.Specification.Cel/EtAlii.Adp.Specification.Cel.csproj" />
+  <Project Path="EtAlii.Adp.Specification.Cel.Tests/EtAlii.Adp.Specification.Cel.Tests.csproj" />
+  <Project Path="EtAlii.Adp.Specification.Disl/EtAlii.Adp.Specification.Disl.csproj" />
+  <Project Path="EtAlii.Adp.Specification.Disl.Tests/EtAlii.Adp.Specification.Disl.Tests.csproj" />
   <Project Path="EtAlii.Adp.Specification.Fbl/EtAlii.Adp.Specification.Fbl.csproj" />
   <Project Path="EtAlii.Adp.Specification.Fbl.Tests/EtAlii.Adp.Specification.Fbl.Tests.csproj" />
   <Project Path="EtAlii.Adp.Hierarchy/EtAlii.Adp.Hierarchy.csproj" />
@@ -95,6 +106,9 @@
     <Project Path="../diagrams/dotnet-dependency-graph/backend/EtAlii.Adp.Diagram.DotNetDependencyGraph/EtAlii.Adp.Diagram.DotNetDependencyGraph.csproj" />
     <Project Path="../diagrams/dotnet-dependency-graph/backend/EtAlii.Adp.Diagram.DotNetDependencyGraph.Tests/EtAlii.Adp.Diagram.DotNetDependencyGraph.Tests.csproj" />
     <Project Path="../diagrams/erd-entity-relationship/backend/EtAlii.Adp.Diagram.ErdEntityRelationship/EtAlii.Adp.Diagram.ErdEntityRelationship.csproj" />
+    <!-- The agent activity diagram: which agent works on what, where and on which system, in a file agents keep current. -->
+    <Project Path="../diagrams/agent-activity-diagram/backend/EtAlii.Adp.Diagram.AgentActivityDiagram/EtAlii.Adp.Diagram.AgentActivityDiagram.csproj" />
+    <Project Path="../diagrams/agent-activity-diagram/backend/EtAlii.Adp.Diagram.AgentActivityDiagram.Tests/EtAlii.Adp.Diagram.AgentActivityDiagram.Tests.csproj" />
     <!-- Agent Behavior Modelling: a chat agent's instructions as a behavior tree, stored as the Markdown the agent reads. -->
     <Project Path="../diagrams/agent-behavior-modelling/backend/EtAlii.Adp.Diagram.AgentBehaviorModelling/EtAlii.Adp.Diagram.AgentBehaviorModelling.csproj" />
     <Project Path="../diagrams/agent-behavior-modelling/backend/EtAlii.Adp.Diagram.AgentBehaviorModelling.Tests/EtAlii.Adp.Diagram.AgentBehaviorModelling.Tests.csproj" />

@@ -1,5 +1,5 @@
 {
-  "doc": "Where a copied binding and a real file disagree (etalii.adp spec 009, FR-021). Each entry is checked by the real-file tests: an unlisted disagreement fails, and so does a listed one that has changed or no longer occurs. Never edit a copied binding, skip a file or weaken an assertion instead. A file is named by its path under fixtures/fbl/real-files, which is its path in etalii.adp.ide.standalone, so this record and standalone's can be compared line by line; it starts from standalone's entries at 25fc7b4a that are not cross-checks with its own parsers.",
+  "doc": "Where a copied binding and a real file disagree (etalii.adp spec 009, FR-021). Each entry is checked by the real-file tests: an unlisted disagreement fails, and so does a listed one that has changed or no longer occurs. Never edit a copied binding, skip a file or weaken an assertion instead. A file is named by its path under fixtures/fbl/real-files, which is its path in etalii.adp.ide.standalone, so this record and standalone's can be compared line by line; it holds standalone's entries at 5756a07 that are not cross-checks with its own parsers. Where an observation carries a parser's own words, they are this library's parser's.",
   "divergences": [
     {
       "property": "registration-layout",
@@ -203,6 +203,13 @@
       "file": "src/diagrams/c4/backend/EtAlii.Adp.Diagram.C4.Tests/Fixtures/comments-everywhere.dsl",
       "observed": "offset 200: The braces of the body do not balance on this line.",
       "reason": "FBL section 4.7 opens a block only when a statement's last non-whitespace character is '{', so 'model { // trailing a brace is legal' opens none and the matching '}' leaves the braces unbalanced, which makes the body unreadable. Structurizr accepts a comment after the brace, and the module reads this fixture. Candidate follow-up for etalii.adp: let FBL section 4.7 ignore a trailing comment matching the binding's comment expression before looking for '{'."
+    },
+    {
+      "property": "unreadable",
+      "binding": "timeline",
+      "file": "src/diagrams/timeline/backend/EtAlii.Adp.Diagram.Timeline.Tests/Fixtures/findings/unparseable.tml",
+      "observed": "offset 48: The body is not well-formed YAML: Nested mappings are not allowed in compact mappings",
+      "reason": "The fixture is one of the timeline module's findings corpus, written not to be YAML on purpose, so the module's not-a-timeline finding has a file to report on. FBL refuses to read the body, which is the right answer for it."
     }
   ]
 }

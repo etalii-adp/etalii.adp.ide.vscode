@@ -1,0 +1,61 @@
+ded: "0.1"
+designer: etalii/knowledge
+# Regions, written for ADP: the side of a two-way relation that holds the values, and a view grouped by it.
+name: Regions
+activeView: g-by-country
+properties:
+  - id: g-name
+    name: Name
+    type: text
+    title: true
+  - id: g-country
+    name: Country
+    type: relation
+    target: countries.yaml
+    limit: one
+    counterpart: c-regions
+  - id: g-neighbour
+    name: Borders on
+    type: relation
+    target: countries.yaml
+views:
+  - id: g-by-country
+    name: By country
+    groupBy: g-country
+  - id: g-all
+    name: All regions
+rows:
+  - id: friesland
+    cells:
+      - property: g-name
+        text: Friesland
+      - property: g-country
+        rows:
+          - row: nl
+  - id: limburg-nl
+    cells:
+      - property: g-name
+        text: Limburg
+      - property: g-country
+        rows:
+          - row: nl
+      - property: g-neighbour
+        rows:
+          - row: be
+  - id: flanders
+    cells:
+      - property: g-name
+        text: Flanders
+      - property: g-country
+        rows:
+          - row: be
+      - property: g-neighbour
+        rows:
+          - row: nl
+  - id: kansai
+    cells:
+      - property: g-name
+        text: Kansai
+      - property: g-country
+        rows:
+          - row: jp

@@ -1,8 +1,8 @@
 {
   "baseline": {
     "repository": "etalii.adp.ide.standalone",
-    "commit": "25fc7b4a",
-    "tests": 86
+    "commit": "5756a07",
+    "tests": 132
   },
   "tests": [
     {
@@ -58,6 +58,75 @@
       "test": "EveryByteOfTheInputBelongsToTheReading",
       "file": "test/core/fbl/conformanceFixtures.test.ts",
       "title": "every byte of the input belongs to the reading"
+    },
+    {
+      "source": "Conformance/InsertEmptyFixtures.Tests.cs",
+      "test": "TheYamlFamilyDepartsFromTheFixtureOnlyAsRecorded",
+      "notApplicable": "Records where standalone's YAML and JSON families depart from the insert-empty fixtures until its task T216. This library passes both fixtures as written, in conformanceFixtures.test.ts."
+    },
+    {
+      "source": "Conformance/InsertEmptyFixtures.Tests.cs",
+      "test": "TheJsonFamilyDepartsFromTheFixtureOnlyAsRecorded",
+      "notApplicable": "Records where standalone's YAML and JSON families depart from the insert-empty fixtures until its task T216. This library passes both fixtures as written, in conformanceFixtures.test.ts."
+    },
+    {
+      "source": "Conformance/InsertEmptyFixtures.Tests.cs",
+      "test": "TheTwoFamiliesWriteDifferentKeysForTheSameAdd",
+      "notApplicable": "Records where standalone's YAML and JSON families depart from the insert-empty fixtures until its task T216. This library passes both fixtures as written, in conformanceFixtures.test.ts."
+    },
+    {
+      "source": "Conformance/KnowledgeFixtures.Steps.Tests.cs",
+      "test": "TheFixturesStepsPass_AsFarAsRecorded",
+      "file": "test/core/fbl/knowledgeFixtures.test.ts",
+      "title": "the fixtures steps pass, as far as recorded"
+    },
+    {
+      "source": "Conformance/KnowledgeFixtures.Tests.cs",
+      "test": "TheFixturesAreFound",
+      "file": "test/core/fbl/knowledgeFixtures.test.ts",
+      "title": "the fixtures are found"
+    },
+    {
+      "source": "Conformance/KnowledgeFixtures.Tests.cs",
+      "test": "TheSpecificationsAttributeTypes_AreRead",
+      "file": "test/core/fbl/knowledgeFixtures.test.ts",
+      "title": "the specifications attribute types, are read"
+    },
+    {
+      "source": "Conformance/KnowledgeFixtures.Tests.cs",
+      "test": "TheFixtureIsReadAsItSays",
+      "file": "test/core/fbl/knowledgeFixtures.test.ts",
+      "title": "the fixture is read as it says"
+    },
+    {
+      "source": "Conformance/KnowledgeFixtures.Tests.cs",
+      "test": "SavingWithoutAnEdit_WritesTheBytesThatWereRead",
+      "file": "test/core/fbl/knowledgeFixtures.test.ts",
+      "title": "saving without an edit, writes the bytes that were read"
+    },
+    {
+      "source": "Conformance/KnowledgeFixtures.Tests.cs",
+      "test": "EveryByteOfTheInputBelongsToTheReading",
+      "file": "test/core/fbl/knowledgeFixtures.test.ts",
+      "title": "every byte of the input belongs to the reading"
+    },
+    {
+      "source": "Conformance/KnowledgeFixtures.Tests.cs",
+      "test": "TheSameTableInYamlJsonAndXml_IsOneModel",
+      "file": "test/core/fbl/knowledgeFixtures.test.ts",
+      "title": "the same table in YAML JSON and XML, is one model"
+    },
+    {
+      "source": "Conformance/KnowledgeTemplates.Tests.cs",
+      "test": "ANewFile_ReadsThroughItsBinding_AsOneTitlePropertyOneViewAndNoRows",
+      "file": "test/core/fbl/templates.test.ts",
+      "title": "a new file, reads through its binding, as one title property one view and no rows"
+    },
+    {
+      "source": "Conformance/KnowledgeTemplates.Tests.cs",
+      "test": "ATemplateOfAnotherFormat_IsNotATableOfThisOne",
+      "file": "test/core/fbl/templates.test.ts",
+      "title": "a template of another format, is not a table of this one"
     },
     {
       "source": "Expressions/Expressions.Tests.cs",
@@ -120,6 +189,12 @@
       "title": "an unreadable body is never saved"
     },
     {
+      "source": "History/History.Tests.cs",
+      "test": "AnEditToAFork_LeavesTheBodyItWasForkedFrom_AsItWas",
+      "file": "test/core/fbl/history.test.ts",
+      "title": "an edit to a fork, leaves the body it was forked from, as it was"
+    },
+    {
       "source": "Loading/Loading.Tests.cs",
       "test": "AValidDocumentLoadsWithoutAProblem",
       "file": "test/core/fbl/loading.test.ts",
@@ -174,6 +249,29 @@
       "title": "a reference resolves against the referring document"
     },
     {
+      "source": "Loading/Loading.Tests.cs",
+      "test": "AVendoredFolderBindingLoadsItsFileRulesAndItsPlugin",
+      "file": "test/core/fbl/loading.test.ts",
+      "title": "a vendored folder binding loads its file rules and its plugin"
+    },
+    {
+      "source": "Loading/Loading.Tests.cs",
+      "test": "VendoredBindingsLoadTheirTitleClaimsRulesAndRegistrationSettings",
+      "file": "test/core/fbl/loading.test.ts",
+      "title": "vendored bindings load their title claims rules and registration settings"
+    },
+    {
+      "source": "Measurements/LargeTable.Tests.cs",
+      "test": "ATableOfTenThousandRows_IsOpenedAndEditedThroughTheBinding",
+      "notApplicable": "A measurement of standalone's runtime whose times are written to the test output and not asserted."
+    },
+    {
+      "source": "Planning/InsertPlacement.Tests.cs",
+      "test": "PlacingANewEntryBeforeAKeyIsRefused",
+      "file": "test/core/fbl/planning.test.ts",
+      "title": "placing a new entry before a key is refused"
+    },
+    {
       "source": "Plugins/PluginBody.Tests.cs",
       "test": "AMissingPluginOpensTheBodyReadOnlyWithAFinding",
       "file": "test/core/fbl/pluginBody.test.ts",
@@ -202,6 +300,36 @@
       "test": "AReadOnlyBindingsPluginIsNeverAskedToPlan",
       "file": "test/core/fbl/pluginBody.test.ts",
       "title": "a read only bindings plugin is never asked to plan"
+    },
+    {
+      "source": "Plugins/PluginOnlyChanges.Tests.cs",
+      "test": "APluginBody_HandsTheChangeToItsPlugin_AsItWasMade",
+      "file": "test/core/fbl/pluginBody.test.ts",
+      "title": "a plugin body, hands the change to its plugin, as it was made"
+    },
+    {
+      "source": "Plugins/PluginOnlyChanges.Tests.cs",
+      "test": "ADeclaredBinding_RefusesTheChange_AndWritesNothing",
+      "file": "test/core/fbl/planning.test.ts",
+      "title": "a declared binding, refuses the change, and writes nothing"
+    },
+    {
+      "source": "Plugins/PluginOnlyChanges.Tests.cs",
+      "test": "ADeclaredBinding_MovesAnElementAmongItsSiblings_CarryingItsBytes",
+      "file": "test/core/fbl/planning.test.ts",
+      "title": "a declared binding, moves an element among its siblings, carrying its bytes"
+    },
+    {
+      "source": "Plugins/PluginOnlyChanges.Tests.cs",
+      "test": "ADeclaredBinding_MovingAnElementToWhereItIs_WritesNothing",
+      "file": "test/core/fbl/planning.test.ts",
+      "title": "a declared binding, moving an element to where it is, writes nothing"
+    },
+    {
+      "source": "Plugins/PluginOnlyChanges.Tests.cs",
+      "test": "ADeclaredBinding_StillAddsWithoutAnIndex",
+      "file": "test/core/fbl/planning.test.ts",
+      "title": "a declared binding, still adds without an index"
     },
     {
       "source": "Reading/Reading.Tests.cs",
@@ -270,6 +398,36 @@
       "title": "a stale layout entry is reported and removed at the next write"
     },
     {
+      "source": "Reading/Reading.Tests.cs",
+      "test": "ABlockThatNamesAViewIsReadAsThatViewWithItsBlockAndPlace",
+      "file": "test/core/fbl/reading.test.ts",
+      "title": "a block that names a view is read as that view with its block and place"
+    },
+    {
+      "source": "Reading/Reading.Tests.cs",
+      "test": "AnIdStrategyIsAskedWithTheTypeAndLineOfEveryEntryWithoutAStoredId",
+      "file": "test/core/fbl/reading.test.ts",
+      "title": "an id strategy is asked with the type and line of every entry without a stored id"
+    },
+    {
+      "source": "Reading/TypedValue.Tests.cs",
+      "test": "TextThatConverts_Reads",
+      "file": "test/core/fbl/reading.test.ts",
+      "title": "text that converts, reads"
+    },
+    {
+      "source": "Reading/TypedValue.Tests.cs",
+      "test": "TextThatDoesNotConvert_DoesNotRead",
+      "file": "test/core/fbl/reading.test.ts",
+      "title": "text that does not convert, does not read"
+    },
+    {
+      "source": "Reading/TypedValue.Tests.cs",
+      "test": "TypedValues_ReadAsTheirOwnTypeOnly",
+      "file": "test/core/fbl/reading.test.ts",
+      "title": "typed values, read as their own type only"
+    },
+    {
       "source": "RealFiles/DeclaredBodies.Tests.cs",
       "test": "TheEnumerationFindsTheFiles",
       "file": "test/core/fbl/realFiles/declaredBodies.test.ts",
@@ -336,13 +494,13 @@
     },
     {
       "source": "RealFiles/Registrations.Tests.cs",
-      "test": "AW3CReadingsSuggestMatchesItsBody",
+      "test": "W3CReadingsSuggestMatchesItsBody",
       "file": "test/core/fbl/realFiles/registrations.test.ts",
       "title": "a W3C readings suggest matches its body"
     },
     {
       "source": "RealFiles/Registrations.Tests.cs",
-      "test": "AC4RegistrationReadsItsLegacyLayout",
+      "test": "C4RegistrationReadsItsLegacyLayout",
       "file": "test/core/fbl/realFiles/registrations.test.ts",
       "title": "a C4 registration reads its legacy layout"
     },
@@ -411,6 +569,42 @@
       "test": "TheSidecarPathIsBesideTheBodyWithItsBaseName",
       "file": "test/core/fbl/registration.test.ts",
       "title": "the sidecar path is beside the body with its base name"
+    },
+    {
+      "source": "Registration/Registration.Tests.cs",
+      "test": "AMissingSiblingBodyIsReportedOnTheOriginLine",
+      "file": "test/core/fbl/registration.test.ts",
+      "title": "a missing sibling body is reported on the origin line"
+    },
+    {
+      "source": "Registration/Registration.Tests.cs",
+      "test": "AnExistingBodyHasNoFinding",
+      "file": "test/core/fbl/registration.test.ts",
+      "title": "an existing body has no finding"
+    },
+    {
+      "source": "Registration/Registration.Tests.cs",
+      "test": "AnUnreadableSidecarRefusesAChangeAndIsNotWritten",
+      "file": "test/core/fbl/registration.test.ts",
+      "title": "an unreadable sidecar refuses a change and is not written"
+    },
+    {
+      "source": "Registration/Registration.Tests.cs",
+      "test": "ABlockIsReadWithItsName",
+      "file": "test/core/fbl/registration.test.ts",
+      "title": "a block is read with its name"
+    },
+    {
+      "source": "Registration/Registration.Tests.cs",
+      "test": "AnEphemeralElementsPositionIsNotStored",
+      "file": "test/core/fbl/registration.test.ts",
+      "title": "an ephemeral elements position is not stored"
+    },
+    {
+      "source": "Registration/Registration.Tests.cs",
+      "test": "AnIdentityTheReadingNoLongerHasIsRemovedAtTheNextStore",
+      "file": "test/core/fbl/registration.test.ts",
+      "title": "an identity the reading no longer has is removed at the next store"
     },
     {
       "source": "Routing/Routing.Tests.cs",
@@ -497,6 +691,36 @@
       "title": "a plugin without template text is asked for one"
     },
     {
+      "source": "Yaml/YamlLevels.Tests.cs",
+      "test": "AKeyTheRuleBindsNothingBefore_BecomesTheFirstKeyOfAMappingThatExists",
+      "file": "test/core/fbl/planning.test.ts",
+      "title": "a key the rule binds nothing before, becomes the first key of a mapping that exists"
+    },
+    {
+      "source": "Yaml/YamlLevels.Tests.cs",
+      "test": "ALevelThatIsThereWithNothingUnderIt_TakesTheKeyOneStepDeeper",
+      "file": "test/core/fbl/planning.test.ts",
+      "title": "a level that is there with nothing under it, takes the key one step deeper"
+    },
+    {
+      "source": "Yaml/YamlLevels.Tests.cs",
+      "test": "EveryMissingLevelOfAChild_IsCreatedOutermostFirst_AndGoesAgainWithItsLastKey",
+      "file": "test/core/fbl/planning.test.ts",
+      "title": "every missing level of a child, is created outermost first, and goes again with its last key"
+    },
+    {
+      "source": "Yaml/YamlLevels.Tests.cs",
+      "test": "ALevelThatStillHoldsSomething_StaysWhenTheLevelUnderItGoes",
+      "file": "test/core/fbl/planning.test.ts",
+      "title": "a level that still holds something, stays when the level under it goes"
+    },
+    {
+      "source": "Yaml/YamlLevels.Tests.cs",
+      "test": "AMissingLevelAStarNames_GivesNoKeyToWrite_SoTheInsertIsRefused",
+      "file": "test/core/fbl/planning.test.ts",
+      "title": "a missing level a star names, gives no key to write, so the insert is refused"
+    },
+    {
       "source": "Yaml/YamlScalars.Tests.cs",
       "test": "APlainSafeStringIsWrittenPlain",
       "file": "test/core/fbl/yamlScalars.test.ts",
@@ -519,6 +743,54 @@
       "test": "ASingleQuotedStringDoublesItsQuotes",
       "file": "test/core/fbl/yamlScalars.test.ts",
       "title": "a single quoted string doubles its quotes"
+    },
+    {
+      "source": "Yaml/YamlWriting.Tests.cs",
+      "test": "AFlowListItemThatAFlowCollectionWouldSplitIsQuoted",
+      "file": "test/core/fbl/planning.test.ts",
+      "title": "a flow list item that a flow collection would split is quoted"
+    },
+    {
+      "source": "Yaml/YamlWriting.Tests.cs",
+      "test": "AMultiLineStringInANewNestedEntryIsIndentedUnderItsKey",
+      "file": "test/core/fbl/planning.test.ts",
+      "title": "a multi line string in a new nested entry is indented under its key"
+    },
+    {
+      "source": "Yaml/YamlWriting.Tests.cs",
+      "test": "AValueStartingWithADashKeepsItsPlainStyle",
+      "file": "test/core/fbl/planning.test.ts",
+      "title": "a value starting with a dash keeps its plain style"
+    },
+    {
+      "source": "Yaml/YamlWriting.Tests.cs",
+      "test": "AValueStartingWithADashIsWrittenPlainWhenTheAttributeAsksForPlain",
+      "file": "test/core/fbl/planning.test.ts",
+      "title": "a value starting with a dash is written plain when the attribute asks for plain"
+    },
+    {
+      "source": "Yaml/YamlWriting.Tests.cs",
+      "test": "AValueThatADashWouldMakeAListItemIsStillQuoted",
+      "file": "test/core/fbl/planning.test.ts",
+      "title": "a value that a dash would make a list item is still quoted"
+    },
+    {
+      "source": "Yaml/YamlWriting.Tests.cs",
+      "test": "AnEmptyValueThatTheAttributeKeepsIsWrittenInANewEntry",
+      "file": "test/core/fbl/planning.test.ts",
+      "title": "an empty value that the attribute keeps is written in a new entry"
+    },
+    {
+      "source": "Yaml/YamlWriting.Tests.cs",
+      "test": "AContainerCreatedBeforeAKeyThatIsNotThereIsCreatedAtTheEnd",
+      "file": "test/core/fbl/planning.test.ts",
+      "title": "a container created before a key that is not there is created at the end"
+    },
+    {
+      "source": "Yaml/YamlWriting.Tests.cs",
+      "test": "RemovingTheLastEntryOfABodyWithoutAFinalNewlineKeepsItWithout",
+      "file": "test/core/fbl/planning.test.ts",
+      "title": "removing the last entry of a body without a final newline keeps it without"
     }
   ]
 }

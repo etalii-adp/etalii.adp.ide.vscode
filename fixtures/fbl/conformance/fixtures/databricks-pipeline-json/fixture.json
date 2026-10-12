@@ -10,7 +10,7 @@
         "add": {
           "type": "Library",
           "attributes": {
-            "kind": "notebook",
+            "libraryKind": "notebook",
             "path": "./gold"
           }
         }

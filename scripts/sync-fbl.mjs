@@ -59,6 +59,31 @@ count('fixtures', conformance.filter((file) => file.endsWith('/fixture.json')).l
 count('registrations (conformance)', conformance.filter((file) => file.startsWith(`${fbl}registrations/`)).length, 1);
 const conformanceDigests = copy(adpGit, adpCommit, conformance, fbl, 'fixtures/fbl/conformance/');
 
+// ---- definitions: the files under definitions/ a fixture names, and the specification beside each binding ----
+
+const definitionsFolder = 'definitions/';
+const adpFiles = new Set(list(adpGit, adpCommit, definitionsFolder));
+const definitions = new Set();
+for (const fixture of conformance.filter((file) => file.endsWith('/fixture.json'))) {
+  const text = adpGit('show', `${adpCommit}:${fixture}`).toString('utf8');
+  for (const [, reference] of text.matchAll(/"((?:\.\.\/)+definitions\/[^"#]+)/g)) {
+    const segments = fixture.split('/').slice(0, -1);
+    for (const segment of reference.split('/')) {
+      if (segment === '..') segments.pop();
+      else segments.push(segment);
+    }
+    const file = segments.join('/');
+    if (!adpFiles.has(file)) continue;
+    definitions.add(file);
+    if (!file.endsWith('.fbl')) continue;
+    for (const specification of ['.dis', '.des']) {
+      if (adpFiles.has(file.slice(0, -4) + specification)) definitions.add(file.slice(0, -4) + specification);
+    }
+  }
+}
+count('definitions fixtures name', definitions.size);
+const definitionsDigests = copy(adpGit, adpCommit, definitions, definitionsFolder, 'fixtures/fbl/definitions/');
+
 // ---- real files: what standalone's real-file tests read, under the paths they have there ----
 
 const standaloneGit = gitIn(standalone);
@@ -120,6 +145,7 @@ if (failures.length > 0) {
 
 const sources = [
   { name: 'conformance', repository: 'https://github.com/etalii-adp/etalii.adp', commit: adpCommit, licence: 'Apache-2.0', from: fbl, to: 'fixtures/fbl/conformance/', files: conformanceDigests },
+  { name: 'definitions', repository: 'https://github.com/etalii-adp/etalii.adp', commit: adpCommit, licence: 'Apache-2.0', from: definitionsFolder, to: 'fixtures/fbl/definitions/', files: definitionsDigests },
   { name: 'real-files', repository: 'https://github.com/etalii-adp/etalii.adp.ide.standalone', commit: standaloneCommit, licence: 'Apache-2.0', from: '', to: 'fixtures/fbl/real-files/', files: realDigests },
 ];
 writeFileSync('fixtures/fbl/manifest.json', JSON.stringify({ sources }, null, 2) + '\n');
@@ -130,6 +156,7 @@ They are copied unchanged, byte for byte, from two repositories, both licensed u
 | Here | From | Commit | Licence |
 |---|---|---|---|
 | \`fixtures/fbl/conformance/\` | [etalii-adp/etalii.adp](https://github.com/etalii-adp/etalii.adp), \`specifications/fbl/\`: the example bindings (\`*.fbl\`), \`fixtures/\` and \`registrations/\` | \`${adpCommit}\` | Apache-2.0 |
+| \`fixtures/fbl/definitions/\` | [etalii-adp/etalii.adp](https://github.com/etalii-adp/etalii.adp), \`definitions/\`: the bindings and inputs a fixture names, and the specification beside each such binding | \`${adpCommit}\` | Apache-2.0 |
 | \`fixtures/fbl/real-files/\` | [etalii-adp/etalii.adp.ide.standalone](https://github.com/etalii-adp/etalii.adp.ide.standalone), the files under \`src/\` its FBL tests read, under the paths they have there | \`${standaloneCommit}\` | Apache-2.0 |
 
 ## Third-party notices
@@ -142,4 +169,4 @@ ${notices.length === 0 ? 'None.' : [...notices].sort().map((file) => `- \`fixtur
 
 Run \`npm run sync-fbl -- <path to etalii.adp> <path to etalii.adp.ide.standalone> [<etalii.adp ref>] [<standalone ref>]\` and commit what it writes; both refs default to \`origin/develop\`. Do not edit a file under \`fixtures/fbl/\` by hand: a difference from its source is taken up by copying at a newer commit.
 `);
-console.log(`Copied ${Object.keys(conformanceDigests).length} conformance files and ${Object.keys(realDigests).length} real files.`);
+console.log(`Copied ${Object.keys(conformanceDigests).length} conformance files, ${Object.keys(definitionsDigests).length} definitions and ${Object.keys(realDigests).length} real files.`);

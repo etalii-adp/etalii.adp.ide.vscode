@@ -7,11 +7,13 @@ import type { Edit } from '../../../src/core/fbl/splice';
 import { bindingOf } from './support/bindings';
 import { utf8 } from './support/repository';
 
-// Undo, redo, snapshots, drift (FBL 7.1, 7.2) and the save (FBL 6.6). Counterparts of standalone's
+// Undo, redo, snapshots, drift (FBL 7.1, 7.2), forks (FBL 9.1) and the save (FBL 6.6). Counterparts of standalone's
 // History/History.Tests.cs.
 const timeline = 'elements:\n  - id: a\n    label: Alpha\n    start: 2026-01-01\n';
 
 const open = (text: string): OpenBody => OpenBody.open(utf8(text), bindingOf('timeline.fbl', 'timeline'), { fileName: 'plan.tml' });
+
+const labels = (opened: OpenBody): unknown[] => opened.model.elements.map((element) => element.attributes.label);
 
 const rename: ModelChange = { kind: 'set', id: 'a', attributes: { label: 'Beta' } };
 
@@ -39,6 +41,18 @@ describe('the history of a body', () => {
     expect(drifted).toEqual({ refused: driftRedo });
     expect(redone).toHaveProperty('done');
     expect(body.bytes).toEqual(edited);
+  });
+
+  it('an edit to a fork, leaves the body it was forked from, as it was', () => {
+    const body = open(timeline);
+    const fork = body.fork();
+    const result = fork.change(rename);
+    expect(result).toHaveProperty('planned');
+    expect(body.bytes).toEqual(utf8(timeline));
+    expect(labels(body)).toEqual(['Alpha']);
+    expect(labels(fork)).toEqual(['Beta']);
+    expect(body.canUndo).toBe(false);
+    expect(fork.canUndo).toBe(true);
   });
 
   it('a reload clears the history', () => {

@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { FblBinding } from '../../../../src/core/fbl/documents/types';
 import { nodeFiles } from '../../../../src/core/fbl/files/nodeFiles';
@@ -134,7 +135,10 @@ describe('the registrations among the real files', () => {
     const folders = chartFolders.map((file) => file.path.slice(0, -'/Chart.yaml'.length));
     expect(chartFolders.filter((file) => file.copied).length).toBeGreaterThanOrEqual(minimumChartFolders);
     expect(folders.filter((folder) => !recogniseFolder(chart, folder, nodeFiles)), 'folders not recognised as a chart').toEqual([]);
-    expect(folders.filter((folder) => !folderFiles(chart, folder, nodeFiles).some((file) => file.relativePath === 'Chart.yaml')), 'charts without their Chart.yaml').toEqual([]);
+    // Its Chart.yaml is selected by the chart rule, at its own path in the folder.
+    const selected = (folder: string): boolean => folderFiles(chart, folder, nodeFiles)
+      .some((file) => file.relativePath === 'Chart.yaml' && file.rule.name === 'chart' && file.fullPath === join(folder, 'Chart.yaml'));
+    expect(folders.filter((folder) => !selected(folder)), 'charts without their Chart.yaml').toEqual([]);
     expect(turtleFiles.filter((file) => file.copied).length).toBeGreaterThanOrEqual(minimumTurtle);
     const misrouted = turtleFiles.filter((file) => {
       const found = candidates(file.name, bytesOfFile(file), bindings);

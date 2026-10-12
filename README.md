@@ -14,7 +14,7 @@ ADP, A Different Perspective, is a range of task-focused tools: diagrams, design
 ADP Properties, in the ADP container of the activity bar, shows and edits what is selected in the diagram that has the focus.
 Each diagram is an editor on the file's own text: every change is one step in Visual Studio Code's undo, edits only the lines it concerns, and leaves the rest of the file byte for byte as it was. **Open as Text** shows the same document beside the diagram, and problems in the file are listed in the Problems panel. The tool types are catalogued in [docs/tools.md](docs/tools.md), and where this host differs from their definitions is recorded in [docs/parity.md](docs/parity.md).
 
-The plug-in also carries a generic implementation of [FBL](https://github.com/etalii-adp/etalii.adp/blob/develop/specifications/fbl/FBL-specification.md) 0.1, the language that binds a tool to a format it does not own. No tool uses it yet, and nothing you see has changed because of it: it is there for the tool types to come. What it implements, what it leaves out and where it differs from standalone's is in [docs/fbl.md](docs/fbl.md).
+The plug-in also carries a generic implementation of [FBL](https://github.com/etalii-adp/etalii.adp/blob/develop/specifications/fbl/FBL-specification.md) 0.6, the language that binds a tool to a format it does not own. No tool uses it yet, and nothing you see has changed because of it: it is there for the tool types to come. What it implements, what it leaves out and where it differs from standalone's is in [docs/fbl.md](docs/fbl.md).
 
 ## Install from a file
 
