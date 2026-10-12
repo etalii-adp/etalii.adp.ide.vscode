@@ -24,7 +24,7 @@
           "when": "has(entry.task_key)",
           "attributes": {
             "key": { "key": "task_key", "reference": { "to": ["task"], "by": "key" }, "empty": "refuse" },
-            "type": {
+            "taskType": {
               "value": "['notebook_task', 'spark_python_task', 'python_wheel_task', 'sql_task', 'dbt_task', 'pipeline_task', 'run_job_task', 'condition_task', 'for_each_task', 'spark_jar_task'].exists(k, k in entry) ? ['notebook_task', 'spark_python_task', 'python_wheel_task', 'sql_task', 'dbt_task', 'pipeline_task', 'run_job_task', 'condition_task', 'for_each_task', 'spark_jar_task'].filter(k, k in entry)[0].replace('_task', '') : 'other'",
               "readOnly": "The type is which *_task mapping the file carries; change it in the file."
             },

@@ -1,0 +1,32 @@
+ded: "0.1"
+designer: etalii/knowledge
+name: Countries
+properties:
+  - id: 1eoaxvzbrxe2jphif2nbr3to8
+    name: Name
+    type: text
+    title: true
+views:
+  - id: 5fes58bpui17ibydqez5uu8z1
+    name: Table
+rows:
+  - id: 5w26aeqghyr68ryp1zkaqp3l8
+    cells:
+      - property: 1eoaxvzbrxe2jphif2nbr3to8
+        text: Netherlands
+  - id: enldk7pm7c2dcr1gdamyhx5lg
+    cells:
+      - property: 1eoaxvzbrxe2jphif2nbr3to8
+        text: Germany
+  - id: eg6uwy69b9sbxfyt6tnung22p
+    cells:
+      - property: 1eoaxvzbrxe2jphif2nbr3to8
+        text: Finland
+  - id: druto96sxx4shh1djee3ordoz
+    cells:
+      - property: 1eoaxvzbrxe2jphif2nbr3to8
+        text: Italy
+  - id: cdc8pevsq1iofe5pf7zdxj9d8
+    cells:
+      - property: 1eoaxvzbrxe2jphif2nbr3to8
+        text: France

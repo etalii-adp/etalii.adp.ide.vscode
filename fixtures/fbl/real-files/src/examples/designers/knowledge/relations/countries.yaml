@@ -1,0 +1,134 @@
+ded: "0.1"
+designer: etalii/knowledge
+# Countries, written for ADP: a parent relation, the other side of a two-way relation, and each kind of grouping.
+name: Countries
+activeView: c-nested
+properties:
+  - id: c-name
+    name: Name
+    type: text
+    title: true
+  - id: c-continent
+    name: Continent
+    type: selection
+    options:
+      - id: europe
+        name: Europe
+        colour: blue
+      - id: asia
+        name: Asia
+        colour: red
+  - id: c-languages
+    name: Languages
+    type: multipleSelection
+    options:
+      - id: dutch
+        name: Dutch
+      - id: french
+        name: French
+      - id: german
+        name: German
+      - id: japanese
+        name: Japanese
+  - id: c-union
+    name: In the European Union
+    type: checkbox
+  - id: c-people
+    name: People (millions)
+    type: number
+  - id: c-part-of
+    name: Part of
+    type: relation
+    target: .
+    limit: one
+    parent: true
+  - id: c-regions
+    name: Regions
+    type: relation
+    target: regions.yaml
+    counterpart: g-country
+    computed: true
+views:
+  - id: c-nested
+    name: Nested
+    columns:
+      - property: c-name
+        width: 220
+      - property: c-part-of
+        visible: false
+    groupBy: c-part-of
+  - id: c-continents
+    name: By continent
+    columns:
+      - property: c-name
+        width: 200
+      - property: c-people
+        width: 140
+      - property: c-part-of
+        visible: false
+    sorts:
+      - property: c-people
+        direction: descending
+    filter:
+      - property: c-people
+        operator: is-not-empty
+    groupBy: c-continent
+    hideEmptyGroups: true
+  - id: c-languages-view
+    name: By language
+    groupBy: c-languages
+  - id: c-union-view
+    name: Union
+    groupBy: c-union
+rows:
+  - id: benelux
+    cells:
+      - property: c-name
+        text: Benelux
+      - property: c-continent
+        option: europe
+  - id: nl
+    cells:
+      - property: c-name
+        text: Netherlands
+      - property: c-continent
+        option: europe
+      - property: c-languages
+        options:
+          - option: dutch
+      - property: c-union
+        checked: true
+      - property: c-people
+        number: 17.9
+      - property: c-part-of
+        rows:
+          - row: benelux
+  - id: be
+    cells:
+      - property: c-name
+        text: Belgium
+      - property: c-continent
+        option: europe
+      - property: c-languages
+        options:
+          - option: dutch
+          - option: french
+          - option: german
+      - property: c-union
+        checked: true
+      - property: c-people
+        number: 11.8
+      - property: c-part-of
+        rows:
+          - row: benelux
+  - id: jp
+    cells:
+      - property: c-name
+        text: Japan
+      - property: c-continent
+        option: asia
+      - property: c-languages
+        options:
+          - option: japanese
+      - property: c-people
+        number: 124.5

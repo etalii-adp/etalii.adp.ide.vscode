@@ -1,7 +1,7 @@
 {
   "$schema": "https://etalii.net/adp/fbl/schema/0.1/fbl.schema.json#/$defs/Document",
-  "fbl": "0.1",
-  "doc": "The timeline's .tml body (definitions/diagrams/timeline.dis, timeline.md): ADP's own YAML, owned outright by the timeline. The simplest complete binding, and the one the timeline specification would name as persistence.binding.",
+  "fbl": "0.5",
+  "doc": "The timeline's .tml body (definitions/diagrams/timeline.dis, timeline.md): ADP's own YAML, owned outright by the timeline. The simplest complete binding, and the one the timeline specification would name as persistence.binding. A timeline keeps every value as the text it was written with (FBL 0.5, section 5.2): label is a string and reads its written text unasked, begin and end are date-times read as text so that the tool reports a time it cannot read in its own words, and a row that is not a number is row 0.",
   "bindings": {
     "timeline": {
       "title": "Timeline Markup Language",
@@ -22,9 +22,9 @@
           "id": { "from": { "key": "id" } },
           "attributes": {
             "label": { "key": "label", "empty": "keep" },
-            "begin": { "key": "begin", "time": "keep-precision" },
-            "end": { "key": "end", "time": "keep-precision", "empty": "remove" },
-            "row": { "key": "row", "default": 0 }
+            "begin": { "key": "begin", "read": "text", "time": "keep-precision" },
+            "end": { "key": "end", "read": "text", "time": "keep-precision", "empty": "remove" },
+            "row": { "key": "row", "default": 0, "quoted": "convert", "fallback": { "value": 0, "report": false } }
           },
           "insert": { "place": "after-last", "container": "/elements", "keys": ["id", "label", "begin", "end", "row"] },
           "remove": { "cascade": ["connection"] }
@@ -37,8 +37,8 @@
           "id": { "from": { "key": "id" } },
           "attributes": {
             "label": { "key": "label", "empty": "keep" },
-            "begin": { "key": "begin", "time": "keep-precision" },
-            "row": { "key": "row", "default": 0 }
+            "begin": { "key": "begin", "read": "text", "time": "keep-precision" },
+            "row": { "key": "row", "default": 0, "quoted": "convert", "fallback": { "value": 0, "report": false } }
           },
           "insert": { "place": "after-last", "container": "/elements", "keys": ["id", "label", "begin", "row"] },
           "remove": { "cascade": ["connection"] }

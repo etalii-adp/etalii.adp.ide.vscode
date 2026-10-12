@@ -36,7 +36,7 @@
           "type": "Library",
           "at": "/libraries/*",
           "attributes": {
-            "kind": {
+            "libraryKind": {
               "value": "has(entry.notebook) ? 'notebook' : has(entry.file) ? 'file' : has(entry.glob) ? 'glob' : 'other'",
               "readOnly": "The kind is which mapping the library entry carries."
             },
@@ -48,8 +48,8 @@
           "insert": {
             "place": "after-last",
             "container": "/libraries",
-            "when": "attributes.kind == 'notebook' || attributes.kind == 'file'",
-            "emit": "{ \"{kind}\": { \"path\": \"{path}\" } }"
+            "when": "attributes.libraryKind == 'notebook' || attributes.libraryKind == 'file'",
+            "emit": "{ \"{libraryKind}\": { \"path\": \"{path}\" } }"
           },
           "remove": { "container": "keep" }
         }
