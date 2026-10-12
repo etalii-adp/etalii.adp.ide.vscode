@@ -24,10 +24,24 @@ export function naturalIds(binding: string): (request: Request) => string | unde
       case 'settings/library': return `library:${attribute(request, 'path')}`;
       case 'freeplane/branch': return `branch:${request.source ?? ''}->${request.target ?? ''}`;
       case 'workspace/relationship': return `${request.source ?? ''}->${request.target ?? ''}`;
+      // The agent activity diagram (DISL 0.4, persistence.view.bind): the root is the diagram, and a
+      // locked position and a group state are view data, keyed by the element they name.
+      case 'aad/diagram': return 'diagram';
+      case 'aad/placement': return `pinned:${attribute(request, 'element')}`;
+      case 'aad/group': return `groups:${attribute(request, 'element')}#${attribute(request, 'group')}`;
       default: return undefined;
     }
   };
 }
+
+/**
+ * The attributes a binding's tool type gives a date or date-time type, each as `rule.attribute`,
+ * which FBL 6.3 asks of the host: read here, as the ids are, from the specifications in etalii.adp.
+ */
+export const timeAttributes = (binding: string): ReadonlySet<string> => new Set(binding === 'aad' ? ['task.updated', 'pullRequest.updated'] : []);
+
+/** Whether a binding's tool type keeps DISL's default deletion policy, which clears the references to a removed element. */
+export const unsetsReferences = (binding: string): boolean => binding === 'aad';
 
 function attribute(request: Request, name: string): string {
   const value = request.attributes[name];

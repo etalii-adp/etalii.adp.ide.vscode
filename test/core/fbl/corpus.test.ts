@@ -17,8 +17,8 @@ const manifest = JSON.parse(new TextDecoder().decode(bytesOf('fixtures/fbl/manif
 const slow = 60_000;
 
 describe('the copied FBL files', () => {
-  it('come from two sources, each with its commit and licence', () => {
-    expect(manifest.sources.map((source) => source.name)).toEqual(['conformance', 'real-files']);
+  it('come from three sources, each with its commit and licence', () => {
+    expect(manifest.sources.map((source) => source.name)).toEqual(['conformance', 'definitions', 'real-files']);
     for (const source of manifest.sources) {
       expect(source.commit).toMatch(/^[0-9a-f]{40}$/);
       expect(source.licence).toBe('Apache-2.0');

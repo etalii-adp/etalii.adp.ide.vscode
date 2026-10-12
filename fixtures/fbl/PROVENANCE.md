@@ -5,6 +5,7 @@ They are copied unchanged, byte for byte, from two repositories, both licensed u
 | Here | From | Commit | Licence |
 |---|---|---|---|
 | `fixtures/fbl/conformance/` | [etalii-adp/etalii.adp](https://github.com/etalii-adp/etalii.adp), `specifications/fbl/`: the example bindings (`*.fbl`), `fixtures/` and `registrations/` | `20c73ae4cbcfb0723e177e74528a441d4fca4340` | Apache-2.0 |
+| `fixtures/fbl/definitions/` | [etalii-adp/etalii.adp](https://github.com/etalii-adp/etalii.adp), `definitions/`: the bindings and inputs a fixture names, and the specification beside each such binding | `20c73ae4cbcfb0723e177e74528a441d4fca4340` | Apache-2.0 |
 | `fixtures/fbl/real-files/` | [etalii-adp/etalii.adp.ide.standalone](https://github.com/etalii-adp/etalii.adp.ide.standalone), the files under `src/` its FBL tests read, under the paths they have there | `5756a07edf339f2d0f8d118bd8922848032b6058` | Apache-2.0 |
 
 ## Third-party notices

@@ -1,4 +1,5 @@
 import type { FblElement } from '../../../../src/core/fbl/model';
+import type { ModelChange } from '../../../../src/core/fbl/planning/modelChange';
 import type {
   PersistencePlugin, PluginPlanRequest, PluginPlanResult, PluginReadRequest, PluginReadResult, PluginTemplateRequest,
 } from '../../../../src/core/fbl/plugins/persistencePlugin';
@@ -41,6 +42,35 @@ export class TestPlugin implements PersistencePlugin {
 
   template(request: PluginTemplateRequest): Uint8Array {
     return utf8(`template for ${request.name} (${request.placeholders.get('base')})`);
+  }
+
+  watch(): readonly string[] {
+    return [];
+  }
+}
+
+/** A persistence plugin that records what it is asked, reads no element, and plans every change as no splice. */
+export class RecordingPlugin implements PersistencePlugin {
+  /** The change it was last asked to plan. */
+  received?: ModelChange;
+  readRequest?: PluginReadRequest;
+  planRequest?: PluginPlanRequest;
+
+  constructor(readonly id: string) {}
+
+  read(request: PluginReadRequest): PluginReadResult {
+    this.readRequest = request;
+    return { elements: [], findings: [], unreadable: false };
+  }
+
+  plan(request: PluginPlanRequest): PluginPlanResult {
+    this.planRequest = request;
+    this.received = request.change;
+    return { planned: [] };
+  }
+
+  template(): Uint8Array {
+    return new Uint8Array();
   }
 
   watch(): readonly string[] {

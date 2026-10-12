@@ -67,6 +67,23 @@
       }
     },
     {
+      "name": "definitions",
+      "repository": "https://github.com/etalii-adp/etalii.adp",
+      "commit": "20c73ae4cbcfb0723e177e74528a441d4fca4340",
+      "licence": "Apache-2.0",
+      "from": "definitions/",
+      "to": "fixtures/fbl/definitions/",
+      "files": {
+        "designers/examples/cities.json": "d4790a0c722f95c53c5672d7b35da431dd28a066fceaa30646078ee62d9ecfd7",
+        "designers/examples/cities.xml": "b84af4b3a22a7487e2ade9d947a438ca7876438d7f3109f372eace91a61298da",
+        "designers/examples/cities.yaml": "3a473d43fb1fe3cf1c6690179464e9a1f6b722cf5436d994f3730bcd2bfcad41",
+        "designers/knowledge.des": "7594073fc99218627e2dc5fd7928ba91521a689294b80a847326f46a8a9994fb",
+        "designers/knowledge.fbl": "59e6c57585b9f3adf17a542facae578793f3e01ad64aee9477b80eae6fef0874",
+        "diagrams/agent-activity-diagram.dis": "6b4c8cf96c35f9be1415450fc89ccdb583d6ba2363423ad92419a4565634fca2",
+        "diagrams/agent-activity-diagram.fbl": "d7a80b9f7cd439ec0e4fbf8b36d1a30d40e6238affd64368a91371f0ee24d366"
+      }
+    },
+    {
       "name": "real-files",
       "repository": "https://github.com/etalii-adp/etalii.adp.ide.standalone",
       "commit": "5756a07edf339f2d0f8d118bd8922848032b6058",

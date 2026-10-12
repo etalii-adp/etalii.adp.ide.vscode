@@ -120,12 +120,18 @@ describe('the declared bindings on real files', () => {
   it.each(removable)('a removal changes only its splices and its undo restores the file: $key on $file', ({ key, file }) => {
     const { body, bytes } = open(key, file);
     const element = removableOf(body.reading)!;
+    const ofType = (): number => body.model.elements.filter((other) => other.type === element.rule.type).length;
+    const holders = ofType();
+    const idsShift = body.model.elements.some((other) => other.type === element.rule.type && !other.idIsStored);
     const result = body.change({ kind: 'remove', id: element.id });
     checkDivergence('remove', key, file, 'refused' in result ? `${element.id}: ${result.refused}` : undefined);
     if ('refused' in result) return;
     expect(result.planned.splices.length).toBeGreaterThan(0);
     expectOnlySplicesChanged(bytes, body.bytes, result.planned.splices, file);
-    expect(body.model.elements.filter((other) => other.id === element.id && other.type === element.rule.type)).toEqual([]);
+    // Where an entry of the type is named by its place (no id, or one an earlier entry holds), ids
+    // move up with the entries and the removed id is taken over, so there the count tells.
+    if (idsShift) expect(ofType()).toBeLessThan(holders);
+    else expect(body.model.elements.filter((other) => other.id === element.id && other.type === element.rule.type)).toEqual([]);
     expect(body.undo()).toHaveProperty('done');
     expect(body.bytes).toEqual(bytes);
   });

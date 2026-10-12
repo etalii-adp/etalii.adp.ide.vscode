@@ -27,8 +27,8 @@ describe('the FBL implementation is generic', () => {
   it('has sources and names to look for', () => {
     expect(sources.length).toBeGreaterThanOrEqual(30);
     expect(origins.length).toBeGreaterThanOrEqual(14);
-    expect(documents).toHaveLength(8);
-    expect(names).toHaveLength(8);
+    expect(documents).toHaveLength(9);
+    expect(names).toHaveLength(9);
     expect(plugins).toHaveLength(2);
   });
 
