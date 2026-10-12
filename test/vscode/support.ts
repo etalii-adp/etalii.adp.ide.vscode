@@ -22,6 +22,9 @@ export async function until<T>(what: string, check: () => T | undefined | Promis
 
 export interface State {
   view?: { elements: { id: string; type: string; x: number; y: number; width: number; label: string }[]; relations: { id: string }[]; readOnly: boolean; notice?: string };
+  /** What a tool type read from its definition was last sent: a scene, as `src/core/scene/scene.ts` has it. */
+  scene?: { nodes: { id: string }[]; edges: { id: string }[]; readOnly?: boolean; notice?: string };
+  kind: 'diagram' | 'designer';
   fields: { id: string; label: string; value: string }[];
   selection: string[];
   version: number;
@@ -37,7 +40,7 @@ export async function state(): Promise<State | undefined> {
 export async function drawn(sinceVersion = 0): Promise<State> {
   return until('the diagram to be drawn', async () => {
     const current = await state();
-    return current?.view && current.version >= sinceVersion ? current : undefined;
+    return (current?.view ?? current?.scene) && current.version >= sinceVersion ? current : undefined;
   });
 }
 

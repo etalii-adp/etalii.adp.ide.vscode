@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { FromToolbox, ToToolbox } from '../core/frame/protocol';
-import type { Diagrams, OpenDiagram } from './diagramEditor';
+import type { Tools, OpenTool } from './toolEditor';
 import { webviewHtml } from './webviewHtml';
 
 const nothingOpen = 'Open a diagram to see what can be added to it.';
@@ -15,12 +15,12 @@ export class ToolboxView implements vscode.WebviewViewProvider {
   static readonly viewId = 'etalii.adp.toolbox';
   private view: vscode.WebviewView | undefined;
 
-  constructor(private readonly context: vscode.ExtensionContext, private readonly diagrams: Diagrams) {
-    context.subscriptions.push(diagrams.onDidChange(() => this.show()));
+  constructor(private readonly context: vscode.ExtensionContext, private readonly tools: Tools) {
+    context.subscriptions.push(tools.onDidChange(() => this.show()));
   }
 
-  static register(context: vscode.ExtensionContext, diagrams: Diagrams): vscode.Disposable {
-    return vscode.window.registerWebviewViewProvider(ToolboxView.viewId, new ToolboxView(context, diagrams), { webviewOptions: { retainContextWhenHidden: true } });
+  static register(context: vscode.ExtensionContext, tools: Tools): vscode.Disposable {
+    return vscode.window.registerWebviewViewProvider(ToolboxView.viewId, new ToolboxView(context, tools), { webviewOptions: { retainContextWhenHidden: true } });
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -34,7 +34,7 @@ export class ToolboxView implements vscode.WebviewViewProvider {
   }
 
   private show(): void {
-    void this.view?.webview.postMessage(entriesOf(this.diagrams.active));
+    void this.view?.webview.postMessage(entriesOf(this.tools.active));
   }
 
   private receive(message: FromToolbox): void {
@@ -42,14 +42,14 @@ export class ToolboxView implements vscode.WebviewViewProvider {
       this.show();
       return;
     }
-    const active = this.diagrams.active;
-    if (active && !active.readOnly) active.post({ v: 1, type: 'addAtCentre', entry: message.entry });
+    const active = this.tools.active;
+    if (active && !active.readOnly) active.post({ v: 2, type: 'addAtCentre', entry: message.entry });
   }
 }
 
 /** The entries for the active diagram, or the sentence that says why there are none. */
-export function entriesOf(active: OpenDiagram | undefined): ToToolbox {
-  if (!active) return { v: 1, type: 'entries', entries: [], empty: nothingOpen };
-  if (active.readOnly || active.lastView?.readOnly) return { v: 1, type: 'entries', entries: [], empty: readOnly };
-  return { v: 1, type: 'entries', entries: active.type.toolbox(active.source) };
+export function entriesOf(active: OpenTool | undefined): ToToolbox {
+  if (!active) return { v: 2, type: 'entries', entries: [], empty: nothingOpen };
+  if (active.readOnly || active.lastView?.readOnly) return { v: 2, type: 'entries', entries: [], empty: readOnly };
+  return { v: 2, type: 'entries', entries: active.type.toolbox(active.source) };
 }

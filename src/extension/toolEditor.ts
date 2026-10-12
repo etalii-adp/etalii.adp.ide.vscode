@@ -1,10 +1,12 @@
 import * as vscode from 'vscode';
-import type { DiagramType, EditRequest, Field, Source, ViewModel, ViewOptions } from '../core/frame/toolType';
+import type { EditRequest, Field, Source, ViewModel, ViewOptions } from '../core/frame/toolType';
 import { viewTypeOf } from '../core/frame/toolType';
 import type { FromCanvas, ToCanvas } from '../core/frame/protocol';
-import { LineDocument } from '../core/text/lineDocument';
-import { spliceBetween } from '../core/text/splice';
+import type { Scene } from '../core/scene/scene';
+import { spliceRanges } from '../core/tool/spliceRanges';
 import type { Findings } from './findings';
+import { handBack } from './opening';
+import type { AnyToolType } from './toolTypes';
 import { webviewHtml } from './webviewHtml';
 
 /** What an edit request came to, as the canvas and the property grid are told. */
@@ -20,22 +22,24 @@ export function registrationUriOf(document: vscode.Uri): vscode.Uri {
   return document.with({ path: `${dot > slash ? document.path.slice(0, dot) : document.path}.adp` });
 }
 
-/** One diagram open in an editor: its document, its webview and what only this editor knows. */
-export class OpenDiagram {
+/** One tool open in an editor: its document, its webview and what only this editor knows. */
+export class OpenTool {
   options: ViewOptions = {};
   selection: readonly string[] = [];
-  lastView: ViewModel | undefined;
+  /** What the canvas was last sent: the tool type's own view. */
+  lastView: Scene | ViewModel | undefined;
   readOnly = false;
   /** The text of the registration beside the document, when there is one. */
   registration: string | undefined;
   readonly registrationUri: vscode.Uri;
 
-  constructor(readonly type: DiagramType, readonly document: vscode.TextDocument, readonly panel: vscode.WebviewPanel) {
+  constructor(readonly type: AnyToolType, readonly document: vscode.TextDocument, readonly panel: vscode.WebviewPanel) {
     this.registrationUri = registrationUriOf(document.uri);
   }
 
   get source(): Source {
-    return this.registration === undefined ? { text: this.document.getText() } : { text: this.document.getText(), registration: this.registration };
+    const source = { fileName: this.document.fileName, text: this.document.getText() };
+    return this.registration === undefined ? source : { ...source, registration: this.registration };
   }
 
   fields(): Field[] {
@@ -57,14 +61,17 @@ async function readText(uri: vscode.Uri): Promise<string | undefined> {
   }
 }
 
-// The one replacement that turns a document's text into another, as an edit of that document.
-function replaceBetween(edit: vscode.WorkspaceEdit, document: vscode.TextDocument, after: string): void {
-  const before = document.getText();
-  const splice = spliceBetween(before, after);
-  if (!splice) return;
-  const lines = LineDocument.parse(before).lines;
-  const offsetOf = (line: number): number => lines.slice(0, line).reduce((sum, entry) => sum + entry.text.length + entry.ending.length, 0);
-  edit.replace(document.uri, new vscode.Range(document.positionAt(offsetOf(splice.startLine)), document.positionAt(offsetOf(splice.endLine))), splice.text);
+// A registration's new text, as an edit of its document. It is small and only a visualization, so
+// it is replaced whole.
+function replaceRegistration(edit: vscode.WorkspaceEdit, document: vscode.TextDocument, after: string): void {
+  if (document.getText() === after) return;
+  edit.replace(document.uri, new vscode.Range(new vscode.Position(0, 0), document.positionAt(document.getText().length)), after);
+}
+
+// The name of what a request does, for the undo step: the label of the action it invokes.
+function labelOf(tool: OpenTool, request: EditRequest): string | undefined {
+  if (request.kind !== 'action') return undefined;
+  return tool.type.actions(tool.source, request.id === undefined ? [] : [request.id]).find((action) => action.id === request.action)?.label;
 }
 
 /**
@@ -76,7 +83,8 @@ function replaceBetween(edit: vscode.WorkspaceEdit, document: vscode.TextDocumen
 interface LayoutStep {
   /** The registration's text before the step; undefined when the step created the file. */
   readonly before: string | undefined;
-  readonly after: string;
+  /** And after it; undefined when the step removed the file. */
+  readonly after: string | undefined;
   readonly depth: number;
 }
 
@@ -113,9 +121,9 @@ class LayoutHistory {
  * Every diagram open in this window, and the one that has the focus. The custom text editor of each
  * diagram type registers its editors here; ADP Properties and the commands act on the active one.
  */
-export class Diagrams implements vscode.Disposable {
-  private readonly open = new Set<OpenDiagram>();
-  private current: OpenDiagram | undefined;
+export class Tools implements vscode.Disposable {
+  private readonly open = new Set<OpenTool>();
+  private current: OpenTool | undefined;
   private readonly histories = new Map<string, LayoutHistory>();
   private readonly changed = new vscode.EventEmitter<void>();
   /** Fires when the active diagram, its selection or its document changes. */
@@ -123,7 +131,7 @@ export class Diagrams implements vscode.Disposable {
 
   constructor(private readonly findings: Findings) {}
 
-  get active(): OpenDiagram | undefined {
+  get active(): OpenTool | undefined {
     return this.current;
   }
 
@@ -131,35 +139,35 @@ export class Diagrams implements vscode.Disposable {
     this.changed.dispose();
   }
 
-  add(diagram: OpenDiagram): void {
+  add(diagram: OpenTool): void {
     this.open.add(diagram);
     this.historyOf(diagram);
     if (diagram.panel.active) this.activate(diagram);
   }
 
-  remove(diagram: OpenDiagram): void {
+  remove(diagram: OpenTool): void {
     this.open.delete(diagram);
     if (this.current === diagram) this.activate(undefined);
     // A file of a shared extension has findings only while it is open as a diagram.
     const stillOpen = [...this.open].some((other) => other.document === diagram.document);
-    if (diagram.type.shared && !stillOpen) this.findings.clear(diagram.document.uri);
+    if (diagram.type.claims.some((claim) => claim.shared) && !stillOpen) this.findings.clear(diagram.document.uri);
     if (!stillOpen) this.histories.delete(diagram.document.uri.toString());
   }
 
-  activate(diagram: OpenDiagram | undefined): void {
+  activate(diagram: OpenTool | undefined): void {
     this.current = diagram;
     this.publishHistory();
     this.changed.fire();
   }
 
   /** Recomputes and sends what a diagram draws; called after every change of its document or options. */
-  refresh(diagram: OpenDiagram): void {
+  refresh(diagram: OpenTool): void {
     const source = diagram.source;
     const computed = diagram.type.view(source, diagram.options);
-    const view: ViewModel = diagram.readOnly ? { ...computed, readOnly: true } : computed;
+    const view = diagram.readOnly ? { ...computed, readOnly: true } : computed;
     diagram.lastView = view;
     diagram.post({
-      v: 1, type: 'view', origin: diagram.type.origin, view,
+      v: 2, type: 'view', origin: diagram.type.origin, kind: diagram.type.kind, view,
       actions: view.readOnly ? [] : diagram.type.actions(source, diagram.selection),
       version: diagram.document.version,
     });
@@ -199,7 +207,7 @@ export class Diagrams implements vscode.Disposable {
     }
   }
 
-  private historyOf(diagram: OpenDiagram): LayoutHistory {
+  private historyOf(diagram: OpenTool): LayoutHistory {
     const key = diagram.document.uri.toString();
     let history = this.histories.get(key);
     if (!history) {
@@ -248,14 +256,14 @@ export class Diagrams implements vscode.Disposable {
 
   // Writes a registration's text, creating or removing the file as the text asks, and saves it:
   // it is only its document's visualization and is never left modified by itself.
-  private async writeRegistration(diagram: OpenDiagram, text: string | undefined): Promise<void> {
+  private async writeRegistration(diagram: OpenTool, text: string | undefined): Promise<void> {
     const edit = new vscode.WorkspaceEdit();
     if (text === undefined) {
       edit.deleteFile(diagram.registrationUri, { ignoreIfNotExists: true });
     } else if (diagram.registration === undefined) {
       edit.createFile(diagram.registrationUri, { contents: new TextEncoder().encode(text), overwrite: true });
     } else {
-      replaceBetween(edit, await vscode.workspace.openTextDocument(diagram.registrationUri), text);
+      replaceRegistration(edit, await vscode.workspace.openTextDocument(diagram.registrationUri), text);
     }
     if (edit.size > 0) await vscode.workspace.applyEdit(edit);
     diagram.registration = text;
@@ -268,7 +276,7 @@ export class Diagrams implements vscode.Disposable {
    * the registration beside it, or of both together. A request made on an older version of the
    * document is cancelled rather than applied to text it was not computed from.
    */
-  async perform(diagram: OpenDiagram, request: EditRequest, version?: number): Promise<Performed> {
+  async perform(diagram: OpenTool, request: EditRequest, version?: number): Promise<Performed> {
     if (diagram.readOnly) return { result: 'cancelled' };
     if (version !== undefined && version !== diagram.document.version) return { result: 'cancelled' };
 
@@ -283,27 +291,45 @@ export class Diagrams implements vscode.Disposable {
       case 'refused':
         return { result: 'refused', sentence: outcome.sentence };
       case 'editInPlace':
-        diagram.post({ v: 1, type: 'reveal', id: outcome.id, editLabel: true, multiline: outcome.multiline });
+        diagram.post({ v: 2, type: 'reveal', id: outcome.id, editLabel: true, multiline: outcome.multiline });
         return { result: 'applied' };
       case 'showField':
         void vscode.commands.executeCommand('etalii.adp.properties.focus');
         return { result: 'applied' };
       case 'confirm':
         return { result: 'cancelled' };
+      case 'open': {
+        // simplified: a path is read against the document's folder, and anything with a scheme as
+        // a URI; a link of another form needs the definition's own rule when one states it.
+        const path = outcome.path;
+        const target = /^[a-z][a-z0-9+.-]*:\/\//i.test(path) ? vscode.Uri.parse(path) : vscode.Uri.joinPath(diagram.document.uri, '..', path);
+        await vscode.commands.executeCommand('vscode.open', target);
+        return { result: 'applied' };
+      }
       case 'applied': {
+        // Every splice of the gesture goes into one edit, so one gesture is one undo step. The
+        // ranges are all of the text as it is before the edit (etalii.adp spec 027, research R5).
         const edit = new vscode.WorkspaceEdit();
-        const documentChanges = outcome.text !== diagram.document.getText();
+        const documentChanges = outcome.splices.length > 0;
         const registrationBefore = diagram.registration;
-        replaceBetween(edit, diagram.document, outcome.text);
+        const label = labelOf(diagram, request);
+        const metadata = label === undefined ? undefined : { label, needsConfirmation: false };
+        for (const splice of spliceRanges(diagram.document.getText(), outcome.splices)) {
+          const range = new vscode.Range(splice.start.line, splice.start.character, splice.end.line, splice.end.character);
+          edit.replace(diagram.document.uri, range, splice.text, metadata);
+        }
 
-        let registrationChanged = false;
-        if (typeof outcome.registration === 'string' && outcome.registration !== diagram.registration) {
-          registrationChanged = true;
-          if (diagram.registration === undefined) {
+        // The registration's new text, or undefined when the edit removes the file.
+        const registrationAfter = outcome.registration ?? undefined;
+        const registrationChanged = outcome.registration !== undefined && registrationAfter !== diagram.registration;
+        if (registrationChanged) {
+          if (registrationAfter === undefined) {
+            edit.deleteFile(diagram.registrationUri, { ignoreIfNotExists: true });
+          } else if (diagram.registration === undefined) {
             // The registration is written when there is first something to keep in it.
-            edit.createFile(diagram.registrationUri, { contents: new TextEncoder().encode(outcome.registration), ignoreIfExists: false });
+            edit.createFile(diagram.registrationUri, { contents: new TextEncoder().encode(registrationAfter), ignoreIfExists: false });
           } else {
-            replaceBetween(edit, await vscode.workspace.openTextDocument(diagram.registrationUri), outcome.registration);
+            replaceRegistration(edit, await vscode.workspace.openTextDocument(diagram.registrationUri), registrationAfter);
           }
         }
 
@@ -311,11 +337,11 @@ export class Diagrams implements vscode.Disposable {
           return { result: 'refused', sentence: 'Visual Studio Code did not accept the edit; the file was not changed.' };
         }
         if (registrationChanged) {
-          diagram.registration = outcome.registration as string;
+          diagram.registration = registrationAfter;
           if (!documentChanges) {
             // The registration alone changed: the step is this history's to take back, in its turn.
             const history = this.historyOf(diagram);
-            history.undo.push({ before: registrationBefore, after: outcome.registration as string, depth: history.depth });
+            history.undo.push({ before: registrationBefore, after: registrationAfter, depth: history.depth });
             history.redo.length = 0;
             this.publishHistory();
           }
@@ -327,7 +353,7 @@ export class Diagrams implements vscode.Disposable {
           this.refresh(diagram);
         }
         if (outcome.select !== undefined) {
-          diagram.post({ v: 1, type: 'reveal', id: outcome.select, ...(outcome.editLabel ? { editLabel: true, multiline: outcome.multiline === true } : {}) });
+          diagram.post({ v: 2, type: 'reveal', id: outcome.select, ...(outcome.editLabel ? { editLabel: true, multiline: outcome.multiline === true } : {}) });
         }
         return { result: 'applied' };
       }
@@ -350,56 +376,62 @@ async function isReadOnly(document: vscode.TextDocument): Promise<boolean> {
  * document, so undo, redo, the modified state, save, revert and the text editor's view of the same
  * file are Visual Studio Code's own.
  */
-export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
-  constructor(private readonly context: vscode.ExtensionContext, private readonly type: DiagramType, private readonly diagrams: Diagrams) {}
+export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
+  constructor(private readonly context: vscode.ExtensionContext, private readonly type: AnyToolType, private readonly tools: Tools) {}
 
-  static register(context: vscode.ExtensionContext, type: DiagramType, diagrams: Diagrams): vscode.Disposable {
-    return vscode.window.registerCustomEditorProvider(viewTypeOf(type), new DiagramEditorProvider(context, type, diagrams), {
+  static register(context: vscode.ExtensionContext, type: AnyToolType, tools: Tools): vscode.Disposable {
+    return vscode.window.registerCustomEditorProvider(viewTypeOf(type), new ToolEditorProvider(context, type, tools), {
       webviewOptions: { retainContextWhenHidden: true },
       supportsMultipleEditorsPerDocument: true,
     });
   }
 
   async resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): Promise<void> {
-    const diagram = new OpenDiagram(this.type, document, panel);
+    // A file of the type's extension that its binding's marker does not match is not this tool's.
+    if (!this.type.claimed(document.fileName, document.getText())) {
+      handBack(document.uri, viewTypeOf(this.type), panel);
+      return;
+    }
+    const diagram = new OpenTool(this.type, document, panel);
     diagram.readOnly = await isReadOnly(document);
     diagram.registration = await readText(diagram.registrationUri);
     panel.webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'dist')] };
     panel.webview.html = webviewHtml(panel.webview, this.context.extensionUri, 'canvas', this.type.displayName);
-    this.diagrams.add(diagram);
+    this.tools.add(diagram);
 
     const subscriptions: vscode.Disposable[] = [
       panel.webview.onDidReceiveMessage((message: FromCanvas) => void this.receive(diagram, message)),
       panel.onDidChangeViewState(() => {
-        if (panel.active) this.diagrams.activate(diagram);
-        else if (this.diagrams.active === diagram) this.diagrams.activate(undefined);
+        if (panel.active) this.tools.activate(diagram);
+        else if (this.tools.active === diagram) this.tools.activate(undefined);
       }),
     ];
     panel.onDidDispose(() => {
       for (const subscription of subscriptions) subscription.dispose();
-      this.diagrams.remove(diagram);
+      this.tools.remove(diagram);
     });
   }
 
-  private async receive(diagram: OpenDiagram, message: FromCanvas): Promise<void> {
+  private async receive(diagram: OpenTool, message: FromCanvas): Promise<void> {
     switch (message.type) {
       case 'ready':
-        this.diagrams.refresh(diagram);
+        this.tools.refresh(diagram);
         return;
       case 'viewOptions':
         diagram.options = message.options;
-        this.diagrams.refresh(diagram);
+        this.tools.refresh(diagram);
         return;
       case 'selection':
         diagram.selection = message.ids;
-        this.diagrams.refresh(diagram);
+        this.tools.refresh(diagram);
         return;
       case 'editing':
         void vscode.commands.executeCommand('setContext', 'etalii.adp.editingText', message.active);
         return;
       case 'edit': {
-        const performed = await this.diagrams.perform(diagram, message.request, message.version);
-        diagram.post({ v: 1, type: 'outcome', seq: message.seq, ...performed });
+        // The request is the tool type's own; its `edit` refuses one it does not know.
+        const performed = await this.tools.perform(diagram, message.request as EditRequest, message.version);
+        diagram.post({ v: 2, type: 'outcome', seq: message.seq, ...performed });
         return;
       }
     }

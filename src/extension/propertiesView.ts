@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { FromProperties, ToProperties } from '../core/frame/protocol';
-import type { Diagrams, OpenDiagram } from './diagramEditor';
+import type { Tools, OpenTool } from './toolEditor';
 import { webviewHtml } from './webviewHtml';
 
 const nothingOpen = 'Open a diagram to see the properties of what you select in it.';
@@ -15,12 +15,12 @@ export class PropertiesView implements vscode.WebviewViewProvider {
   static readonly viewId = 'etalii.adp.properties';
   private view: vscode.WebviewView | undefined;
 
-  constructor(private readonly context: vscode.ExtensionContext, private readonly diagrams: Diagrams) {
-    context.subscriptions.push(diagrams.onDidChange(() => this.show()));
+  constructor(private readonly context: vscode.ExtensionContext, private readonly tools: Tools) {
+    context.subscriptions.push(tools.onDidChange(() => this.show()));
   }
 
-  static register(context: vscode.ExtensionContext, diagrams: Diagrams): vscode.Disposable {
-    return vscode.window.registerWebviewViewProvider(PropertiesView.viewId, new PropertiesView(context, diagrams), { webviewOptions: { retainContextWhenHidden: true } });
+  static register(context: vscode.ExtensionContext, tools: Tools): vscode.Disposable {
+    return vscode.window.registerWebviewViewProvider(PropertiesView.viewId, new PropertiesView(context, tools), { webviewOptions: { retainContextWhenHidden: true } });
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -38,7 +38,7 @@ export class PropertiesView implements vscode.WebviewViewProvider {
   }
 
   private show(): void {
-    const active = this.diagrams.active;
+    const active = this.tools.active;
     this.post(describe(active));
   }
 
@@ -47,20 +47,20 @@ export class PropertiesView implements vscode.WebviewViewProvider {
       this.show();
       return;
     }
-    const active = this.diagrams.active;
+    const active = this.tools.active;
     // The edit is for the element the rows were shown for; if the selection moved on, it is dropped.
     if (!active || active.selection.length !== 1 || active.selection[0] !== message.target) return;
-    const performed = await this.diagrams.perform(active, { kind: 'setField', id: message.target, field: message.field, value: message.value });
-    this.post({ v: 1, type: 'fieldOutcome', field: message.field, ...(performed.result === 'refused' ? { refused: performed.sentence ?? '' } : {}) });
+    const performed = await this.tools.perform(active, { kind: 'setField', id: message.target, field: message.field, value: message.value });
+    this.post({ v: 2, type: 'fieldOutcome', field: message.field, ...(performed.result === 'refused' ? { refused: performed.sentence ?? '' } : {}) });
     if (performed.result !== 'applied') this.show();
   }
 }
 
 /** The rows for a diagram's selection, or the sentence that says why there are none. */
-export function describe(active: OpenDiagram | undefined): ToProperties {
-  if (!active) return { v: 1, type: 'fields', fields: [], empty: nothingOpen };
-  if (active.selection.length === 0) return { v: 1, type: 'fields', fields: [], empty: nothingSelected };
-  if (active.selection.length > 1) return { v: 1, type: 'fields', fields: [], empty: severalSelected };
+export function describe(active: OpenTool | undefined): ToProperties {
+  if (!active) return { v: 2, type: 'fields', fields: [], empty: nothingOpen };
+  if (active.selection.length === 0) return { v: 2, type: 'fields', fields: [], empty: nothingSelected };
+  if (active.selection.length > 1) return { v: 2, type: 'fields', fields: [], empty: severalSelected };
   const fields = active.fields().map((field) => (active.readOnly && field.readOnly === undefined ? { ...field, readOnly: 'This file is read-only.' } : field));
-  return { v: 1, type: 'fields', fields, target: active.selection[0] };
+  return { v: 2, type: 'fields', fields, target: active.selection[0] };
 }
