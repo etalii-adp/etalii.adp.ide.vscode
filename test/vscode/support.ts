@@ -23,7 +23,7 @@ export async function until<T>(what: string, check: () => T | undefined | Promis
 export interface State {
   view?: { elements: { id: string; type: string; x: number; y: number; width: number; label: string }[]; relations: { id: string }[]; readOnly: boolean; notice?: string };
   /** What a tool type read from its definition was last sent: a scene, as `src/core/scene/scene.ts` has it. */
-  scene?: { nodes: { id: string }[]; edges: { id: string }[]; readOnly?: boolean; notice?: string };
+  scene?: { nodes: { id: string; labels: { text: string }[] }[]; edges: { id: string }[]; readOnly?: boolean; notice?: string };
   kind: 'diagram' | 'designer';
   fields: { id: string; label: string; value: string }[];
   selection: string[];
