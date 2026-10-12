@@ -151,9 +151,9 @@ export type EditOutcome =
   /** The request is answered in ADP Properties: the named field is where the user goes on. */
   | { readonly kind: 'showField'; readonly field: string }
   /** A linked file or folder is opened by the extension; nothing is written. */
-  | { readonly kind: 'open'
+  | { readonly kind: 'open'; readonly path: string }
   /** A path is asked with the platform's file and folder dialog; chosen, it is set as the named field, relative to the document. */
-  | { readonly kind: 'pickPath'; readonly id: string; readonly field: string }; readonly path: string };
+  | { readonly kind: 'pickPath'; readonly id: string; readonly field: string };
 
 /** A document as a tool type reads it: its text and, where one exists, its registration's. */
 export interface Source {
