@@ -44,11 +44,11 @@
     ],
     "customEditors": [
       {
-        "viewType": "etalii.adp.gartner.hypecycle-graph",
-        "displayName": "Gartner hype cycle graph",
+        "viewType": "etalii.adp.registration",
+        "displayName": "ADP registration",
         "selector": [
           {
-            "filenamePattern": "*.ghg"
+            "filenamePattern": "*.adp"
           }
         ],
         "priority": "default"
@@ -64,22 +64,17 @@
         "priority": "option"
       },
       {
-        "viewType": "etalii.adp.registration",
-        "displayName": "ADP registration",
+        "viewType": "etalii.adp.gartner.hypecycle-graph",
+        "displayName": "Gartner hype cycle graph",
         "selector": [
           {
-            "filenamePattern": "*.adp"
+            "filenamePattern": "*.ghg"
           }
         ],
         "priority": "default"
       }
     ],
     "commands": [
-      {
-        "command": "etalii.adp.new.gartner.hypecycle-graph",
-        "title": "New Gartner Hype Cycle Graph",
-        "category": "ADP"
-      },
       {
         "command": "etalii.adp.openAsText",
         "title": "Open as Text",
@@ -132,16 +127,6 @@
         "category": "ADP"
       },
       {
-        "command": "etalii.adp.new.etalii.agent-behavior-modelling",
-        "title": "New Agent Behavior Model",
-        "category": "ADP"
-      },
-      {
-        "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
-        "title": "Open as Agent Behavior Model",
-        "category": "ADP"
-      },
-      {
         "command": "etalii.adp.undoLayout",
         "title": "Undo (Diagram)",
         "category": "ADP"
@@ -149,6 +134,21 @@
       {
         "command": "etalii.adp.redoLayout",
         "title": "Redo (Diagram)",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.new.etalii.agent-behavior-modelling",
+        "title": "New Agent Behavior Modelling",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
+        "title": "Open as Agent Behavior Modelling",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.new.gartner.hypecycle-graph",
+        "title": "New Gartner hype cycle graph",
         "category": "ADP"
       }
     ],
@@ -161,16 +161,16 @@
         },
         {
           "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
-          "when": "resourceLangId == markdown && !activeCustomEditorId && resourcePath in etalii.adp.suggested",
+          "when": "resourceExtname =~ /^\\.(md)$/ && !activeCustomEditorId && resourcePath in etalii.adp.suggested",
           "group": "navigation"
         }
       ],
       "file/newFile": [
         {
-          "command": "etalii.adp.new.gartner.hypecycle-graph"
+          "command": "etalii.adp.new.etalii.agent-behavior-modelling"
         },
         {
-          "command": "etalii.adp.new.etalii.agent-behavior-modelling"
+          "command": "etalii.adp.new.gartner.hypecycle-graph"
         }
       ],
       "commandPalette": [
@@ -207,22 +207,22 @@
           "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
         },
         {
-          "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
-          "when": "resourceLangId == markdown"
-        },
-        {
           "command": "etalii.adp.undoLayout",
           "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
         },
         {
           "command": "etalii.adp.redoLayout",
           "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
+          "when": "resourceExtname =~ /^\\.(md)$/"
         }
       ],
       "explorer/context": [
         {
           "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
-          "when": "resourceExtname == .md && resourcePath in etalii.adp.suggested",
+          "when": "resourceExtname =~ /^\\.(md)$/ && resourcePath in etalii.adp.suggested",
           "group": "navigation@90"
         }
       ]
@@ -304,6 +304,7 @@
     "package": "npm run build -- --production && node scripts/package.mjs",
     "sync-examples": "node scripts/sync-examples.mjs",
     "sync-fbl": "node scripts/sync-fbl.mjs",
+    "sync-definitions": "node scripts/sync-definitions.mjs",
     "prepare-debug-examples": "node scripts/prepare-debug-examples.mjs",
     "look": "npm run build && node scripts/harness.mjs"
   },
