@@ -15,9 +15,9 @@ let canvas: Canvas;
 let sent: FromCanvas[];
 
 const viewMessage = (selection: string[] = [], options = {}): ToCanvas => ({
-  v: 1, type: 'view', origin: type.origin, view: type.view(source, options), actions: type.actions(source, selection), version: 7,
+  v: 2, type: 'view', origin: type.origin, kind: 'diagram', view: type.view(source, options), actions: type.actions(source, selection), version: 7,
 });
-const requests = (): EditRequest[] => sent.filter((message) => message.type === 'edit').map((message) => (message as Extract<FromCanvas, { type: 'edit' }>).request);
+const requests = (): EditRequest[] => sent.filter((message) => message.type === 'edit').map((message) => (message as Extract<FromCanvas, { type: 'edit' }>).request as EditRequest);
 const group = (id: string): Element => document.querySelector(`.adp-content [data-id="${id}"]`)!;
 const pointer = (target: EventTarget, kind: string, x: number, y: number, button = 0): void => {
   target.dispatchEvent(new MouseEvent(kind, { bubbles: true, cancelable: true, clientX: x, clientY: y, button }));
@@ -46,13 +46,13 @@ describe('the canvas', () => {
   it('selects what is clicked, tells the extension, and clears the selection on empty canvas', () => {
     pointer(group('radio').querySelector('.adp-segment')!, 'click', 230, 128);
     expect(group('radio').classList.contains('adp-selected')).toBe(true);
-    expect(sent).toContainEqual({ v: 1, type: 'selection', ids: ['radio'] });
+    expect(sent).toContainEqual({ v: 2, type: 'selection', ids: ['radio'] });
     pointer(document.querySelector('.adp-surface')!, 'click', 5, 5);
-    expect(sent[sent.length - 1]).toEqual({ v: 1, type: 'selection', ids: [] });
+    expect(sent[sent.length - 1]).toEqual({ v: 2, type: 'selection', ids: [] });
   });
 
   it('adds an ADP Toolbox entry activated in its view at the centre of what it shows', () => {
-    canvas.receive({ v: 1, type: 'addAtCentre', entry: 'ghg.add.note' });
+    canvas.receive({ v: 2, type: 'addAtCentre', entry: 'ghg.add.note' });
     expect(requests()).toEqual([{ kind: 'drop', entry: 'ghg.add.note', x: 0, y: 0 }]);
   });
 
@@ -64,7 +64,7 @@ describe('the canvas', () => {
   });
 
   it('shows the sentence of a refusal where the user is working', () => {
-    canvas.receive({ v: 1, type: 'outcome', seq: 1, result: 'refused', sentence: 'A trend cannot influence itself.' });
+    canvas.receive({ v: 2, type: 'outcome', seq: 1, result: 'refused', sentence: 'A trend cannot influence itself.' });
     const status = document.querySelector('.adp-status') as HTMLElement;
     expect(status.hidden).toBe(false);
     expect(status.textContent).toBe('A trend cannot influence itself.');
@@ -72,8 +72,8 @@ describe('the canvas', () => {
 
   it('offers nothing that edits on a read-only view', () => {
     const view = { ...type.view(source, {}), readOnly: true };
-    canvas.receive({ v: 1, type: 'view', origin: type.origin, view, actions: [], version: 8 });
-    canvas.receive({ v: 1, type: 'addAtCentre', entry: 'ghg.add.note' });
+    canvas.receive({ v: 2, type: 'view', origin: type.origin, kind: 'diagram', view, actions: [], version: 8 });
+    canvas.receive({ v: 2, type: 'addAtCentre', entry: 'ghg.add.note' });
     drag(group('radio').querySelector('.adp-segment')!, [230, 128], [330, 128]);
     expect(requests()).toEqual([]);
   });
@@ -95,7 +95,7 @@ describe('gestures', () => {
     expect(group('radio').getAttribute('transform')).toBe('translate(12 56)');
     expect(end()).toEqual([before[0] + 12, before[1] + 56]);
     pointer(window, 'pointerup', 241, 190);
-    canvas.receive({ v: 1, type: 'outcome', seq: 1, result: 'applied' });
+    canvas.receive({ v: 2, type: 'outcome', seq: 1, result: 'applied' });
     expect(end()).toEqual(before);
   });
 
@@ -152,7 +152,7 @@ describe('gestures', () => {
     pointer(group('radio').querySelector('.adp-segment')!, 'dblclick', 230, 128);
     const box = document.querySelector('.adp-inline-editor') as HTMLInputElement;
     expect(box.value).toBe('Transistor radio');
-    expect(sent).toContainEqual({ v: 1, type: 'editing', active: true });
+    expect(sent).toContainEqual({ v: 2, type: 'editing', active: true });
     box.value = 'Pocket radio';
     box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(requests()).toEqual([{ kind: 'rename', id: 'radio', text: 'Pocket radio' }]);
@@ -160,7 +160,7 @@ describe('gestures', () => {
   });
 
   it('gives an edit in place up on Escape', () => {
-    canvas.receive({ v: 1, type: 'reveal', id: 'note-1', editLabel: true, multiline: true });
+    canvas.receive({ v: 2, type: 'reveal', id: 'note-1', editLabel: true, multiline: true });
     const box = document.querySelector('.adp-inline-editor') as HTMLTextAreaElement;
     expect(box.tagName).toBe('TEXTAREA');
     box.value = 'Something else';
@@ -172,7 +172,7 @@ describe('gestures', () => {
 describe('the menu and the panel', () => {
   it('opens the context menu with the actions for what was pointed at, once the extension has sent them', () => {
     pointer(group('radio').querySelector('.adp-segment')!, 'contextmenu', 230, 128, 2);
-    expect(sent.at(-1)).toEqual({ v: 1, type: 'selection', ids: ['radio'] });
+    expect(sent.at(-1)).toEqual({ v: 2, type: 'selection', ids: ['radio'] });
     canvas.receive(viewMessage(['radio']));
     const items = [...document.querySelectorAll('.adp-menu-item')];
     expect(items.map((item) => item.querySelector('.adp-menu-label')?.textContent)).toEqual(['Rename…', 'Remove', 'Arrange diagram']);

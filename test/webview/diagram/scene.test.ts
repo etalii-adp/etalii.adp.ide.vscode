@@ -39,6 +39,10 @@ function drawn(of: Scene = scene, kind: ThemeKind = 'light'): SVGSVGElement {
 }
 const group = (root: Element, id: string): Element => root.querySelector(`[data-id="${id}"]`)!;
 const attributes = (element: Element | null | undefined, ...names: string[]): (string | null)[] => names.map((name) => element?.getAttribute(name) ?? null);
+// A colour may be a CSS variable, which an SVG attribute does not resolve, so every colour is in `style`.
+const paint = (element: Element | null | undefined, property: 'fill' | 'stroke' | 'color'): string | undefined =>
+  new RegExp(`(?:^|; )${property}: ([^;]+)`).exec(element?.getAttribute('style') ?? '')?.[1];
+const paints = (element: Element | null | undefined): (string | undefined)[] => [paint(element, 'fill'), paint(element, 'stroke')];
 /** The text of a label drawn inside its node, which is HTML in the SVG. */
 const textIn = (root: Element, id: string): Element => group(root, id).querySelector('[data-label]')!.firstElementChild!;
 
@@ -106,9 +110,10 @@ describe('a shape', () => {
 
   it('paints a part with its own fill and line, and draws no line of no width', () => {
     const banner = group(drawn(), 'transistors');
-    expect(attributes(banner.querySelector('[data-part="peakFill"]'), 'fill', 'stroke')).toEqual(['#f7e7a1', 'none']);
-    expect(attributes(banner.querySelector('[data-part="chevron1"]'), 'fill', 'stroke', 'stroke-width')).toEqual(['none', '#475569', '1.5']);
-    expect(attributes(banner.querySelector('[data-part="peak"]'), 'fill', 'stroke')).toEqual(['none', 'none']);
+    expect(paints(banner.querySelector('[data-part="peakFill"]'))).toEqual(['#f7e7a1', 'none']);
+    expect(paints(banner.querySelector('[data-part="chevron1"]'))).toEqual(['none', '#475569']);
+    expect(banner.querySelector('[data-part="chevron1"]')?.getAttribute('stroke-width')).toBe('1.5');
+    expect(paints(banner.querySelector('[data-part="peak"]'))).toEqual(['none', 'none']);
   });
 
   it('lets the pointer reach a part that is hit, and pass through one that is not', () => {
@@ -167,7 +172,7 @@ describe('an edge', () => {
     const line = group(drawn(), 'i-13').querySelector('.adp-line')!;
     expect(line.tagName).toBe('path');
     expect(line.getAttribute('d')).toBe(pathData(edge('i-13').path));
-    expect(attributes(line, 'fill', 'stroke', 'stroke-width')).toEqual(['none', '#64748b', '1.5']);
+    expect([line.getAttribute('fill'), paint(line, 'stroke'), line.getAttribute('stroke-width')]).toEqual(['none', '#64748b', '1.5']);
     // Halfway along the bottom of the one part, a tenth along the top of the other.
     const from = pointOn(node('transistors').parts.find((part) => part.id === 'slope')!.box, 'bottom', 0.5);
     const to = pointOn(node('radio').parts.find((part) => part.id === 'peak')!.box, 'top', 0.1);
@@ -182,14 +187,14 @@ describe('an edge', () => {
 
   it('has the marker of its target at the end of its line, filled in the colour of the line when its name says so', () => {
     const markers = [...group(drawn(), 'i-13').querySelectorAll('[data-marker]')];
-    expect(markers.map((marker) => attributes(marker, 'data-marker', 'data-end', 'fill', 'stroke'))).toEqual([['arrowFilled', 'target', '#64748b', '#64748b']]);
+    expect(markers.map((marker) => [...attributes(marker, 'data-marker', 'data-end'), ...paints(marker)])).toEqual([['arrowFilled', 'target', '#64748b', '#64748b']]);
     const { to } = edge('i-13');
     expect(markers[0].getAttribute('points')?.startsWith(`${to!.x},${to!.y} `)).toBe(true);
   });
 
   it('has the marker of its source at the start of its line, open when its name says no more', () => {
     const markers = [...group(drawn(withEdge({ ...edge('i-13'), sourceMarker: 'arrow', targetMarker: 'none' })), 'i-13').querySelectorAll('[data-marker]')];
-    expect(markers.map((marker) => attributes(marker, 'data-marker', 'data-end', 'fill', 'stroke'))).toEqual([['arrow', 'source', 'none', '#64748b']]);
+    expect(markers.map((marker) => [...attributes(marker, 'data-marker', 'data-end'), ...paints(marker)])).toEqual([['arrow', 'source', 'none', '#64748b']]);
     const { from } = edge('i-13');
     expect(markers[0].getAttribute('points')).toContain(`${from!.x},${from!.y}`);
   });
@@ -220,15 +225,14 @@ describe('the handles of a node', () => {
 
 describe('the colours (research R13)', () => {
   // What each role is drawn in: the fill, the outline and the text of a note, and an edge's line.
-  const colours = (of: Scene, kind: ThemeKind): Record<string, string | null | undefined> => {
+  const colours = (of: Scene, kind: ThemeKind): Record<string, string | undefined> => {
     const root = drawn(of, kind);
     const note = group(root, 'note-1').querySelector('.adp-shape');
-    const text = textIn(root, 'note-1').getAttribute('style') ?? '';
     const line = group(root, 'i-13').querySelector('.adp-line');
     const marker = group(root, 'i-13').querySelector('[data-marker]');
     return {
-      fill: note?.getAttribute('fill'), outline: note?.getAttribute('stroke'), text: /(?:^|;\s*)color: ([^;]+)/.exec(text)?.[1],
-      line: line?.getAttribute('stroke'), marker: marker?.getAttribute('stroke'), markerFill: marker?.getAttribute('fill'),
+      fill: paint(note, 'fill'), outline: paint(note, 'stroke'), text: paint(textIn(root, 'note-1'), 'color'),
+      line: paint(line, 'stroke'), marker: paint(marker, 'stroke'), markerFill: paint(marker, 'fill'),
     };
   };
 
@@ -244,7 +248,7 @@ describe('the colours (research R13)', () => {
   });
 
   it('draw a text that states no colour in the editor\'s, and in the foreground in high contrast', () => {
-    const fill = (kind: ThemeKind): string | null => group(drawn(scene, kind), 'transistors').querySelector('[data-label="name"]')!.getAttribute('fill');
+    const fill = (kind: ThemeKind): string | undefined => paint(group(drawn(scene, kind), 'transistors').querySelector('[data-label="name"]'), 'fill');
     expect(kinds.map(fill)).toEqual([editorForeground, contrastForeground, editorForeground, contrastForeground]);
   });
 
@@ -252,9 +256,9 @@ describe('the colours (research R13)', () => {
     for (const kind of kinds) {
       const banner = group(drawn(scene, kind), 'transistors');
       const high = kind.startsWith('high-contrast');
-      expect([kind, banner.querySelector('[data-part="peakFill"]')?.getAttribute('stroke')]).toEqual([kind, high ? contrastBorder : 'none']);
-      expect([kind, banner.querySelector('[data-part="chevron1"]')?.getAttribute('stroke')]).toEqual([kind, high ? contrastBorder : kind === 'dark' ? '#e2e8f0' : '#475569']);
-      expect([kind, ...attributes(banner.querySelector('[data-part="peak"]'), 'fill', 'stroke')]).toEqual([kind, 'none', 'none']);
+      expect([kind, paint(banner.querySelector('[data-part="peakFill"]'), 'stroke')]).toEqual([kind, high ? contrastBorder : 'none']);
+      expect([kind, paint(banner.querySelector('[data-part="chevron1"]'), 'stroke')]).toEqual([kind, high ? contrastBorder : kind === 'dark' ? '#e2e8f0' : '#475569']);
+      expect([kind, ...paints(banner.querySelector('[data-part="peak"]'))]).toEqual([kind, 'none', 'none']);
     }
   });
 

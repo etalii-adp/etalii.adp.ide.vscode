@@ -14,9 +14,9 @@ window.addEventListener('message', (event: MessageEvent<ToCanvas>) => canvas.rec
 // While a text box has the focus, keys such as Delete and F2 are its own and not the diagram's.
 const typing = (target: EventTarget | null): boolean => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
 document.addEventListener('focusin', (event) => {
-  if (typing(event.target)) vscode.postMessage({ v: 1, type: 'editing', active: true } satisfies FromCanvas);
+  if (typing(event.target)) vscode.postMessage({ v: 2, type: 'editing', active: true } satisfies FromCanvas);
 });
 document.addEventListener('focusout', (event) => {
-  if (typing(event.target)) vscode.postMessage({ v: 1, type: 'editing', active: false } satisfies FromCanvas);
+  if (typing(event.target)) vscode.postMessage({ v: 2, type: 'editing', active: false } satisfies FromCanvas);
 });
-vscode.postMessage({ v: 1, type: 'ready' } satisfies FromCanvas);
+vscode.postMessage({ v: 2, type: 'ready' } satisfies FromCanvas);
