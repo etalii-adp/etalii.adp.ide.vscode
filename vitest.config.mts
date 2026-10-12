@@ -9,6 +9,8 @@ export default defineConfig({
     projects: [
       { test: { name: 'core', environment: 'node', include: ['test/core/**/*.test.ts'] } },
       { test: { name: 'webview', environment: 'jsdom', include: ['test/webview/**/*.test.ts'] } },
+      // The repository's own commands, each run as a child process against temporary git repositories.
+      { test: { name: 'scripts', environment: 'node', include: ['test/scripts/**/*.test.ts'], testTimeout: 60_000, hookTimeout: 60_000 } },
     ],
   },
 });
