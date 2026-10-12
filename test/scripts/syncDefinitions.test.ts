@@ -48,10 +48,11 @@ const adpFiles: Record<string, string | Buffer> = {
 };
 
 const standaloneFiles: Record<string, string> = {
-  // An extension written without its dot, claimed for the registration only; a template too.
-  'src/tools/beta/beta.fbl': binding({ b: { claims: { extensions: ['md'], shared: true, registrationOnly: true, suggest: { contains: ['## Behavior'] } }, template: { text: '# {base}\r\n' } } }),
-  // No template and nothing shared: a custom editor and no command.
-  'src/diagrams/gamma/backend/gamma.fbl': binding({ g: { claims: { extensions: ['.gam'] } } }),
+  // An extension written without its dot, claimed for the registration only. No template, and a plugin
+  // for a reader, whose `template` operation makes the new document (FBL 13): a "new" command too.
+  'src/tools/beta/beta.fbl': binding({ b: { claims: { extensions: ['md'], shared: true, registrationOnly: true, suggest: { contains: ['## Behavior'] } }, reader: { plugin: 'org.example.beta', version: '^0.1.0' } } }),
+  // No template, a declared reader and nothing shared: a custom editor and no command.
+  'src/diagrams/gamma/backend/gamma.fbl': binding({ g: { claims: { extensions: ['.gam'] }, reader: 'declared' } }),
 };
 
 // The plug-in's manifest before the first run: entries of a tool type that is no longer there
