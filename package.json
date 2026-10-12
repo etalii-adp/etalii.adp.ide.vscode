@@ -308,6 +308,7 @@
     "look": "npm run build && node scripts/harness.mjs"
   },
   "devDependencies": {
+    "@marcbachmann/cel-js": "^8.0.0",
     "@mdi/js": "^7.4.47",
     "@types/adm-zip": "^0.5.8",
     "@types/mocha": "^10.0.10",
