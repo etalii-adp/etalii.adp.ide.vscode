@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { findingCodes } from '../../../src/core/fbl/finding';
 import { driftUndo } from '../../../src/core/fbl/history/splicedFile';
+import { loadDocument } from '../../../src/core/fbl/documents/documentLoader';
 import type { ModelChange } from '../../../src/core/fbl/planning/modelChange';
 import { PluginBody } from '../../../src/core/fbl/plugins/pluginBody';
 import { bindingOf } from './support/bindings';
@@ -81,11 +82,24 @@ describe('a body read by a persistence plugin', () => {
   });
 
   it('a plugin is asked without the args of its binding', () => {
-    // FBL 11.2 gives `read` the files and `plan` the files, the last reading and the change, and nothing else.
+    // FBL 11.2 gives `plan` the files, the last reading and the change, and nothing else; `read`
+    // is given the files and the binding's `args`, of which this binding has none.
     const plugin = new RecordingPlugin(turtleId);
     const body = PluginBody.open(utf8('label a\n'), turtle(), plugin);
     body.plan({ kind: 'remove', id: 'line1' });
     expect(Object.keys(plugin.readRequest!)).toEqual(['files']);
+    expect(Object.keys(plugin.planRequest!).sort()).toEqual(['change', 'files', 'last']);
+  });
+
+  it('a plugin reads with the args of its binding and plans without them', () => {
+    // FBL 11.2: `read` receives "the binding's args"; `plan` receives the bytes, the last reading and one change.
+    const text = '{ "fbl": "0.2", "bindings": { "t": { "claims": { "extensions": [".t"] }, "body": { "kind": "file" }, "reader": { "plugin": "net.example.reader", "args": { "strict": true } } } } }';
+    const { document, problems } = loadDocument(utf8(text));
+    expect(problems).toEqual([]);
+    const plugin = new RecordingPlugin('net.example.reader');
+    const body = PluginBody.open(utf8('label a\n'), document!.bindings.get('t')!, plugin);
+    body.plan({ kind: 'remove', id: 'line1' });
+    expect(Object.keys(plugin.readRequest!).sort()).toEqual(['args', 'files']);
     expect(Object.keys(plugin.planRequest!).sort()).toEqual(['change', 'files', 'last']);
   });
 });

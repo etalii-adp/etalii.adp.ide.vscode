@@ -239,9 +239,11 @@ describe('writing yaml values', () => {
   it('an empty value that the attribute keeps is written in a new entry', () => {
     const body = open('items:\n  - id: a\n');
     const result = body.change({ kind: 'add', type: 'Item', id: 'b', attributes: { note: '', text: '' } });
-    // "note" says keep, "text" says nothing, so only "note" is written.
+    // "note" says keep, and "text" says nothing, which keeps a string too (FBL 0.6, section 6.2:
+    // an insert follows a set's defaults, as the insert-empty-yaml fixture's `undeclared` does).
+    // Standalone's test, written before FBL 0.6, has "text" left out.
     expect(result).toHaveProperty('planned');
-    expect(textOf(body.bytes)).toBe('items:\n  - id: a\n  - id: b\n    note: ""\n');
+    expect(textOf(body.bytes)).toBe('items:\n  - id: a\n  - id: b\n    text: ""\n    note: ""\n');
   });
 
   it('a container created before a key that is not there is created at the end', () => {

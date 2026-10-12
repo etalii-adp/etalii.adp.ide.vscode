@@ -12,7 +12,7 @@ import type { PlanResult } from '../../../../src/core/fbl/planning/plan';
 import { OpenRegistration } from '../../../../src/core/fbl/registration/openRegistration';
 import type { FblSplice } from '../../../../src/core/fbl/splice';
 import { definitions, knowledgeIds, knowledgeTypes } from './knowledge';
-import { naturalIds, timeAttributes, unsetsReferences } from './naturalIds';
+import { attributeTypes, naturalIds, timeAttributes, unsetsReferences } from './naturalIds';
 import { conformance, filesBelow, textOf, utf8 } from './repository';
 
 // The round-trip fixtures copied from etalii.adp (FBL 15.3), and how a host runs one: what
@@ -118,7 +118,7 @@ export class Fixture {
     const binding = this.binding.name;
     return this.isKnowledge
       ? { fileName: this.inputName, deriveId: knowledgeIds, attributeType: knowledgeTypes.of }
-      : { fileName: this.inputName, deriveId: naturalIds(binding), timeAttributes: timeAttributes(binding) };
+      : { fileName: this.inputName, deriveId: naturalIds(binding), timeAttributes: timeAttributes(binding), attributeType: attributeTypes(binding) };
   }
 
   file(name: string): Uint8Array {
