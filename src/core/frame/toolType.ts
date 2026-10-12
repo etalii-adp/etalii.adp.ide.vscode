@@ -66,6 +66,8 @@ export interface ViewOptions {
   readonly viewpoint?: string;
   /** The value of each filter that is not at its default, by the filter's id. */
   readonly filters?: Readonly<Record<string, { readonly value?: unknown; readonly match?: 'any' | 'all' }>>;
+  /** The nodes this viewer folded (true) or unfolded (false), by id; a node not named is as the definition says. */
+  readonly collapsed?: Readonly<Record<string, boolean>>;
 }
 
 export interface ToolboxEntry {
@@ -141,7 +143,7 @@ export interface TextSplice {
 /** What an edit request came to. */
 export type EditOutcome =
   /** The splices of the gesture, and the registration's new text when the edit changed it (null removes it). */
-  | { readonly kind: 'applied'; readonly splices: readonly TextSplice[]; readonly registration?: string | null; readonly select?: string; readonly editLabel?: boolean; readonly multiline?: boolean }
+  | { readonly kind: 'applied'; readonly splices: readonly TextSplice[]; readonly viewOptions?: ViewOptions; readonly registration?: string | null; readonly select?: string; readonly editLabel?: boolean; readonly multiline?: boolean }
   /** Nothing changed, and this is the definition's sentence to show. */
   | { readonly kind: 'refused'; readonly sentence: string }
   /** Ask first; when confirmed, the same request is made again with `confirmed`. */
@@ -196,7 +198,7 @@ export interface ToolType<View, Request> {
   /** The rows of ADP Properties for a selection; empty when there is nothing to show. */
   fields(source: Source, selection: readonly string[]): Field[];
   /** What can be done to the selection, or to the document when it is empty. */
-  actions(source: Source, selection: readonly string[]): Action[];
+  actions(source: Source, selection: readonly string[], options?: ViewOptions): Action[];
   /** Applies one request to the document as it is now. `confirmed` answers an earlier `confirm`. */
   edit(source: Source, request: Request, options: ViewOptions, confirmed: boolean): EditOutcome;
   /** The text of a new document, from the binding's template. */
