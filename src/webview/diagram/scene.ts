@@ -118,6 +118,16 @@ function drawNode(node: SceneNode, paints: Paints): SVGGElement {
   group.append(...[own, ...node.parts.map((part) => drawPart(part, paints)), ...node.labels.map((label) => drawLabel(label, paints))].filter((drawn) => drawn !== undefined));
   // What a selection shows: a composite shape has no outline of its own to take the highlight.
   group.append(svg('rect', { class: 'adp-mark', x: node.box.x - 3, y: node.box.y - 3, width: node.box.width + 6, height: node.box.height + 6, rx: 3 }));
+  // A node with children it can hide carries a marker at the middle of its lower edge: a plus when they are hidden, a minus when they are drawn.
+  if (node.fold) {
+    const cx = node.box.x + node.box.width / 2;
+    const cy = node.box.y + node.box.height;
+    const folded = node.fold === 'folded';
+    group.append(svg('g', { class: 'adp-fold', 'data-fold': node.fold },
+      svg('title', {}, folded ? 'Expand' : 'Collapse'),
+      svg('circle', { cx, cy, r: 6 }),
+      svg('path', { d: `M ${cx - 3} ${cy} L ${cx + 3} ${cy}${folded ? ` M ${cx} ${cy - 3} L ${cx} ${cy + 3}` : ''}` })));
+  }
   return group;
 }
 

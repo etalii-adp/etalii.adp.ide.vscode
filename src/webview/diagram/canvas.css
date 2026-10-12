@@ -198,6 +198,31 @@ body {
   stroke: var(--adp-highlight) !important;
 }
 
+/* The node a dragged node would go under. */
+.adp-element.adp-drop-target > .adp-mark {
+  display: inline;
+  stroke-dasharray: 6 3;
+}
+
+/* The marker that folds a node's children away and brings them back. */
+.adp-fold {
+  cursor: pointer;
+}
+
+.adp-fold circle {
+  fill: var(--vscode-editor-background);
+  stroke: var(--adp-line);
+  vector-effect: non-scaling-stroke;
+  pointer-events: all;
+}
+
+.adp-fold path {
+  fill: none;
+  stroke: var(--vscode-editor-foreground);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
 /* The new bounds of a node while it is resized. */
 .adp-outline {
   fill: none;

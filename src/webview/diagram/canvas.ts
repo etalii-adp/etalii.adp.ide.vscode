@@ -1,7 +1,7 @@
 import { boundsOf, moved as movedBy } from '../../core/diagram/geometry';
 import type { Action, Box, EditRequest, ViewElement, ViewModel, ViewOptions, ViewRelation } from '../../core/frame/toolType';
 import type { FromCanvas, ToCanvas } from '../../core/frame/protocol';
-import { centreOf, pointOn } from '../../core/scene/geometry';
+import { centreOf, holds, pointOn } from '../../core/scene/geometry';
 import type { Scene, SceneNode } from '../../core/scene/scene';
 import { toolboxMime } from '../toolbox/toolbox';
 import { html, svg } from './dom';
@@ -19,7 +19,17 @@ const minimumSize = 4;
 /** How near, in canvas units, a press must be to where an end of an edge can sit to draw an edge rather than move the node. */
 const connectBand = 6;
 
+/**
+ * The keys this plug-in binds to commands of its own, which ask for the action with that shortcut
+ * (package.json, `src/extension/commands.ts`). The canvas leaves them alone, so an action is asked for once.
+ */
+const hostKeys: readonly string[] = ['f2', 'delete', 'alt+up', 'alt+down'];
+
 type Side = 'left' | 'right' | 'top' | 'bottom' | 'corner';
+
+// A key press as a definition writes a shortcut, in lower case: `ctrl+up`, `space`, `enter`.
+const pressed = (event: KeyboardEvent): string =>
+  `${event.ctrlKey || event.metaKey ? 'ctrl+' : ''}${event.altKey ? 'alt+' : ''}${event.shiftKey ? 'shift+' : ''}${event.key === ' ' ? 'space' : event.key.replace(/^Arrow/, '').toLowerCase()}`;
 
 // A distance on its step, a half rounding away from zero; without a step, on whole canvas units, so
 // a drop made at any zoom is stored as a whole number.
@@ -123,6 +133,7 @@ export class Canvas {
     root.addEventListener('drop', (event) => this.dropped(event));
     window.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') this.abandon?.();
+      else this.key(event);
     });
     // A scene's colours are worked out for the theme kind, so a change of theme draws it again.
     new MutationObserver(() => {
@@ -333,9 +344,27 @@ export class Canvas {
     return (target as Element | null)?.closest?.('[data-id]')?.getAttribute('data-id') ?? undefined;
   }
 
+  // A key that an action of the view is offered under asks for that action, on what is selected.
+  // Only for a scene: its definition states the keys, where a view model's are all commands of the plug-in.
+  private key(event: KeyboardEvent): void {
+    const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement;
+    const name = pressed(event);
+    if (!this.scene || !this.surface.root.isConnected || typing || hostKeys.includes(name)) return;
+    const action = this.actions.find((candidate) => candidate.enabled && candidate.shortcut?.toLowerCase() === name);
+    if (!action) return;
+    event.preventDefault();
+    this.request({ kind: 'action', action: action.id, ...(this.selection[0] !== undefined ? { id: this.selection[0] } : {}) });
+  }
+
   private click(event: MouseEvent): void {
     if ((event.target as Element).closest('.adp-handle')) return;
     const id = this.idAt(event.target);
+    // A fold is what this viewer sees and writes nothing, so it is asked for in a read-only scene too.
+    const fold = (event.target as Element).closest('[data-fold]')?.getAttribute('data-fold');
+    if (id && fold) {
+      this.request({ kind: 'fold', id, folded: fold !== 'folded' });
+      return;
+    }
     if (!id || this.node(id)?.selectable === false) {
       this.select([]);
     } else if (event.ctrlKey || event.metaKey || event.shiftKey) {
@@ -354,7 +383,7 @@ export class Canvas {
 
   // Activating an element edits its text in place.
   private activate(event: MouseEvent): void {
-    if (this.readOnly) return;
+    if (this.readOnly || (event.target as Element).closest('[data-fold]')) return;
     const id = this.idAt(event.target);
     const node = this.node(id);
     const element = id ? this.context?.elements.get(id) : undefined;
@@ -478,6 +507,7 @@ export class Canvas {
   // A press on a scene: on a handle of the selection, or on a node, which it moves or draws an edge from.
   private pressScene(event: PointerEvent, scene: Scene): void {
     const target = event.target as Element;
+    if (target.closest('[data-fold]')) return;
     const point = this.surface.toCanvas(event.clientX, event.clientY);
 
     if (event.button === 0 && this.selection.length === 1) {
@@ -519,9 +549,11 @@ export class Canvas {
       return;
     }
     if (event.button !== 0) return;
-    // A press where an end can sit draws an edge from there; anywhere else on the node moves it.
+    // A press where an end can sit draws an edge from there; anywhere else on the node moves it. A
+    // node that is placed for it and cannot be moved is dragged to another node, to go under that one.
     if (near && Math.hypot(near.point.x - point.x, near.point.y - point.y) <= connectBand) edge(near);
     else if (from.movable) this.moveNode(event, node);
+    else this.reparent(event, scene, node);
   }
 
   // Follows the pointer from a press until it is let go, telling a drag from a click.
@@ -670,6 +702,39 @@ export class Canvas {
         // The drawing stays where it was dropped until the view that follows replaces it.
         this.request({ kind: 'move', id: node.id, x: at.x, y: at.y });
         this.settleOnOutcome = settle;
+      },
+      cancel: settle,
+    });
+  }
+
+  // A node of a scene dragged onto another, to become its last child. Let go over nothing, it stays.
+  private reparent(event: PointerEvent, scene: Scene, node: SceneNode): void {
+    const group = this.group(node.id);
+    let parent: SceneNode | undefined;
+    // The node that would become the parent is marked: the topmost one under the pointer.
+    const mark = (next: SceneNode | undefined): void => {
+      if (parent) this.group(parent.id)?.classList.remove('adp-drop-target');
+      if (next) this.group(next.id)?.classList.add('adp-drop-target');
+      parent = next;
+    };
+    const settle = (): void => {
+      mark(undefined);
+      group?.removeAttribute('transform');
+      group?.classList.remove('adp-ghost');
+    };
+    this.track(event, {
+      move: (point, delta) => {
+        // simplified: the node alone follows the pointer, without the nodes under it and the lines to it, and any other node is marked as one it could go under; the tool type refuses the ones the definition forbids, and the scene is drawn again when the edit is applied.
+        group?.setAttribute('transform', `translate(${snapTo(delta.x, 0)} ${snapTo(delta.y, 0)})`);
+        group?.classList.add('adp-ghost');
+        mark([...scene.nodes].reverse().find((candidate) => candidate.id !== node.id && holds(candidate.box, point)));
+        this.surface.overlay.replaceChildren();
+      },
+      end: () => {
+        const onto = parent;
+        settle();
+        this.select([node.id]);
+        if (onto) this.request({ kind: 'reparent', id: node.id, parent: onto.id });
       },
       cancel: settle,
     });

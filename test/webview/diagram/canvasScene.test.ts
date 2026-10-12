@@ -126,7 +126,7 @@ describe('gestures on a scene', () => {
     canvas.receive(viewMessage(withNode({ ...node('radio'), movable: { x: true, y: false } })));
     drag(part('radio', 'peakFill'), [230, 128], [241, 190]);
     canvas.receive(viewMessage(withNode({ ...node('radio'), movable: { x: false, y: false } })));
-    drag(part('radio', 'peakFill'), [230, 128], [241, 190]);
+    drag(part('radio', 'peakFill'), [230, 128], [60, 400]);
     expect(requests()).toEqual([{ kind: 'move', id: 'radio', x: 227, y: 112 }]);
   });
 
@@ -260,6 +260,121 @@ describe('gestures on a scene', () => {
     pointer(target, 'contextmenu', 230, 128, 2);
     canvas.receive({ v: 2, type: 'addAtCentre', entry: 'note' });
     expect(document.querySelector('.adp-inline-editor')).toBeNull();
+    expect(requests()).toEqual([]);
+  });
+});
+
+describe('a scene of nodes that hold nodes', () => {
+  // A mind map's nodes are placed by its layout, so none is movable, and one with children folds.
+  const fixed = { x: false, y: false };
+  const tree: Scene = { ...scene, nodes: scene.nodes.map((one) => ({ ...one, movable: fixed, connectable: false, ...(one.id === 'radio' ? { fold: 'unfolded' } : {}) })) };
+
+  beforeEach(() => canvas.receive(viewMessage(tree)));
+
+  it('asks to fold a node whose fold marker is clicked, and to unfold one that is folded', () => {
+    pointer(group('radio').querySelector('[data-fold]')!, 'click', 258, 144);
+    canvas.receive(viewMessage(withNode({ ...node('radio'), fold: 'folded' } as SceneNode)));
+    pointer(group('radio').querySelector('[data-fold]')!, 'click', 258, 144);
+    expect(requests()).toEqual([{ kind: 'fold', id: 'radio', folded: true }, { kind: 'fold', id: 'radio', folded: false }]);
+  });
+
+  it('asks to fold in a read-only scene too, since a fold writes nothing', () => {
+    canvas.receive(viewMessage({ ...tree, readOnly: true }));
+    pointer(group('radio').querySelector('[data-fold]')!, 'click', 258, 144);
+    expect(requests()).toEqual([{ kind: 'fold', id: 'radio', folded: true }]);
+  });
+
+  it('does not take a press or a double click on the fold marker for a drag or an edit', () => {
+    const marker = group('radio').querySelector('[data-fold]')!;
+    drag(marker, [258, 144], [210, 72]);
+    pointer(marker, 'dblclick', 258, 144);
+    expect(requests()).toEqual([]);
+    expect(document.querySelector('.adp-inline-editor')).toBeNull();
+  });
+
+  it('asks to put a node that is dragged onto another under it, and shows where it would go while it is dragged', () => {
+    // The second note, at 240,280, onto the transistors, at 200,56 and 160 by 32.
+    pointer(group('note-2').querySelector('.adp-shape')!, 'pointerdown', 250, 290);
+    pointer(window, 'pointermove', 150, 250);
+    expect(group('note-2').getAttribute('transform')).toBe('translate(-100 -40)');
+    expect(document.querySelector('.adp-drop-target')).toBeNull();
+    pointer(window, 'pointermove', 230, 70);
+    expect(group('note-2').getAttribute('transform')).toBe('translate(-20 -220)');
+    expect(group('transistors').classList.contains('adp-drop-target')).toBe(true);
+    pointer(window, 'pointerup', 230, 70);
+    expect(requests()).toEqual([{ kind: 'reparent', id: 'note-2', parent: 'transistors' }]);
+    expect(group('note-2').getAttribute('transform')).toBeNull();
+    expect(document.querySelector('.adp-drop-target')).toBeNull();
+  });
+
+  it('asks for nothing when the node is let go over empty canvas, and puts it back', () => {
+    drag(group('note-2').querySelector('.adp-shape')!, [250, 290], [20, 400]);
+    expect(requests()).toEqual([]);
+    expect(group('note-2').getAttribute('transform')).toBeNull();
+  });
+
+  it('moves a node that is movable where it is let go, also over another node', () => {
+    canvas.receive(viewMessage(scene));
+    drag(group('note-2').querySelector('.adp-shape')!, [250, 290], [230, 70]);
+    expect(requests()).toEqual([{ kind: 'move', id: 'note-2', x: 220, y: 60 }]);
+  });
+
+  it('adds an ADP Toolbox entry dropped on a node at the point it was dropped, for the tool type to find the node', () => {
+    const drop = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent;
+    Object.assign(drop, { clientX: 230, clientY: 128, dataTransfer: { getData: (kind: string) => (kind === 'application/x-adp-toolbox' ? 'child' : '') } });
+    group('radio').querySelector('.adp-shape')!.dispatchEvent(drop);
+    expect(requests()).toEqual([{ kind: 'drop', entry: 'child', x: 230, y: 128 }]);
+  });
+});
+
+describe('the keys of a scene', () => {
+  const offered: Action[] = [
+    { id: 'addSibling', label: 'Add sibling', shortcut: 'Enter', enabled: true },
+    { id: 'toggleFold', label: 'Collapse', shortcut: 'Space', enabled: true },
+    { id: 'addChild', label: 'Add child', shortcut: 'Insert', enabled: false, disabledReason: 'Not here.' },
+    { id: 'reorder', label: 'Move up', shortcut: 'Ctrl+Up', enabled: true },
+    { id: 'delete', label: 'Remove', shortcut: 'Delete', enabled: true },
+    { id: 'editLabel', label: 'Rename…', shortcut: 'F2', enabled: true },
+  ];
+  const key = (target: EventTarget, name: string, more: KeyboardEventInit = {}): boolean =>
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true, ...more }));
+
+  beforeEach(() => {
+    pointer(part('radio', 'peakFill'), 'click', 230, 128);
+    canvas.receive(viewMessage(scene, offered));
+  });
+
+  it('ask for the action the view offers under the key that is pressed, on what is selected', () => {
+    expect(key(surface(), 'Enter')).toBe(false);
+    key(surface(), ' ');
+    key(surface(), 'ArrowUp', { ctrlKey: true });
+    expect(requests()).toEqual([
+      { kind: 'action', action: 'addSibling', id: 'radio' }, { kind: 'action', action: 'toggleFold', id: 'radio' }, { kind: 'action', action: 'reorder', id: 'radio' },
+    ]);
+  });
+
+  it('ask for nothing under a key no action has, a key with another modifier, or the key of an action that is not enabled', () => {
+    expect(key(surface(), 'a')).toBe(true);
+    key(surface(), 'Enter', { shiftKey: true });
+    key(surface(), 'Insert');
+    expect(requests()).toEqual([]);
+  });
+
+  it('leave to the extension the keys its own commands are bound to, so an action is not asked for twice', () => {
+    key(surface(), 'Delete');
+    key(surface(), 'F2');
+    expect(requests()).toEqual([]);
+  });
+
+  it('are the text box\'s own while something is typed', () => {
+    key(document.querySelector('.adp-filter-input')!, 'Enter');
+    expect(requests()).toEqual([]);
+  });
+
+  it('are not a view model\'s: its keys stay the extension\'s', () => {
+    const source = { text: read('fixtures/gartner-hypecycle-graph/triggers-and-notes.ghg') };
+    canvas.receive(viewMessage(handCoded.view(source, {}), offered));
+    key(surface(), 'Enter');
     expect(requests()).toEqual([]);
   });
 });

@@ -133,6 +133,24 @@ describe('a shape', () => {
   });
 });
 
+describe('the fold of a node', () => {
+  // `fold` is on a node that has children it can hide.
+  const folding = (fold: 'folded' | 'unfolded'): Element | null => group(drawn(withNode({ ...node('radio'), fold } as SceneNode)), 'radio').querySelector('[data-fold]');
+
+  it('is a marker on a node that can be folded, which says whether it is', () => {
+    expect(attributes(folding('folded'), 'class', 'data-fold')).toEqual(['adp-fold', 'folded']);
+    expect(attributes(folding('unfolded'), 'class', 'data-fold')).toEqual(['adp-fold', 'unfolded']);
+    // At the middle of the bottom of the node's box, which is 216,112 and 84 by 32.
+    expect(attributes(folding('folded')!.querySelector('circle'), 'cx', 'cy')).toEqual(['258', '144']);
+    expect(folding('folded')!.querySelector('title')?.textContent).toBe('Expand');
+    expect(folding('unfolded')!.querySelector('title')?.textContent).toBe('Collapse');
+  });
+
+  it('is nothing on a node that cannot be folded', () => {
+    expect(drawn().querySelector('[data-fold]')).toBeNull();
+  });
+});
+
 describe('a label', () => {
   it('outside its node is text held at the end of its box that the alignment names, in its font size', () => {
     const label = group(drawn(), 'transistors').querySelector('[data-label="name"]')!;
