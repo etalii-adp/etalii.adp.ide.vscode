@@ -23,8 +23,10 @@ export async function until<T>(what: string, check: () => T | undefined | Promis
 export interface State {
   view?: { elements: { id: string; type: string; x: number; y: number; width: number; label: string }[]; relations: { id: string }[]; readOnly: boolean; notice?: string };
   /** What a tool type read from its definition was last sent: a scene, as `src/core/scene/scene.ts` has it. */
-  scene?: { nodes: { id: string; labels: { text: string }[] }[]; edges: { id: string }[]; readOnly?: boolean; notice?: string };
+  scene?: { nodes: { id: string; fold?: 'folded' | 'unfolded'; labels: { text: string }[] }[]; edges: { id: string }[]; readOnly?: boolean; notice?: string };
   kind: 'diagram' | 'designer';
+  /** The view options the editor holds: what the canvas sent, and the folds of this viewer. */
+  options: { collapsed?: Record<string, boolean> };
   fields: { id: string; label: string; value: string }[];
   selection: string[];
   version: number;

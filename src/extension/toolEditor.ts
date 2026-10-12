@@ -72,7 +72,7 @@ function replaceRegistration(edit: vscode.WorkspaceEdit, document: vscode.TextDo
 // The name of what a request does, for the undo step: the label of the action it invokes.
 function labelOf(tool: OpenTool, request: EditRequest): string | undefined {
   if (request.kind !== 'action') return undefined;
-  return tool.type.actions(tool.source, request.id === undefined ? [] : [request.id]).find((action) => action.id === request.action)?.label;
+  return tool.type.actions(tool.source, request.id === undefined ? [] : [request.id], tool.options).find((action) => action.id === request.action)?.label;
 }
 
 /**
@@ -169,7 +169,7 @@ export class Tools implements vscode.Disposable {
     diagram.lastView = view;
     diagram.post({
       v: 2, type: 'view', origin: diagram.type.origin, kind: diagram.type.kind, view,
-      actions: view.readOnly ? [] : diagram.type.actions(source, diagram.selection),
+      actions: view.readOnly ? [] : diagram.type.actions(source, diagram.selection, diagram.options),
       version: diagram.document.version,
     });
     this.findings.show(diagram.document, diagram.type);
@@ -275,13 +275,18 @@ export class Tools implements vscode.Disposable {
   /**
    * Carries out one edit request on a diagram's document, as one undoable edit: of the document, of
    * the registration beside it, or of both together. A request made on an older version of the
-   * document is cancelled rather than applied to text it was not computed from.
+   * document is cancelled rather than applied to text it was not computed from. A request that
+   * changes only what this editor shows, such as a fold, writes nothing and is no undo step.
    */
   async perform(diagram: OpenTool, request: EditRequest, version?: number): Promise<Performed> {
-    if (diagram.readOnly) return { result: 'cancelled' };
     if (version !== undefined && version !== diagram.document.version) return { result: 'cancelled' };
 
     let outcome = diagram.type.edit(diagram.source, request, diagram.options, false);
+    // A file that cannot be written takes no edit, which the tool type does not know. What changes
+    // only this viewer's state, such as a fold, is still its to do.
+    if (diagram.readOnly && !(outcome.kind === 'applied' && outcome.viewOptions !== undefined && outcome.splices.length === 0 && outcome.registration === undefined)) {
+      return { result: 'cancelled' };
+    }
     if (outcome.kind === 'confirm') {
       const answer = await vscode.window.showWarningMessage(outcome.message, { modal: true }, outcome.confirmLabel);
       if (answer !== outcome.confirmLabel) return { result: 'cancelled' };
@@ -319,6 +324,8 @@ export class Tools implements vscode.Disposable {
         // ranges are all of the text as it is before the edit (etalii.adp spec 027, research R5).
         const edit = new vscode.WorkspaceEdit();
         const documentChanges = outcome.splices.length > 0;
+        // The request changed what this editor shows: the options it gives replace those held.
+        if (outcome.viewOptions !== undefined) diagram.options = outcome.viewOptions;
         const registrationBefore = diagram.registration;
         const label = labelOf(diagram, request);
         const metadata = label === undefined ? undefined : { label, needsConfirmation: false };
@@ -358,6 +365,9 @@ export class Tools implements vscode.Disposable {
           // when the document is.
           const registration = vscode.workspace.textDocuments.find((candidate) => candidate.uri.toString() === diagram.registrationUri.toString());
           if (registration?.isDirty && !diagram.document.isDirty) await registration.save();
+          this.refresh(diagram);
+        } else if (outcome.viewOptions !== undefined && !documentChanges) {
+          // Nothing was written, so no change of the document brings the view: it is sent now.
           this.refresh(diagram);
         }
         if (outcome.select !== undefined) {
@@ -426,7 +436,8 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
         this.tools.refresh(diagram);
         return;
       case 'viewOptions':
-        diagram.options = message.options;
+        // The canvas holds no folds: those this editor holds stay.
+        diagram.options = diagram.options.collapsed === undefined ? message.options : { ...message.options, collapsed: diagram.options.collapsed };
         this.tools.refresh(diagram);
         return;
       case 'selection':

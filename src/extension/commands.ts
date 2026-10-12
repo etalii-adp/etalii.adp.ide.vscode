@@ -27,7 +27,7 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
       const active = tools.active;
       if (!active || active.readOnly || active.lastView?.readOnly) return;
       const selection = onDiagram ? [] : active.selection;
-      const action = active.type.actions(active.source, selection)
+      const action = active.type.actions(active.source, selection, active.options)
         .find((candidate) => (pick.shortcut !== undefined && candidate.shortcut === pick.shortcut) || (pick.label !== undefined && pick.label.test(candidate.label)));
       if (!action) return;
       if (!action.enabled) {
@@ -108,7 +108,7 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
       const sent = active.lastView;
       return {
         ...(sent === undefined ? {} : isScene(sent) ? { scene: sent } : { view: sent }),
-        kind: active.type.kind, fields: active.fields(), selection: active.selection, version: active.document.version, origin: active.type.origin,
+        kind: active.type.kind, options: active.options, fields: active.fields(), selection: active.selection, version: active.document.version, origin: active.type.origin,
       };
     });
     register('etalii.adp.test.edit', async (request: unknown) => {

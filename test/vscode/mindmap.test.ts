@@ -17,6 +17,9 @@ const unclaimedReason = 'the binding of the mind map has no marker yet: etalii-a
 // Two nodes of the example, by the ids its file gives them.
 const root = 'ID_5eb2r180uk2p4ys1q0tkiwil6';
 const sceneGraph = 'ID_1guw8w5hp34usdnp25phle3s4';
+// A node with nodes under it, and the first of those.
+const layout = 'ID_cfszit7hnta23frsv88kmqg1z';
+const measurePass = 'ID_56kq0gezao11kk77h11qmd35j';
 
 const duplicateId = [
   '<map version="freeplane 1.11.5">',
@@ -72,6 +75,7 @@ suite(suiteName, () => {
     assert.strictEqual(state.origin, 'freeplane/mindmap');
     assert.strictEqual(state.kind, 'diagram');
     assert.ok(state.scene, 'a tool type read from its definition shows a scene');
+    // The example folds nothing, so every node of the file is drawn.
     assert.strictEqual(state.scene.nodes.length, nodesIn(fs.readFileSync(uri.fsPath, 'utf8')), 'every node of the file is drawn');
     assert.notStrictEqual(state.scene.readOnly, true);
     assert.strictEqual(tab.isDirty, false);
@@ -107,6 +111,7 @@ suite(suiteName, () => {
   test('adding a child is one undo step, and everything else in the file stays as it was', async () => {
     const { document, original } = await open();
     const before = (await drawn()).scene!.nodes.length;
+    // The new node is named by the definition; the canvas is then told to open its text in place.
     assert.deepStrictEqual(await edit({ kind: 'action', action: 'addChild', id: root }), { result: 'applied' });
 
     await until('the child in the document', () => nodesIn(document.getText()) === nodesIn(original) + 1);
@@ -124,6 +129,31 @@ suite(suiteName, () => {
     await until('the undo', () => document.getText() === original);
     await vscode.commands.executeCommand('redo');
     await until('the redo', () => document.getText() === added);
+  });
+
+  test('folding a node hides what is under it for this viewer, and writes nothing', async () => {
+    const { document, original } = await open();
+    const before = (await drawn()).scene!.nodes;
+    assert.strictEqual(before.find((node) => node.id === layout)?.fold, 'unfolded');
+    assert.ok(before.some((node) => node.id === measurePass));
+
+    assert.deepStrictEqual(await edit({ kind: 'fold', id: layout, folded: true }), { result: 'applied' });
+    const folded = await until('the folded scene', async () => {
+      const current = await drawn();
+      return current.scene!.nodes.find((node) => node.id === layout)?.fold === 'folded' ? current : undefined;
+    });
+    assert.ok(!folded.scene!.nodes.some((node) => node.id === measurePass), 'what is under the node is not drawn');
+    assert.ok(folded.scene!.nodes.length < before.length);
+    assert.strictEqual(folded.options.collapsed?.[layout], true);
+    // A fold is the viewer's: the file does not change, and there is nothing to save or to undo.
+    assert.strictEqual(document.getText(), original);
+    assert.strictEqual(document.isDirty, false);
+    assert.strictEqual(folded.version, document.version);
+
+    assert.deepStrictEqual(await edit({ kind: 'fold', id: layout, folded: false }), { result: 'applied' });
+    await until('the unfolded scene', async () => (await drawn()).scene!.nodes.length === before.length);
+    assert.strictEqual(document.getText(), original);
+    assert.strictEqual(document.isDirty, false);
   });
 
   test('a save without an edit leaves the file byte for byte what it was', async () => {
