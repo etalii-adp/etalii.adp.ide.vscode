@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import type { DiagramType } from '../core/frame/diagramType';
-import { viewTypeOf } from '../core/frame/diagramType';
+import type { DiagramType } from '../core/frame/toolType';
+import { viewTypeOf } from '../core/frame/toolType';
 import * as fbl from '../core/fbl';
 import { registerCommands } from './commands';
 import { DiagramEditorProvider, Diagrams } from './diagramEditor';

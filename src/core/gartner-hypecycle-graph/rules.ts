@@ -1,4 +1,4 @@
-import type { Finding } from '../frame/diagramType';
+import type { Finding } from '../frame/toolType';
 import { boundaryKeys, formatEnd, hasSpan, isPlaceable, isReadableEnd, phaseCount, type Model } from './model';
 import { formatMonth } from './scale';
 

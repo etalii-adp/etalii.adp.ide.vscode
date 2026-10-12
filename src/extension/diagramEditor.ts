@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import type { DiagramType, EditRequest, Field, Source, ViewModel, ViewOptions } from '../core/frame/diagramType';
-import { viewTypeOf } from '../core/frame/diagramType';
+import type { DiagramType, EditRequest, Field, Source, ViewModel, ViewOptions } from '../core/frame/toolType';
+import { viewTypeOf } from '../core/frame/toolType';
 import type { FromCanvas, ToCanvas } from '../core/frame/protocol';
 import { LineDocument } from '../core/text/lineDocument';
 import { spliceBetween } from '../core/text/splice';

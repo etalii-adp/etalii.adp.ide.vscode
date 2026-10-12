@@ -1,4 +1,5 @@
-import type { Action, DiagramType, EditOutcome, EditRequest, Field, Finding, Source, ToolboxEntry, ViewModel, ViewOptions } from '../frame/diagramType';
+import type { HandCodedDiagramType as DiagramType, HandCodedOutcome as EditOutcome, HandCodedRequest as EditRequest, HandCodedSource as Source } from '../frame/handCoded';
+import type { Action, Field, Finding, ToolboxEntry, ViewModel, ViewOptions } from '../frame/toolType';
 import { LineDocument } from '../text/lineDocument';
 import { newShortGuid } from '../text/shortGuid';
 import { apply, influenceOf, noteOf, removalConfirmation, trendOf, triggerOf, unreadable, type Edit } from './edits';

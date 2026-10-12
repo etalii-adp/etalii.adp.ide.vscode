@@ -1,4 +1,4 @@
-import type { Field } from '../../core/frame/diagramType';
+import type { Field } from '../../core/frame/toolType';
 import type { FromProperties, ToProperties } from '../../core/frame/protocol';
 import { html } from '../diagram/dom';
 import { gridOf } from './controls';

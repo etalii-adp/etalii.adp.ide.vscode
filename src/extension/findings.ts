@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { DiagramType, Finding, Severity } from '../core/frame/diagramType';
+import type { DiagramType, Finding, Severity } from '../core/frame/toolType';
 
 const severities: Record<Severity, vscode.DiagnosticSeverity> = {
   error: vscode.DiagnosticSeverity.Error,

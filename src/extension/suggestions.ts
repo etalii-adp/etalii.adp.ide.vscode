@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { DiagramType } from '../core/frame/diagramType';
+import type { DiagramType } from '../core/frame/toolType';
 
 const maximumFiles = 2000;
 const maximumBytes = 512 * 1024;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { EditOutcome } from '../../../src/core/frame/diagramType';
+import type { HandCodedOutcome as EditOutcome } from '../../../src/core/frame/handCoded';
 import { actionIds, gartnerHypecycleGraph as type } from '../../../src/core/gartner-hypecycle-graph/index';
 import { parse } from '../../../src/core/gartner-hypecycle-graph/parser';
 import { formatMonth } from '../../../src/core/gartner-hypecycle-graph/scale';

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { EditRequest } from '../../../src/core/frame/diagramType';
+import type { EditRequest } from '../../../src/core/frame/toolType';
 import type { FromCanvas, ToCanvas } from '../../../src/core/frame/protocol';
 import { gartnerHypecycleGraph as type } from '../../../src/core/gartner-hypecycle-graph/index';
 import { Canvas } from '../../../src/webview/diagram/canvas';

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { agentBehaviorModelling as type } from '../../../src/core/agent-behavior-modelling/index';
-import type { EditRequest, Source } from '../../../src/core/frame/diagramType';
+import type { HandCodedRequest as EditRequest, HandCodedSource as Source } from '../../../src/core/frame/handCoded';
 import type { FromCanvas } from '../../../src/core/frame/protocol';
 import { Canvas } from '../../../src/webview/diagram/canvas';
 import { notationFor, type DrawContext } from '../../../src/webview/diagram/notation';

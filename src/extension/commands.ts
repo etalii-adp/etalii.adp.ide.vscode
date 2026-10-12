@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import type { DiagramType, EditRequest } from '../core/frame/diagramType';
-import { viewTypeOf } from '../core/frame/diagramType';
+import type { DiagramType, EditRequest } from '../core/frame/toolType';
+import { viewTypeOf } from '../core/frame/toolType';
 import type { Diagrams, OpenDiagram } from './diagramEditor';
 import { PropertiesView } from './propertiesView';
 import { entriesOf, ToolboxView } from './toolboxView';

@@ -163,9 +163,9 @@ describe('a hand-coded diagram type as a tool type', () => {
   });
 
   it('gives a replacement as the one range that differs', () => {
-    const { splices } = applied('name: Alpha\nx: 1\n', 'name: Beta\nx: 1\n');
-    expect(splices).toEqual([{ offset: 6, length: 5, text: 'Beta' }]);
-    expect(spliced('name: Alpha\nx: 1\n', splices)).toBe('name: Beta\nx: 1\n');
+    const { splices } = applied('name: Alpha\nx: 1\n', 'name: Zed\nx: 1\n');
+    expect(splices).toEqual([{ offset: 6, length: 5, text: 'Zed' }]);
+    expect(spliced('name: Alpha\nx: 1\n', splices)).toBe('name: Zed\nx: 1\n');
   });
 
   it('gives no splice for an unchanged text', () => {

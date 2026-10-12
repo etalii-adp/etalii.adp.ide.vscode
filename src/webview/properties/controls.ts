@@ -1,4 +1,4 @@
-import type { Field } from '../../core/frame/diagramType';
+import type { Field } from '../../core/frame/toolType';
 import { html } from '../diagram/dom';
 
 /** The control of one field, wired to hand over its value when it is committed. */

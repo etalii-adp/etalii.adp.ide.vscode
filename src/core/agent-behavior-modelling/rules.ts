@@ -1,4 +1,4 @@
-import type { Finding } from '../frame/diagramType';
+import type { Finding } from '../frame/toolType';
 import { categoryOf, kindIds, rootsOf, shownKeyword, type Model } from './model';
 
 // What the notation forbids, read over the whole model. A document that breaks a rule still opens

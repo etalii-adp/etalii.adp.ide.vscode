@@ -1,4 +1,4 @@
-import type { Action } from '../../core/frame/diagramType';
+import type { Action } from '../../core/frame/toolType';
 import { html } from './dom';
 import { icon } from './icons';
 

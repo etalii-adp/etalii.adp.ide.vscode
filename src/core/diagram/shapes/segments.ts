@@ -1,4 +1,4 @@
-import type { Box } from '../../frame/diagramType';
+import type { Box } from '../../frame/toolType';
 import { roundAwayFromZero } from '../../text/rounding';
 import type { Point } from '../geometry';
 import { arrowBannerPointDepth } from './outline';

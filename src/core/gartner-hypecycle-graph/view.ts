@@ -1,4 +1,4 @@
-import type { Box, ViewElement, ViewModel, ViewOptions, ViewRelation } from '../frame/diagramType';
+import type { Box, ViewElement, ViewModel, ViewOptions, ViewRelation } from '../frame/toolType';
 import { widthOfText } from '../text/textMetric';
 import { unreadable } from './edits';
 import type { Attachment } from '../diagram/shapes/segments';

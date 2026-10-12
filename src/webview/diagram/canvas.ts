@@ -1,5 +1,5 @@
 import { boundsOf, moved as movedBy } from '../../core/diagram/geometry';
-import type { Action, Box, EditRequest, ViewElement, ViewModel, ViewOptions, ViewRelation } from '../../core/frame/diagramType';
+import type { Action, Box, EditRequest, ViewElement, ViewModel, ViewOptions, ViewRelation } from '../../core/frame/toolType';
 import type { FromCanvas, ToCanvas } from '../../core/frame/protocol';
 import { toolboxMime } from '../toolbox/toolbox';
 import { html, svg } from './dom';

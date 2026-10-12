@@ -1,4 +1,4 @@
-import type { Box } from '../../core/frame/diagramType';
+import type { Box } from '../../core/frame/toolType';
 import { svg } from './dom';
 
 const minScale = 0.05;
