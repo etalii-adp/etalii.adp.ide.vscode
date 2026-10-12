@@ -21,11 +21,12 @@ const sceneGraph = 'ID_1guw8w5hp34usdnp25phle3s4';
 const layout = 'ID_cfszit7hnta23frsv88kmqg1z';
 const measurePass = 'ID_56kq0gezao11kk77h11qmd35j';
 
-const duplicateId = [
+// A central topic without text breaks the definition's rule `mindmap.unnamed-root`. Its rule for a
+// duplicated id cannot fail as it is written (etalii.adp issue 152), so that one is not the example.
+const unnamedRoot = [
   '<map version="freeplane 1.11.5">',
-  '<node TEXT="Root" ID="ID_root">',
-  '<node TEXT="First" ID="ID_same"/>',
-  '<node TEXT="Second" ID="ID_same"/>',
+  '<node TEXT="" ID="ID_root">',
+  '<node TEXT="First" ID="ID_first"/>',
   '</node>',
   '</map>',
 ].join('\n');
@@ -174,16 +175,16 @@ suite(suiteName, () => {
   });
 
   test('lists a rule finding in the Problems panel with its rule and line', async () => {
-    const { uri, document } = await open(duplicateId);
+    const { uri, document } = await open(unnamedRoot);
     const diagnostics = await until('the finding', () => {
-      const found = vscode.languages.getDiagnostics(uri).filter((diagnostic) => diagnostic.code === 'mindmap.duplicate-id');
+      const found = vscode.languages.getDiagnostics(uri).filter((diagnostic) => diagnostic.code === 'mindmap.unnamed-root');
       return found.length > 0 ? found : undefined;
     });
     assert.strictEqual(diagnostics.length, 1);
     assert.strictEqual(diagnostics[0].source, 'ADP');
-    assert.strictEqual(diagnostics[0].severity, vscode.DiagnosticSeverity.Error);
-    assert.strictEqual(diagnostics[0].message, 'Two nodes share the id \'ID_same\' (\'First\' and \'Second\').');
-    assert.strictEqual(document.lineAt(diagnostics[0].range.start.line).text, '<node TEXT="Second" ID="ID_same"/>');
+    assert.strictEqual(diagnostics[0].severity, vscode.DiagnosticSeverity.Warning);
+    assert.match(diagnostics[0].message, /^The map '.+' has an unnamed central topic\.$/);
+    assert.strictEqual(document.lineAt(diagnostics[0].range.start.line).text, '<node TEXT="" ID="ID_root">');
     // A map that breaks a rule still opens, and can be edited.
     assert.notStrictEqual((await drawn()).scene!.readOnly, true);
   });
