@@ -72,6 +72,16 @@
           }
         ],
         "priority": "default"
+      },
+      {
+        "viewType": "etalii.adp.freeplane.mindmap",
+        "displayName": "Mind map",
+        "selector": [
+          {
+            "filenamePattern": "*.mm"
+          }
+        ],
+        "priority": "default"
       }
     ],
     "commands": [
@@ -150,6 +160,11 @@
         "command": "etalii.adp.new.gartner.hypecycle-graph",
         "title": "New Gartner hype cycle graph",
         "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.new.freeplane.mindmap",
+        "title": "New Mind map",
+        "category": "ADP"
       }
     ],
     "menus": {
@@ -171,6 +186,9 @@
         },
         {
           "command": "etalii.adp.new.gartner.hypecycle-graph"
+        },
+        {
+          "command": "etalii.adp.new.freeplane.mindmap"
         }
       ],
       "commandPalette": [
