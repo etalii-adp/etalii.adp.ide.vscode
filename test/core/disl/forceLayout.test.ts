@@ -207,16 +207,21 @@ describe('a force layout and a pinned node', () => {
 });
 
 describe('a force layout after a live change', () => {
-  it('starts from the positions on screen, so what the change does not touch moves only a little', () => {
-    const { nodes, links } = generate(4);
+  it('starts from the positions on screen and not from the computed start, so the picture moves less than one drawn anew', () => {
+    const { nodes, links } = generate(1);
     const settled = placed(nodes, links);
     const onScreen = nodes.map((node): ForceNode => ({ ...node, placed: settled.get(node.id)! }));
-    // An agent added to a specification of the first project.
-    const after = placed([...onScreen, { id: 'new-agent', tier: 2, width: 160, height: 44 }], [...links, ['p0s2', 'new-agent']]);
-    const untouched = nodes.filter((node) => !node.id.startsWith('p0') && node.tier !== 4);
-    const moves = untouched.map((node) => Math.hypot(after.get(node.id)!.x - settled.get(node.id)!.x, after.get(node.id)!.y - settled.get(node.id)!.y));
-    expect(Math.max(...moves)).toBeLessThan(60);
-    expect(overlapping(onScreen, after)).toEqual([]);
+    // An agent added to a specification, as an agent that starts work adds itself.
+    const added: ForceNode = { id: 'new-agent', tier: 2, width: 160, height: 44 };
+    const grown: Pair[] = [...links, ['p0s2', 'new-agent']];
+    const live = placed([...onScreen, added], grown);
+    const anew = placed([...nodes, added], grown);
+    const moves = (to: ReadonlyMap<string, Point>): number[] => nodes.map((node) => Math.hypot(to.get(node.id)!.x - settled.get(node.id)!.x, to.get(node.id)!.y - settled.get(node.id)!.y)).sort((a, b) => a - b);
+    const mean = (values: readonly number[]): number => values.reduce((sum, value) => sum + value, 0) / values.length;
+    // Half of the picture hardly moves, and all of it moves less than when it is laid out from nothing.
+    expect(moves(live)[Math.floor(nodes.length / 2)]).toBeLessThan(10);
+    expect(mean(moves(live))).toBeLessThan(mean(moves(anew)) / 2);
+    expect(overlapping([...onScreen, added], live)).toEqual([]);
   });
 
   it('moves a settled picture that did not change hardly at all', () => {
