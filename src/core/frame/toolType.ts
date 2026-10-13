@@ -24,39 +24,7 @@ export interface Box {
   readonly height: number;
 }
 
-/** One drawn element: its top-left, its size and what its type's notation needs to draw it. */
-export interface ViewElement extends Box {
-  readonly id: string;
-  /** The element type within its diagram type, such as `trend`. */
-  readonly type: string;
-  /** The text an in-place edit opens with. */
-  readonly label: string;
-  readonly tooltip?: string;
-  readonly data: Readonly<Record<string, unknown>>;
-}
-
-/** One drawn relation between two elements. */
-export interface ViewRelation {
-  readonly id: string;
-  readonly type: string;
-  readonly from: string;
-  readonly to: string;
-  readonly data: Readonly<Record<string, unknown>>;
-}
-
-/** What a canvas draws: the elements, the relations and whatever its type shows around them. */
-export interface ViewModel {
-  readonly elements: readonly ViewElement[];
-  readonly relations: readonly ViewRelation[];
-  /** True when nothing that edits may be offered. */
-  readonly readOnly: boolean;
-  /** Why the diagram is read-only or empty, when there is something to say. */
-  readonly notice?: string;
-  /** What the type's notation shows around the drawing: a ruler, a filter, a legend. */
-  readonly chrome: Readonly<Record<string, unknown>>;
-}
-
-/** Per open editor, never saved. A diagram type reads the options it knows and ignores the rest. */
+/** Per open editor, never saved. A tool type reads the options it knows and ignores the rest. */
 export interface ViewOptions {
   /** The part of the canvas in view; absent means everything. */
   readonly viewport?: Box;
@@ -217,9 +185,6 @@ export interface ToolType<View, Request> {
 export type DiagramToolType = ToolType<Scene, EditRequest>;
 /** A designer read from its definition. */
 export type DesignerToolType = ToolType<TableView, TableRequest>;
-
-/** A hand-coded diagram, until the last pull request of spec 027 (User Story 4) removes the two. */
-export type DiagramType = ToolType<ViewModel, EditRequest>;
 
 /** The identifier a tool type registers under: `etalii.adp.<vendor>.<type>`. */
 export function viewTypeOf(type: Pick<ToolType<unknown, unknown>, 'origin'>): string {

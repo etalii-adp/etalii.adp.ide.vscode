@@ -7,7 +7,7 @@ import {
   boxOutline, centreOf, cubicBetween, cubicPath, distance, leaving, movedPath, normalAt, normalOf, pathOutline, pointIn, pointOn, sideAt, sides, union,
   type Box, type Cubic, type Outline, type PathCommand, type Point, type Side,
 } from './geometry';
-import { scalesOf, type Coordinates, type Placement, type PlacementSource } from '../disl/coordinates';
+import { anchorOf, scalesOf, type Coordinates, type PlacementSource } from '../disl/coordinates';
 import type { Expressions, Scope } from '../disl/expressions';
 import { forceLayout, type ForceNode } from '../disl/forceLayout';
 import { assignRows, packAlongRows, type LayoutConfig, type LayoutPlugin, type PackedItem, type RowItem } from '../disl/layout';
@@ -19,6 +19,7 @@ import {
   type Position, type ShapeRef, type Stroke, type Style,
 } from '../disl/notation';
 import type { StoredView } from '../disl/persistence';
+import { tidyTreePlaces, type TidyTree, type TreeItem } from './tidyTree';
 import { isCel, isObject, localized, type Expression } from '../disl/specification';
 import type { Viewpoint, Viewpoints } from '../disl/viewpoints';
 
@@ -46,6 +47,11 @@ export interface SceneOptions {
   readonly collapsed?: Readonly<Record<string, boolean>>;
   /** The view data stored with the diagram (DISL 11.6): what is pinned and where, the groups that are not at their default, and the kept filters. */
   readonly view?: StoredView;
+  /**
+   * The top-left corner each node is kept at, by id, where what is kept of the view is a
+   * registration's layout and not a part of the document (FBL 8.3): a pin by another name.
+   */
+  readonly corners?: Readonly<Record<string, Point>>;
   /** Where the centre of each node was on screen before the document last changed: a layout that runs by itself starts from there (DISL 10.4). */
   readonly placed?: Readonly<Record<string, Point>>;
   /** The host's measure of a text, for a specification whose text metric is `host`. */
@@ -213,6 +219,8 @@ export interface Scene {
   readonly bounds?: Box;
   /** What could not be drawn as the specification says. */
   readonly findings: readonly Finding[];
+  /** For a scene a `tidyTree` laid out (DISL 10.3): the tree, with where each node is drawn, which is what a drag is previewed from. */
+  readonly tree?: SceneTree;
   // What follows is set by the tool type that shows the scene; `createScene` leaves it out.
   /** True when nothing that edits may be offered. */
   readonly readOnly?: boolean;
@@ -226,6 +234,11 @@ export interface Scene {
   readonly tokens?: Readonly<Record<string, SceneToken>>;
   /** What the notation shows around the drawing. */
   readonly chrome?: SceneChrome;
+}
+
+/** The tree a `tidyTree` laid out: its options, and every drawn node in model order with its place. */
+export interface SceneTree extends TidyTree {
+  readonly nodes: readonly (TreeItem & Point)[];
 }
 
 export interface SceneToken {
@@ -310,14 +323,7 @@ interface Placed {
 }
 
 const number = (value: unknown): number | undefined => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);
-const fractions: Readonly<Record<string, number>> = { left: 0, top: 0, center: 0.5, right: 1, bottom: 1 };
-
-/** The point of a node its position refers to, as fractions of its width and its height (DISL 5.8): its top-left corner unless its placement says otherwise. */
-export function anchorOf(anchor: Placement['anchor']): readonly [number, number] {
-  if (anchor === undefined) return [0, 0];
-  if (typeof anchor !== 'string') return anchor;
-  return [fractions[anchor.split('-').find((word) => word === 'left' || word === 'right') ?? 'center'], fractions[anchor.split('-').find((word) => word === 'top' || word === 'bottom') ?? 'center']];
-}
+export { anchorOf };
 
 // What this host decides of a compartment, a badge and a label at an edge, where DISL states no number (docs/disl-support.md).
 /** The space above and below the text of a row, and above the first and below the last row of a compartment. */
@@ -330,6 +336,9 @@ const hundredth = (value: number): number => Math.round(value * 100) / 100;
 
 // A value an item order sorts by: a moment by its time, whatever offset it is written with, and anything else as it is.
 const sortKey = (value: Value | undefined): Value | undefined => (typeof value === 'string' && /^\d{4}-\d\d-\d\dT/.test(value) && !Number.isNaN(Date.parse(value)) ? Date.parse(value) : value);
+
+/** How finely a superellipse is walked. A multiple of four, so the middle of each side is a step. */
+const superellipseSteps = 64;
 
 /** A padding as its four sides: top, right, bottom, left. */
 function sidesOf(padding: Style['padding']): readonly [number, number, number, number] {
@@ -384,7 +393,9 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
   const views = new Map<string, Scope>();
   // `self.view` (DISL 12.2): where the element is drawn, once that is known, and whether this viewer folded it.
   const pins = viewpoint.respect === 'pinned' ? options.view?.pinned ?? {} : {};
-  const world = expressions.over(model, { env: { viewpoint: viewpoint.name, ...options.env }, view: (id) => ({ ...views.get(id), collapsed: options.collapsed?.[id] === true, pinned: Object.hasOwn(pins, id) }) });
+  const corners = viewpoint.respect === 'pinned' ? options.corners ?? {} : {};
+  const isPinned = (id: string): boolean => Object.hasOwn(pins, id) || Object.hasOwn(corners, id);
+  const world = expressions.over(model, { env: { viewpoint: viewpoint.name, ...options.env }, view: (id) => ({ ...views.get(id), collapsed: options.collapsed?.[id] === true, pinned: isPinned(id) }) });
   const locale = typeof options.env?.locale === 'string' ? options.env.locale : undefined;
   const elements = new Map<string, ModelElement | ModelRelation>([...model.relations, ...model.elements].map((element) => [element.id, element]));
 
@@ -668,7 +679,25 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
   const config = viewpoint.layout;
   const laid = [...places.values()].filter((place) => place.layout.x || place.layout.y);
   const plugin = config?.plugin === undefined ? undefined : tool.layouts?.(config.plugin);
-  if (config?.force && !plugin) {
+  // Where a node is kept, as its top-left corner: the corner a registration keeps, else its pin, which is the point its placement names.
+  const keptAt = (place: Placed): Point | undefined => {
+    const { id } = place.element;
+    if (Object.hasOwn(corners, id)) return corners[id];
+    if (!Object.hasOwn(pins, id)) return undefined;
+    const [fx, fy] = anchorOf(place.notation.placement.anchor);
+    return { x: pins[id].x - fx * place.box.width, y: pins[id].y - fy * place.box.height };
+  };
+  let tree: SceneTree | undefined;
+  if (config?.tidyTree && !plugin) {
+    // Containment as a tidy tree (DISL 10.3): every drawn node, a node whose parent is not drawn as a root.
+    const items = [...places.values()].map((place): TreeItem => ({
+      id: place.element.id, width: place.box.width, height: place.box.height,
+      ...(place.element.parent !== undefined && places.has(place.element.parent) ? { parent: place.element.parent } : {}),
+    }));
+    const at = tidyTreePlaces(items, config.tidyTree, (id) => keptAt(places.get(id)!)?.y);
+    for (const place of places.values()) place.box = { ...place.box, ...at.get(place.element.id)! };
+    tree = { ...config.tidyTree, nodes: items.map((item) => ({ ...item, ...at.get(item.id)! })) };
+  } else if (config?.force && !plugin) {
     // Every node no attribute places is the layout's to place (DISL 10): a pinned one is where it is kept, and the others arrange themselves around it.
     const unplaced = (source: PlacementSource | undefined): boolean => source === undefined || source === 'free' || (isObject(source) && 'layout' in source);
     const free = [...places.values()].filter((place) => unplaced(place.notation.placement.x) && unplaced(place.notation.placement.y));
@@ -676,13 +705,12 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     const nodes = free.map((place): ForceNode => {
       const { id } = place.element;
       const { width, height } = place.box;
-      const [fx, fy] = anchorOf(place.notation.placement.anchor);
       const tier = config.force!.tiers.findIndex((types) => types.some((type) => isA(metamodel, place.element.type, type)));
-      const kept = Object.hasOwn(pins, id) ? pins[id] : undefined;
+      const kept = keptAt(place);
       const on = options.placed && Object.hasOwn(options.placed, id) ? options.placed[id] : undefined;
       return {
         id, width, height, ...(tier < 0 ? {} : { tier }),
-        ...(kept ? { pinned: { x: kept.x + (0.5 - fx) * width, y: kept.y + (0.5 - fy) * height } } : {}), ...(on ? { placed: on } : {}),
+        ...(kept ? { pinned: { x: kept.x + width / 2, y: kept.y + height / 2 } } : {}), ...(on ? { placed: on } : {}),
       };
     });
     const links = [...model.relations, ...derived].flatMap((relation) => (relation.source !== undefined && relation.target !== undefined && among.has(relation.source) && among.has(relation.target) ? [[relation.source, relation.target] as const] : []));
@@ -795,13 +823,26 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
       const path = definition?.path ?? (typeof shape === 'object' && 'path' in shape ? shape.path : undefined);
       const called = definition?.name ?? (typeof shape === 'string' ? shape : shape && 'type' in shape ? shape.type : 'rect');
       if (path) return { kind: 'path', name: called, box: within, commands: commandsOf(path, within, self, scope(within)), fillRule: path.fillRule };
-      if (!definition && (called === 'hexagon' || called === 'folder')) {
-        // Two built-in shapes that are no rectangle, by their parameters or the defaults of DISL B.2; a fraction is of the width.
+      if (!definition && (called === 'hexagon' || called === 'folder' || called === 'parallelogram' || called === 'superellipse')) {
+        // The built-in shapes that are no rectangle, by their parameters or the defaults of DISL B.2; a fraction is of the width.
         const stated = typeof shape === 'object' && 'type' in shape ? shape.params ?? {} : {};
         const param = (name: string, fallback: number): number => number(bound(stated[name], self)) ?? fallback;
         const { width: w, height: h } = within;
         let points: readonly (readonly [number, number])[];
-        if (called === 'hexagon') {
+        if (called === 'superellipse') {
+          // |2x/w - 1|^n + |2y/h - 1|^n = 1, walked once round in as many steps as keep the middle of each side on a step.
+          const power = 2 / Math.max(2, param('exponent', 4));
+          points = Array.from({ length: superellipseSteps }, (_, index) => {
+            const angle = (2 * Math.PI * index) / superellipseSteps;
+            const [cos, sin] = [Math.cos(angle), Math.sin(angle)];
+            return [w / 2 + Math.sign(cos) * Math.abs(cos) ** power * (w / 2), h / 2 + Math.sign(sin) * Math.abs(sin) ** power * (h / 2)] as const;
+          });
+        } else if (called === 'parallelogram') {
+          // The skew is a fraction of the width, or a length where it is more than one.
+          const skew = param('skew', 0.2);
+          const lean = Math.min(w, skew > 1 ? skew : skew * w);
+          points = bound(stated.direction, self) === 'left' ? [[0, 0], [w - lean, 0], [w, h], [lean, h]] : [[lean, 0], [w, 0], [w - lean, h], [0, h]];
+        } else if (called === 'hexagon') {
           const inset = param('inset', 0.25);
           points = bound(stated.orientation, self) === 'pointy'
             ? [[w / 2, 0], [w, inset * h], [w, (1 - inset) * h], [w / 2, h], [0, (1 - inset) * h], [0, inset * h]]
@@ -896,14 +937,19 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
       const fixed = isObject(from) && ('layout' in from || (isCel(from) && !('write' in from)));
       return !fixed && (typeof allowed === 'boolean' ? allowed : allowed[axis] !== false);
     };
+    // In a tidy tree a node is dragged where the tree's `drag` gives the drag a meaning: across to reorder, down to move its row (DISL 10.3).
+    const dragged = (axis: 'x' | 'y', allowed: boolean | { readonly x?: boolean; readonly y?: boolean }): boolean => {
+      const drag = tree?.drag;
+      return drag !== undefined && (axis === 'x' ? drag.across === 'reorder' : drag.down === 'row') && (typeof allowed === 'boolean' ? allowed : allowed[axis] !== false);
+    };
     return {
       declared: (custom?.parts ?? []).map((part, index) => part.id ?? String(index)),
       notation: own,
       node: {
         id: self, type: element.type, box, system: place.system, shape, outline, style, params, parts, handles, labels, compartments, badges,
-        pinned: Object.hasOwn(pins, self),
+        pinned: isPinned(self),
         tooltip: message(own.tooltip, self),
-        movable: { x: free('x', movable), y: free('y', movable) },
+        movable: { x: free('x', movable) || dragged('x', movable), y: free('y', movable) || dragged('y', movable) },
         resizable: { x: free('x', resizable) && sizable !== false && sizable !== 'vertical', y: free('y', resizable) && sizable !== false && sizable !== 'horizontal' },
         connectable: flag(own.connectable, self, true),
         selectable: flag(own.selectable, self, true),
@@ -1119,6 +1165,14 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     }
     if (toAnchor.mode !== 'part') to = towards(toAnchor, target, from);
 
+    if (routing === 'orthogonal') {
+      // At right angles, as the end it leaves faces: away to halfway, across, and on into the other end.
+      const down = from.normal.x === 0;
+      const middle = down ? (from.y + to.y) / 2 : (from.x + to.x) / 2;
+      const [first, second] = down ? [{ x: from.x, y: middle }, { x: to.x, y: middle }] : [{ x: middle, y: from.y }, { x: middle, y: to.y }];
+      edges.push({ ...common, from, to, path: [{ op: 'M', x: from.x, y: from.y }, { op: 'L', ...first }, { op: 'L', ...second }, { op: 'L', x: to.x, y: to.y }] });
+      continue;
+    }
     if (routing !== 'bezier') {
       if (routing !== 'straight') report(`routing:${routing}`, `An edge of the type \`${relation.type}\` is routed as \`${routing}\`, which this add-on draws as a straight line.`);
       edges.push({ ...common, from, to, path: [{ op: 'M', x: from.x, y: from.y }, { op: 'L', x: to.x, y: to.y }] });
@@ -1142,6 +1196,7 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     filtered: [...filtered],
     bounds: nodes.length === 0 ? undefined : nodes.map((node) => node.box).reduce(union),
     findings: [...found.values()],
+    ...(tree ? { tree } : {}),
   };
 }
 

@@ -1,10 +1,8 @@
 import type { FromToolbox, ToToolbox } from '../../core/frame/protocol';
-import '../tools';
 import { Toolbox } from './toolbox';
 import './toolbox.css';
 
-// The ADP Toolbox view: the entries of the active diagram's type, with the icons every diagram type
-// brings, and the messages between it and the extension.
+// The ADP Toolbox view: the entries of the active diagram's type, and the messages between it and the extension.
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 

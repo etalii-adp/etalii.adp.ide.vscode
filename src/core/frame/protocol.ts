@@ -8,7 +8,7 @@ export const protocolVersion = 2;
 export type ToCanvas =
   /**
    * What to show, and the version of the document it was computed from. The view is the tool type's
-   * own: a `Scene`, a `TableView` or, until the hand-coded diagrams are gone, a `ViewModel`.
+   * own: a `Scene` or a `TableView`.
    */
   | {
     readonly v: 2; readonly type: 'view'; readonly origin: string; readonly kind: 'diagram' | 'designer'; readonly view: unknown; readonly actions: readonly Action[]; readonly version: number;

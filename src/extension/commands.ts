@@ -5,8 +5,8 @@ import { keepAsText } from './opening';
 import { PropertiesView } from './propertiesView';
 import { entriesOf, ToolboxView } from './toolboxView';
 import type { OpenTool, Tools } from './toolEditor';
+import type { Scene } from '../core/scene/scene';
 import type { AnyToolType } from './toolTypes';
-import { isScene } from './toolTypes';
 
 /** The commands the plug-in adds, all in the category "ADP". */
 export function registerCommands(context: vscode.ExtensionContext, tools: Tools, types: readonly AnyToolType[]): void {
@@ -100,15 +100,25 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
   }
 
   // Under test, the canvas's two ends are reachable without a pointer: what it was last sent, and
-  // an edit request made as it would make one (etalii.adp spec 006, contracts/frame.md). What it
-  // was sent is `scene` for a tool type read from its definition and `view` for a hand-coded one.
+  // an edit request made as it would make one (etalii.adp spec 006, contracts/frame.md). What a
+  // diagram was sent is its `scene`, and `view` says the same of it in the words the tests of spec
+  // 006 read: each node as an element with its top-left, its type in lower case and the text an
+  // edit in place opens with, and each edge as a relation.
   if (process.env.ADP_TEST) {
+    const elementsOf = (scene: Scene): unknown => ({
+      elements: scene.nodes.map((node) => ({
+        id: node.id, type: node.type.toLowerCase(), ...node.box,
+        label: (node.labels.find((label) => label.editable !== false) ?? node.labels[0])?.editText ?? '',
+      })),
+      relations: scene.edges.map((edge) => ({ id: edge.id, type: edge.type.toLowerCase(), from: edge.source, to: edge.target })),
+      readOnly: scene.readOnly === true, ...(scene.notice === undefined ? {} : { notice: scene.notice }),
+    });
     register('etalii.adp.test.state', () => {
       const active = tools.active;
       if (!active) return undefined;
       const sent = active.lastView;
       return {
-        ...(sent === undefined ? {} : active.type.kind === 'designer' ? { table: sent } : isScene(sent) ? { scene: sent } : { view: sent }),
+        ...(sent === undefined ? {} : 'nodes' in sent ? { scene: sent, view: elementsOf(sent) } : { table: sent }),
         kind: active.type.kind, options: active.options, fields: active.fields(), selection: active.selection, version: active.document.version, origin: active.type.origin,
         actions: active.type.actions(active.source, active.selection, active.options),
       };

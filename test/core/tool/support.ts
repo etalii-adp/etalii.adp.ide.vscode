@@ -101,6 +101,17 @@ export const fixture = (name: string): Source => ({ fileName: `${name}.ghg`, tex
 
 export const sourceOf = (text: string, fileName = 'document.ghg'): Source => ({ fileName, text });
 
+const behaviorModels = 'examples/agent-behavior-modelling';
+
+export const behaviorModelNames = (): string[] => readdirSync(behaviorModels, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+
+/** An example of Agent Behavior Modelling as the frame hands it to a tool type: its Markdown and its registration, exactly as they are on disk. */
+export const behaviorModel = (name: string): Source => ({
+  fileName: `${name}.md`,
+  text: readFileSync(`${behaviorModels}/${name}/${name}.md`, 'utf8'),
+  registration: readFileSync(`${behaviorModels}/${name}/${name}.adp`, 'utf8'),
+});
+
 // ---- outcomes ----
 
 export type Applied = Extract<EditOutcome, { kind: 'applied' }>;

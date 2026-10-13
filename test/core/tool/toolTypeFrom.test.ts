@@ -33,6 +33,13 @@ const nodeOf = (source: Source, id: string) => type.view(source, {}).nodes.find(
 /** A new id as the definition's persistence makes it: 25 characters of base 36. */
 const minted = /^ {2}- id: [0-9a-z]{25}$/;
 
+// The ids the tool type is spoken to by (src/core/tool/wireIds.ts): the definition maps its own names to them in `x-ghg`,
+// and what the tool type gives out carries them. A request is accepted under the definition's own name as well.
+const wire = object(specification['x-ghg']);
+const toolId = (tool: unknown): unknown => at(wire, 'tools', String(tool), 'drop');
+const actionId = (key: unknown, target: string): unknown => at(wire, 'actions', `${target}/${String(key)}`) ?? at(wire, 'actions', String(key));
+const rowId = (row: string): string => String(at(wire, 'properties', row));
+
 /** Whether a sentence is a text of the definition: a message as it is written, or a text one of its expressions holds. */
 const stated = (sentence: string): boolean => definitionText.includes(JSON.stringify(sentence)) || definitionText.includes(`'${sentence}'`);
 
@@ -240,12 +247,12 @@ describe('what is offered is what the definition offers', () => {
   it('in the toolbox: every tool of its groups, with the definition\'s label, icon and description', () => {
     const tools = array(at(specification, 'toolbox', 'groups')).flatMap((group) => array(at(group, 'tools')));
     expect(tools).toHaveLength(3);
-    expect(type.toolbox(prepared)).toEqual(tools.map((tool) => ({ id: at(tool, 'id'), label: at(tool, 'label'), icon: at(tool, 'icon'), description: at(tool, 'doc') })));
+    expect(type.toolbox(prepared)).toEqual(tools.map((tool) => ({ id: toolId(at(tool, 'id')), label: at(tool, 'label'), icon: at(tool, 'icon'), description: at(tool, 'doc') })));
   });
 
   it.each(Object.keys(targets))('as actions on %s: the entries of its context menu, in their order', (target) => {
     const menu = array(at(specification, 'toolbox', 'contextMenus')).find((set) => array(at(set, 'for')).includes(target));
-    const declared = array(at(menu, 'tools')).map((entry) => ({ id: at(entry, 'operation') ?? at(entry, 'kind'), label: at(entry, 'label'), icon: at(entry, 'icon'), shortcut: at(entry, 'shortcut') }));
+    const declared = array(at(menu, 'tools')).map((entry) => ({ id: actionId(at(entry, 'operation') ?? at(entry, 'kind'), target), label: at(entry, 'label'), icon: at(entry, 'icon'), shortcut: at(entry, 'shortcut') }));
     expect(declared.length).toBeGreaterThan(1);
     const offered = type.actions(prepared, targets[target] === undefined ? [] : [targets[target]]);
     expect(offered.map(({ id, label, icon, shortcut }) => ({ id, label, icon, shortcut }))).toEqual(declared);
@@ -254,8 +261,8 @@ describe('what is offered is what the definition offers', () => {
 
   it('leaves out an entry the definition shows only on a condition, until the condition holds', () => {
     const ids = (source: Source): string[] => type.actions(source, ['transistors']).map((action) => action.id);
-    expect(ids(base)).not.toContain('evenPhases');
-    expect(ids(prepared)).toContain('evenPhases');
+    expect(ids(base)).not.toContain(actionId('evenPhases', 'Trend'));
+    expect(ids(prepared)).toContain(actionId('evenPhases', 'Trend'));
   });
 
   it('as fields: the rows of the definition\'s form, each in the section it is in, with what it shows', () => {
@@ -266,15 +273,15 @@ describe('what is offered is what the definition offers', () => {
     ]);
     const byId = new Map(fields.map((field) => [field.id, field]));
     const marks = array(at(specification, 'forms', 'trend', 'items')).flatMap((section) => array(at(section, 'items'))).find((item) => at(item, 'attribute') === 'phases');
-    expect(byId.get('name')).toEqual({ id: 'name', label: 'Name', group: 'Identity', control: 'text', value: 'Transistors' });
-    expect(byId.get('description')).toMatchObject({ control: 'multiline', value: '' });
-    expect(byId.get('tags')).toMatchObject({ control: 'tags', value: '', options: ['electronics', 'invention'] });
-    expect(byId.get('phases')).toMatchObject({ control: 'slider', value: 'All four', options: array(at(marks, 'widgetOptions', 'marks')).map((mark) => at(mark, 'label')) });
-    expect(byId.get('peakEnd')?.value).toBe('1960-01');
+    expect(byId.get(rowId('name'))).toEqual({ id: 'ghg.name', label: 'Name', group: 'Identity', control: 'text', value: 'Transistors' });
+    expect(byId.get(rowId('description'))).toMatchObject({ control: 'multiline', value: '' });
+    expect(byId.get(rowId('tags'))).toMatchObject({ control: 'tags', value: '', options: ['electronics', 'invention'] });
+    expect(byId.get(rowId('phases'))).toMatchObject({ control: 'slider', value: 'All four', options: array(at(marks, 'widgetOptions', 'marks')).map((mark) => at(mark, 'label')) });
+    expect(byId.get(rowId('peakEnd'))?.value).toBe('1960-01');
     // A computed row is shown and not edited, with the definition's reason.
     const reason = String(array(at(array(at(specification, 'forms', 'trend', 'items')).flatMap((section) => array(at(section, 'items'))).find((item) => at(item, 'id') === 'peakInfluencedBy'), 'readOnlyReasons'))[0]);
-    expect(byId.get('peakInfluencedBy')).toMatchObject({ control: 'multiline', value: 'Transistor invented', readOnly: reason });
-    expect(byId.get('slopeInfluences')?.value).toBe('Transistor radio · Peak');
+    expect(byId.get(rowId('peakInfluencedBy'))).toMatchObject({ control: 'multiline', value: 'Transistor invented', readOnly: reason });
+    expect(byId.get(rowId('slopeInfluences'))?.value).toBe('Transistor radio · Peak');
   });
 
   it('as fields of one selected element only', () => {
@@ -289,7 +296,7 @@ describe('what is offered is what the definition offers', () => {
   });
 });
 
-// The value each row of ADP Properties is given, by the type of its element. A row that is added to a form needs one here.
+// The value each row of ADP Properties is given, by the type of its element and the row's name in the definition. A row that is added to a form needs one here.
 const entered: Readonly<Record<string, string>> = {
   'Trend/name': 'Valves', 'Trend/description': 'Before the transistor.', 'Trend/tags': 'a, b', 'Trend/start': '1951-01', 'Trend/stop': '1991-01',
   'Trend/phases': 'Peak and Trough', 'Trend/peakEnd': '1961-01', 'Trend/troughEnd': '1971-01', 'Trend/slopeEnd': '1981-01',
@@ -341,10 +348,12 @@ describe('every offer can be made', () => {
   });
 
   const rows = Object.entries(targets).flatMap(([target, id]) => (id === undefined ? [] : type.fields(prepared, [id]).filter((field: Field) => field.readOnly === undefined).map((field) => ({ target, id, field: field.id }))));
+  /** The value for a row, by the id the tool type gives the row. */
+  const valueOf = new Map(Object.entries(entered).map(([key, value]) => [`${key.slice(0, key.indexOf('/'))}/${rowId(key.slice(key.indexOf('/') + 1))}`, value]));
 
-  it('are, in ADP Properties, 18 rows that can be edited', () => expect(rows.map((row) => `${row.target}/${row.field}`).sort()).toEqual(Object.keys(entered).sort()));
+  it('are, in ADP Properties, 18 rows that can be edited', () => expect(rows.map((row) => `${row.target}/${row.field}`).sort()).toEqual([...valueOf.keys()].sort()));
 
-  it.each(rows)('the field $field of $target', ({ target, id, field }) => made({ kind: 'setField', id, field, value: entered[`${target}/${field}`] }));
+  it.each(rows)('the field $field of $target', ({ target, id, field }) => made({ kind: 'setField', id, field, value: valueOf.get(`${target}/${field}`)! }));
 
   const scene = type.view(prepared, {});
 
@@ -393,7 +402,7 @@ describe('a refusal carries the definition\'s sentence, and nothing is written',
   it('of an action that is offered disabled, with the same sentence as its reason', () => {
     const empty = sourceOf(type.newDocument('empty'));
     const sentence = at(array(at(specification, 'behavior', 'operations', 'arrange', 'unavailable'))[0], 'message');
-    expect(type.actions(empty, []).find((action) => action.id === 'arrange')).toMatchObject({ enabled: false, disabledReason: sentence });
+    expect(type.actions(empty, []).find((action) => action.id === actionId('arrange', 'diagram'))).toMatchObject({ enabled: false, disabledReason: sentence });
     expect(edit(empty, { kind: 'action', action: 'arrange' })).toEqual({ kind: 'refused', sentence });
   });
 
@@ -438,7 +447,7 @@ describe('a refusal carries the definition\'s sentence, and nothing is written',
   });
 
   it('of a field that is only shown, with the reason the field gives', () => {
-    const field = type.fields(base, ['transistors']).find((candidate) => candidate.id === 'peakInfluencedBy')!;
+    const field = type.fields(base, ['transistors']).find((candidate) => candidate.id === rowId('peakInfluencedBy'))!;
     expect(refusal(edit(base, { kind: 'setField', id: 'transistors', field: field.id, value: 'Radio' }))).toBe(field.readOnly);
   });
 });
@@ -447,14 +456,14 @@ describe('an unreadable body', () => {
   const broken = fixture('not-yaml');
   const sentence = at(specification, 'behavior', 'messages', 'std.readOnly');
 
-  it('opens empty and read-only, with the reader\'s finding as its notice', () => {
+  it('opens empty and read-only, with the definition\'s sentence for it as its notice', () => {
     const found = type.findings(broken);
     expect(found).toHaveLength(1);
     // The code and the severity the definition gives the reader's finding, on the line the reader names.
     expect(found[0]).toMatchObject({ rule: at(specification, 'constraints', 'builtIn', 'std.unparseable', 'code'), severity: at(specification, 'constraints', 'builtIn', 'std.unparseable', 'severity'), line: 3 });
     expect(found[0].message).toMatch(/^The document could not be read as YAML: ./);
     const scene = type.view(broken, {});
-    expect(scene).toMatchObject({ nodes: [], edges: [], readOnly: true, notice: found[0].message });
+    expect(scene).toMatchObject({ nodes: [], edges: [], readOnly: true, notice: sentence });
   });
 
   it('offers nothing that edits', () => {

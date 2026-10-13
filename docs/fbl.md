@@ -4,7 +4,7 @@ FBL, the [Format Binding Language](https://github.com/etalii-adp/etalii.adp/blob
 
 ## What the library is
 
-**No tool uses it yet.** The hype cycle graph and Agent Behavior Modelling read and write their files as before, with their own text primitives (`src/core/text`) and the existing reader of the `.adp` registration (`src/core/registration`). The library adds no editor, command, finding or setting, and nothing a user sees changes. It is in the plug-in so that the tool types that come next can be bound to their formats by an FBL document and no code of their own.
+**Every tool type uses it.** A tool type is read from its definition (see [docs/disl-support.md](disl-support.md)), and its documents are read and written through its FBL binding by this library: an edit is the library's splices of the text, and a registration is read with the library's registration document. The library itself adds no editor, command, finding or setting.
 
 It takes an FBL document and a body as bytes, and:
 

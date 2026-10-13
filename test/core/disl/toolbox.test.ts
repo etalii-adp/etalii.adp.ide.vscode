@@ -113,14 +113,17 @@ describe('a toolbox', () => {
 
   it('reports a tool that creates no type of the specification, and what it does not support', () => {
     const { findings } = interpret(small({
-      groups: [{ id: 'all', tools: [{ id: 'ghost', creates: 'Ghost' }, { id: 'box', creates: 'Box', drop: { place: 'under' } }] }],
+      groups: [{ id: 'all', tools: [
+        { id: 'ghost', creates: 'Ghost' }, { id: 'box', creates: 'Box', drop: { place: 'under' } },
+        { id: 'dot', creates: 'Dot', drop: { targets: [{ kind: 'operation', operation: 'tidy', on: ['Box'] }] } },
+      ] }],
       contextTools: [{ for: ['Box'], tools: [{ kind: 'operation', operation: 'tidy', forEach: 'self.children' }] }],
     }));
     expect(findings.map((finding) => finding.message)).toEqual([
       'The tool `ghost` creates `Ghost`, which is not a type of this specification.',
       'The tool `ghost` has no `kind` and creates nothing, so it does nothing.',
-      'The tool `box` chooses what a drop does by what lies under it, which this add-on does not support; it creates at the drop point.',
-      'A context tool is repeated for each item of a list (`forEach`), which this add-on does not support; it is shown once.',
+      'The tool `box` places what it creates by `under`, which is no placement of this specification; it creates at the drop point.',
+      'The tool `dot` chooses what a drop does by what lies under it, which this add-on does not support; it creates at the drop point.',
     ]);
   });
 

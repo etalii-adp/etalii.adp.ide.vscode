@@ -12,7 +12,8 @@ import { altered, applied, array, at, definitionOf, diagramOf, linesChanged, obj
 // `fixtures/tools/mindmap/mindmap.transcript.json` (standalone 5756a07,
 // `EtAlii.Adp.Diagram.Mindmap.Tests/Parity/MindmapTranscript.cs`). The transcript names a tool, an
 // action and a property row by standalone's wire ids; the definition maps its own names to them in
-// `x-mindmap`, which this test reads to translate. What a test expects is the transcript's or the
+// `x-mindmap`, and the tool type gives its toolbox, its actions and its rows out under those ids. A
+// request is made here under the definition's own name, which the tool type takes as well. What a test expects is the transcript's or the
 // definition's, and is typed here only where it is the bytes of a document.
 
 const folder = 'mindmap';
@@ -39,7 +40,7 @@ const recorded = (document: string): Recorded => {
 };
 const sha256 = (text: string): string => createHash('sha256').update(encode(text)).digest('hex');
 
-// The transcript's ids, by the definition's names.
+// The transcript's ids, by the definition's names: what a request is made under.
 const inverse = (map: unknown): Map<string, string> => new Map(Object.entries(object(map)).map(([name, wire]) => [String(wire), name]));
 const actionIds = inverse(at(specification, 'x-mindmap', 'actions'));
 const rowIds = inverse(at(specification, 'x-mindmap', 'properties'));
@@ -62,7 +63,7 @@ function actionOf(line: string): Action {
   const [first, label, icon, shortcut, available] = line.split(' | ');
   const wire = first.slice(first.indexOf(' ') + 1);
   return {
-    id: actionIds.get(wire) ?? wire, label, icon,
+    id: wire, label, icon,
     // Standalone sends the space bar as the key " "; the definition writes it "Space" (mindmap.md 7.1).
     ...(shortcut === '-' ? {} : { shortcut: shortcut === ' ' ? 'Space' : shortcut }),
     enabled: available.startsWith('on'),
@@ -74,7 +75,7 @@ function fieldOf(line: string): Field {
   const match = /^(\S+) \| (.*?) \| ("(?:[^"\\]|\\.)*") \| (Line|Text) \| (editable|read-only \((.*)\)) \| group (.*)$/s.exec(line);
   if (!match) throw new Error(`not a row: ${line}`);
   return {
-    id: rowIds.get(match[1]) ?? match[1], label: match[2], group: match[7], control: match[4] === 'Text' ? 'multiline' : 'text', value: JSON.parse(match[3]) as string,
+    id: match[1], label: match[2], group: match[7], control: match[4] === 'Text' ? 'multiline' : 'text', value: JSON.parse(match[3]) as string,
     ...(match[6] === undefined ? {} : { readOnly: match[6] }),
   };
 }
@@ -199,7 +200,7 @@ function run(start: Source, record: Recorded): { readonly steps: readonly Ran[];
         same(last, { kind: 'confirm', title: question[1], message: question[2], confirmLabel: question[3], danger: question[4] === 'True' });
       } else if (answer.startsWith('chooses: ')) {
         // Standalone offers a tree of the project's files; this host answers with the platform's dialog, which the extension shows.
-        same(last, { kind: 'pickPath', id: real(step.do.slice(step.do.lastIndexOf(' ') + 1)), field: 'link' });
+        same(last, { kind: 'pickPath', id: real(step.do.slice(step.do.lastIndexOf(' ') + 1)), field: 'mindmap.link' });
       } else if (answer.startsWith('asks: ')) {
         const asked = /InlineLabelElementId = (\S*), CommitActionId = (\S*) \}$/.exec(answer)!;
         if (asked[2] !== '') {
@@ -207,7 +208,7 @@ function run(start: Source, record: Recorded): { readonly steps: readonly Ran[];
           if (last.kind !== 'applied' || last.select === undefined || masked(last.select) !== asked[1] || last.editLabel !== true || last.multiline === true) problems.push(`The outcome is ${JSON.stringify(last)}, not the new node ${asked[1]} selected with its text opened in place.`);
         } else if (asked[1] !== '') same(last, { kind: 'editInPlace', id: real(asked[1]), multiline: false });
         // Standalone asks the notes in a dialog; this host answers in ADP Properties, at the row of the notes.
-        else same(last, { kind: 'showField', field: 'notes' });
+        else same(last, { kind: 'showField', field: 'mindmap.notes' });
       } else problems.push(`An answer this test does not read: ${answer}`);
     } catch (error) {
       problems.push(`It threw: ${error instanceof Error ? error.message : String(error)}`);
@@ -294,7 +295,9 @@ describe('the mind map, a tool type from its definition', () => {
   });
 
   it('offers the toolbox the transcript records', () => {
-    expect(type.toolbox(architecture).map((entry) => `${String(object(toolWire[entry.id]).id)} | ${entry.label} | ${entry.icon} | drops ${String(object(toolWire[entry.id]).drop)} | ${entry.description}`)).toEqual(transcript.toolbox);
+    // An entry is offered under the id it is dropped by.
+    const toolOf = (drop: string): Json => object(Object.values(toolWire).find((tool) => object(tool).drop === drop));
+    expect(type.toolbox(architecture).map((entry) => `${String(toolOf(entry.id).id)} | ${entry.label} | ${entry.icon} | drops ${entry.id} | ${entry.description}`)).toEqual(transcript.toolbox);
   });
 
   it('starts a new document as one central topic named after the file, which reads cleanly', () => {
@@ -352,7 +355,7 @@ describe.each(documents)('$name', ({ name, path, record }) => {
     // A view with the fold of every branch flipped: what the file leaves open is folded, what it folds is open.
     const flipped: ViewOptions = {
       collapsed: Object.fromEntries(targets.flatMap(({ id }) => {
-        const row = type.fields(source, [id]).find((field) => field.id === 'folded');
+        const row = type.fields(source, [id]).find((field) => field.id === 'mindmap.folded');
         return row ? [[id, row.value === 'No']] : [];
       })),
     };
@@ -409,7 +412,7 @@ describe('a refusal, in the definition\'s words', () => {
     for (const field of type.fields(architecture, [root]).filter((row) => row.readOnly !== undefined)) {
       expect(refusal(edit({ kind: 'setField', id: root, field: field.id, value: 'Yes' }))).toBe(field.readOnly);
     }
-    expect(type.fields(architecture, [root]).filter((row) => row.readOnly !== undefined).map((row) => row.id)).toEqual(['folded', 'identifier']);
+    expect(type.fields(architecture, [root]).filter((row) => row.readOnly !== undefined).map((row) => row.id)).toEqual(['mindmap.folded', 'mindmap.identifier']);
   });
 });
 
@@ -507,7 +510,7 @@ describe('the gestures the transcript has no step for', () => {
       const labels = array(node.labels).map((label, index) => (index === 0 ? { ...object(label), editable: 'form' } : label));
       return { ...written, notation: { ...object(written.notation), nodes: { ...nodes, Node: { ...node, labels } } } };
     }) }, registry);
-    expect(inForm.edit(architecture, { kind: 'action', action: 'editLabel', id: root }, {}, false)).toEqual({ kind: 'showField', field: 'text' });
+    expect(inForm.edit(architecture, { kind: 'action', action: 'editLabel', id: root }, {}, false)).toEqual({ kind: 'showField', field: 'mindmap.text' });
   });
 });
 

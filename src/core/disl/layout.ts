@@ -1,11 +1,12 @@
 // The layout of a specification (DISL 10): the configurations it names, when layout runs and what
 // it respects, and the standard algorithms `rowPacked` (10.1) and `rows` (10.2), whose results DISL
 // states. The algorithms work on plain items; the scene gives them the elements' places. The `force`
-// layout in tiers (10.4) is read here and run by `forceLayout.ts`.
+// layout in tiers (10.4) is read here and run by `forceLayout.ts`, and `tidyTree` (10.3) by `tidyTree.ts`.
 
 import type { GeomExpr } from './notation';
 import { finding, type Finding, type Loaded, type Model } from './model';
 import { isObject, type Doc, type Expression, type Section, type Specification } from './specification';
+import type { TidyTree } from '../scene/tidyTree';
 
 /** `$defs/RowPacked` (DISL 10.1), with its defaults filled in. */
 export interface RowPacked {
@@ -43,6 +44,8 @@ export interface LayoutConfig {
   readonly rowPacked?: RowPacked;
   readonly rows?: RowsLayout;
   readonly force?: ForceLayout;
+  /** `$defs/TidyTree` (DISL 10.3) with its defaults filled in, and the spacing the tree is packed with. */
+  readonly tidyTree?: TidyTree;
   /** The id of the plugin that is the algorithm, for one named `plugin:<id>` (DISL 13.1). */
   readonly plugin?: string;
   /** `spacing` and `options` as they are written: a plugin's to read. */
@@ -84,7 +87,7 @@ export interface Layout {
 }
 
 /** The algorithms this add-on runs; a configuration of another one is kept and reported. */
-export const standardAlgorithms: readonly string[] = ['none', 'rowPacked', 'rows', 'force'];
+export const standardAlgorithms: readonly string[] = ['none', 'rowPacked', 'rows', 'force', 'tidyTree'];
 
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T => (allowed.includes(value as T) ? (value as T) : fallback);
 
@@ -102,7 +105,11 @@ export function readLayoutConfig(name: string, declared: Section, report: (messa
   const packed = options('rowPacked');
   const rows = options('rows');
   const force = options('force');
+  const tree = options('tidyTree');
   const number = (value: unknown, fallback: number): number => (typeof value === 'number' && Number.isFinite(value) ? value : fallback);
+  const spacing = isObject(declared.spacing) ? declared.spacing : {};
+  const [treeRows, treeDrag] = [isObject(tree?.rows) ? tree.rows : {}, isObject(tree?.drag) ? tree.drag : {}];
+  if (tree && declared.direction !== undefined && declared.direction !== 'down') report(`The layout \`${name}\` grows its tree \`${String(declared.direction)}\`, which this add-on does not do; the tree is drawn downwards.`);
   // simplified: a `force` layout is run in tiers, as the first definition that names it states it; without `tiers` every node is placed by the forces alone, about the origin.
   const tiers = (Array.isArray(force?.tiers) ? force.tiers : []).map((tier) => [tier].flat().filter((type): type is string => typeof type === 'string'));
   return {
@@ -125,8 +132,16 @@ export function readLayoutConfig(name: string, declared: Section, report: (messa
       swapPasses: number(rows.swapPasses, 0),
     },
     force: force && { tiers, gap: number(force.gap, 24) },
+    tidyTree: tree && {
+      parentAlign: oneOf(tree.parentAlign, ['firstLastCentre', 'childrenCentre'], 'firstLastCentre'),
+      origin: oneOf(tree.origin, ['leftmostAtZero', 'rootAtZero'], 'leftmostAtZero'),
+      rows: { stored: oneOf(treeRows.stored, ['none', 'y'], 'none'), minGap: number(treeRows.minGap, 0) },
+      drag: { carry: oneOf(treeDrag.carry, ['subtree', 'node'], 'node'), across: oneOf(treeDrag.across, ['reorder', 'none'], 'none'), down: oneOf(treeDrag.down, ['row', 'none'], 'none') },
+      // simplified: the distances DISL leaves to the runtime where a tree states none.
+      spacing: { node: number(spacing.node, 24), layer: number(spacing.layer, 48), component: number(spacing.component, number(spacing.node, 24) * 2) },
+    },
     ...(plugin === undefined ? {} : { plugin }),
-    spacing: Object.fromEntries(Object.entries(isObject(declared.spacing) ? declared.spacing : {}).filter((entry): entry is [string, number] => typeof entry[1] === 'number')),
+    spacing: Object.fromEntries(Object.entries(spacing).filter((entry): entry is [string, number] => typeof entry[1] === 'number')),
     options: isObject(declared.options) ? declared.options : {},
     doc: declared.doc as Doc | undefined,
   };

@@ -17,16 +17,12 @@ const webview = [
       '!**/core/frame',
       '!**/core/scene',
       '!**/core/tool',
-      // The hand-coded diagrams draw from their own core folders; User Story 4 of spec 027 removes these three.
-      '!**/core/diagram',
-      '!**/core/gartner-hypecycle-graph',
-      '!**/core/agent-behavior-modelling',
     ],
     message: 'src/webview imports only src/core/frame and src/core/scene, so nothing that reads a definition.',
   },
-  // geometry.ts is arithmetic on points and paths and reads nothing, so the webview may call it.
+  // geometry.ts is arithmetic on points and paths, and tidyTree.ts on the boxes of a tree: they read nothing, so the webview may call them.
   { group: ['**/core/tool/*', '!**/core/tool/tableView'], message: 'Of src/core/tool a webview imports the types of tableView.ts only: what a table surface draws and asks.' },
-  { group: ['**/core/frame/**', '**/core/scene/**', '**/core/tool/tableView', '!**/core/scene/geometry'], allowTypeImports: true, message: 'src/webview imports only types from src/core/frame and src/core/scene, and the functions of src/core/scene/geometry.' },
+  { group: ['**/core/frame/**', '**/core/scene/**', '**/core/tool/tableView', '!**/core/scene/geometry', '!**/core/scene/tidyTree'], allowTypeImports: true, message: 'src/webview imports only types from src/core/frame and src/core/scene, and the functions of src/core/scene/geometry and tidyTree.' },
 ];
 
 export default tseslint.config(

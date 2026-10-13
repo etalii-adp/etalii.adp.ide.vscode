@@ -26,7 +26,7 @@ export interface Refused {
   readonly refused: string;
 }
 
-type Step = Extract<ModelChange, { kind: 'add' | 'set' | 'remove' | 'move' }>;
+type Step = Extract<ModelChange, { kind: 'add' | 'set' | 'remove' | 'move' | 'retype' }>;
 
 const DIAGRAM = 'diagram';
 
@@ -123,6 +123,11 @@ export function modelChangesOf(changes: readonly Change[], context: ChangeContex
       if (!cascaded(change.id) && !held(change.id)) steps.push({ kind: 'remove', id: change.id });
     } else if (change.kind === 'move') {
       steps.push({ kind: 'move', id: change.id, ...(change.parent === undefined ? {} : { parent: change.parent }), ...(change.position === undefined ? {} : { position: change.position }) });
+    } else if (change.kind === 'retype') {
+      // The new type by the name the binding reads it under, with what its attributes are given.
+      const found = stored(change.type, change.id, change.attributes);
+      if ('refused' in found) return found;
+      steps.push({ kind: 'retype', id: change.id, type: found.type, attributes: found.attributes });
     } else if (change.kind === 'add') {
       const ends = { ...(change.source === undefined ? {} : { source: change.source }), ...(change.target === undefined ? {} : { target: change.target }) };
       // An attribute the metamodel declares read-only is the file's to state, never written: a new element starts without it.

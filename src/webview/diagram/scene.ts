@@ -4,8 +4,8 @@ import { html, svg } from './dom';
 import { iconPath } from './icons';
 
 // A scene as SVG (etalii.adp spec 027, research R3 and R13): what a tool type read from its
-// definition sends in place of a view model. Everything is placed by the scene; what is left to
-// this host is the colour of each paint, which follows the editor's theme.
+// definition sends. Everything is placed by the scene; what is left to this host is the colour of
+// each paint, which follows the editor's theme.
 
 /** The kind of colour theme Visual Studio Code is in. */
 export type ThemeKind = 'light' | 'dark' | 'high-contrast' | 'high-contrast-light';
@@ -85,18 +85,32 @@ function drawPart(part: ScenePart, paints: Paints): SVGElement | undefined {
   return drawn;
 }
 
-// A label outside its node is its text, held where its alignment says; one inside is laid out in
-// its box by the browser, as this host lays out the text of a view model's element.
-function drawLabel(label: SceneLabel, paints: Paints): SVGElement {
+/** How much of a node's width a text that is placed on it by a point, and must not run out of it, leaves free at each side. */
+const textInset = 8;
+
+// A label outside its node, or at a point of it, is its text, held where its alignment says; one
+// inside is laid out in its box by the browser.
+function drawLabel(label: SceneLabel, paints: Paints, node: SceneNode): SVGElement {
   const { box, style } = label;
   const colour = paints.colour(style.font?.color, 'text');
   const weight = style.font?.weight;
+  // What a font says beside its size and weight: the space between its letters, in canvas units, and its case (DISL 6.6).
+  const spacing = number(style.font?.letterSpacing);
+  const lettering = [...(spacing === undefined ? [] : [`letter-spacing: ${spacing}px`]), ...(typeof style.font?.transform === 'string' ? [`text-transform: ${style.font.transform}`] : [])];
   const words = typeof label.position === 'string' ? label.position.split('-') : ['outside'];
+  // A text at a point of its node that is one line and may not run on is kept within the node, cut off with an ellipsis where the label asks for one.
+  const room = node.box.width - 2 * textInset;
+  if (typeof label.position !== 'string' && label.wrap === 'none' && (label.overflow === 'ellipsis' || label.overflow === 'clip') && box.width > room && room > 0) {
+    const look = ['text-align: center', `font-size: ${label.fontSize}px`, `color: ${colour}`, 'justify-content: center', ...(weight === undefined ? [] : [`font-weight: ${weight}`]), ...lettering];
+    return svg('foreignObject', { class: label.tooltip === undefined ? 'adp-scene-label' : 'adp-scene-label adp-hover', 'data-label': label.id, x: node.box.x + textInset, y: box.y, width: room, height: box.height },
+      label.tooltip === undefined ? undefined : svg('title', {}, label.tooltip),
+      html('div', { class: label.overflow === 'ellipsis' ? 'adp-scene-text adp-ellipsis' : 'adp-scene-text', style: look.join('; ') }, html('span', {}, label.text)));
+  }
   if (words[0] === 'outside') {
     const lines = label.text.split('\n');
     const x = label.align === 'start' ? box.x : label.align === 'end' ? box.x + box.width : box.x + box.width / 2;
     return svg('text', {
-      class: 'adp-scene-label', 'data-label': label.id, 'text-anchor': label.align === 'center' ? 'middle' : label.align, 'font-size': label.fontSize, 'font-weight': weight, style: `fill: ${colour}`,
+      class: 'adp-scene-label', 'data-label': label.id, 'text-anchor': label.align === 'center' ? 'middle' : label.align, 'font-size': label.fontSize, 'font-weight': weight, style: [`fill: ${colour}`, ...lettering].join('; '),
     }, ...lines.map((line, index) => svg('tspan', { x, y: box.y + ((index + 0.5) * box.height) / lines.length, 'dominant-baseline': 'central' }, line)));
   }
   const held = words.includes('top') ? 'flex-start' : words.includes('bottom') ? 'flex-end' : 'center';
@@ -105,7 +119,7 @@ function drawLabel(label: SceneLabel, paints: Paints): SVGElement {
     `text-align: ${label.align}`, `font-size: ${label.fontSize}px`, `color: ${colour}`, `justify-content: ${held}`,
     ...(weight === undefined ? [] : [`font-weight: ${weight}`]),
     ...(label.wrap === 'none' ? ['white-space: pre'] : label.wrap === 'char' ? ['overflow-wrap: anywhere'] : []),
-    ...(label.overflow === 'visible' ? ['overflow: visible'] : []),
+    ...(label.overflow === 'visible' ? ['overflow: visible'] : []), ...lettering,
   ];
   const oneLine = label.overflow === 'ellipsis' && label.maxLines === 1;
   // A label with a tooltip is what the pointer rests on to read it: the text in full.
@@ -167,7 +181,7 @@ function drawNode(node: SceneNode, paints: Paints): SVGGElement {
   own?.setAttribute('pointer-events', 'all');
   const text = paints.colour(node.style.font?.color, 'text');
   group.append(...[
-    own, ...node.parts.map((part) => drawPart(part, paints)), ...node.labels.map((label) => drawLabel(label, paints)),
+    own, ...node.parts.map((part) => drawPart(part, paints)), ...node.labels.map((label) => drawLabel(label, paints, node)),
     ...node.compartments.map((compartment) => drawCompartment(compartment, node, paints)), ...node.badges.map((badge) => drawBadge(badge, text)),
   ].filter((drawn) => drawn !== undefined));
   // What a selection shows: a composite shape has no outline of its own to take the highlight.
@@ -215,8 +229,13 @@ function drawMarker(name: string, end: 'source' | 'target', points: readonly Poi
   return svg('polyline', { points: [at(size, size / 2.5), at(0, 0), at(size, -size / 2.5)].join(' '), ...look });
 }
 
+/** One edge of a scene as its group, in the colours of a theme kind: what the canvas draws again while an end of it is dragged along. */
+export function drawEdge(edge: SceneEdge, scene: Scene, kind: ThemeKind): SVGGElement | undefined {
+  return edgeGroup(edge, { kind, colour: (paint, role) => colourOf(scene.tokens, kind, paint, role) });
+}
+
 // An edge: a wide line the pointer reaches, its line, and the marker at each end. Nothing for an edge the scene hides.
-function drawEdge(edge: SceneEdge, paints: Paints): SVGGElement | undefined {
+function edgeGroup(edge: SceneEdge, paints: Paints): SVGGElement | undefined {
   if (edge.hidden !== undefined || edge.path.length === 0) return undefined;
   const d = pathData(edge.path);
   const width = number(edge.stroke.width) ?? 1;
@@ -232,7 +251,7 @@ function drawEdge(edge: SceneEdge, paints: Paints): SVGGElement | undefined {
 /** A scene as the groups of the canvas's content: one for each drawn edge, then one for each node, so a node lies over the lines that reach it. */
 export function drawScene(scene: Scene, kind: ThemeKind): SVGGElement[] {
   const paints: Paints = { kind, colour: (paint, role) => colourOf(scene.tokens, kind, paint, role) };
-  return [...scene.edges.map((edge) => drawEdge(edge, paints)).filter((group) => group !== undefined), ...scene.nodes.map((node) => drawNode(node, paints))];
+  return [...scene.edges.map((edge) => edgeGroup(edge, paints)).filter((group) => group !== undefined), ...scene.nodes.map((node) => drawNode(node, paints))];
 }
 
 /** The handles of a node that are visible, each named by its index among all of them, at a size that stays the same on the screen. */
