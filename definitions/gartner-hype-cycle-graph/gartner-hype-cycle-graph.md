@@ -139,7 +139,7 @@ The specification's `compact` viewpoint is a variant of true time with a "Compac
 
 ## Toolbox, context actions and the property grid
 
-**Toolbox** (`backend/GhgToolboxProvider.cs`): three items, dragged onto the canvas (`mode: "drop"`), with the code's icons and descriptions and no group heading. A dropped trend is 12 steps of the unit long with all four phases; the default names "New trend" and "Trigger" are numbered "New trend 2", "New trend 3" when taken (`GhgEdits.UniqueName`), which the specification's `uniqueName` function mirrors. Influences are drawn, not dropped, so they have no toolbox entry.
+**Toolbox** (`backend/GhgToolboxProvider.cs`): three items, dragged onto the canvas (`mode: "drop"`), with the code's icons and descriptions and no group heading. A dropped trend is 12 steps of the unit long with all four phases; the default names "New trend" and "Trigger" are numbered "New trend 2", "New trend 3" when taken (`UniqueName.Of` in `EtAlii.Adp.History`), which the specification's `uniqueName` function mirrors. Influences are drawn, not dropped, so they have no toolbox entry.
 
 **Context actions** (`backend/GhgContextActionProvider.cs`), with their icons in the specification:
 
@@ -203,7 +203,7 @@ The backend refuses what the canvas would not offer anyway, because a request is
 - "A trend needs a name." and "A trigger needs a name." (a note's text may be emptied)
 - "This trend's dates cannot be read, so it cannot be changed until they are fixed in the file."
 - "A trend must stop after it starts, at least one month later." and "A trend must be at least one month long."
-- "A trend showing N phases must be at least N months long, one per phase." (`GhgEdits.cs`)
+- "A trend showing N phases must be at least N months long, one per phase." (`Commands/GhgRefusals.cs`)
 - "A trend shows 1 to 4 phases."
 - "This note's position cannot be read, so it cannot be resized until it is fixed in the file." and "A note needs a width and a height."
 - "'…' is not a date; write it as YYYY-MM, such as 2007-06." (for a trigger, "such as 1947-12.")

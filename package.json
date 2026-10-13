@@ -54,6 +54,16 @@
         "priority": "default"
       },
       {
+        "viewType": "etalii.adp.etalii.agent-activity-diagram",
+        "displayName": "Agent activity diagram",
+        "selector": [
+          {
+            "filenamePattern": "*.aad"
+          }
+        ],
+        "priority": "default"
+      },
+      {
         "viewType": "etalii.adp.etalii.agent-behavior-modelling",
         "displayName": "Agent Behavior Modelling",
         "selector": [
@@ -147,6 +157,11 @@
         "category": "ADP"
       },
       {
+        "command": "etalii.adp.new.etalii.agent-activity-diagram",
+        "title": "New Agent activity diagram",
+        "category": "ADP"
+      },
+      {
         "command": "etalii.adp.new.etalii.agent-behavior-modelling",
         "title": "New Agent Behavior Modelling",
         "category": "ADP"
@@ -181,6 +196,9 @@
         }
       ],
       "file/newFile": [
+        {
+          "command": "etalii.adp.new.etalii.agent-activity-diagram"
+        },
         {
           "command": "etalii.adp.new.etalii.agent-behavior-modelling"
         },
