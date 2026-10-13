@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { EditRequest, Field, Source, ViewModel, ViewOptions } from '../core/frame/toolType';
+import type { EditRequest, Field, Source, ViewOptions } from '../core/frame/toolType';
 import { viewTypeOf } from '../core/frame/toolType';
 import type { FromCanvas, ToCanvas } from '../core/frame/protocol';
 import { linkKind } from '../core/disl/metamodel';
@@ -30,7 +30,7 @@ export class OpenTool {
   options: ViewOptions = {};
   selection: readonly string[] = [];
   /** What the canvas was last sent: the tool type's own view, and the version of the document it was made of. */
-  lastView: Scene | ViewModel | TableView | undefined;
+  lastView: Scene | TableView | undefined;
   lastVersion: number | undefined;
   readOnly = false;
   /** The text of the registration beside the document, when there is one. */

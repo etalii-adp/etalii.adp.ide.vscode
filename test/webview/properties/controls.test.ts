@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { gartnerHypecycleGraph as type } from '../../../src/core/gartner-hypecycle-graph/index';
 import { gridOf } from '../../../src/webview/properties/controls';
 import { read } from '../../core/files';
+import { diagram } from '../support';
 
-const source = { text: read('fixtures/gartner-hypecycle-graph/triggers-and-notes.ghg') };
+const type = diagram('gartner-hype-cycle-graph');
+const source = { fileName: 'triggers-and-notes.ghg', text: read('fixtures/gartner-hypecycle-graph/triggers-and-notes.ghg') };
 
 function grid(id: string): { root: HTMLElement; commits: [string, string][] } {
   const commits: [string, string][] = [];

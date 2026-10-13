@@ -12,6 +12,6 @@ suite('The plug-in, installed', () => {
     const extension = vscode.extensions.getExtension('etalii.adp');
     assert.ok(extension);
     const api = await extension.activate();
-    assert.deepStrictEqual(api.viewTypes, ['etalii.adp.gartner.hypecycle-graph', 'etalii.adp.etalii.agent-behavior-modelling', 'etalii.adp.etalii.agent-activity-diagram', 'etalii.adp.etalii.knowledge', 'etalii.adp.freeplane.mindmap']);
+    assert.deepStrictEqual(api.viewTypes, ['etalii.adp.etalii.agent-activity-diagram', 'etalii.adp.etalii.agent-behavior-modelling', 'etalii.adp.gartner.hypecycle-graph', 'etalii.adp.etalii.knowledge', 'etalii.adp.freeplane.mindmap']);
   });
 });

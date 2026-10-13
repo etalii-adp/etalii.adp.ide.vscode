@@ -2,7 +2,7 @@ import { build } from 'esbuild';
 import { createRequire } from 'node:module';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 // A page that shows the canvas, or the table of a designer, outside Visual Studio Code, on one example, for a look at the drawing.
-// With ADP_TEST=1 and ADP_TEST_DEFINITIONS=1 the tool type is the one read from definitions/, as in the plug-in.
+// The tool type is the one read from definitions/, as in the plug-in.
 await build({ entryPoints: ['src/extension/toolTypes.ts'], bundle: true, format: 'cjs', platform: 'node', outfile: '.debug/core.cjs', logLevel: 'error' });
 const { toolTypesAt } = createRequire(import.meta.url)('../.debug/core.cjs');
 const example = process.argv[2] ?? 'examples/gartner-hypecycle-graph/technology-trends/technology-trends.ghg';

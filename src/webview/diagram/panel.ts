@@ -1,10 +1,18 @@
-import type { ViewModel, ViewOptions } from '../../core/frame/toolType';
+import type { ViewOptions } from '../../core/frame/toolType';
 import { html } from './dom';
 
 interface FilterChrome {
   readonly label: string;
   readonly tags: readonly string[];
   readonly mode: 'any' | 'all';
+}
+
+/** What the panel shows: a filter with the tags in use, a legend, and whether Compact is on, each only where the diagram has it. */
+export interface PanelChrome {
+  readonly filter?: FilterChrome;
+  readonly tags?: readonly string[];
+  readonly legend?: readonly { readonly caption: string; readonly swatchClass: string }[];
+  readonly compact?: boolean;
 }
 
 /**
@@ -49,10 +57,9 @@ export class Panel {
   }
 
   /** Shows what the view declares, keeping whatever is being typed. */
-  show(view: ViewModel): void {
-    const chrome = view.chrome;
-    const filter = chrome.filter as FilterChrome | undefined;
-    const legend = (chrome.legend as { caption: string; swatchClass: string }[] | undefined) ?? [];
+  show(chrome: PanelChrome): void {
+    const { filter } = chrome;
+    const legend = chrome.legend ?? [];
     const hasCompact = typeof chrome.compact === 'boolean';
     this.element.hidden = !filter && legend.length === 0 && !hasCompact;
 
@@ -62,7 +69,7 @@ export class Panel {
       this.tags = [...filter.tags];
       this.mode.value = filter.mode;
       this.drawChips();
-      const inUse = (chrome.tags as string[] | undefined) ?? [];
+      const inUse = chrome.tags ?? [];
       this.suggestions.replaceChildren(...inUse.map((tag) => html('option', { value: tag })));
     }
 

@@ -1,11 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Action, EditRequest } from '../../../src/core/frame/toolType';
 import type { FromCanvas, ToCanvas } from '../../../src/core/frame/protocol';
-import { gartnerHypecycleGraph as handCoded } from '../../../src/core/gartner-hypecycle-graph/index';
 import { createScene, type Scene, type SceneNode } from '../../../src/core/scene/scene';
 import { Canvas } from '../../../src/webview/diagram/canvas';
-import '../../../src/webview/tools';
-import { read } from '../../core/files';
 import { canvasTool } from '../../core/scene/tool';
 
 // The canvas drawing a scene, in a simulated browser: what a tool type read from its definition
@@ -370,13 +367,6 @@ describe('the keys of a scene', () => {
     key(document.querySelector('.adp-filter-input')!, 'Enter');
     expect(requests()).toEqual([]);
   });
-
-  it('are not a view model\'s: its keys stay the extension\'s', () => {
-    const source = { text: read('fixtures/gartner-hypecycle-graph/triggers-and-notes.ghg') };
-    canvas.receive(viewMessage(handCoded.view(source, {}), offered));
-    key(surface(), 'Enter');
-    expect(requests()).toEqual([]);
-  });
 });
 
 describe('what a scene shows around the drawing', () => {
@@ -423,17 +413,5 @@ describe('what a scene shows around the drawing', () => {
     canvas.receive(viewMessage({ ...scene, chrome: { rulers: [], filters: [], toggles: [], legend: [] } }));
     expect((document.querySelector('.adp-panel') as HTMLElement).hidden).toBe(true);
     expect(document.querySelector('.adp-stage')?.getAttribute('style') ?? '').toBe('');
-  });
-});
-
-describe('the canvas, sent a view model', () => {
-  it('draws it with its type\'s notation as before, and asks as before', () => {
-    const source = { text: read('fixtures/gartner-hypecycle-graph/triggers-and-notes.ghg') };
-    canvas.receive(viewMessage(handCoded.view(source, {})));
-    expect(group('transistors').querySelectorAll('.adp-segment')).toHaveLength(4);
-    expect(document.querySelector('.adp-surface')?.getAttribute('aria-label')).toBe('Gartner hype cycle graph');
-    expect(document.querySelector('.adp-stage')?.getAttribute('style') ?? '').toBe('');
-    drag(group('radio').querySelector('.adp-segment')!, [230, 128], [241, 190]);
-    expect(requests()).toEqual([{ kind: 'move', id: 'radio', x: 228, y: 168 }]);
   });
 });

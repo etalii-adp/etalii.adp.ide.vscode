@@ -1,16 +1,15 @@
-import { boundsOf, moved as movedBy } from '../../core/diagram/geometry';
-import type { Action, Box, EditRequest, ViewElement, ViewModel, ViewOptions, ViewRelation } from '../../core/frame/toolType';
+import { treeDragPreview } from '../../core/scene/tidyTree';
+import type { Action, Box, EditRequest, ViewOptions } from '../../core/frame/toolType';
 import type { FromCanvas, ToCanvas } from '../../core/frame/protocol';
-import { centreOf, holds, pointOn } from '../../core/scene/geometry';
-import type { Scene, SceneNode, SceneRow } from '../../core/scene/scene';
+import { centreOf, holds, pointOn, type Point } from '../../core/scene/geometry';
+import type { Scene, SceneEdge, SceneNode, SceneRow } from '../../core/scene/scene';
 import { toolboxMime } from '../toolbox/toolbox';
 import { html, svg } from './dom';
 import { InlineEditor } from './inlineEditor';
 import { Menu } from './menu';
-import { notationFor, type CanvasPoint, type DrawContext, type Notation } from './notation';
 import { Panel } from './panel';
-import { Ruler, type Rung } from './ruler';
-import { colourOf, drawHandles, drawScene, themeKind } from './scene';
+import { Ruler } from './ruler';
+import { colourOf, drawEdge, drawHandles, drawScene, themeKind } from './scene';
 import { Surface } from './surface';
 
 /** How far, in pixels, a press must travel before it is a drag rather than a click. */
@@ -26,6 +25,8 @@ const connectBand = 6;
 const hostKeys: readonly string[] = ['f2', 'delete', 'alt+up', 'alt+down'];
 
 type Side = 'left' | 'right' | 'top' | 'bottom' | 'corner';
+/** A point in canvas units. */
+type CanvasPoint = Point;
 
 // A key press as a definition writes a shortcut, in lower case: `ctrl+up`, `space`, `enter`.
 const pressed = (event: KeyboardEvent): string =>
@@ -51,9 +52,27 @@ function endAt(node: SceneNode, point: CanvasPoint): { readonly text: string; re
 }
 
 /**
- * The canvas of one diagram. It draws the view it is sent, a scene as it is and a view model with
- * its diagram type's notation, keeps the selection, and turns every gesture into a request to the
- * extension: it never changes the model itself, and it draws the view that follows.
+ * An edge with its two ends moved, each by the way its node is dragged: a line at right angles
+ * turns where it did, between the two ends as they are now, and any other is drawn straight.
+ */
+function following(edge: SceneEdge, from: CanvasPoint, to: CanvasPoint): SceneEdge {
+  if (!edge.from || !edge.to) return edge;
+  const [a, b] = [{ ...edge.from, x: edge.from.x + from.x, y: edge.from.y + from.y }, { ...edge.to, x: edge.to.x + to.x, y: edge.to.y + to.y }];
+  if (from.x === to.x && from.y === to.y) {
+    const shifted = (x: number, y: number): { x: number; y: number } => ({ x: x + from.x, y: y + from.y });
+    return { ...edge, from: a, to: b, path: edge.path.map((step) => (step.op === 'Z' ? step : step.op === 'Q' ? { ...step, ...shifted(step.x, step.y), cx: step.cx + from.x, cy: step.cy + from.y }
+      : step.op === 'C' ? { ...step, ...shifted(step.x, step.y), c1x: step.c1x + from.x, c1y: step.c1y + from.y, c2x: step.c2x + from.x, c2y: step.c2y + from.y } : { ...step, ...shifted(step.x, step.y) })) };
+  }
+  const down = edge.from.normal.x === 0;
+  const middle = down ? (a.y + b.y) / 2 : (a.x + b.x) / 2;
+  const turns = edge.routing !== 'orthogonal' ? [] : down ? [{ op: 'L' as const, x: a.x, y: middle }, { op: 'L' as const, x: b.x, y: middle }] : [{ op: 'L' as const, x: middle, y: a.y }, { op: 'L' as const, x: middle, y: b.y }];
+  return { ...edge, from: a, to: b, curve: undefined, path: [{ op: 'M', x: a.x, y: a.y }, ...turns, { op: 'L', x: b.x, y: b.y }] };
+}
+
+/**
+ * The canvas of one diagram. It draws the scene it is sent as it is, keeps the selection, and turns
+ * every gesture into a request to the extension: it never changes the model itself, and it draws
+ * the view that follows.
  */
 export class Canvas {
   readonly surface: Surface;
@@ -64,11 +83,8 @@ export class Canvas {
   private readonly ruler: Ruler;
   private readonly menu: Menu;
   private readonly editor: InlineEditor;
-  /** What is shown: a scene, from a tool type read from its definition, or the view model of a hand-coded one. */
+  /** What is shown: the scene of a tool type read from its definition. */
   private scene: Scene | undefined;
-  private view: ViewModel | undefined;
-  private context: DrawContext | undefined;
-  private notation: Notation | undefined;
   private actions: readonly Action[] = [];
   private version = 0;
   private selection: string[] = [];
@@ -101,23 +117,19 @@ export class Canvas {
     this.status.hidden = true;
     this.stage.append(this.notice, this.status);
     this.panel = new Panel(this.stage, (options) => {
+      // A scene's filter is asked for by its id, and its toggle by the viewpoint it turns on.
       const chrome = this.scene?.chrome;
-      if (chrome) {
-        // A scene's filter is asked for by its id, and its toggle by the viewpoint it turns on.
-        const filter = chrome.filters.find((candidate) => candidate.control === 'chips');
-        const toggle = chrome.toggles[0];
-        this.options = {
-          ...(filter ? { filters: { [filter.id]: { value: options.filterTags, match: options.filterMode } } } : {}),
-          ...(toggle && options.compact === true ? { viewpoint: toggle.viewpoint } : {}),
-        };
-      } else {
-        this.options = { ...this.options, ...options };
-      }
+      const filter = chrome?.filters.find((candidate) => candidate.control === 'chips');
+      const toggle = chrome?.toggles[0];
+      this.options = {
+        ...(filter ? { filters: { [filter.id]: { value: options.filterTags, match: options.filterMode } } } : {}),
+        ...(toggle && options.compact === true ? { viewpoint: toggle.viewpoint } : {}),
+      };
       this.reportView();
     });
     this.ruler = new Ruler(this.stage);
     this.menu = new Menu(this.stage, (action) => this.request({
-      kind: 'action', action, ...(this.selection[0] !== undefined ? { id: this.selection[0] } : this.scene && this.menuAt ? this.menuAt : {}),
+      kind: 'action', action, ...(this.selection[0] !== undefined ? { id: this.selection[0] } : this.menuAt ?? {}),
     }));
     this.editor = new InlineEditor(this.stage, (active) => this.send({ v: 2, type: 'editing', active }));
 
@@ -148,12 +160,7 @@ export class Canvas {
       case 'view': {
         // A gesture begun on an older view is given up rather than applied to what it was not computed from.
         this.abandon?.();
-        // A scene has nodes, a view model has elements.
-        const view = message.view as Scene | ViewModel;
-        this.scene = 'nodes' in view ? view : undefined;
-        this.view = 'nodes' in view ? undefined : view;
-        if (this.scene) this.context = undefined;
-        this.notation = notationFor(message.origin);
+        this.scene = message.view as Scene;
         this.actions = message.actions;
         this.version = message.version;
         this.draw();
@@ -182,12 +189,6 @@ export class Canvas {
         if (row) {
           this.surface.reveal(row.node.box);
           if (message.editLabel) this.edit(message.id, row.row.text, row.row.box, false);
-          return;
-        }
-        const element = this.context?.elements.get(message.id);
-        if (element) {
-          this.surface.reveal(element);
-          if (message.editLabel) this.edit(element.id, element.label, element, message.multiline === true);
         }
         return;
       }
@@ -195,14 +196,14 @@ export class Canvas {
         if (message.command === 'toggleCompact') this.panel.toggleCompact();
         return;
       case 'addAtCentre':
-        if ((this.scene || this.view) && !this.readOnly) this.addAtCentre(message.entry);
+        if (this.scene && !this.readOnly) this.addAtCentre(message.entry);
         return;
     }
   }
 
   /** True when what is shown may not be edited. */
   private get readOnly(): boolean {
-    return (this.scene ?? this.view)?.readOnly === true;
+    return this.scene?.readOnly === true;
   }
 
   private node(id: string | undefined): SceneNode | undefined {
@@ -252,47 +253,25 @@ export class Canvas {
 
   private draw(): void {
     const scene = this.scene;
-    const view = this.view;
-    const notation = this.notation;
+    if (!scene) return;
     const root = this.surface.root;
-    let ids: string[];
-    if (scene) {
-      root.setAttribute('aria-label', 'Diagram');
-      this.surface.content.replaceChildren(...drawScene(scene, themeKind()));
-      ids = [...scene.nodes, ...scene.edges].map((drawn) => drawn.id);
-      this.showChrome(scene);
-    } else if (view && notation) {
-      root.setAttribute('aria-label', notation.label);
-      const context: DrawContext = { view, elements: new Map(view.elements.map((element) => [element.id, element])) };
-      this.context = context;
-      // Relations first, so an element's shape is drawn over the line that reaches it.
-      const drawn: SVGGElement[] = [];
-      for (const relation of view.relations) {
-        const group = notation.relation(relation, context);
-        if (group) drawn.push(group);
-      }
-      for (const element of view.elements) drawn.push(notation.element(element, context));
-      this.surface.content.replaceChildren(...drawn);
-      ids = [...view.elements, ...view.relations].map((drawn) => drawn.id);
-      this.stage.removeAttribute('style');
-      this.panel.show(view);
-    } else {
-      return;
-    }
+    root.setAttribute('aria-label', 'Diagram');
     root.setAttribute('role', 'application');
+    this.surface.content.replaceChildren(...drawScene(scene, themeKind()));
+    this.showChrome(scene);
 
     // A selection survives a redraw for as long as what it names is still drawn.
+    const ids = [...scene.nodes, ...scene.edges].map((drawn) => drawn.id);
     this.selection = this.selection.filter((id) => ids.includes(id));
     this.markSelection();
 
-    const notice = (scene ?? view)?.notice;
-    this.notice.hidden = notice === undefined;
-    this.notice.textContent = notice ?? '';
-    this.surface.placeOnce(scene ? scene.bounds : boundsOf(view?.elements ?? []));
+    this.notice.hidden = scene.notice === undefined;
+    this.notice.textContent = scene.notice ?? '';
+    this.surface.placeOnce(scene.bounds);
     this.drawRuler();
   }
 
-  // What a scene shows around the drawing, in the panel this host shows a view model's in.
+  // What a scene shows around the drawing, in this host's panel.
   private showChrome(scene: Scene): void {
     const chrome = scene.chrome;
     const kind = themeKind();
@@ -301,12 +280,9 @@ export class Canvas {
     const filter = chrome?.filters.find((candidate) => candidate.control === 'chips');
     const toggle = chrome?.toggles[0];
     this.panel.show({
-      elements: [], relations: [], readOnly: true,
-      chrome: {
-        ...(filter ? { filter: { label: filter.label, tags: Array.isArray(filter.value) ? filter.value : [], mode: filter.match }, tags: filter.options } : {}),
-        legend: legend.map((entry) => ({ caption: entry.label, swatchClass: '' })),
-        ...(toggle ? { compact: toggle.on } : {}),
-      },
+      ...(filter ? { filter: { label: filter.label, tags: Array.isArray(filter.value) ? filter.value.map(String) : [], mode: filter.match }, tags: filter.options } : {}),
+      legend: legend.map((entry) => ({ caption: entry.label, swatchClass: '' })),
+      ...(toggle ? { compact: toggle.on } : {}),
     });
     // A filter that is a switch: one the diagram keeps is changed by an edit, and any other is this viewer's option.
     const switches = (chrome?.filters ?? []).filter((candidate) => candidate.control === 'switch');
@@ -327,27 +303,15 @@ export class Canvas {
 
   private drawRuler(): void {
     const viewport = this.surface.viewport();
-    if (this.scene) {
-      // simplified: one ruler is drawn, the first along x, in this host's strip at the bottom of the view; a ruler along y, at the top or fixed to the canvas needs a strip of its own.
-      const ruler = this.scene.chrome?.rulers.find((candidate) => candidate.axis === 'x');
-      const zoom = this.surface.zoom;
-      // The finest level whose ticks have room; the coarsest when none has.
-      const level = ruler?.levels.find((candidate) => candidate.spacing * zoom >= candidate.minSpacing && zoom >= (candidate.minZoom ?? 0) && zoom <= (candidate.maxZoom ?? Infinity)) ?? ruler?.levels.at(-1);
-      this.ruler.element.hidden = !level;
-      this.ruler.element.replaceChildren(...(level?.ticks ?? [])
-        .filter((tick) => tick.at >= viewport.x && tick.at <= viewport.x + viewport.width)
-        .map((tick) => html('span', { class: 'adp-ruler-tick', style: `left: ${this.surface.toScreen(tick.at, 0).x}px` }, tick.label)));
-      return;
-    }
-    const chrome = this.view?.chrome;
-    const rungs = (chrome?.ruler as Rung[] | undefined) ?? [];
-    this.ruler.draw(rungs, (chrome?.unitMonths as number | undefined) ?? 1, viewport, this.surface.zoom, (x) => this.surface.toScreen(x, 0).x);
-  }
-
-  private selected(): ViewElement | ViewRelation | undefined {
-    if (this.selection.length !== 1 || !this.view) return undefined;
-    const id = this.selection[0];
-    return this.context?.elements.get(id) ?? this.view.relations.find((relation) => relation.id === id);
+    // simplified: one ruler is drawn, the first along x, in this host's strip at the bottom of the view; a ruler along y, at the top or fixed to the canvas needs a strip of its own.
+    const ruler = this.scene?.chrome?.rulers.find((candidate) => candidate.axis === 'x');
+    const zoom = this.surface.zoom;
+    // The finest level whose ticks have room; the coarsest when none has.
+    const level = ruler?.levels.find((candidate) => candidate.spacing * zoom >= candidate.minSpacing && zoom >= (candidate.minZoom ?? 0) && zoom <= (candidate.maxZoom ?? Infinity)) ?? ruler?.levels.at(-1);
+    this.ruler.element.hidden = !level;
+    this.ruler.element.replaceChildren(...(level?.ticks ?? [])
+      .filter((tick) => tick.at >= viewport.x && tick.at <= viewport.x + viewport.width)
+      .map((tick) => html('span', { class: 'adp-ruler-tick', style: `left: ${this.surface.toScreen(tick.at, 0).x}px` }, tick.label)));
   }
 
   private markSelection(): void {
@@ -373,7 +337,6 @@ export class Canvas {
   // The handles of a single selection: the sides it can be resized by, and its notation's own.
   private drawHandles(): void {
     const handles: SVGElement[] = [];
-    const selected = this.selected();
     if (this.scene && !this.readOnly && this.selection.length === 1) {
       const node = this.node(this.selection[0]);
       if (node) handles.push(...this.resizeHandles(node.box, node.resizable.x, node.resizable.y), ...drawHandles(node, this.surface.zoom));
@@ -382,15 +345,6 @@ export class Canvas {
       for (const end of ['from', 'to'] as const) {
         const at = edge?.[end];
         if (at?.part !== undefined) handles.push(svg('circle', { class: 'adp-handle', 'data-end': end, cx: at.x, cy: at.y, r: 4 / this.surface.zoom, style: 'cursor: move' }));
-      }
-    } else if (selected && this.view && !this.view.readOnly && this.context) {
-      if (!('from' in selected)) {
-        const resize = selected.data.resize;
-        handles.push(...this.resizeHandles(selected, resize === 'horizontal' || resize === 'both', resize === 'both'));
-      }
-      for (const handle of this.notation?.handles(selected, this.context) ?? []) {
-        handles.push(svg('circle', { class: 'adp-handle', 'data-handle': handle.id, cx: handle.x, cy: handle.y, r: 4 / this.surface.zoom, style: `cursor: ${handle.cursor}` },
-          svg('title', {}, handle.title)));
       }
     }
     this.surface.overlay.replaceChildren(...handles);
@@ -403,7 +357,6 @@ export class Canvas {
   }
 
   // A key that an action of the view is offered under asks for that action, on what is selected.
-  // Only for a scene: its definition states the keys, where a view model's are all commands of the plug-in.
   private key(event: KeyboardEvent): void {
     const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement;
     const name = pressed(event);
@@ -416,7 +369,7 @@ export class Canvas {
 
   private click(event: MouseEvent): void {
     if ((event.target as Element).closest('.adp-handle')) return;
-    if (this.scene && this.activateControl(event.target)) return;
+    if (this.activateControl(event.target)) return;
     const id = this.idAt(event.target);
     // A fold is what this viewer sees and writes nothing, so it is asked for in a read-only scene too.
     const fold = (event.target as Element).closest('[data-fold]')?.getAttribute('data-fold');
@@ -446,10 +399,8 @@ export class Canvas {
     const id = this.idAt(event.target);
     const node = this.node(id);
     const row = node ? undefined : this.row(id);
-    const element = id ? this.context?.elements.get(id) : undefined;
     if (row && id) this.edit(id, row.row.text, row.row.box, false);
     else if (node) this.editLabel(node);
-    else if (element && this.view) this.edit(element.id, element.label, element, element.data.multiline === true);
   }
 
   // The menu shows the actions for what was pointed at, which the extension sends with the view
@@ -517,52 +468,8 @@ export class Canvas {
   // ---- gestures ----
 
   private press(event: PointerEvent): void {
-    if (this.readOnly || this.editor.active) return;
-    if (this.scene) {
-      this.pressScene(event, this.scene);
-      return;
-    }
-    const view = this.view;
-    const context = this.context;
-    if (!view || !context) return;
-    const target = event.target as Element;
-    const point = this.surface.toCanvas(event.clientX, event.clientY);
-
-    if (event.button === 0) {
-      const handle = target.closest('[data-handle]')?.getAttribute('data-handle');
-      const side = target.closest('[data-resize]')?.getAttribute('data-resize') as Side | null | undefined;
-      const selected = this.selected();
-      if (handle && selected) {
-        this.dragHandle(event, selected, handle);
-        return;
-      }
-      if (side && selected && !('from' in selected)) {
-        this.resize(event, selected.id, selected, side, (bounds) => (this.notation && this.context ? this.notation.element({ ...selected, ...bounds }, this.context) : undefined));
-        return;
-      }
-    }
-
-    const id = this.idAt(target);
-    const element = id ? context.elements.get(id) : undefined;
-    if (!element) return;
-    const from = { id: element.id, movable: element.data.movable === true };
-    const line = (fromEnd: string) => (to: CanvasPoint): SVGElement => (this.notation
-      ? this.notation.connecting(element, fromEnd, to)
-      : svg('line', { class: 'adp-relation-line adp-connecting', x1: element.x + element.width / 2, y1: element.y + element.height / 2, x2: to.x, y2: to.y }));
-    const arrive = (targetId: string, at: CanvasPoint): string | undefined | null => {
-      const target = context.elements.get(targetId);
-      return target ? this.notation?.connectTo(target, at) : null;
-    };
-    if (event.button === 2) {
-      // A right-button drag from an element draws a relation from it; a right click is the menu.
-      const fromEnd = this.notation?.connectFrom(element, point) ?? '';
-      if (element.data.connectable === true) this.connect(event, from, fromEnd, true, line(fromEnd), arrive);
-      return;
-    }
-    if (event.button !== 0) return;
-    const fromEnd = element.data.connectable === true ? this.notation?.connectFrom(element, point) : undefined;
-    if (fromEnd !== undefined) this.connect(event, from, fromEnd, false, line(fromEnd), arrive);
-    else if (element.data.movable === true) this.move(event, element);
+    if (this.readOnly || this.editor.active || !this.scene) return;
+    this.pressScene(event, this.scene);
   }
 
   // A press on a scene: on a handle of the selection, or on a node, which it moves or draws an edge from.
@@ -613,7 +520,7 @@ export class Canvas {
     // A press where an end can sit draws an edge from there; anywhere else on the node moves it. A
     // node that is placed for it and cannot be moved is dragged to another node, to go under that one.
     if (near && Math.hypot(near.point.x - point.x, near.point.y - point.y) <= connectBand) edge(near);
-    else if (from.movable) this.moveNode(event, node);
+    else if (from.movable) this.moveNode(event, scene, node);
     else this.reparent(event, scene, node);
   }
 
@@ -653,10 +560,6 @@ export class Canvas {
     return [...this.surface.content.querySelectorAll('[data-id]')].find((candidate) => candidate.getAttribute('data-id') === id) ?? null;
   }
 
-  private snap(): { x: number; y: number } {
-    return (this.view?.chrome.snap as { x: number; y: number } | undefined) ?? { x: 0, y: 0 };
-  }
-
   // Draws a stand-in for something being changed, and dims the thing itself until the gesture ends.
   private preview(id: string, drawing: SVGElement | undefined): void {
     this.group(id)?.classList.add('adp-ghost');
@@ -669,16 +572,18 @@ export class Canvas {
     this.drawHandles();
   }
 
-  private move(event: PointerEvent, element: ViewElement): void {
-    const snap = this.snap();
-    const context = this.context;
+  // A node of a scene dragged along the axes it may be moved on, to whole canvas units. In a tidy
+  // tree the drag is the tree's (DISL 10.3): the node carries what is beneath it, the rest of its
+  // row follows it up and down, and the siblings it has passed step aside to show where it will land.
+  private moveNode(event: PointerEvent, scene: Scene, node: SceneNode): void {
     const groups = new Map<string, Element>();
     for (const group of this.surface.content.querySelectorAll('.adp-element[data-id]')) groups.set(group.getAttribute('data-id') ?? '', group);
-    const lines = new Map<string, { group: Element; drawn: Node[] }>();
+    const lines = new Map<string, { readonly group: Element; readonly drawn: Node[] }>();
     for (const group of this.surface.content.querySelectorAll('.adp-relation[data-id]')) lines.set(group.getAttribute('data-id') ?? '', { group, drawn: [...group.childNodes] });
-    const relations = this.view?.relations ?? [];
+    const tree = scene.tree?.nodes.some((entry) => entry.id === node.id) ? scene.tree : undefined;
+    const places = new Map((tree?.nodes ?? []).map((entry) => [entry.id, { x: entry.x, y: entry.y }]));
     let moved: Element[] = [];
-    let redrawn: { group: Element; drawn: Node[] }[] = [];
+    let redrawn: { readonly group: Element; readonly drawn: Node[] }[] = [];
     const settle = (): void => {
       for (const group of moved) group.removeAttribute('transform');
       for (const line of redrawn) line.group.replaceChildren(...line.drawn);
@@ -686,72 +591,36 @@ export class Canvas {
       redrawn = [];
     };
 
-    // How far each element is drawn from its place while this one is dragged to `at`. A notation
-    // may say it for the whole drawing, such as a tree whose siblings step aside; otherwise the
-    // element moves, with whatever its view says goes with it and whatever follows it up and down.
+    // How far each node is drawn from its place while this one is dragged to `at`.
     const offsetsAt = (at: CanvasPoint): Map<string, CanvasPoint> => {
-      const given = context ? this.notation?.dragging(element, at, context) : undefined;
-      if (given) return given;
-      const offsets = new Map<string, CanvasPoint>();
-      const subtree = (element.data.subtree as string[] | undefined) ?? [element.id];
-      for (const id of (element.data.row as string[] | undefined) ?? []) offsets.set(id, { x: 0, y: at.y - element.y });
-      for (const id of subtree) offsets.set(id, { x: at.x - element.x, y: at.y - element.y });
-      return offsets;
+      if (!tree) return new Map([[node.id, { x: at.x - node.box.x, y: at.y - node.box.y }]]);
+      const preview = treeDragPreview(tree.nodes, places, node.id, at.x, at.y, tree);
+      return new Map([...preview].map(([id, point]) => [id, { x: point.x - places.get(id)!.x, y: point.y - places.get(id)!.y }]));
     };
 
-    let at = { x: element.x, y: element.y };
-    this.track(event, {
-      move: (_point, delta) => {
-        at = { x: element.x + snapTo(delta.x, snap.x), y: element.y + snapTo(delta.y, snap.y) };
-        const offsets = offsetsAt(at);
-        settle();
-        const shifted = new Map(context?.elements);
-        for (const [id, offset] of offsets) {
-          const group = groups.get(id);
-          const drawn = context?.elements.get(id);
-          if (!group || !drawn || (offset.x === 0 && offset.y === 0)) continue;
-          group.setAttribute('transform', `translate(${offset.x} ${offset.y})`);
-          moved.push(group);
-          shifted.set(id, movedBy(drawn, offset));
-        }
-        // A line to something that moves is drawn again from where that is drawn now, so it
-        // follows the drag; the view that answers the drop draws it for good.
-        const moving = new Set(moved.map((group) => group.getAttribute('data-id')));
-        for (const relation of relations) {
-          if (!moving.has(relation.from) && !moving.has(relation.to)) continue;
-          const line = lines.get(relation.id);
-          if (!line || !this.notation || !this.view) continue;
-          const drawn = this.notation.relation(relation, { view: this.view, elements: shifted });
-          line.group.replaceChildren(...(drawn ? [...drawn.childNodes] : []));
-          redrawn.push(line);
-        }
-        this.surface.overlay.replaceChildren();
-      },
-      end: () => {
-        this.select([element.id]);
-        if (at.x === element.x && at.y === element.y) {
-          settle();
-          return;
-        }
-        // The drawing stays where it was dropped until the view that follows replaces it.
-        this.request({ kind: 'move', id: element.id, x: at.x, y: at.y });
-        this.settleOnOutcome = settle;
-      },
-      cancel: settle,
-    });
-  }
-
-  // A node of a scene dragged along the axes it may be moved on, to whole canvas units.
-  private moveNode(event: PointerEvent, node: SceneNode): void {
-    const group = this.group(node.id);
-    const settle = (): void => group?.removeAttribute('transform');
     let at = { x: node.box.x, y: node.box.y };
     this.track(event, {
       move: (_point, delta) => {
-        const by = { x: node.movable.x ? snapTo(delta.x, 0) : 0, y: node.movable.y ? snapTo(delta.y, 0) : 0 };
-        at = { x: node.box.x + by.x, y: node.box.y + by.y };
-        // simplified: the node alone follows the pointer, and the edges that reach it stay, since where an end sits and how its line runs are worked out with the scene; the scene is drawn again when the edit is applied.
-        group?.setAttribute('transform', `translate(${by.x} ${by.y})`);
+        at = { x: node.box.x + (node.movable.x ? snapTo(delta.x, 0) : 0), y: node.box.y + (node.movable.y ? snapTo(delta.y, 0) : 0) };
+        const offsets = offsetsAt(at);
+        settle();
+        for (const [id, offset] of offsets) {
+          const group = groups.get(id);
+          if (!group || (offset.x === 0 && offset.y === 0)) continue;
+          group.setAttribute('transform', `translate(${offset.x} ${offset.y})`);
+          moved.push(group);
+        }
+        // A line to something that moves is drawn again from where that is drawn now, so it follows
+        // the drag; the scene that answers the drop draws it for good.
+        const still = { x: 0, y: 0 };
+        for (const edge of scene.edges) {
+          const [from, to] = [offsets.get(edge.source) ?? still, offsets.get(edge.target) ?? still];
+          const line = lines.get(edge.id);
+          if (!line || (from.x === 0 && from.y === 0 && to.x === 0 && to.y === 0)) continue;
+          const drawn = drawEdge(following(edge, from, to), scene, themeKind());
+          line.group.replaceChildren(...(drawn ? [...drawn.childNodes] : []));
+          redrawn.push(line);
+        }
         this.surface.overlay.replaceChildren();
       },
       end: () => {
@@ -802,7 +671,7 @@ export class Canvas {
   }
 
   private resize(event: PointerEvent, id: string, box: Box, side: Side, drawing: (bounds: Box) => SVGElement | undefined): void {
-    const snap = this.snap();
+    const snap = { x: 0, y: 0 };
     const right = box.x + box.width;
     const bottom = box.y + box.height;
     let bounds = box;
@@ -827,24 +696,6 @@ export class Canvas {
         if (bounds !== box) this.request({ kind: 'resize', id, side, bounds });
       },
       cancel: () => this.endPreview(id),
-    });
-  }
-
-  private dragHandle(event: PointerEvent, selected: ViewElement | ViewRelation, handle: string): void {
-    let request: EditRequest | undefined;
-    this.track(event, {
-      move: (point) => {
-        if (!this.notation || !this.context) return;
-        const drag = this.notation.dragHandle(selected, handle, point, this.context);
-        request = drag.request;
-        const drawing = drag.element ? this.notation.element(drag.element, this.context) : drag.relation ? this.notation.relation(drag.relation, this.context) : undefined;
-        this.preview(selected.id, drawing);
-      },
-      end: () => {
-        this.endPreview(selected.id);
-        if (request) this.request(request);
-      },
-      cancel: () => this.endPreview(selected.id),
     });
   }
 
@@ -929,15 +780,10 @@ export class Canvas {
   private reportView(): void {
     const { viewport: _previous, ...kept } = this.options;
     void _previous;
-    if (this.options.compact === true) {
-      // Compact places every element by where all the others start, so it needs the whole document.
-      this.options = kept;
-    } else {
-      const view = this.surface.viewport();
-      // Half a screen more on every side, so a short pan shows what was already drawn.
-      const margin = { x: view.width / 2, y: view.height / 2 };
-      this.options = { ...kept, viewport: { x: view.x - margin.x, y: view.y - margin.y, width: view.width + 2 * margin.x, height: view.height + 2 * margin.y } };
-    }
+    const view = this.surface.viewport();
+    // Half a screen more on every side, so a short pan shows what was already drawn.
+    const margin = { x: view.width / 2, y: view.height / 2 };
+    this.options = { ...kept, viewport: { x: view.x - margin.x, y: view.y - margin.y, width: view.width + 2 * margin.x, height: view.height + 2 * margin.y } };
     this.send({ v: 2, type: 'viewOptions', options: this.options });
   }
 }

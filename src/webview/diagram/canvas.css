@@ -62,59 +62,6 @@ body {
   user-select: none;
 }
 
-.adp-label {
-  fill: var(--vscode-editor-foreground);
-  font-size: 12px;
-  pointer-events: none;
-}
-
-.adp-node {
-  fill: var(--adp-node-fill);
-  stroke: var(--adp-node-stroke);
-  stroke-width: 1.5;
-  pointer-events: all;
-}
-
-/* A segmented shape is filled segment by segment; its outline is the line around them all. */
-.adp-node.adp-node-segmented {
-  fill: none;
-  pointer-events: none;
-}
-
-.adp-segment {
-  fill: var(--adp-node-fill);
-  stroke: none;
-}
-
-.adp-segment-divider {
-  fill: none;
-  stroke: var(--adp-node-stroke);
-  stroke-width: 1.5;
-  pointer-events: none;
-}
-
-/* Text inside a shape: the labels stacked and centred, and never in the way of the pointer. */
-.adp-text {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  box-sizing: border-box;
-  height: 100%;
-  padding: 4px 6px;
-  overflow: hidden;
-  text-align: center;
-  pointer-events: none;
-}
-
-/*
- * A selection is one colour on the outline and a heavier line, the fill untouched, for elements
- * and relations alike, arrowhead included.
- */
-.adp-element.adp-selected .adp-node {
-  stroke: var(--adp-highlight);
-  stroke-width: 3;
-}
-
 .adp-relation-line {
   fill: none;
   stroke: var(--adp-line);
@@ -128,10 +75,6 @@ body {
   stroke: transparent;
   stroke-width: 14;
   cursor: pointer;
-}
-
-.adp-relation.adp-unselectable {
-  pointer-events: none;
 }
 
 .adp-relation.adp-selected .adp-relation-line {

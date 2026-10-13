@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { viewTypeOf } from '../core/frame/toolType';
-import { bodyOf, originOf } from '../core/registration/registration';
+import { RegistrationDocument } from '../core/fbl';
 import type { AnyToolType } from './toolTypes';
 
 /**
@@ -46,14 +46,15 @@ export class RegistrationEditorProvider implements vscode.CustomTextEditorProvid
 
   /** The body and tool type a registration names, or the sentence that says why it cannot be followed. */
   async target(document: vscode.TextDocument): Promise<{ body: vscode.Uri; type: AnyToolType } | string> {
-    const text = document.getText();
-    const origin = originOf(text);
+    // Read as FBL reads a registration (FBL 8.1): its origin on the first line, and the `body` header when it names another file.
+    const registration = RegistrationDocument.read(new TextEncoder().encode(document.getText()));
+    const origin = registration.origin === '' ? undefined : registration.origin;
     if (origin === undefined) return 'This registration is empty: its first line names no tool type.';
     const type = this.types.find((candidate) => candidate.origin === origin);
     if (!type) return `This registration names the tool type ${origin}, which this plug-in does not bring.`;
 
     const folder = document.uri.with({ path: document.uri.path.slice(0, document.uri.path.lastIndexOf('/') + 1) });
-    const named = bodyOf(text);
+    const named = registration.body;
     const base = document.uri.path.slice(document.uri.path.lastIndexOf('/') + 1).replace(/\.adp$/i, '');
     const body = vscode.Uri.joinPath(folder, named ?? `${base}.${type.claims[0].extensions[0]}`);
     try {
