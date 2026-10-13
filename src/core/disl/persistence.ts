@@ -170,10 +170,11 @@ export function newId(persistence: InterpretedPersistence, type: string): string
 }
 
 /** What `typeMap` says of a binding type: its entry, or the type under its own name. */
-const entryOf = (persistence: InterpretedPersistence, type: string): TypeMapEntry =>
+export const entryOf = (persistence: InterpretedPersistence, type: string): TypeMapEntry =>
   Object.hasOwn(persistence.typeMap, type) ? persistence.typeMap[type] : { as: type };
 
-const mapped = (entry: TypeMapEntry, name: string): string | null =>
+/** The name an attribute of a binding has in the metamodel, or null for one that is not in the model. */
+export const mapped = (entry: TypeMapEntry, name: string): string | null =>
   entry.attributes && Object.hasOwn(entry.attributes, name) ? entry.attributes[name] : name;
 
 /**
@@ -241,7 +242,10 @@ export function readModel(reading: Pick<FblModel, 'elements' | 'findings' | 'unr
       const host: Record<string, unknown> = {};
       const named = read(entry, entryMap, entryMap.as, attributes, host);
       // An attribute mapped to `id` is the element's id only where the library found none in the body.
-      const element: ModelElement = { id: entry.idIsStored ? entry.id : named.id ?? entry.id, type: entryMap.as, attributes, host, parent: entry.parentId, ephemeral: !entry.idIsStored && named.id === undefined, line: entry.line };
+      const element: ModelElement = {
+        id: entry.idIsStored ? entry.id : named.id ?? entry.id, type: entryMap.as, attributes, host, parent: entry.parentId, ephemeral: !entry.idIsStored && named.id === undefined, line: entry.line,
+        ...(entry.parentSlot === undefined ? {} : { slot: entry.parentSlot }),
+      };
       inModel.set(entry, element.id);
       if (isRelation(metamodel.types[entryMap.as])) relations.push({ ...element, source: named.source ?? entry.source, target: named.target ?? entry.target });
       else elements.push(element);

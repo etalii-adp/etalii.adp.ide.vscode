@@ -116,9 +116,10 @@ export interface BehaviorSection {
  *   children without the element itself.
  *
  * The `position` of an `add` is the sibling it goes directly after or before; without one it goes after the last.
+ * Its `slot` is the named place of its parent it is kept in, where the parent holds several kinds apart.
  */
 export type Change =
-  | { readonly kind: 'add'; readonly id: string; readonly type: string; readonly attributes: Attributes; readonly source?: string; readonly target?: string; readonly parent?: string; readonly position?: Beside }
+  | { readonly kind: 'add'; readonly id: string; readonly type: string; readonly attributes: Attributes; readonly source?: string; readonly target?: string; readonly parent?: string; readonly slot?: string; readonly position?: Beside }
   | { readonly kind: 'set'; readonly id: string; readonly attributes: Readonly<Record<string, Value | null>> }
   | { readonly kind: 'remove'; readonly id: string }
   | { readonly kind: 'move'; readonly id: string; readonly parent?: string; readonly position?: Beside | { readonly index: number } };
@@ -349,7 +350,7 @@ export function applyChanges(model: Model, changes: readonly Change[]): Model {
   for (const change of changes) {
     if (change.kind === 'add') {
       const line = Math.max(0, ...elements.map((element) => element.line), ...relations.map((relation) => relation.line)) + 1;
-      const made: ModelElement = { id: change.id, type: change.type, attributes: change.attributes, host: {}, ephemeral: false, line, ...(change.parent === undefined ? {} : { parent: change.parent }) };
+      const made: ModelElement = { id: change.id, type: change.type, attributes: change.attributes, host: {}, ephemeral: false, line, ...(change.parent === undefined ? {} : { parent: change.parent }), ...(change.slot === undefined ? {} : { slot: change.slot }) };
       if ('source' in change || 'target' in change) relations = [...relations, { ...made, source: change.source, target: change.target }];
       else elements = beside(elements, made, change.position);
     } else if (change.kind === 'move') {
@@ -491,7 +492,7 @@ class Ends {
   constructor(readonly source: string, readonly target: string) {}
 }
 
-const skips = ['move', 'resize', 'retype', 'reparent', 'reorder', 'plugin'];
+const skips = ['move', 'resize', 'retype', 'reparent', 'plugin'];
 // The actions that change nothing of the model: an operation of these alone is offered in a read-only document and is no undo step (DISL 9.4).
 const viewing = ['view', 'select', 'reveal', 'highlight', 'open'];
 const asks = ['select', 'reveal', 'highlight', 'editLabel', 'openForm'] as const;
@@ -694,9 +695,12 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     const scopeOf = (self: string | undefined, variables: Readonly<Record<string, unknown>> = {}): Scope => {
       const over = now();
       const more: Record<string, unknown> = {};
+      const held = (value: unknown): unknown => (value instanceof Ends ? { source: over.element(value.source), target: over.element(value.target) }
+        : !(value instanceof Reference) ? value : typeof value.ids === 'string' ? over.element(value.ids) : value.ids.map((id) => over.element(id)));
       for (const [name, value] of Object.entries(variables)) {
-        more[name] = value instanceof Ends ? { source: over.element(value.source), target: over.element(value.target) }
-          : !(value instanceof Reference) ? value : typeof value.ids === 'string' ? over.element(value.ids) : value.ids.map((id) => over.element(id));
+        // The parameters of an operation are one variable, `p`, whose members may be elements.
+        const members = !(value instanceof Ends) && !(value instanceof Reference) && isObject(value) && Object.values(value).some((member) => member instanceof Reference);
+        more[name] = members ? Object.fromEntries(Object.entries(value).map(([member, given]) => [member, held(given)])) : held(value);
       }
       if (self === undefined) return over.scope(undefined, more);
       return self === '' ? over.scope(undefined, { self: over.diagram, ...more }) : over.scope(self, more);
@@ -816,7 +820,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       return { position, placed };
     };
 
-    const add = (type: string, attributes: Readonly<Record<string, Value | null>>, ends?: { readonly source: string; readonly target: string }, parent?: string, position?: Beside): string | undefined => {
+    const add = (type: string, attributes: Readonly<Record<string, Value | null>>, ends?: { readonly source: string; readonly target: string }, parent?: string, position?: Beside, slot?: string): string | undefined => {
       const meta = metamodel.types[type];
       if (!meta || meta.abstract || isRelation(meta) !== (ends !== undefined)) {
         refuse(`This could not be done: \`${type}\` is not a type that can be created here.`);
@@ -832,7 +836,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       }
       const fits: Record<string, Value | null> = {};
       for (const [name, value] of Object.entries({ ...defaultsOf(metamodel, type), ...computed, ...attributes })) fits[name] = fitted(value, meta.attributes[name]);
-      apply({ kind: 'add', id, type, attributes: merged({}, fits), ...ends, ...(parent === undefined ? {} : { parent }), ...(position === undefined ? {} : { position }) });
+      apply({ kind: 'add', id, type, attributes: merged({}, fits), ...ends, ...(parent === undefined ? {} : { parent }), ...(slot === undefined ? {} : { slot }), ...(position === undefined ? {} : { position }) });
       created.push(id);
       fire(ends ? 'connect' : 'create', id, [], 'user');
       return id;
@@ -947,6 +951,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
           const values = each(action.create.attributes);
           const at = action.create.at === undefined ? undefined : one(action.create.at)?.value;
           const parent = action.create.parent === undefined ? undefined : one(action.create.parent)?.value;
+          const slot = action.create.slot === undefined ? undefined : one(action.create.slot)?.value;
           if (typeof type !== 'string' || !values) continue;
           // Next to a sibling (DISL 9.4, positional create). Where the definition names none and the new
           // element goes under the parent of the element the action runs on, it goes directly after
@@ -960,13 +965,40 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
           const next: Beside | undefined = behind !== undefined ? { after: behind } : ahead !== undefined ? { before: ahead } : undefined;
           const point = isObject(at) && typeof at.x === 'number' && typeof at.y === 'number' ? { x: at.x, y: at.y } : undefined;
           const { position, placed } = dropped(type, point);
-          if (check({ kind: 'create', values: { elementType: type, position, parent: null, dropTarget: null, tool: null } })) kept(action.as, add(type, { ...placed, ...values }, undefined, typeof parent === 'string' ? parent : undefined, next));
+          if (check({ kind: 'create', values: { elementType: type, position, parent: null, dropTarget: null, tool: null } })) kept(action.as, add(type, { ...placed, ...values }, undefined, typeof parent === 'string' && parent !== '' ? parent : undefined, next, typeof slot === 'string' && slot !== '' ? slot : undefined));
         } else if (isObject(action.connect)) {
           const type = one(action.connect.type)?.value;
           const from = one(action.connect.source)?.value;
           const to = one(action.connect.target)?.value;
           const values = each(action.connect.attributes);
           if (typeof type === 'string' && typeof from === 'string' && typeof to === 'string' && values) kept(action.as, related(type, from, to, {}, values));
+        } else if (isObject(action.reorder)) {
+          // Only the place among its siblings changes (DESL 8.2): `by` a signed number of places, or directly after or before a sibling.
+          const moved = action.reorder.target === undefined ? self : one(action.reorder.target)?.value;
+          const element = typeof moved === 'string' ? find(working, moved) : undefined;
+          if (!element || 'source' in element) continue;
+          const siblings = working.elements.filter((other) => other.parent === element.parent && other.slot === element.slot);
+          const from = siblings.indexOf(element);
+          const named = (expression: unknown): string | undefined => {
+            const id = expression === undefined ? undefined : one(expression)?.value;
+            return typeof id === 'string' && id !== '' ? id : undefined;
+          };
+          let to: number | undefined;
+          if (action.reorder.by !== undefined) {
+            const by = Number(one(action.reorder.by)?.value);
+            to = Number.isInteger(by) ? from + by : undefined;
+            if (to === undefined || to < 0 || to >= siblings.length) { refuse('It cannot be moved past the first or the last place.'); continue; }
+          } else {
+            const beside = named(action.reorder.after) ?? named(action.reorder.before);
+            if (beside === undefined) continue;
+            const at = siblings.findIndex((other) => other.id === beside);
+            if (at < 0) { refuse('It can only be put next to what lies in the same place as it does.'); continue; }
+            // Its place once it is taken out: after or before the sibling named.
+            to = named(action.reorder.after) !== undefined ? (at < from ? at + 1 : at) : (at < from ? at : at - 1);
+          }
+          if (to === from) continue;
+          const position: Beside = to < from ? { before: siblings[to].id } : { after: siblings[to].id };
+          apply({ kind: 'move', id: element.id, ...(element.parent === undefined ? {} : { parent: element.parent }), position });
         } else if (action.delete !== undefined) {
           const doomed = one(action.delete)?.value;
           drop((Array.isArray(doomed) ? doomed : [doomed]).filter((id): id is string => typeof id === 'string'));
@@ -1134,7 +1166,17 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     if (!state.available) return { refused: state.reason ?? `${state.label} cannot be done now.` };
     const run = open(model, situation, 'change', free(declared[id].actions));
     const whole = state.target === undefined && selection.length > 0 ? { selection: new Reference(selection) } : {};
-    run.act(declared[id].actions ?? [], state.target ?? '', { position, p: args ?? {}, ...whole }, 'operation');
+    // A parameter that is not given takes its default; one whose type is a type of the metamodel is the element of that id.
+    const p: Record<string, unknown> = { ...args };
+    for (const [name, param] of Object.entries(isObject(declared[id].params) ? declared[id].params : {})) {
+      const stated = isObject(param) ? param : {};
+      const value = args && Object.hasOwn(args, name) ? args[name] : isCel(stated.default) ? undefined : (stated.default as Value | undefined);
+      if (value === undefined || value === null) delete p[name];
+      else if (typeof stated.type !== 'string' || !Object.hasOwn(metamodel.types, stated.type)) p[name] = value;
+      else if (typeof value !== 'string' || !find(model, value)) return { refused: 'That is no longer in this diagram.' };
+      else p[name] = new Reference(value);
+    }
+    run.act(declared[id].actions ?? [], state.target ?? '', { position, p, ...whole }, 'operation');
     return run.finish();
   };
 

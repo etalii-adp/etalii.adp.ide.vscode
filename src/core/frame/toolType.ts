@@ -1,4 +1,5 @@
 import type { Scene } from '../scene/scene';
+import type { TableRequest, TableView } from '../tool/tableView';
 
 // The frame: what every tool type shares in this host, and the one contract a type implements
 // (etalii.adp spec 027, contracts/tool-type.md). Everything here is data that crosses to a webview as
@@ -214,7 +215,8 @@ export interface ToolType<View, Request> {
 
 /** A diagram read from its definition. */
 export type DiagramToolType = ToolType<Scene, EditRequest>;
-// DesignerToolType arrives with TableView and TableRequest of src/core/tool/tableView.ts.
+/** A designer read from its definition. */
+export type DesignerToolType = ToolType<TableView, TableRequest>;
 
 /** A hand-coded diagram, until the last pull request of spec 027 (User Story 4) removes the two. */
 export type DiagramType = ToolType<ViewModel, EditRequest>;

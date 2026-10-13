@@ -27,7 +27,9 @@ const removed = (outcome: Done): string[] => outcome.changes.filter((change) => 
 const elementOf = (on: Model, id: string) => on.elements.find((element) => element.id === id);
 
 // A target and arguments for each operation of the definition, by its name: what a gesture of the surface would give it.
-const samples: Readonly<Record<string, { readonly on?: readonly string[]; readonly args?: Readonly<Record<string, Value>> }>> = {
+// `first` is what is done before it, where the example has nothing for it to act on.
+interface Sample { readonly on?: readonly string[] | ((on: Model) => readonly string[]); readonly args?: Readonly<Record<string, Value>>; readonly first?: readonly (readonly [string, readonly string[], Readonly<Record<string, Value>>])[] }
+const samples: Readonly<Record<string, Sample>> = {
   addProperty: { args: { name: 'Mayor', valueType: 'text' } },
   renameProperty: { on: ['p3'], args: { name: 'Inhabitants' } },
   changePropertyType: { on: ['p3'], args: { valueType: 'text' } },
@@ -36,7 +38,7 @@ const samples: Readonly<Record<string, { readonly on?: readonly string[]; readon
   deleteProperty: { on: ['p9'] },
   setTitleProperty: { on: ['p1'] },
   createRelation: { args: { name: 'Twin', targetFile: '.' } },
-  setParentRelation: { on: ['p5'] },
+  setParentRelation: { on: (on) => on.elements.filter((element) => element.attributes.targetFile === '.').map((element) => element.id), first: [['createRelation', [], { name: 'Twin', targetFile: '.' }]] },
   addOption: { on: ['p2'], args: { name: 'Luxembourg', colour: 'green' } },
   renameOption: { on: ['o1'], args: { name: 'The Netherlands' } },
   recolourOption: { on: ['o1'], args: { colour: 'orange' } },
@@ -62,15 +64,15 @@ const samples: Readonly<Record<string, { readonly on?: readonly string[]; readon
   deleteView: { on: ['v1'] },
   switchView: { on: ['v2'] },
   setColumn: { on: ['v1'], args: { property: 'p3', visible: false } },
-  moveColumn: { on: ['v1/columns/p3'] },
+  moveColumn: { on: ['v1/columns/p1'], first: [['setColumn', ['v1'], { property: 'p1', width: 200 }]] },
   resetColumn: { on: ['v1/columns/p3'] },
   calculate: { on: ['v1'], args: { property: 'p3', calculation: 'sum' } },
-  removeCalculation: { on: ['v1/columns/p3'] },
+  removeCalculation: { on: ['v1/columns/p3'], first: [['calculate', ['v1'], { property: 'p3', calculation: 'sum' }]] },
   freeze: { on: ['v1'], args: { property: 'p1' } },
-  unfreeze: { on: ['v1'] },
+  unfreeze: { on: ['v1'], first: [['freeze', ['v1'], { property: 'p1' }]] },
   addSort: { on: ['v1'], args: { property: 'p1' } },
   setSortDirection: { on: ['v1/sorts/p3'], args: { direction: 'ascending' } },
-  moveSort: { on: ['v1/sorts/p3'] },
+  moveSort: { on: ['v1/sorts/p1'], first: [['addSort', ['v1'], { property: 'p1' }]] },
   removeSort: { on: ['v1/sorts/p3'] },
   addCondition: { on: ['v1'], args: { property: 'p3', operator: 'greater-than', number: 500000 } },
   setCondition: { on: ['v1/filter/0'], args: { operator: 'is-not' } },
@@ -81,8 +83,8 @@ const samples: Readonly<Record<string, { readonly on?: readonly string[]; readon
   ungroup: { on: ['v1'] },
   hideEmptyGroups: { on: ['v1'], args: { hide: true } },
   setGroup: { on: ['v1'], args: { slot: 'collapsed', key: 'o1' } },
-  unsetGroup: { on: [] },
-  moveGroup: { on: [] },
+  unsetGroup: { on: ['v1/groupOrder/o2'], first: [['setGroup', ['v1'], { slot: 'groupOrder', key: 'o2' }]] },
+  moveGroup: { on: ['v1/groupOrder/o1'], first: [['setGroup', ['v1'], { slot: 'groupOrder', key: 'o2' }], ['setGroup', ['v1'], { slot: 'groupOrder', key: 'o1' }]] },
 };
 
 describe('the operations of a designer', () => {
@@ -110,16 +112,11 @@ describe('the operations of a designer', () => {
     expect(Object.keys(samples).sort()).toEqual(Object.keys(declared).sort());
   });
 
-  // A group setting to act on is made first: the example has none.
-  const grouped = run('setGroup', ['v1'], { slot: 'groupOrder', key: 'o2' }).after;
-  const twice = run('setGroup', ['v1'], { slot: 'groupOrder', key: 'o1' }, grouped).after;
-
   it.each(Object.keys(declared))('%s is one transaction, which changes the model', (id) => {
     const sample = samples[id];
-    const on = id === 'unsetGroup' || id === 'moveGroup' ? twice : model;
-    const selection = id === 'unsetGroup' ? ['v1/groupOrder/o2'] : id === 'moveGroup' ? ['v1/groupOrder/o1'] : sample.on ?? [];
+    const on = (sample.first ?? []).reduce((before, [operation, selection, args]) => run(operation, selection, args, before).after, model);
     // An operation on something that is already as it asks changes nothing: the title is the title.
-    const outcome = run(id, selection, sample.args, on);
+    const outcome = run(id, typeof sample.on === 'function' ? sample.on(on) : sample.on ?? [], sample.args, on);
     if (id === 'setTitleProperty') expect(outcome.changes).toEqual([]);
     else expect(outcome.changes.length, 'the changes it makes').toBeGreaterThan(0);
     // The model after it holds every element once, and nothing the changes removed.

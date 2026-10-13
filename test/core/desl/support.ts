@@ -3,10 +3,10 @@
 // and a document of it read through its binding into the model the operations run on.
 import { readFileSync } from 'node:fs';
 import { interpretOperations, type Operations } from '../../../src/core/desl/operations';
-import { loadDesigner, type DesignerSpecification } from '../../../src/core/desl/specification';
+import { expressionsOf, loadDesigner, type DesignerSpecification } from '../../../src/core/desl/specification';
 import { interpretSurface, type Surface } from '../../../src/core/desl/surface';
 import { interpretConstraints, type Constraints } from '../../../src/core/disl/constraints';
-import { createExpressions, type Expressions } from '../../../src/core/disl/expressions';
+import type { Expressions } from '../../../src/core/disl/expressions';
 import { interpretMetamodel, type Metamodel } from '../../../src/core/disl/metamodel';
 import type { Finding, Model } from '../../../src/core/disl/model';
 import { readModel } from '../../../src/core/disl/persistence';
@@ -49,7 +49,7 @@ export interface Interpreted {
 export function interpreted(json: unknown): Interpreted {
   const designer = loadDesigner(json);
   const metamodel = interpretMetamodel(designer.value.interpreted);
-  const expressions = createExpressions(designer.value.interpreted, metamodel.value);
+  const expressions = expressionsOf(designer.value, metamodel.value);
   const constraints = interpretConstraints(designer.value.interpreted, metamodel.value, expressions);
   const surface = interpretSurface(designer.value.surface, metamodel.value);
   if (!surface.value) throw new Error(`The surface cannot be read: ${surface.findings.map((found) => found.message).join(' ')}`);

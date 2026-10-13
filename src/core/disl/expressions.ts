@@ -61,6 +61,8 @@ export interface ExpressionOptions {
   readonly locale?: string;
   /** The host's measure of a text at a font size, for a specification whose text metric is `host` (DISL 6.5). */
   textWidth?(text: string, fontSize: number): number;
+  /** Functions of the language the specification is written in that DISL does not have, each registered by its signature. */
+  library?(register: (signature: string, handler: (...args: never[]) => unknown) => void): void;
 }
 
 // The library tells a value of a type of its own by its constructor, so an element is an object of
@@ -130,6 +132,17 @@ export function createExpressions(specification: Specification, metamodel: Metam
     for (let parent = member(entity, 'parent'); parent instanceof Entity; parent = member(parent, 'parent')) above.push(parent);
     return above;
   });
+  // What DESL adds to an element and to the document (DESL 9.2, 9.4). Elements are compared by identity, never by id.
+  register('Entity.elementsOfType(string): list<dyn>', (entity: Entity, type: string) => list(entity, 'elements').filter(typed(type)));
+  register('Entity.childrenOfType(string): list<dyn>', (entity: Entity, type: string) => list(entity, 'children').filter(typed(type)));
+  register('Entity.ancestorsOfType(string): list<dyn>', (entity: Entity, type: string) => {
+    const above: Entity[] = [];
+    for (let parent = member(entity, 'parent'); parent instanceof Entity; parent = member(parent, 'parent')) if (typed(type)(parent)) above.push(parent);
+    return above;
+  });
+  register('Entity.positionIn(list<dyn>): int', (entity: Entity, items: unknown[]) => BigInt(items.indexOf(entity)));
+  register('list.isUnique(): bool', (items: unknown[]) => new Set(items).size === items.length);
+  options.library?.(register);
   register('Entity.label(): string', (entity: Entity) => String(member(entity, metamodel.types[factsOf(entity)?.type ?? '']?.labelAttribute ?? '') ?? ''));
 
   // ---- the function library (DISL 12.1 and 12.4), as far as it is built ----
@@ -301,6 +314,8 @@ export function createExpressions(specification: Specification, metamodel: Metam
           case 'incoming': return all(model.relations.filter((other) => other.target === element.id));
           case 'outgoing': return all(model.relations.filter((other) => other.source === element.id));
           case 'source': case 'target': return relation ? find((element as ModelRelation)[name]) : undefined;
+          // The slot it is kept in (DESL 9.2), unless its type has an attribute of that name.
+          case 'slot': return Object.hasOwn(attributesOf(metamodel, element.type), 'slot') ? undefined : element.slot ?? '';
           default: return undefined;
         }
       };
@@ -315,7 +330,8 @@ export function createExpressions(specification: Specification, metamodel: Metam
     return {
       diagram,
       element: find,
-      scope: (self, more) => ({ diagram, env, ...(self === undefined ? {} : { self: find(self) }), ...more }),
+      // `document` is DESL's name for what DISL calls `diagram` (DESL 9.3).
+      scope: (self, more) => ({ diagram, document: diagram, env, ...(self === undefined ? {} : { self: find(self) }), ...more }),
       toCel,
     };
   };
