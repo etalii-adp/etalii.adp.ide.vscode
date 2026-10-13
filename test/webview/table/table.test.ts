@@ -16,7 +16,7 @@ const property = (id: string, more: Partial<TableProperty> = {}): TableProperty 
 const cell = (id: string, value: TableCell['value'], more: Partial<TableCell> = {}): TableCell => ({ id, value, items: [], text: value === null ? '' : String(value), ...more });
 
 const properties: TableProperty[] = [
-  property('title', { title: true, frozen: true, width: 200, icon: 'mdi-format-title', calculation: { label: 'Count', text: '3' } }),
+  property('title', { title: true, frozen: true, width: 200, icon: 'mdi-format-title', summary: { label: 'Count', text: '3' } }),
   property('estimate', { valueType: 'number', editor: 'number', wrap: true }),
   property('done', { valueType: 'checkbox', editor: 'checkbox' }),
   property('due', { valueType: 'date', editor: 'date' }),

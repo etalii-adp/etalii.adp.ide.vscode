@@ -37,6 +37,8 @@ const copies = [
   // DESL's smallest example and its binding: the tool type a test adds to a temporary definitions folder.
   [adpName, 'specifications/desl/minimal-table.des', 'fixtures/tools/desl/minimal-table.des'],
   [adpName, 'specifications/desl/minimal-table.fbl', 'fixtures/tools/desl/minimal-table.fbl'],
+  // DESL's own schema: what a test reads for the words that are DESL's.
+  [adpName, 'specifications/desl/desl.schema.json', 'fixtures/tools/desl/desl.schema.json'],
 ];
 
 const clone = (path, gitRef) => {

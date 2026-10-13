@@ -206,7 +206,7 @@ function shown(table: TableData): ShownView {
       // The title column is never hidden.
       visible: property.title || setting.visible !== false, wrap: setting.wrap === true, frozen: index <= frozen,
       ...(typeof setting.width === 'number' ? { width: setting.width } : {}),
-      ...(result === undefined ? {} : { calculation: { label: calculations.find((value) => value.key === calculation)?.label ?? calculation, text: result } }),
+      ...(result === undefined ? {} : { summary: { label: calculations.find((value) => value.key === calculation)?.label ?? calculation, text: result } }),
     };
   });
 

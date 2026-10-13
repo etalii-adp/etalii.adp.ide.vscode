@@ -1,0 +1,489 @@
+/*
+ * The table surface of a designer. Every colour is the theme's own, except the colours of the
+ * options, which the view carries for each kind of theme and the surface sets on the tags. In
+ * high contrast every edge is the contrast border and a tag is outlined, so nothing is told by a
+ * fill alone.
+ */
+:root {
+  --adp-table-line: var(--vscode-editorGroup-border, var(--vscode-widget-border, transparent));
+  --adp-table-head: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+}
+
+body.vscode-high-contrast,
+body.vscode-high-contrast-light {
+  --adp-table-line: var(--vscode-contrastBorder);
+  --adp-table-head: var(--vscode-editor-background);
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+.adp-table {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.adp-table [hidden] {
+  display: none;
+}
+
+.adp-table button,
+.adp-table input,
+.adp-table select,
+.adp-table textarea {
+  font: inherit;
+}
+
+.adp-table :focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.adp-icon path {
+  fill: currentColor;
+}
+
+/* The views of the document, as tabs. */
+.adp-table-tabs {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding: 4px 8px 0;
+  border-bottom: 1px solid var(--adp-table-line);
+}
+
+.adp-table-tab {
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid transparent;
+}
+
+.adp-table-tab:has([aria-selected='true']) {
+  border-bottom-color: var(--vscode-focusBorder);
+}
+
+.adp-table-tab button {
+  padding: 4px 6px;
+  border: none;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+}
+
+.adp-table-tab [aria-selected='true'] {
+  color: var(--vscode-editor-foreground);
+}
+
+/* The actions of the document, the search and the settings of the view that is shown. */
+.adp-table-toolbar,
+.adp-table-options,
+.adp-table-actions,
+.adp-table-settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.adp-table-toolbar,
+.adp-table-options {
+  flex: none;
+  padding: 4px 8px;
+}
+
+.adp-table-action,
+.adp-table-params button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--vscode-button-border, var(--vscode-contrastBorder, transparent));
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  cursor: pointer;
+}
+
+.adp-table-action:hover:not([aria-disabled]),
+.adp-table-params button:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.adp-table-params button[type='submit'] {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.adp-table-params button[type='submit']:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.adp-table-action[aria-disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.adp-table-search,
+.adp-table-params input:not([type='checkbox']),
+.adp-table-params select,
+.adp-table-params textarea,
+.adp-table-editor {
+  box-sizing: border-box;
+  padding: 2px 4px;
+  border: 1px solid var(--vscode-input-border, var(--vscode-contrastBorder, transparent));
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+}
+
+.adp-table input[type='checkbox'] {
+  accent-color: var(--vscode-focusBorder);
+}
+
+.adp-table-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border: 1px solid var(--adp-table-line);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.adp-table-options .adp-table-chip {
+  padding: 1px;
+}
+
+.adp-table-options .adp-table-tag {
+  margin-right: 0;
+}
+
+.adp-table-chip:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.adp-table-chip.adp-selected {
+  border-color: var(--vscode-focusBorder);
+}
+
+.adp-table-notice {
+  flex: none;
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--vscode-inputValidation-infoBorder, var(--vscode-contrastBorder, transparent));
+  background: var(--vscode-inputValidation-infoBackground, transparent);
+  color: var(--vscode-inputValidation-infoForeground, inherit);
+}
+
+.adp-table-status {
+  flex: none;
+  margin: 0;
+  padding: 2px 8px;
+  color: var(--vscode-errorForeground);
+}
+
+.adp-table-status:empty {
+  display: none;
+}
+
+/* The grid. Its columns have the widths the view gives, so a frozen column knows where it stays. */
+.adp-table-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.adp-table-grid {
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.adp-table-grid th,
+.adp-table-grid td {
+  position: relative;
+  box-sizing: border-box;
+  height: 26px;
+  padding: 2px 6px;
+  overflow: hidden;
+  border-right: 1px solid var(--adp-table-line);
+  border-bottom: 1px solid var(--adp-table-line);
+  background: var(--vscode-editor-background);
+  font-weight: normal;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adp-table-grid td.adp-table-wrap {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.adp-table-grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-right: 24px;
+  background: var(--adp-table-head);
+}
+
+.adp-table-grid tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  border-top: 1px solid var(--adp-table-line);
+  background: var(--adp-table-head);
+  color: var(--vscode-descriptionForeground);
+}
+
+.adp-table-grid .adp-table-number,
+.adp-table-grid .adp-table-frozen {
+  position: sticky;
+  z-index: 1;
+}
+
+.adp-table-grid .adp-table-number {
+  left: 0;
+  width: 44px;
+  padding-right: 6px;
+  color: var(--vscode-descriptionForeground);
+  text-align: right;
+}
+
+.adp-table-grid thead .adp-table-number,
+.adp-table-grid thead .adp-table-frozen,
+.adp-table-grid tfoot .adp-table-number,
+.adp-table-grid tfoot .adp-table-frozen {
+  z-index: 3;
+}
+
+.adp-table-grid thead .adp-icon {
+  margin-right: 4px;
+  vertical-align: text-bottom;
+}
+
+.adp-table-menu-button {
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  line-height: 0;
+  cursor: pointer;
+}
+
+.adp-table-grid .adp-table-menu-button {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+}
+
+.adp-table-menu-button .adp-icon {
+  margin: 0;
+}
+
+.adp-table-menu-button:hover {
+  background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
+}
+
+.adp-table-row:hover > * {
+  background: var(--vscode-list-hoverBackground);
+}
+
+/* What is selected is told by its fill and by an edge, which high contrast keeps. */
+.adp-table-grid .adp-selected > *,
+.adp-table-grid th.adp-selected,
+.adp-table-grid td.adp-selected {
+  background: var(--vscode-list-inactiveSelectionBackground, var(--vscode-editor-background));
+  box-shadow: inset 0 0 0 1px var(--vscode-contrastActiveBorder, transparent);
+}
+
+.adp-table-grid th:focus,
+.adp-table-grid td:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.adp-table-group th {
+  position: sticky;
+  left: 0;
+  background: var(--adp-table-head);
+  font-weight: bold;
+}
+
+.adp-table-group[aria-expanded='false'] .adp-table-group-label::before {
+  content: '\25b8  ';
+}
+
+.adp-table-group[aria-expanded='true'] .adp-table-group-label::before {
+  content: '\25be  ';
+}
+
+.adp-table-count {
+  margin-left: 8px;
+  color: var(--vscode-descriptionForeground);
+  font-weight: normal;
+}
+
+/* A value that is one of several, or one of the options of a column. */
+.adp-table-tag {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 6px;
+  border-radius: 3px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.adp-table-tag.adp-table-coloured {
+  color: var(--vscode-editor-foreground);
+}
+
+.adp-table-tag.adp-selected {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.adp-table-remove {
+  margin-left: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* The editor of a cell lies over it; the one that adds a row to a cell stands after its tags. */
+.adp-table-editor {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.adp-table-editor.adp-table-adding {
+  position: static;
+  width: 96px;
+  height: auto;
+}
+
+/* The options of a choice, the parameters of an operation and the menu lie over the table. */
+.adp-table-list,
+.adp-table-params,
+.adp-menu {
+  position: absolute;
+  z-index: 10;
+  margin: 0;
+  border: 1px solid var(--vscode-menu-border, var(--vscode-contrastBorder, transparent));
+  background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+  color: var(--vscode-menu-foreground, var(--vscode-editor-foreground));
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, transparent);
+}
+
+.adp-table-list,
+.adp-menu {
+  min-width: 180px;
+  max-height: 60%;
+  padding: 4px 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.adp-table-list [role='option'] {
+  padding: 3px 12px;
+  cursor: pointer;
+}
+
+.adp-table-list [role='option']:hover,
+.adp-table-list [role='option']:focus {
+  outline: none;
+  background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
+  box-shadow: inset 0 0 0 1px var(--vscode-contrastActiveBorder, transparent);
+}
+
+.adp-table-list [aria-checked]::before {
+  content: '\2610  ';
+}
+
+.adp-table-list [aria-checked='true']::before,
+.adp-table-list [aria-selected='true']::before {
+  content: '\2713  ';
+}
+
+.adp-table-params {
+  top: 48px;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(360px, 90%);
+  padding: 12px;
+  transform: translateX(-50%);
+}
+
+.adp-table-params label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.adp-table-params label:has(input[type='checkbox']) {
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.adp-table-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.adp-menu[hidden] {
+  display: none;
+}
+
+.adp-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 12px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.adp-menu-item:hover:not([aria-disabled]),
+.adp-menu-item:focus-visible {
+  background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
+  color: var(--vscode-menu-selectionForeground, inherit);
+}
+
+.adp-menu-item[aria-disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.adp-menu-label {
+  flex: 1;
+}
+
+.adp-menu-shortcut {
+  color: var(--vscode-descriptionForeground);
+}

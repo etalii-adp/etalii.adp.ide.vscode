@@ -5,6 +5,7 @@ import type { FromCanvas, ToCanvas } from '../core/frame/protocol';
 import { linkKind } from '../core/disl/metamodel';
 import { placesOf, type Scene } from '../core/scene/scene';
 import { spliceRanges } from '../core/tool/spliceRanges';
+import type { TableRequest, TableView } from '../core/tool/tableView';
 import type { Findings } from './findings';
 import { handBack } from './opening';
 import { pickLink } from './projectLinkPicker';
@@ -29,7 +30,7 @@ export class OpenTool {
   options: ViewOptions = {};
   selection: readonly string[] = [];
   /** What the canvas was last sent: the tool type's own view, and the version of the document it was made of. */
-  lastView: Scene | ViewModel | undefined;
+  lastView: Scene | ViewModel | TableView | undefined;
   lastVersion: number | undefined;
   readOnly = false;
   /** The text of the registration beside the document, when there is one. */
@@ -72,7 +73,8 @@ function replaceRegistration(edit: vscode.WorkspaceEdit, document: vscode.TextDo
 }
 
 // The name of what a request does, for the undo step: the label of the action it invokes.
-function labelOf(tool: OpenTool, request: EditRequest): string | undefined {
+function labelOf(tool: OpenTool, request: EditRequest | TableRequest): string | undefined {
+  if (request.kind === 'operation') return tool.type.actions(tool.source, request.on ?? [], tool.options).find((action) => action.id === request.operation)?.label;
   if (request.kind !== 'action') return undefined;
   return tool.type.actions(tool.source, request.id === undefined ? [] : [request.id], tool.options).find((action) => action.id === request.action)?.label;
 }
@@ -285,7 +287,7 @@ export class Tools implements vscode.Disposable {
    * document is cancelled rather than applied to text it was not computed from. A request that
    * changes only what this editor shows, such as a fold, writes nothing and is no undo step.
    */
-  async perform(diagram: OpenTool, request: EditRequest, version?: number): Promise<Performed> {
+  async perform(diagram: OpenTool, request: EditRequest | TableRequest, version?: number): Promise<Performed> {
     if (version !== undefined && version !== diagram.document.version) return { result: 'cancelled' };
 
     let outcome = diagram.type.edit(diagram.source, request, diagram.options, false);
@@ -439,7 +441,8 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
     diagram.readOnly = await isReadOnly(document);
     diagram.registration = await readText(diagram.registrationUri);
     panel.webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'dist')] };
-    panel.webview.html = webviewHtml(panel.webview, this.context.extensionUri, 'canvas', this.type.displayName);
+    // A diagram is drawn on the canvas, a designer on its table.
+    panel.webview.html = webviewHtml(panel.webview, this.context.extensionUri, this.type.kind === 'designer' ? 'table' : 'canvas', this.type.displayName);
     this.tools.add(diagram);
 
     const subscriptions: vscode.Disposable[] = [
@@ -476,7 +479,7 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
         return;
       case 'edit': {
         // The request is the tool type's own; its `edit` refuses one it does not know.
-        const performed = await this.tools.perform(diagram, message.request as EditRequest, message.version);
+        const performed = await this.tools.perform(diagram, message.request as EditRequest | TableRequest, message.version);
         diagram.post({ v: 2, type: 'outcome', seq: message.seq, ...performed });
         return;
       }

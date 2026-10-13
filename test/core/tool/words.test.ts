@@ -11,91 +11,142 @@ import { filesUnder } from '../files';
 
 const folders = ['src/core/disl', 'src/core/desl', 'src/core/scene', 'src/core/tool'];
 const schema = 'fixtures/disl/disl.schema.json';
+const designerSchema = 'fixtures/tools/desl/desl.schema.json';
 
 /**
  * A name of a definition that the folders may hold all the same, because it is not the tool type's
  * word there. `disl`: DISL's own schema has it as a property, a value or a definition, which this
- * test checks. `standard`: an identifier the DISL specification, or the layout of a definition's folder, defines for every tool type.
+ * test checks. `desl`: DESL's own schema has it, and DISL's has not, which this test checks too. `standard`: an identifier the DISL specification, or the layout of a definition's folder, defines for every tool type.
  * `english`: an ordinary word the interpreter uses in a sense of its own, which the reason states.
  */
 interface Exempt {
   readonly name: string;
-  readonly use: 'disl' | 'standard' | 'english';
+  readonly use: 'disl' | 'desl' | 'standard' | 'english';
   readonly reason: string;
 }
 
 const exempt: readonly Exempt[] = [
+  { name: '.md', use: 'standard', reason: 'the extension of the companion document every definition has beside its specification (etalii.adp spec 027, contracts/definitions.md)' },
   { name: 'action', use: 'disl', reason: 'a value of Plugin.provides' },
+  { name: 'all', use: 'disl', reason: 'a value of BudgetWithhold.edits' },
+  { name: 'any', use: 'disl', reason: 'a value of Filter.match.default' },
+  { name: 'ascending', use: 'disl', reason: 'a value of Compartment.itemOrder.direction' },
   { name: 'at', use: 'disl', reason: 'a property of SnapRuleObject' },
+  { name: 'average', use: 'disl', reason: 'a value of TextMetric.kind' },
   { name: 'bottom', use: 'disl', reason: 'a value of Budget.position' },
   { name: 'canvas', use: 'disl', reason: 'a property of Viewpoint' },
+  { name: 'Cell', use: 'standard', reason: 'one crossing of a row and a column: the singular of `cells`, which DESL\'s surface names (DESL 7.2)' },
+  { name: 'cells', use: 'desl', reason: 'a property of Surface' },
   { name: 'century', use: 'disl', reason: 'a value of TimeUnit' },
   { name: 'Check', use: 'english', reason: 'to check a model is to evaluate its constraints (DISL 8): `Constraints.check`, and the check of a gesture in a transaction' },
+  { name: 'checkbox', use: 'disl', reason: 'a value of FormItem.widget' },
+  { name: 'checked', use: 'english', reason: 'a change that is checked is held to the constraints of its gesture before it is applied (DISL 8.4)' },
   { name: 'Child', use: 'english', reason: 'a child is an element nested in another, or an item of a container: DISL\'s `children` and `parent`' },
   { name: 'collapsed', use: 'disl', reason: 'a property of Compartment' },
+  { name: 'Colour', use: 'desl', reason: 'a property of Columns.options' },
+  { name: 'Column', use: 'disl', reason: 'a property of SourceLocation' },
+  { name: 'columns', use: 'disl', reason: 'a property of ContainerSpec' },
   { name: 'Composite', use: 'standard', reason: 'a word of the feature identifier `shape.composite` (DISL, Appendix B.8)' },
+  { name: 'computed', use: 'disl', reason: 'a property of Canvas.legend' },
+  { name: 'Condition', use: 'english', reason: 'a condition is an expression that holds or does not: an action\'s `when`, a rule\'s `rule`' },
+  { name: 'conditions', use: 'disl', reason: 'a definition of the schema' },
   { name: 'container', use: 'disl', reason: 'a property of NodeNotation' },
   { name: 'count', use: 'disl', reason: 'a property of Budget' },
   { name: 'date', use: 'disl', reason: 'a value of Attribute.writtenPrecision' },
+  { name: 'dateTime', use: 'desl', reason: 'a value of ValueType.editor' },
   { name: 'decade', use: 'disl', reason: 'a value of TimeUnit' },
+  { name: 'default', use: 'disl', reason: 'a property of Viewpoint' },
+  { name: 'descending', use: 'disl', reason: 'a value of Compartment.itemOrder.direction' },
   { name: 'description', use: 'disl', reason: 'a property of Doc' },
+  { name: 'designer', use: 'standard', reason: 'the kind of tool DESL specifies, as `docs/terminology.md` of etalii.adp has it: a tool type is a diagram or a designer' },
   { name: 'diagram', use: 'disl', reason: 'a value of Function.uses' },
+  { name: 'Direction', use: 'disl', reason: 'a property of PortType' },
   { name: 'Do', use: 'disl', reason: 'a property of Action' },
-  { name: 'Edge', use: 'disl', reason: 'a property of Notation' },
   { name: 'duplicateId', use: 'standard', reason: 'a word of `std.duplicateId`, the built-in constraint for an id that two elements share (DISL 8.7)' },
+  { name: 'earliest', use: 'english', reason: 'the earliest of several: the first row a layout may place an element in' },
+  { name: 'Edge', use: 'disl', reason: 'a property of Notation' },
   { name: 'element', use: 'disl', reason: 'a property of ViewBind' },
   { name: 'elements', use: 'disl', reason: 'a property of Persistence.ordering' },
   { name: 'Environment', use: 'english', reason: 'the environment of the CEL library, in which every expression of a specification is parsed (DISL 12)' },
   { name: 'Fallback', use: 'disl', reason: 'a property of Plugin' },
+  { name: 'filter', use: 'disl', reason: 'a property of Style' },
+  { name: 'finished', use: 'disl', reason: 'a property of Simulation.notice' },
   { name: 'folded', use: 'english', reason: 'a folded node is one whose children are hidden: the scene\'s word for the state DISL calls `collapsed`, as `SceneNode.fold` gives it to a canvas' },
   { name: 'folder', use: 'standard', reason: 'the name of a built-in shape (DISL 6.7), and a folder of `definitions/`, which is one tool type (etalii.adp spec 027, contracts/definitions.md)' },
   { name: 'from', use: 'disl', reason: 'a property of Import' },
   { name: 'group', use: 'disl', reason: 'a property of ViewBind' },
+  { name: 'groupBy', use: 'disl', reason: 'a property of Compartment' },
   { name: 'groups', use: 'disl', reason: 'a property of ToolGroup, and a value of ViewKind' },
   { name: 'height', use: 'disl', reason: 'a property of Placement' },
   { name: 'id', use: 'disl', reason: 'a property of Reason' },
+  { name: 'item', use: 'standard', reason: 'the name `forEach` binds each item of its list to unless it names another (DISL 9.4, DESL 8.2)' },
+  { name: 'json', use: 'disl', reason: 'a value of DataType.base' },
+  { name: 'key', use: 'disl', reason: 'a property of Attribute' },
   { name: 'kind', use: 'disl', reason: 'a property of Axis' },
   { name: 'label', use: 'disl', reason: 'a property of Language' },
   { name: 'left', use: 'disl', reason: 'a value of Budget.position' },
+  { name: 'Limit', use: 'english', reason: 'a limit of a relation type is what its ends allow (DISL 8.7), and of a reading how much of a body is read' },
   { name: 'link', use: 'disl', reason: 'a value of the widgets a form item names' },
   { name: 'Location', use: 'disl', reason: 'a property of Constraint' },
-  { name: '.md', use: 'standard', reason: 'the extension of the companion document every definition has beside its specification (etalii.adp spec 027, contracts/definitions.md)' },
+  { name: 'Match', use: 'disl', reason: 'a property of Filter' },
+  { name: 'max', use: 'disl', reason: 'a property of MinMax' },
+  { name: 'min', use: 'disl', reason: 'a property of MinMax' },
   { name: 'mm', use: 'standard', reason: 'the letters of a month in an LDML pattern, as a ruler and a form write a year and a month (DISL 5.13)' },
   { name: 'month', use: 'disl', reason: 'a value of TimeUnit' },
   { name: 'name', use: 'disl', reason: 'a property of PluginCall' },
   { name: 'node', use: 'disl', reason: 'a property of Notation' },
   { name: 'nodes', use: 'disl', reason: 'a property of Viewpoint' },
+  { name: 'none', use: 'disl', reason: 'a value of Modifier' },
+  { name: 'number', use: 'disl', reason: 'a value of DataType.base' },
+  { name: 'one', use: 'english', reason: 'one of several: the value of one expression, one element of a selection' },
   { name: 'openLink', use: 'english', reason: 'to open a link is a gesture of the frame\'s contract (`EditRequest.kind`, etalii.adp spec 027, contracts/tool-type.md), whatever a definition calls the operation that does it' },
+  { name: 'Option', use: 'english', reason: 'an option is one of the values a choice offers: of a form item (DISL 7), of a column (DESL 7.3)' },
+  { name: 'options', use: 'disl', reason: 'a property of Filter' },
   { name: 'other', use: 'english', reason: 'the other of two things: the other end of an edge, another element of a list' },
   { name: 'Parallel', use: 'disl', reason: 'a property of EdgeNotation' },
+  { name: 'parent', use: 'disl', reason: 'a value of Attribute.unique' },
   { name: 'pending', use: 'english', reason: 'a pending connection is a connect gesture that ended on an element and has no relation type yet (DISL 7.3)' },
   { name: 'Phase', use: 'disl', reason: 'a property of Hook' },
   { name: 'placement', use: 'disl', reason: 'a definition of the schema: where the coordinates of a node come from' },
   { name: 'position', use: 'disl', reason: 'a property of Label' },
+  { name: 'properties', use: 'english', reason: 'the properties of an object, and ADP Properties, the frame\'s view of a selection' },
+  { name: 'Property', use: 'english', reason: 'a property of an object, and a column of a table as the frame\'s contract names one (`TableProperty`, etalii.adp spec 027, contracts/tool-type.md)' },
+  { name: 'range', use: 'standard', reason: 'a function of CEL\'s lists extension, which DISL requires (DISL 12.1)' },
   { name: 'relation', use: 'disl', reason: 'a value of Constraint.scope' },
   { name: 'right', use: 'disl', reason: 'a value of Budget.position' },
   { name: 'row', use: 'disl', reason: 'a value of FormItem.kind' },
   { name: 'rowPacked', use: 'disl', reason: 'a property of LayoutConfig' },
   { name: 'rows', use: 'disl', reason: 'a property of LayoutConfig' },
+  { name: 'selection', use: 'disl', reason: 'a property of Canvas' },
   { name: 'Side', use: 'disl', reason: 'a property of EndAnchor' },
+  { name: 'Sort', use: 'desl', reason: 'a property of ValueType' },
   { name: 'Specification', use: 'disl', reason: 'the definition of the schema a specification file is' },
   { name: 'specifications', use: 'english', reason: 'the specification files of the folders of `definitions/`: DISL\'s own word for what a tool engineer writes' },
   { name: 'spread', use: 'disl', reason: 'a value of NeighbourBounds.absent' },
   { name: 'start', use: 'disl', reason: 'a property of Axis' },
   { name: 'std.readOnly', use: 'standard', reason: 'the id under which `behavior.messages` gives the sentence of a diagram that cannot be edited (DISL 9.1)' },
+  { name: 'sum', use: 'english', reason: 'the sum of several numbers, as a layout adds the sizes of what it places' },
+  { name: 'table', use: 'disl', reason: 'a value of FormItem.widget' },
   { name: 'tags', use: 'disl', reason: 'a property of Doc' },
+  { name: 'target', use: 'disl', reason: 'a property of RelationType' },
   { name: 'text', use: 'disl', reason: 'a property of Budget' },
   { name: 'time', use: 'disl', reason: 'a value of DataType.base' },
   { name: 'title', use: 'disl', reason: 'a property of Compartment' },
   { name: 'to', use: 'disl', reason: 'a property of AxisRange' },
   { name: 'top', use: 'disl', reason: 'a value of Budget.position' },
   { name: 'Trigger', use: 'disl', reason: 'a property of Layout' },
+  { name: 'type', use: 'disl', reason: 'a property of Function.params' },
+  { name: 'uniqueName', use: 'standard', reason: 'a function of DESL\'s library (DESL 9.4)' },
   { name: 'unit', use: 'disl', reason: 'a property of Budget' },
   { name: 'Unreadable', use: 'disl', reason: 'a value of TypeMapEntry.as' },
   { name: 'value', use: 'disl', reason: 'a property of Doc' },
+  { name: 'valueType', use: 'disl', reason: 'a property of Axis' },
   { name: 'version', use: 'disl', reason: 'a property of Language' },
   { name: 'view', use: 'disl', reason: 'a property of Persistence' },
+  { name: 'views', use: 'desl', reason: 'a property of Surface' },
+  { name: 'visible', use: 'disl', reason: 'a property of Ruler' },
   { name: 'width', use: 'disl', reason: 'a property of Placement' },
+  { name: 'wrap', use: 'disl', reason: 'a property of Axis' },
   { name: 'x', use: 'disl', reason: 'a property of ViewBind' },
   { name: 'y', use: 'disl', reason: 'a property of ViewBind' },
   { name: 'year', use: 'disl', reason: 'a value of TimeUnit' },
@@ -154,8 +205,8 @@ function declaredNames(): Map<string, string> {
   return names;
 }
 
-/** Every property, value and definition name of DISL's schema, by its words. */
-function schemaWords(): Set<string> {
+/** Every property, value and definition name of a language's schema, by its words. */
+function schemaWords(path = schema): Set<string> {
   const found = new Set<string>();
   const walk = (node: unknown, key?: string): void => {
     if (Array.isArray(node)) {
@@ -168,7 +219,7 @@ function schemaWords(): Set<string> {
       }
     } else if (key === 'const' && typeof node === 'string') found.add(words(node));
   };
-  walk(JSON.parse(readFileSync(schema, 'utf8')));
+  walk(JSON.parse(readFileSync(path, 'utf8')));
   return found;
 }
 
@@ -231,6 +282,15 @@ describe('the words of a tool type', () => {
     expect(exempt.filter((entry) => entry.use !== 'disl' && inSchema.has(words(entry.name))).map((entry) => entry.name)).toEqual([]);
   });
 
+  it('are exempt as a word of DESL only where DESL\'s schema has the word', () => {
+    const inSchema = schemaWords(designerSchema);
+    expect(inSchema.size).toBeGreaterThan(100);
+    expect(exempt.filter((entry) => entry.use === 'desl' && !inSchema.has(words(entry.name))).map((entry) => entry.name)).toEqual([]);
+    // A word DISL has not and DESL has is exempt as DESL's, and for no weaker reason.
+    const inDisl = schemaWords();
+    expect(exempt.filter((entry) => entry.use !== 'disl' && entry.use !== 'desl' && !inDisl.has(words(entry.name)) && inSchema.has(words(entry.name))).map((entry) => entry.name)).toEqual([]);
+  });
+
   it('are the only names the exempt list holds', () => {
     expect(exempt.filter((entry) => !names.has(words(entry.name))).map((entry) => entry.name)).toEqual([]);
   });
@@ -240,8 +300,7 @@ describe('the words of a tool type', () => {
   });
 
   it('are read for in every folder that reads a definition', () => {
-    // src/core/desl/ arrives with the first designer; the three others are here from this change on.
-    expect(folders.filter((folder) => folder !== 'src/core/desl' && !existsSync(folder))).toEqual([]);
+    expect(folders.filter((folder) => !existsSync(folder))).toEqual([]);
     expect(filesUnder('src/core/tool', '.ts').length).toBeGreaterThan(0);
   });
 

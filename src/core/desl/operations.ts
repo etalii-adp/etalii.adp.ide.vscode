@@ -357,7 +357,7 @@ export function interpretOperations(designer: DesignerSpecification, surface: Su
   }
 
   /** A transaction's outcome, with what DESL asks of it beside its actions. */
-  function finished(model: Model, outcome: Outcome): Outcome {
+  function concluded(model: Model, outcome: Outcome): Outcome {
     if (outcome.refused !== undefined) return outcome;
     let changes = [...outcome.changes, ...conversions(model, outcome.after)];
     // A value that is set back to what the document holds is no change of it.
@@ -394,7 +394,7 @@ export function interpretOperations(designer: DesignerSpecification, surface: Su
   const run: Operations['run'] = (model, id, selection, args) => {
     const state = declaredIds.has(id) ? availability(model, id, selection) : behavior.value.availability(model, id, selection);
     if (!state.offered) return { refused: NOT_HERE };
-    return finished(model, behavior.value.operate(model, id, selection, undefined, undefined, args));
+    return concluded(model, behavior.value.operate(model, id, selection, undefined, undefined, args));
   };
 
   /** The value type of a column of a model, when the specification has it. */

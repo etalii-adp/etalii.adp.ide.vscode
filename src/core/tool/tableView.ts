@@ -48,7 +48,7 @@ export interface TableProperty {
   /** Whether it stays in sight when the table scrolls sideways. */
   readonly frozen: boolean;
   /** What the line under the column shows of the rows in sight. */
-  readonly calculation?: { readonly label: string; readonly text: string };
+  readonly summary?: { readonly label: string; readonly text: string };
   /** Why its cells are shown and not edited; absent for a column that is edited. */
   readonly readOnly?: string;
 }
@@ -190,7 +190,7 @@ export interface TableData {
 
 export interface ShownView {
   /** What the view says of its columns, in its order. A column it does not list follows, as it is by default. */
-  readonly columns?: readonly (Partial<Pick<TableProperty, 'visible' | 'width' | 'wrap' | 'frozen' | 'calculation'>> & { readonly id: string })[];
+  readonly columns?: readonly (Partial<Pick<TableProperty, 'visible' | 'width' | 'wrap' | 'frozen' | 'summary'>> & { readonly id: string })[];
   /** The ids of the rows in sight, in order. Absent for every row, in the document's order. */
   readonly rows?: readonly string[];
   readonly groups?: readonly TableGroup[];
@@ -253,11 +253,11 @@ export function tableReader(parts: TableParts) {
 
   /** The columns of a model, in its order, each as it is without a view. */
   function propertiesOf(model: Model): TableProperty[] {
-    const kinds = valueKind(metamodel, attributesOf(metamodel, columns.type)[columns.valueType]?.type ?? '');
+    const typed = valueKind(metamodel, attributesOf(metamodel, columns.type)[columns.valueType]?.type ?? '');
     return model.elements.filter((element) => element.type === columns.type).map((column): TableProperty => {
       const valueType = valueTypeOf(column);
       const named = column.attributes[columns.valueType];
-      const icon = kinds.kind === 'enum' ? kinds.enum.values.find((value) => value.key === named)?.icon : undefined;
+      const icon = typed.kind === 'enum' ? typed.enum.values.find((value) => value.key === named)?.icon : undefined;
       const options = columns.options;
       return {
         id: column.id, name: textOf(column.attributes[columns.name]), valueType: textOf(named),

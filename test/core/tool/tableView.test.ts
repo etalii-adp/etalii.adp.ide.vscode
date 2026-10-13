@@ -178,9 +178,9 @@ describe('the view that is shown', () => {
     const frozen = view(after(map, { kind: 'operation', operation: 'freeze', on: ['v2'], args: { property: 'p2' } }));
     expect(frozen.properties.filter((property) => property.frozen).map((property) => property.id)).toEqual(['p1', 'p2']);
     const summed = view(after(map, { kind: 'operation', operation: 'calculate', on: ['v2'], args: { property: 'p3', calculation: 'sum' } }));
-    expect(summed.properties.find((property) => property.id === 'p3')?.calculation).toEqual({ label: 'Sum', text: '1276643' });
+    expect(summed.properties.find((property) => property.id === 'p3')?.summary).toEqual({ label: 'Sum', text: '1276643' });
     const counted = view(after(map, { kind: 'operation', operation: 'calculate', on: ['v2'], args: { property: 'p3', calculation: 'percentEmpty' } }));
-    expect(counted.properties.find((property) => property.id === 'p3')?.calculation).toEqual({ label: 'Percent empty', text: '78%' });
+    expect(counted.properties.find((property) => property.id === 'p3')?.summary).toEqual({ label: 'Percent empty', text: '78%' });
   });
 
   it('lists the settings of the view that is shown, each as what its operations are for', () => {

@@ -6,13 +6,17 @@ import type { EditRequest, ToolType, ViewModel } from '../core/frame/toolType';
 import { gartnerHypecycleGraph } from '../core/gartner-hypecycle-graph/index';
 import { plugins } from '../core/plugins/index';
 import type { Scene } from '../core/scene/scene';
+import type { TableRequest, TableView } from '../core/tool/tableView';
 import { toolTypesFrom } from '../core/tool/toolTypeFrom';
 
-/** A tool type this plug-in brings: one read from its definition, or one of the two hand-coded diagrams. */
-export type AnyToolType = ToolType<Scene | ViewModel, EditRequest>;
+/**
+ * A tool type this plug-in brings: a diagram or a designer read from its definition, or one of the
+ * two hand-coded diagrams. A request is the tool type's own, and its `edit` refuses one it does not know.
+ */
+export type AnyToolType = ToolType<Scene | ViewModel | TableView, EditRequest | TableRequest>;
 
 /** Whether what a tool type shows is a scene, which a definition gives, and not a hand-coded view model. */
-export function isScene(view: Scene | ViewModel): view is Scene {
+export function isScene(view: Scene | ViewModel | TableView): view is Scene {
   return 'nodes' in view;
 }
 
@@ -44,11 +48,12 @@ export function toolTypesAt(extensionPath: string): readonly AnyToolType[] {
   // simplified: a hand-coded type wins for its origin, so the two diagrams are as they were, and
   // keeps its place in the list; the last pull request of spec 027 (User Story 4) removes the two
   // and this list is then `types` alone. Under test, ADP_TEST_DEFINITIONS=1 lets the definition win.
-  const handCoded: AnyToolType[] = [gartnerHypecycleGraph, agentBehaviorModelling].map(fromHandCoded);
+  const handCoded = [gartnerHypecycleGraph, agentBehaviorModelling].map(fromHandCoded) as readonly unknown[] as readonly AnyToolType[];
   const definitionWins = process.env.ADP_TEST !== undefined && process.env.ADP_TEST_DEFINITIONS === '1';
-  const read = (origin: string): AnyToolType | undefined => types.find((type) => type.origin === origin);
+  const all = types as readonly unknown[] as readonly AnyToolType[];
+  const read = (origin: string): AnyToolType | undefined => all.find((type) => type.origin === origin);
   return [
     ...handCoded.map((type) => (definitionWins ? read(type.origin) ?? type : type)),
-    ...types.filter((type) => !handCoded.some((other) => other.origin === type.origin)),
+    ...all.filter((type) => !handCoded.some((other) => other.origin === type.origin)),
   ];
 }
