@@ -1,5 +1,7 @@
-// The frame: what every diagram type shares in this host, and the one contract a type implements
-// (etalii.adp spec 006, contracts/frame.md). Everything here is data that crosses to a webview as
+import type { Scene } from '../scene/scene';
+
+// The frame: what every tool type shares in this host, and the one contract a type implements
+// (etalii.adp spec 027, contracts/tool-type.md). Everything here is data that crosses to a webview as
 // JSON, so nothing in it is a class or a function except the contract itself.
 
 /** How a finding is rated; the definitions' own four severities. */
@@ -60,6 +62,12 @@ export interface ViewOptions {
   readonly filterTags?: readonly string[];
   readonly filterMode?: 'any' | 'all';
   readonly compact?: boolean;
+  /** The viewpoint to draw, by its name; the default one when absent. */
+  readonly viewpoint?: string;
+  /** The value of each filter that is not at its default, by the filter's id. */
+  readonly filters?: Readonly<Record<string, { readonly value?: unknown; readonly match?: 'any' | 'all' }>>;
+  /** The nodes this viewer folded (true) or unfolded (false), by id; a node not named is as the definition says. */
+  readonly collapsed?: Readonly<Record<string, boolean>>;
 }
 
 export interface ToolboxEntry {
@@ -96,7 +104,7 @@ export interface Action {
   readonly disabledReason?: string;
 }
 
-/** Every gesture a canvas, the toolbox or the property grid can ask of a diagram type. */
+/** Every gesture a canvas, the toolbox or the property grid can ask of a diagram. */
 export type EditRequest =
   /** A toolbox entry dropped at a point. */
   | { readonly kind: 'drop'; readonly entry: string; readonly x: number; readonly y: number }
@@ -115,58 +123,96 @@ export type EditRequest =
   /** A property edited in ADP Properties. */
   | { readonly kind: 'setField'; readonly id: string; readonly field: string; readonly value: string }
   /** An action invoked on an element or relation, or on the diagram when there is no id. */
-  | { readonly kind: 'action'; readonly action: string; readonly id?: string };
+  | { readonly kind: 'action'; readonly action: string; readonly id?: string; readonly x?: number; readonly y?: number }
+  /** A node dragged onto another node, to become its child, at a position among its children when given. */
+  | { readonly kind: 'reparent'; readonly id: string; readonly parent: string; readonly index?: number }
+  /** The children of a node hidden or shown. */
+  | { readonly kind: 'fold'; readonly id: string; readonly folded: boolean }
+  /** A node kept where it was put, or given back to the layout. */
+  | { readonly kind: 'pin'; readonly id: string; readonly pinned: boolean }
+  /** The link of a node followed. */
+  | { readonly kind: 'openLink'; readonly id: string };
+
+/** One FBL splice of the body: a range of UTF-8 bytes of `Source.text` and what replaces it. */
+export interface TextSplice {
+  readonly offset: number;
+  readonly length: number;
+  readonly text: string;
+}
 
 /** What an edit request came to. */
 export type EditOutcome =
-  /** The document's new text, and the registration's when the edit changed it (null removes it). */
-  | { readonly kind: 'applied'; readonly text: string; readonly registration?: string | null; readonly select?: string; readonly editLabel?: boolean; readonly multiline?: boolean }
-  /** Nothing changed, and this is the sentence to show. */
+  /** The splices of the gesture, and the registration's new text when the edit changed it (null removes it). */
+  | { readonly kind: 'applied'; readonly splices: readonly TextSplice[]; readonly viewOptions?: ViewOptions; readonly registration?: string | null; readonly select?: string; readonly editLabel?: boolean; readonly multiline?: boolean }
+  /** Nothing changed, and this is the definition's sentence to show. */
   | { readonly kind: 'refused'; readonly sentence: string }
   /** Ask first; when confirmed, the same request is made again with `confirmed`. */
   | { readonly kind: 'confirm'; readonly title: string; readonly message: string; readonly confirmLabel: string; readonly danger: boolean }
   /** The request asks for text edited in place before anything is written. */
   | { readonly kind: 'editInPlace'; readonly id: string; readonly multiline: boolean }
   /** The request is answered in ADP Properties: the named field is where the user goes on. */
-  | { readonly kind: 'showField'; readonly field: string };
+  | { readonly kind: 'showField'; readonly field: string }
+  /** A linked file or folder is opened by the extension; nothing is written. */
+  | { readonly kind: 'open'; readonly path: string }
+  /** A path is asked with the platform's file and folder dialog; chosen, it is set as the named field, relative to the document. */
+  | { readonly kind: 'pickPath'; readonly id: string; readonly field: string };
 
-/** A document as a diagram type reads it: its text and, where one exists, its registration's. */
+/** A document as a tool type reads it: its text and, where one exists, its registration's. */
 export interface Source {
+  readonly fileName: string;
   readonly text: string;
   readonly registration?: string;
 }
 
-/**
- * One diagram type as the frame sees it. A type is listed once in the extension's list of diagram
- * types and supplies nothing else to it; what it draws is its notation in the webview.
- */
-export interface DiagramType {
-  /** The tool type's origin, `<vendor>/<type>`, the same in every ADP host. */
-  readonly origin: string;
-  /** The one display name of the tool type. */
-  readonly displayName: string;
+/** One binding's claim, as its FBL `claims` states it. */
+export interface Claim {
   /** File extensions without the dot. */
   readonly extensions: readonly string[];
-  /** True when the extension belongs to other tools too, so a file is this type only by choice. */
+  /** True when the extensions belong to other tools too. */
   readonly shared: boolean;
-  /** Whether a file of a shared extension looks like this type, so opening it as one is offered. */
-  suggests(text: string): boolean;
+  /** True when the binding has a marker a file must match. */
+  readonly marker: boolean;
+  /** True when the binding claims the extension for its registration only. */
+  readonly registrationOnly: boolean;
+}
+
+/** One tool type as the frame sees it, generic over what it shows and what a gesture asks. */
+export interface ToolType<View, Request> {
+  /** The tool type's origin, `<vendor>/<type>`, the same in every ADP host. */
+  readonly origin: string;
+  /** The tool's kind, as docs/terminology.md has it. */
+  readonly kind: 'diagram' | 'designer';
+  /** The one display name of the tool type. */
+  readonly displayName: string;
+  /** What the binding claims: one entry per binding of the definition. */
+  readonly claims: readonly Claim[];
+  /** Whether a file is this tool type's: extension and marker both. */
+  claimed(fileName: string, text: string): boolean;
+  /** Whether a file of a shared extension looks like this type, from the binding's `claims.suggest`. */
+  suggests(fileName: string, text: string): boolean;
   /** Everything wrong with the document. Never throws. */
   findings(source: Source): Finding[];
-  /** What to draw. Never throws. */
-  view(source: Source, options: ViewOptions): ViewModel;
+  /** What to show. Never throws. */
+  view(source: Source, options: ViewOptions): View;
   toolbox(source: Source): ToolboxEntry[];
   /** The rows of ADP Properties for a selection; empty when there is nothing to show. */
   fields(source: Source, selection: readonly string[]): Field[];
-  /** What can be done to the selection, or to the diagram when it is empty. */
-  actions(source: Source, selection: readonly string[]): Action[];
+  /** What can be done to the selection, or to the document when it is empty. */
+  actions(source: Source, selection: readonly string[], options?: ViewOptions): Action[];
   /** Applies one request to the document as it is now. `confirmed` answers an earlier `confirm`. */
-  edit(source: Source, request: EditRequest, options: ViewOptions, confirmed: boolean): EditOutcome;
-  /** The text of a new document. */
+  edit(source: Source, request: Request, options: ViewOptions, confirmed: boolean): EditOutcome;
+  /** The text of a new document, from the binding's template. */
   newDocument(name: string): string;
 }
 
-/** The identifier a diagram type registers under: `etalii.adp.<vendor>.<type>`. */
-export function viewTypeOf(type: Pick<DiagramType, 'origin'>): string {
+/** A diagram read from its definition. */
+export type DiagramToolType = ToolType<Scene, EditRequest>;
+// DesignerToolType arrives with TableView and TableRequest of src/core/tool/tableView.ts.
+
+/** A hand-coded diagram, until the last pull request of spec 027 (User Story 4) removes the two. */
+export type DiagramType = ToolType<ViewModel, EditRequest>;
+
+/** The identifier a tool type registers under: `etalii.adp.<vendor>.<type>`. */
+export function viewTypeOf(type: Pick<ToolType<unknown, unknown>, 'origin'>): string {
   return `etalii.adp.${type.origin.replace('/', '.')}`;
 }

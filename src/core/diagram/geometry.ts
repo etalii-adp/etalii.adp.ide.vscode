@@ -1,4 +1,4 @@
-import type { Box } from '../frame/diagramType';
+import type { Box } from '../frame/toolType';
 
 // The points and boxes every part of the diagram library measures with, in canvas units.
 

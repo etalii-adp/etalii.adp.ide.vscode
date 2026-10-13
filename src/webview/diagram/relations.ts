@@ -1,7 +1,7 @@
 import { pathOf, type End } from '../../core/diagram/connectors';
 import { centreOf, type Point } from '../../core/diagram/geometry';
 import { attachmentPoint, nearestAttachment, type Attachment } from '../../core/diagram/shapes/segments';
-import type { ViewElement, ViewRelation } from '../../core/frame/diagramType';
+import type { ViewElement, ViewRelation } from '../../core/frame/toolType';
 import type { DiagramDefinition, ElementTypeDefinition, RelationTypeDefinition } from './definition';
 import { svg } from './dom';
 import { bannerOfElement } from './elements';

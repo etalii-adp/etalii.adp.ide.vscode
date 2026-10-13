@@ -10,8 +10,8 @@ declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 
 const vscode = acquireVsCodeApi();
 const send = (message: FromToolbox): void => vscode.postMessage(message);
-const toolbox = new Toolbox(document.body, (entry) => send({ v: 1, type: 'add', entry }));
+const toolbox = new Toolbox(document.body, (entry) => send({ v: 2, type: 'add', entry }));
 window.addEventListener('message', (event: MessageEvent<ToToolbox>) => {
   if (event.data.type === 'entries') toolbox.show(event.data.entries, event.data.empty);
 });
-send({ v: 1, type: 'ready' });
+send({ v: 2, type: 'ready' });

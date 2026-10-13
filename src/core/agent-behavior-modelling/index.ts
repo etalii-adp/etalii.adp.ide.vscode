@@ -1,4 +1,5 @@
-import type { Action, Box, DiagramType, EditOutcome, EditRequest, Field, Finding, Source, ToolboxEntry, ViewElement, ViewModel, ViewOptions, ViewRelation } from '../frame/diagramType';
+import type { HandCodedDiagramType as DiagramType, HandCodedOutcome as EditOutcome, HandCodedRequest as EditRequest, HandCodedSource as Source } from '../frame/handCoded';
+import type { Action, Box, Field, Finding, ToolboxEntry, ViewElement, ViewModel, ViewOptions, ViewRelation } from '../frame/toolType';
 import { newRegistration, readLayout, writeLayout, type Position } from '../registration/registration';
 import { LineDocument } from '../text/lineDocument';
 import { arrange, dropOf, isNothing, moveIndexOf, nodeHeight, nodeWidth, renamed, rowAndBeneath } from './layout';

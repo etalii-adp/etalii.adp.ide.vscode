@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import type { DiagramType } from '../core/frame/diagramType';
-import { viewTypeOf } from '../core/frame/diagramType';
+import { viewTypeOf } from '../core/frame/toolType';
 import { bodyOf, originOf } from '../core/registration/registration';
+import type { AnyToolType } from './toolTypes';
 
 /**
  * Opening a registration opens the diagram it registers: the `.adp` names a tool type and the file
@@ -11,9 +11,9 @@ import { bodyOf, originOf } from '../core/registration/registration';
 export class RegistrationEditorProvider implements vscode.CustomTextEditorProvider {
   static readonly viewType = 'etalii.adp.registration';
 
-  constructor(private readonly types: readonly DiagramType[]) {}
+  constructor(private readonly types: readonly AnyToolType[]) {}
 
-  static register(types: readonly DiagramType[]): vscode.Disposable {
+  static register(types: readonly AnyToolType[]): vscode.Disposable {
     return vscode.window.registerCustomEditorProvider(RegistrationEditorProvider.viewType, new RegistrationEditorProvider(types));
   }
 
@@ -35,7 +35,7 @@ export class RegistrationEditorProvider implements vscode.CustomTextEditorProvid
   }
 
   /** Opens the diagram a registration registers, then closes the registration's own tab. */
-  private async follow(registration: vscode.Uri, target: { body: vscode.Uri; type: DiagramType }, column: vscode.ViewColumn | undefined): Promise<void> {
+  private async follow(registration: vscode.Uri, target: { body: vscode.Uri; type: AnyToolType }, column: vscode.ViewColumn | undefined): Promise<void> {
     // Not as a preview: a preview would take the place of the registration's tab while that is still being shown.
     await vscode.commands.executeCommand('vscode.openWith', target.body, viewTypeOf(target.type), { viewColumn: column, preview: false });
     const own = vscode.window.tabGroups.all
@@ -45,7 +45,7 @@ export class RegistrationEditorProvider implements vscode.CustomTextEditorProvid
   }
 
   /** The body and tool type a registration names, or the sentence that says why it cannot be followed. */
-  async target(document: vscode.TextDocument): Promise<{ body: vscode.Uri; type: DiagramType } | string> {
+  async target(document: vscode.TextDocument): Promise<{ body: vscode.Uri; type: AnyToolType } | string> {
     const text = document.getText();
     const origin = originOf(text);
     if (origin === undefined) return 'This registration is empty: its first line names no tool type.';
@@ -55,11 +55,11 @@ export class RegistrationEditorProvider implements vscode.CustomTextEditorProvid
     const folder = document.uri.with({ path: document.uri.path.slice(0, document.uri.path.lastIndexOf('/') + 1) });
     const named = bodyOf(text);
     const base = document.uri.path.slice(document.uri.path.lastIndexOf('/') + 1).replace(/\.adp$/i, '');
-    const body = vscode.Uri.joinPath(folder, named ?? `${base}.${type.extensions[0]}`);
+    const body = vscode.Uri.joinPath(folder, named ?? `${base}.${type.claims[0].extensions[0]}`);
     try {
       await vscode.workspace.fs.stat(body);
     } catch {
-      return `This registration's document, ${named ?? `${base}.${type.extensions[0]}`}, is not there.`;
+      return `This registration's document, ${named ?? `${base}.${type.claims[0].extensions[0]}`}, is not there.`;
     }
     return { body, type };
   }

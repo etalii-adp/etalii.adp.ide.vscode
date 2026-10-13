@@ -1,4 +1,4 @@
-import type { Field } from '../../core/frame/diagramType';
+import type { Field } from '../../core/frame/toolType';
 import type { FromProperties, ToProperties } from '../../core/frame/protocol';
 import { html } from '../diagram/dom';
 import { gridOf } from './controls';
@@ -37,7 +37,7 @@ function show(fields: readonly Field[], empty: string | undefined, force: boolea
   if (key !== shown || force) {
     shown = key;
     root.replaceChildren(...gridOf(fields, empty, (field, value) => {
-      if (target !== undefined) send({ v: 1, type: 'setField', target, field, value });
+      if (target !== undefined) send({ v: 2, type: 'setField', target, field, value });
     }));
   }
   showRefusal();
@@ -58,4 +58,4 @@ window.addEventListener('message', (event: MessageEvent<ToProperties>) => {
     showRefusal();
   }
 });
-send({ v: 1, type: 'ready' });
+send({ v: 2, type: 'ready' });

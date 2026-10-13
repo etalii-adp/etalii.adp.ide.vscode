@@ -1,7 +1,7 @@
 import type { Point } from '../../core/diagram/geometry';
 import { treeDragPreview, type TreeNode } from '../../core/diagram/layout/tree';
 import { boundaryLanding, nearestAttachment } from '../../core/diagram/shapes/segments';
-import type { EditRequest, ViewElement, ViewModel, ViewRelation } from '../../core/frame/diagramType';
+import type { EditRequest, ViewElement, ViewModel, ViewRelation } from '../../core/frame/toolType';
 import type { DiagramDefinition, DraggingDefinition } from './definition';
 import { bannerOfElement, drawElement } from './elements';
 import { registerIcons } from './icons';

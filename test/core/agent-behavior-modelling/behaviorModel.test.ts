@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { EditOutcome, EditRequest, Source } from '../../../src/core/frame/diagramType';
-import { viewTypeOf } from '../../../src/core/frame/diagramType';
+import type { HandCodedOutcome as EditOutcome, HandCodedRequest as EditRequest, HandCodedSource as Source } from '../../../src/core/frame/handCoded';
+import { viewTypeOf } from '../../../src/core/frame/toolType';
 import { actionIds, agentBehaviorModelling as type, fieldIds } from '../../../src/core/agent-behavior-modelling/index';
 import { compute, minimumGap, nodeHeight, nodeWidth, horizontalGap, verticalGap } from '../../../src/core/agent-behavior-modelling/layout';
 import { kinds, kindFromKeyword, keywordOf, rootsOf } from '../../../src/core/agent-behavior-modelling/model';

@@ -1,4 +1,4 @@
-import type { Box, ViewElement } from '../../core/frame/diagramType';
+import type { Box, ViewElement } from '../../core/frame/toolType';
 import { bannerOf, evenFractions, type Banner } from '../../core/diagram/shapes/segments';
 import { outlineOf, type BuiltInShape } from '../../core/diagram/shapes/outline';
 import type { ElementTypeDefinition, LabelDefinition } from './definition';

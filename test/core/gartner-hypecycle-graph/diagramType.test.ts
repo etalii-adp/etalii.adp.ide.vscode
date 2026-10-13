@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { EditOutcome, ViewElement } from '../../../src/core/frame/diagramType';
-import { viewTypeOf } from '../../../src/core/frame/diagramType';
+import type { HandCodedOutcome as EditOutcome } from '../../../src/core/frame/handCoded';
+import type { ViewElement } from '../../../src/core/frame/toolType';
+import { viewTypeOf } from '../../../src/core/frame/toolType';
 import { attachmentPoint, bannerOf, boundaryLanding, evenFractions, nearestAttachment } from '../../../src/core/diagram/shapes/segments';
 import { actionIds, fieldIds, gartnerHypecycleGraph as type } from '../../../src/core/gartner-hypecycle-graph/index';
 import { filesUnder, read } from '../files';

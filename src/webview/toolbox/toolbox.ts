@@ -1,4 +1,4 @@
-import type { ToolboxEntry } from '../../core/frame/diagramType';
+import type { ToolboxEntry } from '../../core/frame/toolType';
 import { html } from '../diagram/dom';
 import { icon } from '../diagram/icons';
 

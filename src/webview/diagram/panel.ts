@@ -1,4 +1,4 @@
-import type { ViewModel, ViewOptions } from '../../core/frame/diagramType';
+import type { ViewModel, ViewOptions } from '../../core/frame/toolType';
 import { html } from './dom';
 
 interface FilterChrome {

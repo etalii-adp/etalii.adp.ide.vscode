@@ -1,4 +1,4 @@
-import type { Box } from '../../frame/diagramType';
+import type { Box } from '../../frame/toolType';
 import type { Point } from '../geometry';
 
 // One outline per built-in shape, stated once so the drawing and everything measured from it

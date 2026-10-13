@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { agentBehaviorModelling as type } from '../../../src/core/agent-behavior-modelling/index';
-import type { EditRequest, Source } from '../../../src/core/frame/diagramType';
+import type { HandCodedRequest as EditRequest, HandCodedSource as Source } from '../../../src/core/frame/handCoded';
 import type { FromCanvas } from '../../../src/core/frame/protocol';
 import { Canvas } from '../../../src/webview/diagram/canvas';
 import { notationFor, type DrawContext } from '../../../src/webview/diagram/notation';
@@ -60,7 +60,7 @@ describe('gestures on a behavior model', () => {
   const source: Source = { text: read('examples/agent-behavior-modelling/research-assistant/research-assistant.md') };
   const research = type.view(source, {});
   let sent: FromCanvas[];
-  const requests = (): EditRequest[] => sent.filter((message) => message.type === 'edit').map((message) => (message as Extract<FromCanvas, { type: 'edit' }>).request);
+  const requests = (): EditRequest[] => sent.filter((message) => message.type === 'edit').map((message) => (message as Extract<FromCanvas, { type: 'edit' }>).request as EditRequest);
   const group = (id: string): Element => document.querySelector(`.adp-content [data-id="${id}"]`)!;
   const pointer = (target: EventTarget, kind: string, x: number, y: number, button = 0): void => {
     target.dispatchEvent(new MouseEvent(kind, { bubbles: true, cancelable: true, clientX: x, clientY: y, button }));
@@ -71,7 +71,7 @@ describe('gestures on a behavior model', () => {
     document.body.replaceChildren();
     sent = [];
     const canvas = new Canvas(document.body, (message) => sent.push(message));
-    canvas.receive({ v: 1, type: 'view', origin: type.origin, view: research, actions: [], version: 1 });
+    canvas.receive({ v: 2, type: 'view', origin: type.origin, kind: 'diagram', view: research, actions: [], version: 1 });
   });
 
   it('carries the subtree with a dragged node, and its row up and down only', () => {
