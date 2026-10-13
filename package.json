@@ -84,6 +84,28 @@
         "priority": "default"
       },
       {
+        "viewType": "etalii.adp.etalii.knowledge",
+        "displayName": "Knowledge",
+        "selector": [
+          {
+            "filenamePattern": "*.yaml"
+          },
+          {
+            "filenamePattern": "*.yml"
+          },
+          {
+            "filenamePattern": "*.json"
+          },
+          {
+            "filenamePattern": "*.ded"
+          },
+          {
+            "filenamePattern": "*.xml"
+          }
+        ],
+        "priority": "option"
+      },
+      {
         "viewType": "etalii.adp.freeplane.mindmap",
         "displayName": "Mind map",
         "selector": [
@@ -177,6 +199,16 @@
         "category": "ADP"
       },
       {
+        "command": "etalii.adp.new.etalii.knowledge",
+        "title": "New Knowledge",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.openAs.etalii.knowledge",
+        "title": "Open as Knowledge",
+        "category": "ADP"
+      },
+      {
         "command": "etalii.adp.new.freeplane.mindmap",
         "title": "New Mind map",
         "category": "ADP"
@@ -193,6 +225,11 @@
           "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
           "when": "resourceExtname =~ /^\\.(md)$/ && !activeCustomEditorId && resourcePath in etalii.adp.suggested",
           "group": "navigation"
+        },
+        {
+          "command": "etalii.adp.openAs.etalii.knowledge",
+          "when": "resourceExtname =~ /^\\.(yaml|yml|json|ded|xml)$/ && !activeCustomEditorId && resourcePath in etalii.adp.suggested",
+          "group": "navigation"
         }
       ],
       "file/newFile": [
@@ -204,6 +241,9 @@
         },
         {
           "command": "etalii.adp.new.gartner.hypecycle-graph"
+        },
+        {
+          "command": "etalii.adp.new.etalii.knowledge"
         },
         {
           "command": "etalii.adp.new.freeplane.mindmap"
@@ -253,12 +293,21 @@
         {
           "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
           "when": "resourceExtname =~ /^\\.(md)$/"
+        },
+        {
+          "command": "etalii.adp.openAs.etalii.knowledge",
+          "when": "resourceExtname =~ /^\\.(yaml|yml|json|ded|xml)$/"
         }
       ],
       "explorer/context": [
         {
           "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
           "when": "resourceExtname =~ /^\\.(md)$/ && resourcePath in etalii.adp.suggested",
+          "group": "navigation@90"
+        },
+        {
+          "command": "etalii.adp.openAs.etalii.knowledge",
+          "when": "resourceExtname =~ /^\\.(yaml|yml|json|ded|xml)$/ && resourcePath in etalii.adp.suggested",
           "group": "navigation@90"
         }
       ]

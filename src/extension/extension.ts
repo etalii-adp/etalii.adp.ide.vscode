@@ -6,6 +6,7 @@ import { Findings } from './findings';
 import { claimantOf } from './opening';
 import { PropertiesView } from './propertiesView';
 import { RegistrationEditorProvider } from './registrationEditor';
+import { watchReopening } from './reopening';
 import { watchSuggestions } from './suggestions';
 import { ToolboxView } from './toolboxView';
 import { ToolEditorProvider, Tools } from './toolEditor';
@@ -30,6 +31,7 @@ export function activate(context: vscode.ExtensionContext): AdpApi {
   }
   context.subscriptions.push(ToolboxView.register(context, tools), PropertiesView.register(context, tools), RegistrationEditorProvider.register(types));
   watchSuggestions(context, types);
+  watchReopening(context, types);
 
   // A registration is only a document's visualization: it is saved with its document, and a
   // change of it on disk is followed by the diagram it belongs to.

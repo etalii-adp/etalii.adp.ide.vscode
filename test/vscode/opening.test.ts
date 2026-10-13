@@ -35,8 +35,8 @@ suite('Opening a file in Visual Studio Code', () => {
   test('the package ships the copied definitions', () => {
     const extension = vscode.extensions.getExtension('etalii.adp');
     assert.ok(extension);
-    for (const tool of ['gartner-hype-cycle-graph', 'agent-behavior-modelling']) {
-      for (const file of [`${tool}.dis`, `${tool}.fbl`, `${tool}.md`, 'PROVENANCE.md']) {
+    for (const [tool, kind] of [['gartner-hype-cycle-graph', 'dis'], ['agent-behavior-modelling', 'dis'], ['knowledge', 'des']]) {
+      for (const file of [`${tool}.${kind}`, `${tool}.fbl`, `${tool}.md`, 'PROVENANCE.md']) {
         assert.ok(fs.existsSync(path.join(extension.extensionPath, 'definitions', tool, file)), `the package has definitions/${tool}/${file}`);
       }
     }

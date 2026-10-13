@@ -8,7 +8,7 @@ const editor = { group: ['vscode', '**/extension/**', '**/webview/**'], message:
 const node = { group: ['node:*', 'node:*/**'], message: 'In src/core only fbl/files/nodeFiles.ts and fbl/history/digest.ts import a node: module.' };
 const dom = ['error', 'document', 'window'];
 
-// A webview draws what it is sent. Of the core it sees the frame and the scene, and nothing that reads a definition.
+// A webview draws what it is sent. Of the core it sees the frame, the scene and the table view, and nothing that reads a definition.
 const webview = [
   { group: ['vscode', '**/extension/**'], message: 'src/webview imports neither vscode nor src/extension.' },
   {
@@ -16,6 +16,7 @@ const webview = [
       '**/core/*',
       '!**/core/frame',
       '!**/core/scene',
+      '!**/core/tool',
       // The hand-coded diagrams draw from their own core folders; User Story 4 of spec 027 removes these three.
       '!**/core/diagram',
       '!**/core/gartner-hypecycle-graph',
@@ -24,7 +25,8 @@ const webview = [
     message: 'src/webview imports only src/core/frame and src/core/scene, so nothing that reads a definition.',
   },
   // geometry.ts is arithmetic on points and paths and reads nothing, so the webview may call it.
-  { group: ['**/core/frame/**', '**/core/scene/**', '!**/core/scene/geometry'], allowTypeImports: true, message: 'src/webview imports only types from src/core/frame and src/core/scene, and the functions of src/core/scene/geometry.' },
+  { group: ['**/core/tool/*', '!**/core/tool/tableView'], message: 'Of src/core/tool a webview imports the types of tableView.ts only: what a table surface draws and asks.' },
+  { group: ['**/core/frame/**', '**/core/scene/**', '**/core/tool/tableView', '!**/core/scene/geometry'], allowTypeImports: true, message: 'src/webview imports only types from src/core/frame and src/core/scene, and the functions of src/core/scene/geometry.' },
 ];
 
 export default tseslint.config(

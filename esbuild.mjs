@@ -27,7 +27,7 @@ const builds = [
   },
   {
     ...shared,
-    entryPoints: { canvas: 'src/webview/diagram/main.ts', properties: 'src/webview/properties/main.ts', toolbox: 'src/webview/toolbox/main.ts' },
+    entryPoints: { canvas: 'src/webview/diagram/main.ts', table: 'src/webview/table/main.ts', properties: 'src/webview/properties/main.ts', toolbox: 'src/webview/toolbox/main.ts' },
     outdir: 'dist/webview',
     platform: 'browser',
     target: 'es2022',

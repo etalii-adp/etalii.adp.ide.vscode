@@ -18,3 +18,4 @@ The files under `examples/` and `fixtures/` are copied unchanged, byte for byte,
 | `examples/knowledge/` | `etalii.adp.ide.standalone` | `src/designers/knowledge/examples/` | `5756a07edf339f2d0f8d118bd8922848032b6058` |
 | `fixtures/tools/desl/minimal-table.des` | `etalii.adp` | `specifications/desl/minimal-table.des` | `2477f75cda3b0dd407bafa0a5151f6620b7e970f` |
 | `fixtures/tools/desl/minimal-table.fbl` | `etalii.adp` | `specifications/desl/minimal-table.fbl` | `2477f75cda3b0dd407bafa0a5151f6620b7e970f` |
+| `fixtures/tools/desl/desl.schema.json` | `etalii.adp` | `specifications/desl/desl.schema.json` | `2477f75cda3b0dd407bafa0a5151f6620b7e970f` |

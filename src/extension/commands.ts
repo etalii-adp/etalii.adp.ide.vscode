@@ -25,7 +25,8 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
   const runAction = (command: string, pick: { shortcut?: string; label?: RegExp }, onDiagram = false): void => {
     register(command, async () => {
       const active = tools.active;
-      if (!active || active.readOnly || active.lastView?.readOnly) return;
+      // These commands are the canvas's: a designer's operations are run from its table.
+      if (!active || active.type.kind !== 'diagram' || active.readOnly || active.lastView?.readOnly) return;
       const selection = onDiagram ? [] : active.selection;
       const action = active.type.actions(active.source, selection, active.options)
         .find((candidate) => (pick.shortcut !== undefined && candidate.shortcut === pick.shortcut) || (pick.label !== undefined && pick.label.test(candidate.label)));
@@ -107,8 +108,9 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
       if (!active) return undefined;
       const sent = active.lastView;
       return {
-        ...(sent === undefined ? {} : isScene(sent) ? { scene: sent } : { view: sent }),
+        ...(sent === undefined ? {} : active.type.kind === 'designer' ? { table: sent } : isScene(sent) ? { scene: sent } : { view: sent }),
         kind: active.type.kind, options: active.options, fields: active.fields(), selection: active.selection, version: active.document.version, origin: active.type.origin,
+        actions: active.type.actions(active.source, active.selection, active.options),
       };
     });
     register('etalii.adp.test.edit', async (request: unknown) => {

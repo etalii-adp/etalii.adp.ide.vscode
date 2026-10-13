@@ -20,6 +20,8 @@ export interface ModelElement {
   readonly host: Readonly<Record<string, unknown>>;
   /** The id of the node this one is nested in. */
   readonly parent?: string;
+  /** The named place of its parent it is kept in, where the parent holds several kinds apart (DESL 4.6). */
+  readonly slot?: string;
   /** The id is not kept in the document, so nothing may be stored by it (DISL 11.5.3). */
   readonly ephemeral: boolean;
   /** The line of the document the element starts at. */

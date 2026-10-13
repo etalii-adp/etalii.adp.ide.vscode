@@ -45,8 +45,9 @@ export function readDefinitionFolder(name: string, files: ReadonlyMap<string, Ui
 
   const persistence = isObject(specification.persistence) ? specification.persistence : {};
   if (persistence.format !== 'fbl') return { reason: `The definition stores its model as \`${String(persistence.format ?? 'json')}\`, and a tool type is read through an FBL binding only.` };
-  // simplified: one binding, as a diagram has; read `persistence.bindings` too when the first designer arrives.
-  const references = [persistence.binding].filter((reference): reference is string => typeof reference === 'string' && reference.includes('#'));
+  // A diagram names one binding, a designer one for each format family a document of it may be written in (DESL 5.1).
+  const named: readonly unknown[] = Array.isArray(persistence.bindings) ? persistence.bindings : [persistence.binding];
+  const references = named.filter((reference): reference is string => typeof reference === 'string' && reference.includes('#'));
   if (references.length === 0) return { reason: 'The definition does not name its FBL binding as an address and a name.' };
 
   const bindings: FblBinding[] = [];
