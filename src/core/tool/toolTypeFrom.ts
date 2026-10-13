@@ -10,10 +10,10 @@ import { interpretCoordinates, rulerRows } from '../disl/coordinates';
 import { createExpressions } from '../disl/expressions';
 import { createTexts, formFor, interpretForms, type FormItem, type Subject } from '../disl/forms';
 import { interpretLayout } from '../disl/layout';
-import { defaultOf, interpretMetamodel } from '../disl/metamodel';
+import { defaultOf, derivedRelations, interpretMetamodel, isRelation, linkKind, type DerivedRelation } from '../disl/metamodel';
 import { emptyModel, type Finding as Found, type Model, type Value } from '../disl/model';
 import { edgeNotation, interpretNotation, nodeNotation, styleOf, type Paint } from '../disl/notation';
-import { foldsOf, interpretPersistence, readModel } from '../disl/persistence';
+import { foldsOf, interpretPersistence, momentAttributes, readModel, viewEntryIds, type StoredView } from '../disl/persistence';
 import { isCel, isObject, loadSpecification } from '../disl/specification';
 import { groupsIn, interpretToolbox, type ToolGroup } from '../disl/toolbox';
 import { interpretViewpoints } from '../disl/viewpoints';
@@ -27,11 +27,11 @@ import { produceTemplate } from '../fbl/routing/templateWriter';
 import type { Edit } from '../fbl/splice';
 import { decode, encode } from '../fbl/text/utf8';
 import type { Action, Control, DiagramToolType, EditOutcome, EditRequest, Field, Finding, Severity, Source, ToolboxEntry, ViewOptions } from '../frame/toolType';
-import { arrangedRows, createScene, type Scene, type SceneChrome, type SceneOptions, type SceneRuler, type SceneTool, type SceneToken } from '../scene/scene';
+import { anchorOf, arrangedRows, createScene, type Scene, type SceneChrome, type SceneOptions, type SceneRuler, type SceneTool, type SceneToken } from '../scene/scene';
 import { widthOfText } from '../text/textMetric';
 import { claimingBinding, claimsOf, suggests } from './claims';
 import { readDefinitionFolder, type Definition } from './definitionFolder';
-import { composedSplices, modelChangesOf } from './modelChanges';
+import { composedSplices, modelChangesOf, viewStepsOf } from './modelChanges';
 import { missingPlugins, pluginReferences, type PluginRegistry } from './pluginRegistry';
 
 // The host's own sentences, for what a definition has no words for.
@@ -40,6 +40,7 @@ const NO_ROW = 'This value cannot be changed here.';
 const NO_TEXT = 'This text cannot be changed here.';
 const NOT_HERE = 'This is not possible here.';
 const UNREADABLE = 'The document could not be read, so it cannot be edited.';
+const NO_LINK = 'There is no link to open.';
 
 const severities: Readonly<Record<string, Severity>> = { error: 'error', warning: 'warning', info: 'information', hint: 'hint' };
 const controls: Readonly<Record<string, Control>> = {
@@ -120,11 +121,18 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
     /** What the view says of it. */
     readonly notice?: string;
     readonly unreadable: boolean;
+    /** The view data the document keeps, and the entries of it that are about nothing, which go with the next write (DISL 11.6). */
+    readonly view: StoredView;
+    readonly stale: readonly string[];
+    /** The relations the model's relation types derive: drawn and edited, and no part of the model. */
+    readonly derived: readonly DerivedRelation[];
   }
 
+  // What the FBL library asks of the tool type's specification: the id of an entry of bound view data, and which attributes hold a moment (FBL 5.3, 6.3).
+  const reading = new Map(bindings.map((binding) => [binding, { deriveId: viewEntryIds(persistence.value), timeAttributes: momentAttributes(binding, metamodel.value, persistence.value) }]));
   const bodyOf = (binding: FblBinding, source: Source): OpenBody | PluginBody => {
     const bytes = encode(source.text);
-    return binding.plugin ? PluginBody.open(bytes, binding, plugins.persistence(binding.plugin.plugin), source.fileName) : OpenBody.open(bytes, binding);
+    return binding.plugin ? PluginBody.open(bytes, binding, plugins.persistence(binding.plugin.plugin), source.fileName) : OpenBody.open(bytes, binding, reading.get(binding));
   };
 
   // The frame asks several things of one text in a row: the last reading is kept.
@@ -136,12 +144,17 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
     const read = body.model;
     const typed = readModel(read, binding, metamodel.value, persistence.value);
     const model = read.unreadable ? emptyModel : typed.value;
+    const derived = derivedRelations(metamodel.value, expressions, model);
     // The reader of a binding says itself that its plugin is missing; it is said once, with the others.
-    const found = constraints.value.check(model, typed.findings, { file: source.fileName.slice(Math.max(source.fileName.lastIndexOf('/'), source.fileName.lastIndexOf('\\')) + 1) }).filter((finding) => finding.code !== findingCodes.pluginMissing).map(framed);
+    const found = [
+      ...constraints.value.check(model, typed.findings, { file: source.fileName.slice(Math.max(source.fileName.lastIndexOf('/'), source.fileName.lastIndexOf('\\')) + 1) }).filter((finding) => finding.code !== findingCodes.pluginMissing),
+      ...derived.findings,
+    ].map(framed);
     const gate = needed.length > 0 ? messages.pluginMissing(needed[0].id) : body.isReadOnly && !read.unreadable ? binding.readOnly || messages.readOnlyFile : undefined;
+    const kept = { view: typed.view, stale: typed.stale, derived: derived.value };
     const open: Open = read.unreadable
-      ? { binding, read, model, findings: found, unreadable: true, refusal: behavior.value.message('std.readOnly', emptyModel) ?? found[0]?.message ?? UNREADABLE, notice: found[0]?.message ?? UNREADABLE }
-      : { binding, read, model, findings: found, unreadable: false, refusal: gate, notice: gate };
+      ? { binding, read, model, findings: found, unreadable: true, refusal: behavior.value.message('std.readOnly', emptyModel) ?? found[0]?.message ?? UNREADABLE, notice: found[0]?.message ?? UNREADABLE, ...kept }
+      : { binding, read, model, findings: found, unreadable: false, refusal: gate, notice: gate, ...kept };
     last = { source, open };
     return open;
   }
@@ -149,7 +162,10 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
   const viewpointOf = (options: ViewOptions): string =>
     (options.viewpoint !== undefined && Object.hasOwn(viewpoints.value.all, options.viewpoint) ? options.viewpoint : viewpoints.value.default);
 
+  // One request asks for the scene of one document several times: the last one is kept.
+  let drawn: { readonly open: Open; readonly options: ViewOptions; readonly scene: Scene } | undefined;
   const sceneOf = (open: Open, options: ViewOptions): Scene => {
+    if (drawn?.open === open && drawn.options === options) return drawn.scene;
     // Which nodes are folded for this viewer: what the options hold, else what the definition seeds a fold from (DISL 11.6).
     const folded = foldsOf(persistence.value, expressions, open.model, options.collapsed);
     const settings: SceneOptions = {
@@ -157,13 +173,25 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
       viewpoint: viewpointOf(options),
       filters: options.filters as SceneOptions['filters'],
       collapsed: Object.fromEntries(open.model.elements.map((element) => [element.id, folded(element.id)])),
+      view: open.view,
+      ...(options.placed === undefined ? {} : { placed: options.placed }),
       ...(open.refusal === undefined ? {} : { env: { readOnly: true } }),
     };
-    return createScene(sceneTool, open.model, settings);
+    drawn = { open, options, scene: createScene(sceneTool, open.model, settings) };
+    return drawn.scene;
   };
 
-  const situationOf = (open: Open, options: ViewOptions): Situation =>
-    ({ env: { viewpoint: viewpointOf(options), ...(open.refusal === undefined ? {} : { readOnly: true }) }, ...(options.collapsed === undefined ? {} : { collapsed: options.collapsed }) });
+  const situationOf = (open: Open, options: ViewOptions): Situation => ({
+    env: { viewpoint: viewpointOf(options), ...(open.refusal === undefined ? {} : { readOnly: true }) }, ...(options.collapsed === undefined ? {} : { collapsed: options.collapsed }),
+    view: open.view,
+    // Where a node is drawn, as the point of it its placement names: what is stored when it is pinned (DISL 11.6).
+    at: (id) => {
+      const node = sceneOf(open, options).nodes.find((candidate) => candidate.id === id);
+      if (!node) return undefined;
+      const [fx, fy] = anchorOf(nodeNotation(viewpoints.value.all[viewpointOf(options)].notation, metamodel.value, node.type).placement.anchor);
+      return { x: node.box.x + fx * node.box.width, y: node.box.y + fy * node.box.height };
+    },
+  });
   const elementOf = (model: Model, id: string) => [...model.elements, ...model.relations].find((element) => element.id === id);
 
   // ---- what a scene carries beside its nodes and edges ----
@@ -210,13 +238,14 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
     }
 
     const filters = Object.values(canvas.filters).map((filter) => {
-      const kept = options.filters?.[filter.id];
+      // The value the diagram keeps for a kept filter, and this viewer's for any other (DISL 6.13.1).
+      const kept = filter.persist ? { value: open.view.filters[filter.id], match: undefined } : options.filters?.[filter.id];
       const choices = evaluated(filter.options);
       return {
         id: filter.id, label: texts.worded(filter.label, scope, filter.id), control: filter.control,
         options: Array.isArray(choices) ? choices.filter((choice): choice is string => typeof choice === 'string') : [],
         value: (kept?.value as Value | undefined) ?? evaluated(filter.default) ?? null,
-        match: kept?.match ?? filter.match.default, matchToggle: filter.match.userToggle,
+        match: kept?.match ?? filter.match.default, matchToggle: filter.match.userToggle, kept: filter.persist,
       };
     });
 
@@ -284,10 +313,13 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
 
   function actions(source: Source, selection: readonly string[], options: ViewOptions = {}): Action[] {
     const open = opened(source);
-    const target = selection.length === 1 && elementOf(open.model, selection[0]) ? selection[0] : undefined;
+    const line = selection.length === 1 ? open.derived.find((relation) => relation.id === selection[0]) : undefined;
+    const target = selection.length === 1 && (line ?? elementOf(open.model, selection[0])) ? selection[0] : undefined;
     // In a document that cannot be edited, what is left is what changes nothing of it: a fold, a link followed.
     const offered = behavior.value.menu(open.model, target, situationOf(open, options)).groups.flat()
       .filter((entry) => open.refusal === undefined || (!open.unreadable && behavior.value.operations.find((operation) => operation.id === entry.operation)?.viewOnly === true));
+    // A derived relation whose removal its definition maps to an operation, and that has no menu of its own, is removed by the host's own entry: see docs/disl-support.md.
+    if (line && offered.length === 0 && open.refusal === undefined && Object.hasOwn(line.edits, 'delete')) return [{ id: 'delete', label: 'Delete', shortcut: 'Delete', enabled: true }];
     return offered.map((entry): Action => ({
       id: entry.operation ?? entry.kind, label: entry.label,
       ...(entry.icon === undefined ? {} : { icon: entry.icon }), ...(entry.shortcut === undefined ? {} : { shortcut: entry.shortcut }),
@@ -322,8 +354,18 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
     if (outcome.refused !== undefined) return { kind: 'refused', sentence: outcome.refused };
     const link = outcome.effects.find((effect) => effect.kind === 'open' && effect.message !== undefined);
     if (link && outcome.changes.length === 0) return { kind: 'open', path: link.message! };
-    const steps = modelChangesOf(outcome.changes, { binding: open.binding, metamodel: metamodel.value, persistence: persistence.value, read: open.read }, open.model);
-    if ('refused' in steps) return { kind: 'refused', sentence: steps.refused };
+    const modelSteps = modelChangesOf(outcome.changes, { binding: open.binding, metamodel: metamodel.value, persistence: persistence.value, read: open.read }, open.model);
+    if ('refused' in modelSteps) return { kind: 'refused', sentence: modelSteps.refused };
+    const standard = (filter: string): Value | null => {
+      const value = notation.value.canvas.filters[filter].default;
+      const computed = isCel(value) ? expressions.evaluate(value, texts.scope({ model: open.model })) : undefined;
+      return computed ? (computed.ok ? computed.value : null) : (value as Value);
+    };
+    const viewSteps = viewStepsOf(outcome.view, persistence.value.view.bind, open.binding, open.read, standard);
+    if ('refused' in viewSteps) return { kind: 'refused', sentence: viewSteps.refused };
+    // With any write go the entries of view data that are about nothing, the last first, so that one named by its place is still at that place (DISL 11.6).
+    const written = modelSteps.length + viewSteps.length > 0;
+    const steps = [...(written ? [...open.stale].reverse().map((id) => ({ kind: 'remove' as const, id })) : []), ...modelSteps, ...viewSteps];
     // Each step is planned against the body the one before left; FBL's own history is not used (research R5).
     const body = steps.length > 0 ? bodyOf(open.binding, source) : undefined;
     const edits: Edit[] = [];
@@ -356,7 +398,8 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
     const { model } = open;
     const intents = behavior.value;
     // What changes nothing of the document is not an edit: a fold, and an operation of viewer state, are answered in a read-only document too (DISL 9.4).
-    const viewing = request.kind === 'fold' || request.kind === 'openLink' || (request.kind === 'action' && intents.operations.find((operation) => operation.id === request.action)?.viewOnly === true);
+    const viewing = (request.kind === 'fold' && request.group === undefined) || request.kind === 'openLink'
+      || (request.kind === 'action' && intents.operations.find((operation) => operation.id === request.action)?.viewOnly === true);
     if (open.refusal !== undefined && (open.unreadable || !viewing)) return { kind: 'refused', sentence: open.refusal };
     const situation = situationOf(open, options);
     const viewpoint = viewpointOf(options);
@@ -408,9 +451,14 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
         if (!elementOf(model, request.from) || !elementOf(model, request.to)) return refused(GONE);
         // simplified: the first relation the definition offers for the two; give the request the type when a definition offers several.
         const offered = intents.menu(model, { source: request.from, target: request.to }, situation).groups.flat().find((entry) => entry.via !== undefined);
-        if (!offered?.via) return refused(NOT_HERE);
-        if (!offered.enabled) return refused(offered.reason ?? NOT_HERE);
-        return done(intents.connect(model, offered.via, request.from, request.to, { source: endOf(request.fromEnd), target: endOf(request.toEnd) }, situation));
+        if (offered && !offered.enabled) return refused(offered.reason ?? NOT_HERE);
+        // Where the definition offers none, the relation is the one whose ends allow the two: the first that takes both, else the first that takes
+        // the one the line starts at, which then refuses the other end with the sentence of `std.endpoints` (DISL 8.7).
+        const [from, to] = [elementOf(model, request.from)!.type, elementOf(model, request.to)!.type];
+        const relations = Object.values(metamodel.value.types).filter(isRelation);
+        const joining = offered?.via ?? (relations.find((type) => type.source.types.includes(from) && type.target.types.includes(to)) ?? relations.find((type) => type.source.types.includes(from)))?.name;
+        if (joining === undefined) return refused(NOT_HERE);
+        return done(intents.connect(model, joining, request.from, request.to, { source: endOf(request.fromEnd), target: endOf(request.toEnd) }, situation));
       }
       case 'moveEnd':
         return done(intents.reattach(model, request.id, request.end === 'from' ? 'source' : 'target', endOf(request.value) ?? {}, situation));
@@ -421,11 +469,18 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
         if (!element) return refused(GONE);
         const on: Subject = { model, element: element.id, env: situation.env };
         const row = rowsOf(on, element.type).find(({ item }) => item.rowId(on) === request.field);
-        return row ? done(intents.edit(model, element.id, row.item, request.value, situation)) : refused(NO_ROW);
+        if (!row) return refused(NO_ROW);
+        // An attribute that an operation of the definition sets from its one parameter is set by that operation, so that what it does beside is done too.
+        const setting = row.item.attribute === undefined ? undefined : intents.operations.find((operation) => operation.asks === row.item.attribute && operation.param !== undefined && intents.availability(model, operation.id, [element.id], situation).offered);
+        const parsed = setting ? row.item.parse(on, request.value) : undefined;
+        if (setting && parsed && 'refused' in parsed) return refused(parsed.refused);
+        const given = parsed && 'set' in parsed ? parsed.set[row.item.attribute!] : undefined;
+        if (setting && given !== undefined && given !== null) return done(intents.operate(model, setting.id, [element.id], situation, undefined, { [setting.param!]: given }));
+        return done(intents.edit(model, element.id, row.item, request.value, situation));
       }
       case 'action': {
         const { id } = request;
-        if (id !== undefined && !elementOf(model, id)) return refused(GONE);
+        if (id !== undefined && !elementOf(model, id) && !open.derived.some((relation) => relation.id === id)) return refused(GONE);
         const selection = id === undefined ? [] : [id];
         const asking = (question: { readonly title: string; readonly message: string; readonly confirmLabel: string; readonly danger: boolean }): EditOutcome =>
           ({ kind: 'confirm', title: question.title, message: question.message, confirmLabel: question.confirmLabel, danger: question.danger });
@@ -437,7 +492,7 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
             // The operation is a plugin's: what it answers is the outcome, and changes it makes are planned as any other.
             const result = plugins.action(operation.plugin)?.run({ source, model, selection });
             if (!result) return { kind: 'applied', splices: [] };
-            return result.kind === 'changes' ? done({ changes: result.changes, after: applyChanges(model, result.changes), created: [], effects: [], collapsed: {} }) : result;
+            return result.kind === 'changes' ? done({ changes: result.changes, after: applyChanges(model, result.changes), created: [], effects: [], collapsed: {}, view: [] }) : result;
           }
           // A request carries no parameters, and this host has no dialog to ask them in: the value is asked in ADP Properties, at the row of the attribute the operation sets.
           const field = state.offered && state.available && id !== undefined ? rowOf(open, situation, id, operation.asks) : undefined;
@@ -452,6 +507,11 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
           if (removal.refused !== undefined) return refused(removal.refused);
           return removal.confirm && !confirmed ? asking(removal.confirm) : done(intents.remove(model, selection, situation));
         }
+        // The standard entries of DISL 7.3 that a definition lists by their kind.
+        if (request.action === 'pin' && id !== undefined) return done(intents.pin(model, id, situation.at?.(id), situation));
+        if (request.action === 'unpin' && id !== undefined) return done(intents.unpin(model, [id], situation));
+        if (request.action === 'unpinAll') return done(intents.unpin(model, undefined, situation));
+        if (request.action === 'create-child' && id !== undefined) return done(intents.createChild(model, id, situation));
         if (request.action === 'editLabel' && id !== undefined) {
           const editing = editedLabel(model, id, viewpoint);
           if (editing?.how !== 'form') return editing ? { kind: 'editInPlace', id, multiline: editing.how === 'multiline' } : refused(NO_TEXT);
@@ -465,11 +525,21 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
         return done(intents.reparent(model, request.id, request.parent, request.index, situation));
       case 'fold': {
         if (!elementOf(model, request.id)) return refused(GONE);
+        // The state of a group of a node's items is kept with the diagram: an edit (DISL 6.9).
+        if (request.group !== undefined) return done(intents.fold(model, request.id, request.group, request.folded, situation));
         // Viewer state (DISL 11.6): nothing is written, so there are no splices and no undo step.
         return nodeOf(request.id)?.fold === undefined ? refused(NOT_HERE) : { kind: 'applied', splices: [], viewOptions: { ...options, collapsed: { ...options.collapsed, [request.id]: request.folded } } };
       }
       case 'openLink': {
         if (!elementOf(model, request.id)) return refused(GONE);
+        if (request.compartment !== undefined) {
+          // The link symbol of an item: the link is the one the scene drew it with, and it is opened as the `open` action opens one (DISL 6.9, 9.4).
+          const items = nodeOf(request.id)?.compartments.find((compartment) => compartment.id === request.compartment)?.rows.filter((row) => row.kind === 'item') ?? [];
+          const link = items[request.item ?? 0]?.link;
+          if (link === undefined) return refused(NO_LINK);
+          const kind = linkKind(link);
+          return kind.kind === 'uri' && kind.scheme !== 'http' && kind.scheme !== 'https' ? refused(`The link "${link}" is neither an http or https address nor a path, so it is not opened.`) : { kind: 'open', path: link };
+        }
         // The link is what the first operation offered on the element that opens one gives (DISL 9.4, `open`).
         const opening = intents.operations.find((operation) => {
           const state = operation.opens ? intents.availability(model, operation.id, [request.id], situation) : undefined;
@@ -477,8 +547,13 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
         });
         return opening ? done(intents.operate(model, opening.id, [request.id], situation)) : refused(NOT_HERE);
       }
+      case 'pin': {
+        if (!elementOf(model, request.id)) return refused(GONE);
+        return done(request.pinned ? intents.pin(model, request.id, situation.at?.(request.id), situation) : intents.unpin(model, [request.id], situation));
+      }
+      case 'filter':
+        return done(intents.filter(model, request.id, request.value as Value, situation));
       default:
-        // simplified: pinning is refused; it is built with the first definition that stores `pinned`.
         return refused(NOT_HERE);
     }
   }

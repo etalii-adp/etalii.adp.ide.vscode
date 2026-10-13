@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import type { EditRequest, Field, Source, ViewModel, ViewOptions } from '../core/frame/toolType';
 import { viewTypeOf } from '../core/frame/toolType';
 import type { FromCanvas, ToCanvas } from '../core/frame/protocol';
-import type { Scene } from '../core/scene/scene';
+import { linkKind } from '../core/disl/metamodel';
+import { placesOf, type Scene } from '../core/scene/scene';
 import { spliceRanges } from '../core/tool/spliceRanges';
 import type { Findings } from './findings';
 import { handBack } from './opening';
@@ -27,8 +28,9 @@ export function registrationUriOf(document: vscode.Uri): vscode.Uri {
 export class OpenTool {
   options: ViewOptions = {};
   selection: readonly string[] = [];
-  /** What the canvas was last sent: the tool type's own view. */
+  /** What the canvas was last sent: the tool type's own view, and the version of the document it was made of. */
   lastView: Scene | ViewModel | undefined;
+  lastVersion: number | undefined;
   readOnly = false;
   /** The text of the registration beside the document, when there is one. */
   registration: string | undefined;
@@ -164,9 +166,14 @@ export class Tools implements vscode.Disposable {
   /** Recomputes and sends what a diagram draws; called after every change of its document or options. */
   refresh(diagram: OpenTool): void {
     const source = diagram.source;
+    // The document changed since the canvas was last sent a scene: a layout that runs on every change starts
+    // from where the nodes are on screen, so that what the change did not touch moves little (DISL 10.4).
+    const shown = diagram.lastView;
+    if (shown && 'nodes' in shown && diagram.lastVersion !== diagram.document.version) diagram.options = { ...diagram.options, placed: placesOf(shown) };
     const computed = diagram.type.view(source, diagram.options);
     const view = diagram.readOnly ? { ...computed, readOnly: true } : computed;
     diagram.lastView = view;
+    diagram.lastVersion = diagram.document.version;
     diagram.post({
       v: 2, type: 'view', origin: diagram.type.origin, kind: diagram.type.kind, view,
       actions: view.readOnly ? [] : diagram.type.actions(source, diagram.selection, diagram.options),
@@ -312,11 +319,29 @@ export class Tools implements vscode.Disposable {
         return this.perform(diagram, { kind: 'setField', id: outcome.id, field: outcome.field, value: picked.value });
       }
       case 'open': {
-        // simplified: a path is read against the document's folder, and anything with a scheme as
-        // a URI; a link of another form needs the definition's own rule when one states it.
-        const path = outcome.path;
-        const target = /^[a-z][a-z0-9+.-]*:\/\//i.test(path) ? vscode.Uri.parse(path) : vscode.Uri.joinPath(diagram.document.uri, '..', path);
-        await vscode.commands.executeCommand('vscode.open', target);
+        // An address is opened in the browser. A path, read against the document's folder when it is
+        // relative, is shown in the Explorer and opened when it lies in the workspace; any other path
+        // is shown, with why it was not opened and an offer to copy it (DISL 9.4).
+        const link = outcome.path;
+        if (linkKind(link).kind === 'uri') {
+          await vscode.env.openExternal(vscode.Uri.parse(link));
+          return { result: 'applied' };
+        }
+        const absolute = /^([A-Za-z]:[\\/]|[\\/])/.test(link);
+        const target = absolute ? vscode.Uri.file(link) : vscode.Uri.joinPath(diagram.document.uri, '..', link);
+        if (vscode.workspace.getWorkspaceFolder(target) === undefined) {
+          const copy = 'Copy Path';
+          const chosen = await vscode.window.showInformationMessage(`${target.fsPath} is outside this workspace, so it is not opened.`, copy);
+          if (chosen === copy) await vscode.env.clipboard.writeText(target.fsPath);
+          return { result: 'applied' };
+        }
+        try {
+          const found = await vscode.workspace.fs.stat(target);
+          await vscode.commands.executeCommand('revealInExplorer', target);
+          if (found.type !== vscode.FileType.Directory) await vscode.commands.executeCommand('vscode.open', target);
+        } catch {
+          return { result: 'refused', sentence: `${target.fsPath} is not there, so it is not opened.` };
+        }
         return { result: 'applied' };
       }
       case 'applied': {
@@ -435,11 +460,13 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
       case 'ready':
         this.tools.refresh(diagram);
         return;
-      case 'viewOptions':
-        // The canvas holds no folds: those this editor holds stay.
-        diagram.options = diagram.options.collapsed === undefined ? message.options : { ...message.options, collapsed: diagram.options.collapsed };
+      case 'viewOptions': {
+        // The canvas holds no folds, and not where the nodes were before the last change: those this editor holds stay.
+        const { collapsed, placed } = diagram.options;
+        diagram.options = { ...message.options, ...(collapsed === undefined ? {} : { collapsed }), ...(placed === undefined ? {} : { placed }) };
         this.tools.refresh(diagram);
         return;
+      }
       case 'selection':
         diagram.selection = message.ids;
         this.tools.refresh(diagram);

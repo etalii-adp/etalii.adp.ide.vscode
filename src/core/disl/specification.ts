@@ -2,7 +2,7 @@
 // for name; a section another module interprets is typed there and is a plain object here.
 
 import { finding, type Finding, type Loaded } from './model';
-import { unsupportedFeatures } from './support';
+import { dislMinor as minor, unsupportedFeatures } from './support';
 
 export type { Finding, Loaded } from './model';
 
@@ -266,9 +266,6 @@ export const celOf = (expression: Expression): string => (typeof expression === 
 export const isCel = (value: unknown): value is CelValue => isObject(value) && typeof value.cel === 'string';
 
 export const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-
-/** The minor version of DISL this interpreter was written for; its major version is 0. */
-const minor = 3;
 
 const sections = ['functions', 'coordinates', 'notation', 'toolbox', 'forms', 'constraints', 'behavior', 'layout', 'persistence', 'viewpoints'] as const;
 

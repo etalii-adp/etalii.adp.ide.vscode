@@ -35,7 +35,7 @@ describe('the persistence of the hype cycle graph', () => {
   it('has the type map and what of the view each viewer keeps', () => {
     expect(Object.keys(persistence.typeMap)).toEqual(['Graph', 'Unit', 'Trend', 'Trigger', 'Note', 'Influence', 'Unreadable']);
     expect(persistence.typeMap.Influence).toMatchObject({ as: 'Influence', attributes: { from: 'source', to: 'target' }, hostAttributes: ['storedId', 'unknownKeys'] });
-    expect(persistence.view).toEqual({ store: [], viewer: ['viewpoint', 'filters', 'viewport'], initial: {} });
+    expect(persistence.view).toEqual({ store: [], viewer: ['viewpoint', 'filters', 'viewport'], initial: {}, bind: {} });
   });
 });
 

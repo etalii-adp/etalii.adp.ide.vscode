@@ -7,6 +7,6 @@ They are the definition of one tool type, copied unchanged, byte for byte, from 
 
 | File | Repository | Path | Commit | SHA-256 |
 |---|---|---|---|---|
-| `gartner-hype-cycle-graph.dis` | `etalii.adp` | `definitions/diagrams/gartner-hype-cycle-graph.dis` | `2477f75cda3b0dd407bafa0a5151f6620b7e970f` | `fab0bbdf6a57db82402214f114e08bafb7a082569f42681ecd44a5442d2683e6` |
+| `gartner-hype-cycle-graph.dis` | `etalii.adp` | `definitions/diagrams/gartner-hype-cycle-graph.dis` | `8e52c81af82ad3cef23937139545c44495621db8` | `fab0bbdf6a57db82402214f114e08bafb7a082569f42681ecd44a5442d2683e6` |
 | `gartner-hype-cycle-graph.fbl` | `etalii.adp.ide.standalone` | `src/diagrams/gartner-hype-cycle-graph/backend/EtAlii.Adp.Diagram.GartnerHypeCycleGraph/gartner-hype-cycle-graph.fbl` | `5756a07edf339f2d0f8d118bd8922848032b6058` | `69c9f444ddf13e98f62a22b1e7bc86e7b08be2c60629df27f7226681c750b46e` |
-| `gartner-hype-cycle-graph.md` | `etalii.adp` | `definitions/diagrams/gartner-hype-cycle-graph.md` | `2477f75cda3b0dd407bafa0a5151f6620b7e970f` | `a47c10b33c3474549751d248eb60b4014e60cce51516ead380baca01f3c5afe1` |
+| `gartner-hype-cycle-graph.md` | `etalii.adp` | `definitions/diagrams/gartner-hype-cycle-graph.md` | `8e52c81af82ad3cef23937139545c44495621db8` | `91b3c833d3b42ce282730edad1e84547c9a45f997224ec70cff8cf3a63a09b69` |

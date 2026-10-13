@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { conformance, supportedFeatures } from '../../../src/core/disl/support';
+import { conformance, dislMinor, supportedFeatures } from '../../../src/core/disl/support';
 import { carried } from '../../../src/core/plugins/index';
 import { allFolders, at, specificationOf } from './support';
 
@@ -39,6 +39,11 @@ describe('the support record', () => {
       'Versions', 'Conformance class and features', 'What is read of each section', 'Plugins', 'Code for one tool type',
       'What this host decides', 'Differences from each definition', 'Differences raised and not settled here',
     ]);
+  });
+
+  it('states the version of DISL the interpreter reads', () => {
+    const versions = rows(section(text, 2, 'Versions'));
+    expect(versions.find((cells) => cells[0] === 'DISL')?.[1]).toBe(`0.${dislMinor}`);
   });
 
   describe('its features', () => {

@@ -2,7 +2,7 @@ import { boundsOf, moved as movedBy } from '../../core/diagram/geometry';
 import type { Action, Box, EditRequest, ViewElement, ViewModel, ViewOptions, ViewRelation } from '../../core/frame/toolType';
 import type { FromCanvas, ToCanvas } from '../../core/frame/protocol';
 import { centreOf, holds, pointOn } from '../../core/scene/geometry';
-import type { Scene, SceneNode } from '../../core/scene/scene';
+import type { Scene, SceneNode, SceneRow } from '../../core/scene/scene';
 import { toolboxMime } from '../toolbox/toolbox';
 import { html, svg } from './dom';
 import { InlineEditor } from './inlineEditor';
@@ -133,6 +133,8 @@ export class Canvas {
     root.addEventListener('drop', (event) => this.dropped(event));
     window.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') this.abandon?.();
+      // Enter and Space activate what has the focus in the drawing, as a click does: a heading, a link symbol, a badge.
+      else if ((event.key === 'Enter' || event.key === ' ') && this.activateControl(event.target)) event.preventDefault();
       else this.key(event);
     });
     // A scene's colours are worked out for the theme kind, so a change of theme draws it again.
@@ -175,6 +177,13 @@ export class Canvas {
           if (message.editLabel) this.editLabel(node, message.multiline === true);
           return;
         }
+        // An item of a compartment that is an element: its node is brought into view, and its own text is what is edited.
+        const row = this.row(message.id);
+        if (row) {
+          this.surface.reveal(row.node.box);
+          if (message.editLabel) this.edit(message.id, row.row.text, row.row.box, false);
+          return;
+        }
         const element = this.context?.elements.get(message.id);
         if (element) {
           this.surface.reveal(element);
@@ -198,6 +207,45 @@ export class Canvas {
 
   private node(id: string | undefined): SceneNode | undefined {
     return this.scene?.nodes.find((node) => node.id === id);
+  }
+
+  // The item of a compartment that is the element of an id, with the node that lists it.
+  private row(id: string | undefined): { readonly node: SceneNode; readonly row: SceneRow } | undefined {
+    for (const node of this.scene?.nodes ?? []) {
+      const row = node.compartments.flatMap((compartment) => compartment.rows).find((candidate) => candidate.element !== undefined && candidate.element === id);
+      if (row) return { node, row };
+    }
+    return undefined;
+  }
+
+  // The node something of the drawing belongs to: an item with an id of its own is still drawn in its node.
+  private nodeAt(target: EventTarget | null): SceneNode | undefined {
+    return this.node((target as Element | null)?.closest?.('.adp-element')?.getAttribute('data-id') ?? undefined);
+  }
+
+  /**
+   * Activates the control of a scene something is in, when it is in one: the heading of a group
+   * folds or opens it, a link symbol opens the link of its item, and a badge that runs an
+   * operation runs it on its node. Each asks the extension, also in a scene that cannot be edited:
+   * which of them writes is the tool type's to say.
+   */
+  private activateControl(target: EventTarget | null): boolean {
+    const element = target as Element | null;
+    const node = this.nodeAt(target);
+    if (!node || !element?.closest || !this.surface.root.contains(element)) return false;
+    const heading = element.closest('[data-group]');
+    const link = element.closest('[data-link]');
+    const badge = element.closest('[data-operation]');
+    if (link) {
+      const item = link.closest('[data-item]');
+      const compartment = link.closest('[data-compartment]')?.getAttribute('data-compartment');
+      if (item && compartment) this.request({ kind: 'openLink', id: node.id, compartment, item: Number(item.getAttribute('data-item')) });
+    } else if (heading) {
+      this.request({ kind: 'fold', id: node.id, group: heading.getAttribute('data-group') ?? '', folded: heading.getAttribute('aria-expanded') === 'true' });
+    } else if (badge) {
+      this.request({ kind: 'action', action: badge.getAttribute('data-operation') ?? '', id: node.id });
+    }
+    return link !== null || heading !== null || badge !== null;
   }
 
   // ---- drawing ----
@@ -259,6 +307,16 @@ export class Canvas {
         legend: legend.map((entry) => ({ caption: entry.label, swatchClass: '' })),
         ...(toggle ? { compact: toggle.on } : {}),
       },
+    });
+    // A filter that is a switch: one the diagram keeps is changed by an edit, and any other is this viewer's option.
+    const switches = (chrome?.filters ?? []).filter((candidate) => candidate.control === 'switch');
+    this.panel.showSwitches(switches.map((entry) => ({ id: entry.id, label: entry.label, on: entry.value === true, locked: entry.kept && scene.readOnly === true })), (id, on) => {
+      if (switches.find((entry) => entry.id === id)?.kept) {
+        this.request({ kind: 'filter', id, value: on });
+      } else {
+        this.options = { ...this.options, filters: { ...this.options.filters, [id]: { value: on } } };
+        this.reportView();
+      }
     });
     this.panel.element.querySelectorAll('.adp-legend-swatch').forEach((swatch, index) => swatch.setAttribute('style', `background: ${colourOf(scene.tokens, kind, legend[index].fill, 'fill')}`));
     const named = this.panel.element.querySelector('.adp-compact')?.lastChild;
@@ -358,6 +416,7 @@ export class Canvas {
 
   private click(event: MouseEvent): void {
     if ((event.target as Element).closest('.adp-handle')) return;
+    if (this.scene && this.activateControl(event.target)) return;
     const id = this.idAt(event.target);
     // A fold is what this viewer sees and writes nothing, so it is asked for in a read-only scene too.
     const fold = (event.target as Element).closest('[data-fold]')?.getAttribute('data-fold');
@@ -383,11 +442,13 @@ export class Canvas {
 
   // Activating an element edits its text in place.
   private activate(event: MouseEvent): void {
-    if (this.readOnly || (event.target as Element).closest('[data-fold]')) return;
+    if (this.readOnly || (event.target as Element).closest('[data-fold], [data-group], [data-link], [data-operation]')) return;
     const id = this.idAt(event.target);
     const node = this.node(id);
+    const row = node ? undefined : this.row(id);
     const element = id ? this.context?.elements.get(id) : undefined;
-    if (node) this.editLabel(node);
+    if (row && id) this.edit(id, row.row.text, row.row.box, false);
+    else if (node) this.editLabel(node);
     else if (element && this.view) this.edit(element.id, element.label, element, element.data.multiline === true);
   }
 
@@ -530,7 +591,7 @@ export class Canvas {
       }
     }
 
-    const node = this.node(this.idAt(target));
+    const node = this.nodeAt(target);
     if (!node) return;
     const from = { id: node.id, movable: node.movable.x || node.movable.y };
     const edge = (start: ReturnType<typeof endAt>): void => {

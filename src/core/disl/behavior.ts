@@ -9,20 +9,22 @@
 // `actions`), `deletion` (`relations`, `children`, `references: "unset"`, `confirm`), the actions
 // `set`, `unset`, `create`, `connect`, `delete`, `let`, `if`, `forEach`, `layout` (the `rows`
 // algorithm), `abort`, `call`, and those that only ask the host for something (`select`, `reveal`,
-// `highlight`, `editLabel`, `openForm`, `notify`, `open`), the `view` action for a viewer's folds,
-// a `create` placed `after` or `before` a sibling, and a node moved under another parent. The
-// `clipboard` is read and kept, and nothing is done with it. Parent placements, retyping and
-// simulations are not read, and an action of another kind is reported and skipped.
+// `highlight`, `editLabel`, `openForm`, `notify`, `open`), the `view` action for a viewer's folds
+// and for the view data that is stored (a pin, the state of a group, a kept filter), a `create`
+// placed `after` or `before` a sibling, a node moved under another parent, the standard entries
+// `pin`, `unpin`, `unpinAll` and `create-child`, and the gestures on a derived relation that its
+// `edits` map to an operation. The `clipboard` is read and kept, and nothing is done with it. Parent
+// placements, retyping and simulations are not read, and an action of another kind is reported and skipped.
 
 import type { Constraints, Gesture } from './constraints';
 import { monthsIn, scalesOf, unitOf, type Axis, type Coordinates, type CoordinateSystem, type Placement, type PlacementSource, type SnapRule, type Snapping } from './coordinates';
 import type { Expressions, Scope, World } from './expressions';
 import { createTexts, type FormItem } from './forms';
 import type { Layout, LayoutConfig } from './layout';
-import { attributesOf, defaultOf, defaultsOf, isA, isRelation, parseYearMonth, valueKind, type Metamodel } from './metamodel';
+import { attributesOf, defaultOf, defaultsOf, derivedRelations, formatMoment, isA, isRelation, linkKind, parseYearMonth, valueKind, type DerivedRelation, type Metamodel } from './metamodel';
 import { finding, type Attributes, type Finding, type Loaded, type Model, type ModelElement, type ModelRelation, type Value } from './model';
 import { edgeNotation, interpretNotation, nodeNotation, type EndAnchor, type Label, type Notation } from './notation';
-import { foldsOf, newId, type InterpretedPersistence } from './persistence';
+import { foldsOf, newId, type InterpretedPersistence, type StoredView } from './persistence';
 import { isCel, isObject, labelOf, localized, type Attribute, type CelValue, type Doc, type Expression, type Message, type NeighbourBounds, type Reason, type Specification } from './specification';
 import { setsFor, type ContextSet, type Toolbox } from './toolbox';
 import type { Viewpoints } from './viewpoints';
@@ -132,19 +134,42 @@ export interface Effect {
 }
 
 /**
+ * One change to the view data that is stored with the diagram (DISL 11.6): no change of the model,
+ * and an edit all the same, which is written and undone with the intent it belongs to.
+ *
+ * - `pin`: an element is kept at a position, in the coordinates of its placement.
+ * - `unpin`: its pin and its stored position go, and the layout places it again.
+ * - `group`: the state of a group of an element's items, by the group's key; null where the state
+ *   is the group's default again, which is not stored.
+ * - `filter`: the value of a kept filter; null where it is the filter's default again.
+ */
+export type ViewChange =
+  | { readonly kind: 'pin'; readonly element: string; readonly x: number; readonly y: number }
+  | { readonly kind: 'unpin'; readonly element: string }
+  | { readonly kind: 'group'; readonly element: string; readonly group: string; readonly collapsed: boolean | null }
+  | { readonly kind: 'filter'; readonly id: string; readonly value: Value | null };
+
+/**
  * What one intent comes to: the changes in order and the model after them, or the sentence that
  * refuses it. `collapsed` holds the folds the intent changed for this viewer, by element: viewer
- * state, which is no change of the model (DISL 11.6).
+ * state, which is no change of the model (DISL 11.6). `view` holds what it changed of the stored view data.
  */
 export type Outcome =
-  | { readonly changes: readonly Change[]; readonly after: Model; readonly created: readonly string[]; readonly effects: readonly Effect[]; readonly collapsed: Readonly<Record<string, boolean>>; readonly refused?: undefined }
+  | {
+    readonly changes: readonly Change[]; readonly after: Model; readonly created: readonly string[]; readonly effects: readonly Effect[];
+    readonly collapsed: Readonly<Record<string, boolean>>; readonly view: readonly ViewChange[]; readonly refused?: undefined;
+  }
   | { readonly refused: string };
 
-/** Where an intent takes place: the members of `env` (DISL 12.2), of which `viewpoint` and `readOnly` are read here, and what this viewer folded. */
+/** Where an intent takes place: the members of `env` (DISL 12.2), of which `viewpoint` and `readOnly` are read here, and what is kept of the view. */
 export interface Situation {
   readonly env?: Scope;
   /** The folds this viewer holds, by element (DISL 11.6). An element that is not named is as `persistence.view.initial` says. */
   readonly collapsed?: Readonly<Record<string, boolean>>;
+  /** The view data stored with the diagram: what is pinned, the groups that are not at their default, and the kept filters. */
+  readonly view?: StoredView;
+  /** Where a node is drawn now, as the point its placement names: what pinning it, or dragging it, starts from. */
+  at?(id: string): Point | undefined;
 }
 
 /** A point of the canvas, in canvas units at zoom 1, in the coordinate system of the viewpoint. */
@@ -179,8 +204,12 @@ export interface Operation {
   readonly keys: readonly string[];
   /** The plugin that is the operation, by its id: the host runs it. */
   readonly plugin?: string;
-  /** For an operation with parameters whose first action sets one attribute: that attribute, which is where a host without a dialog asks the value. */
+  /**
+   * For an operation with one parameter whose first action sets an attribute to it: that attribute,
+   * which is where a host without a dialog asks the value, and the parameter the value is given as.
+   */
   readonly asks?: string;
+  readonly param?: string;
   /** Whether one of its actions opens a link (DISL 9.4, `open`). */
   readonly opens: boolean;
   /** Whether it changes nothing of the model: viewer state, the selection, a link opened. It is then no edit, and is run in a read-only document too. */
@@ -212,6 +241,11 @@ export interface OfferedEntry {
   /** Why it is not enabled. */
   readonly reason?: string;
 }
+
+/** The host's own sentences for pinning, where a definition has no words for them. */
+const NOTHING_PINNED = 'No position is locked.';
+const NOT_PINNED = 'Its position is not locked.';
+const NOT_KEPT = 'This is not kept with the diagram, so it cannot be changed here.';
 
 /** A pending connection (DISL 7.3): a connect gesture that ended on an element. */
 export interface Pending {
@@ -259,6 +293,16 @@ export interface Behavior {
   reparent(model: Model, element: string, parent: string, index?: number, situation?: Situation): Outcome;
   /** An operation run on a selection, at the point it was invoked at when there is one. */
   operate(model: Model, operation: string, selection: readonly string[], situation?: Situation, at?: Point, args?: Readonly<Record<string, Value>>): Outcome;
+  /** A child added to an element by the first `create-child` entry its menu offers (DISL 7.3), in the slot the entry names. */
+  createChild(model: Model, parent: string, situation?: Situation): Outcome;
+  /** A node pinned at a position, in the coordinates of its placement: a layout that respects pins leaves it there (DISL 7.3, 10.4). */
+  pin(model: Model, element: string, at: Point | undefined, situation?: Situation): Outcome;
+  /** The pins of the named nodes taken off, or of every pinned node when none is named, as one edit. */
+  unpin(model: Model, elements: readonly string[] | undefined, situation?: Situation): Outcome;
+  /** A group of an element's items collapsed or expanded, by the group's key (DISL 6.9). Its state is stored only while it differs from its default. */
+  fold(model: Model, element: string, group: string, collapsed: boolean, situation?: Situation): Outcome;
+  /** A kept filter of the canvas set to a value (DISL 6.13.1). The value is stored only while it differs from the filter's default. */
+  filter(model: Model, id: string, value: Value, situation?: Situation): Outcome;
 }
 
 /** The other sections the behavior works with. */
@@ -442,11 +486,19 @@ class Reference {
   constructor(readonly ids: string | readonly string[]) {}
 }
 
+// A derived relation as `self` of the operation one of its gestures runs: its two ends, each looked up as a Reference is.
+class Ends {
+  constructor(readonly source: string, readonly target: string) {}
+}
+
 const skips = ['move', 'resize', 'retype', 'reparent', 'reorder', 'plugin'];
 // The actions that change nothing of the model: an operation of these alone is offered in a read-only document and is no undo step (DISL 9.4).
 const viewing = ['view', 'select', 'reveal', 'highlight', 'open'];
 const asks = ['select', 'reveal', 'highlight', 'editLabel', 'openForm'] as const;
-const defaultLabels: Readonly<Record<string, string>> = { delete: 'Delete', editLabel: 'Rename', duplicate: 'Duplicate', openForm: 'Properties', moveUp: 'Move up', moveDown: 'Move down' };
+const defaultLabels: Readonly<Record<string, string>> = {
+  delete: 'Delete', editLabel: 'Rename', duplicate: 'Duplicate', openForm: 'Properties', moveUp: 'Move up', moveDown: 'Move down',
+  pin: 'Lock position', unpin: 'Unlock position', unpinAll: 'Unlock all positions',
+};
 
 const list = (value: string | readonly string[] | undefined): readonly string[] => (value === undefined ? [] : typeof value === 'string' ? [value] : value);
 const bound = (source: PlacementSource | undefined): { readonly attribute: string; readonly offset: number } | undefined =>
@@ -500,11 +552,12 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
   // ---- what a viewer holds ----
 
   // `self.view.collapsed` (DISL 11.6, 12.2) for the situation of an intent. The last one is kept: an intent asks it several times.
-  let viewed: { readonly model: Model; readonly held: Situation['collapsed']; readonly view: (id: string) => Scope } | undefined;
+  let viewed: { readonly model: Model; readonly held: Situation['collapsed']; readonly stored: Situation['view']; readonly view: (id: string) => Scope } | undefined;
   const viewFor = (model: Model, situation: Situation | undefined): ((id: string) => Scope) => {
-    if (viewed?.model !== model || viewed.held !== situation?.collapsed) {
+    if (viewed?.model !== model || viewed.held !== situation?.collapsed || viewed.stored !== situation?.view) {
       const folded = foldsOf(parts.persistence, expressions, model, situation?.collapsed);
-      viewed = { model, held: situation?.collapsed, view: (id) => ({ collapsed: folded(id) }) };
+      const pinned = situation?.view?.pinned ?? {};
+      viewed = { model, held: situation?.collapsed, stored: situation?.view, view: (id) => ({ collapsed: folded(id), pinned: Object.hasOwn(pinned, id) }) };
     }
     return viewed.view;
   };
@@ -513,7 +566,40 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     if (seen?.model !== model || seen.situation !== situation) seen = { model, situation, world: expressions.over(model, { env: situation?.env, view: viewFor(model, situation) }) };
     return seen.world;
   };
-  const free = (actions: readonly unknown[] | undefined): boolean => (actions ?? []).length > 0 && (actions ?? []).every((action) => isObject(action) && viewing.some((kind) => kind in action));
+  // The kinds of view data that are stored: changing one is an edit, whatever action does it (DISL 9.4).
+  const stores = (kind: string): boolean => parts.persistence.view.store.includes(kind);
+  const edits = (view: unknown): boolean => isObject(view) && ((view.pinned !== undefined && stores('pinned')) || (view.groups !== undefined && stores('groups'))
+    || (isObject(view.filters) && Object.keys(view.filters).some((id) => ownNotation.canvas.filters[id]?.persist === true)));
+  const free = (actions: readonly unknown[] | undefined): boolean =>
+    (actions ?? []).length > 0 && (actions ?? []).every((action) => isObject(action) && viewing.some((kind) => kind in action) && !edits(action.view));
+  // Whether a layout that runs by itself leaves a pinned node where it is, so that a drag and a drop pin (DISL 10.4).
+  const pins = (parts.layout.trigger === 'always' || parts.layout.trigger === 'onChange') && parts.layout.respect === 'pinned' && stores('pinned');
+
+  // The relations the model's relation types derive (DISL 4.11.3): no part of the model, and found again for each model.
+  const derivedOf = new WeakMap<Model, readonly DerivedRelation[]>();
+  const derivedIn = (model: Model): readonly DerivedRelation[] => {
+    let known = derivedOf.get(model);
+    if (!known) derivedOf.set(model, known = derivedRelations(metamodel, expressions, model).value);
+    return known;
+  };
+
+  // The state a group of an element's items has while nothing is stored for it, by the group's key; nothing for a key that names no group (DISL 6.9).
+  const groupDefault = (model: Model, element: string, key: string, scope: Scope): boolean | undefined => {
+    const type = find(model, element)?.type;
+    if (type === undefined) return undefined;
+    for (const compartment of nodeNotation(ownNotation, metamodel, type).compartments) {
+      const grouped = compartment.groupBy;
+      if (!grouped && compartment.collapsible && compartment.id === key) return holds(compartment.collapsed, scope, false);
+      if (!grouped || !('children' in compartment.items)) continue;
+      for (const child of compartment.items.children) {
+        const attribute = attributesOf(metamodel, child)[grouped.attribute] as Attribute | undefined;
+        const kind = attribute && valueKind(metamodel, attribute.type);
+        const value = kind?.kind === 'enum' ? kind.enum.values.find((candidate) => candidate.stored === key) : undefined;
+        if (value) return grouped.collapsed[value.key] === true;
+      }
+    }
+    return undefined;
+  };
 
   // ---- the viewpoint an intent takes place in ----
 
@@ -580,8 +666,14 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
   const open = (model: Model, situation: Situation | undefined, kind: 'change' | 'handle' | 'create', ungated = false) => {
     const env = situation?.env;
     const collapsed: Record<string, boolean> = {};
+    const viewChanges: ViewChange[] = [];
+    // What is pinned once this transaction is done: what the document keeps, with what the transaction changed of it.
+    const pinnedNow = (id: string): boolean => {
+      const last = [...viewChanges].reverse().find((change) => (change.kind === 'pin' || change.kind === 'unpin') && change.element === id);
+      return last ? last.kind === 'pin' : Object.hasOwn(situation?.view?.pinned ?? {}, id);
+    };
     // What the viewer holds, with what this transaction changed of it.
-    const view = (id: string): Scope => (Object.hasOwn(collapsed, id) ? { collapsed: collapsed[id] } : viewFor(model, situation)(id));
+    const view = (id: string): Scope => ({ ...viewFor(model, situation)(id), ...(Object.hasOwn(collapsed, id) ? { collapsed: collapsed[id] } : {}), pinned: pinnedNow(id) });
     const before = expressions.over(model, { env, view });
     const changes: Change[] = [];
     const created: string[] = [];
@@ -603,7 +695,8 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       const over = now();
       const more: Record<string, unknown> = {};
       for (const [name, value] of Object.entries(variables)) {
-        more[name] = !(value instanceof Reference) ? value : typeof value.ids === 'string' ? over.element(value.ids) : value.ids.map((id) => over.element(id));
+        more[name] = value instanceof Ends ? { source: over.element(value.source), target: over.element(value.target) }
+          : !(value instanceof Reference) ? value : typeof value.ids === 'string' ? over.element(value.ids) : value.ids.map((id) => over.element(id));
       }
       if (self === undefined) return over.scope(undefined, more);
       return self === '' ? over.scope(undefined, { self: over.diagram, ...more }) : over.scope(self, more);
@@ -612,7 +705,40 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       if (typeof expression !== 'string' && !isCel(expression)) return expression === undefined ? undefined : { value: expression as Value, raw: expression };
       const result = expressions.evaluate(expression, scope);
       if (!result.ok) refuse(`This could not be done: ${result.error}`);
-      return result.ok ? result : undefined;
+      // simplified: a moment an expression gives is stored in the host's local time with its offset, to the second; read the attribute's `timezone` and `newPrecision` when a definition states another.
+      return !result.ok ? undefined : result.raw instanceof Date ? { value: formatMoment(result.raw), raw: result.raw } : result;
+    };
+
+    // ---- the view data that is stored (DISL 11.6) ----
+
+    const pin = (id: string, at: Point | undefined): void => {
+      const element = find(working, id);
+      const kept = situation?.view?.pinned[id];
+      if (!element || 'source' in element || isRelation(metamodel.types[element.type])) return refuse('That is no longer in this diagram.');
+      if (!stores('pinned')) return refuse(NOT_KEPT);
+      if (element.ephemeral) return refuse('Its id is not kept in the document, so its position cannot be locked.');
+      if (!at) return refuse('Where it is drawn is not known here, so its position cannot be locked.');
+      if (!(pinnedNow(id) && kept?.x === at.x && kept.y === at.y)) viewChanges.push({ kind: 'pin', element: id, x: at.x, y: at.y });
+    };
+    const unpin = (id: string): void => {
+      if (!stores('pinned')) return refuse(NOT_KEPT);
+      if (!pinnedNow(id)) return refuse(NOT_PINNED);
+      viewChanges.push({ kind: 'unpin', element: id });
+    };
+    const group = (id: string, key: string, state: boolean): void => {
+      const standard = groupDefault(working, id, key, scopeOf(id));
+      if (standard === undefined) return refuse('That is no longer in this diagram.');
+      if (!stores('groups')) return refuse(NOT_KEPT);
+      const now = [...viewChanges].reverse().find((change) => change.kind === 'group' && change.element === id && change.group === key);
+      const held = now?.kind === 'group' ? now.collapsed ?? standard : situation?.view?.groups[id]?.[key] ?? standard;
+      if (held !== state) viewChanges.push({ kind: 'group', element: id, group: key, collapsed: state === standard ? null : state });
+    };
+    const keep = (id: string, value: Value): void => {
+      const kept = Object.hasOwn(ownNotation.canvas.filters, id) ? ownNotation.canvas.filters[id] : undefined;
+      if (!kept?.persist || !stores('filters')) return refuse(NOT_KEPT);
+      const standard = isCel(kept.default) ? evaluated(kept.default, scopeOf(undefined))?.value ?? null : kept.default;
+      const held = situation?.view && Object.hasOwn(situation.view.filters, id) ? situation.view.filters[id] : standard;
+      if (!same(held, value)) viewChanges.push({ kind: 'filter', id, value: same(value, standard) ? null : value });
     };
 
     // A gesture is checked against the model as it was before the transaction (DISL 8.4).
@@ -697,8 +823,15 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
         return undefined;
       }
       const id = mint(type);
+      // A default that is computed is worked out now, in the `create` context (DISL 4.3).
+      const computed: Record<string, Value> = {};
+      for (const [name, attribute] of Object.entries(meta.attributes)) {
+        if (!isCel(attribute.default) || 'fixed' in attribute || Object.hasOwn(attributes, name)) continue;
+        const value = evaluated(attribute.default, scopeOf(undefined, { elementType: type, position: null, parent: parent === undefined ? null : new Reference(parent) }))?.value;
+        if (value !== undefined && value !== null) computed[name] = value;
+      }
       const fits: Record<string, Value | null> = {};
-      for (const [name, value] of Object.entries({ ...defaultsOf(metamodel, type), ...attributes })) fits[name] = fitted(value, meta.attributes[name]);
+      for (const [name, value] of Object.entries({ ...defaultsOf(metamodel, type), ...computed, ...attributes })) fits[name] = fitted(value, meta.attributes[name]);
       apply({ kind: 'add', id, type, attributes: merged({}, fits), ...ends, ...(parent === undefined ? {} : { parent }), ...(position === undefined ? {} : { position }) });
       created.push(id);
       fire(ends ? 'connect' : 'create', id, [], 'user');
@@ -864,13 +997,22 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
         } else if (typeof action.call === 'string' && Object.hasOwn(declared, action.call)) {
           act(declared[action.call].actions ?? [], self, { ...variables, p: each(action.args) ?? {} }, source);
         } else if (isObject(action.view)) {
-          // Viewer state (DISL 9.4, 11.6): of it, the fold of the target is read.
+          // View data (DISL 9.4, 11.6): the viewer's fold of the target, and of what is stored its pin, the states of its groups and the kept filters.
           const folded = action.view.collapsed === undefined ? undefined : one(action.view.collapsed)?.value;
           if (typeof target === 'string' && target !== '' && typeof folded === 'boolean') collapsed[target] = folded;
+          const pinned = action.view.pinned === undefined ? undefined : one(action.view.pinned)?.value;
+          if (typeof target === 'string' && target !== '' && pinned === true) pin(target, situation?.at?.(target));
+          else if (typeof target === 'string' && target !== '' && pinned === false && pinnedNow(target)) unpin(target);
+          for (const [key, state] of Object.entries(each(action.view.groups) ?? {})) if (typeof target === 'string' && typeof state === 'boolean') group(target, key, state);
+          // simplified: of the filters a `view` action sets, the kept ones are set; one that is each viewer's own is the canvas's to set.
+          for (const [id, value] of Object.entries(each(action.view.filters) ?? {})) if (ownNotation.canvas.filters[id]?.persist === true && value !== null) keep(id, value);
         } else if (action.open !== undefined) {
+          // An http or https address and a path are the host's to open; anything else is not opened (DISL 9.4).
           const link = one(action.open)?.value;
-          if (typeof link === 'string' && link !== '') effects.push({ kind: 'open', elements: [self].filter((id) => id !== ''), message: link });
-          else refuse('There is no link to open.');
+          const kind = typeof link === 'string' && link !== '' ? linkKind(link) : undefined;
+          if (!kind) refuse('There is no link to open.');
+          else if (kind.kind === 'uri' && kind.scheme !== 'http' && kind.scheme !== 'https') refuse(`The link "${String(link)}" is neither an http or https address nor a path, so it is not opened.`);
+          else effects.push({ kind: 'open', elements: [self].filter((id) => id !== ''), message: link as string });
         } else if (isObject(action.notify)) {
           effects.push({ kind: 'notify', elements: [], message: said(action.notify.message, '') });
         } else if (asked !== undefined) {
@@ -916,13 +1058,31 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       // An invariant that prevents rejects the whole transaction (DISL 14.4).
       const broken = refused === undefined && changes.length > 0 && lastGesture ? constraints.refusals(lastGesture, model, working) : [];
       if (broken.length > 0) refuse(broken[0].message);
-      return refused === undefined ? { changes, after: working, created, effects, collapsed } : { refused };
+      return refused === undefined ? { changes, after: working, created, effects, collapsed, view: viewChanges } : { refused };
     };
 
-    return { act, add, apply, attached, check, dropped, drop, evaluated, finish, fire, refuse, related, scopeOf, write, effects };
+    // A gesture on a derived relation is the operation its `edits` map it to, run with the relation as `self` (DISL 4.11.4).
+    const onDerived = (relation: Pick<DerivedRelation, 'type' | 'source' | 'target' | 'edits'>, gesture: string): void => {
+      const operation = Object.hasOwn(relation.edits, gesture) ? relation.edits[gesture] : undefined;
+      const type = metamodel.types[relation.type];
+      const reason = isObject(type?.declared.derived) ? (type.declared.derived.reason as Message | undefined) : undefined;
+      if (operation === undefined || !Object.hasOwn(declared, operation)) return refuse(worded(reason, scopeOf(undefined), 'This follows from what it joins, so it cannot be changed by itself.'));
+      act(declared[operation].actions ?? [], '', { self: new Ends(relation.source, relation.target), position: null, p: {} }, 'operation');
+    };
+
+    return { act, add, apply, attached, check, dropped, drop, evaluated, finish, fire, group, keep, onDerived, pin, refuse, related, scopeOf, unpin, write, effects };
   };
 
   // ---- operations ----
+
+  // The attribute the first action of an operation sets to its one parameter, as `p.<parameter>`.
+  const asked = (operation: OperationDeclaration): { readonly asks?: string; readonly param?: string } => {
+    const [param, ...more] = Object.keys(isObject(operation.params) ? operation.params : {});
+    const first = operation.actions?.[0];
+    const set = isObject(first) && isObject(first.set) ? first.set : {};
+    const attribute = param === undefined || more.length > 0 ? undefined : Object.keys(set).find((name) => set[name] === `p.${param}`);
+    return attribute === undefined ? {} : { asks: attribute, param };
+  };
 
   const operations: Operation[] = Object.entries(declared).map(([id, operation]) => ({
     id,
@@ -936,7 +1096,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       ...[...toolbox.contextTools, ...toolbox.contextMenus].flatMap((set) => set.entries.filter((entry) => entry.operation === id).map((entry) => entry.shortcut)),
     ].filter((key): key is string => key !== undefined))],
     ...(typeof operation.plugin === 'string' ? { plugin: operation.plugin } : isObject(operation.plugin) && typeof operation.plugin.name === 'string' ? { plugin: operation.plugin.name } : {}),
-    ...(isObject(operation.params) && isObject(operation.actions?.[0]) && isObject(operation.actions[0].set) && Object.keys(operation.actions[0].set).length === 1 ? { asks: Object.keys(operation.actions[0].set)[0] } : {}),
+    ...asked(operation),
     opens: (operation.actions ?? []).some((action) => isObject(action) && action.open !== undefined),
     viewOnly: free(operation.actions),
   }));
@@ -999,12 +1159,67 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     const made = run.add(tool.creates, { ...placed, ...initial });
     // What follows a creation is the tool's to say (`after`, DISL 7.2); the new element is in `created` either way.
     if (made !== undefined && tool.after !== 'none') run.effects.push({ kind: tool.after, elements: [made] });
+    // Where a layout respects pins, a node dropped from the toolbox is pinned at the drop point (DISL 10.4).
+    if (made !== undefined && pins && Object.keys(placed).length === 0) run.pin(made, at);
     return run.finish();
+  };
+
+  const derivedType = (type: string): Readonly<Record<string, string>> | undefined => {
+    const meta = metamodel.types[type];
+    const rule = isRelation(meta) && isObject(meta.declared.derived) ? meta.declared.derived : undefined;
+    return rule && Object.fromEntries(Object.entries(isObject(rule.edits) ? rule.edits : {}).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
   };
 
   const connect: Behavior['connect'] = (model, type, source, target, ends, situation) => {
     const run = open(model, situation, 'create');
-    run.related(type, source, target, ends ?? {});
+    const mapped = derivedType(type);
+    // A derived relation is not created: drawing it is the operation its `edits` name, once the gesture's constraints let it (DISL 4.11.4).
+    if (!mapped) run.related(type, source, target, ends ?? {});
+    else if (run.check({ kind: 'connect', elements: { source, target }, values: { relationType: type } })) run.onDerived({ type, source, target, edits: mapped }, 'connect');
+    return run.finish();
+  };
+
+  const createChild: Behavior['createChild'] = (model, parent, situation) => {
+    const run = open(model, situation, 'create');
+    const element = find(model, parent);
+    const scope = run.scopeOf(parent);
+    const entry = !element ? undefined : setsFor(toolbox.contextMenus, metamodel, element.type).filter((set) => given(set.when, scope))
+      .flatMap((set) => set.entries).find((candidate) => candidate.kind === 'create-child' && candidate.creates !== undefined && given(candidate.visible, scope));
+    const type = entry?.creates === undefined ? undefined : metamodel.types[entry.creates];
+    if (!element || !entry || !type) run.refuse(message('std.notApplicable', model, situation) ?? 'Nothing can be added to this.');
+    else if (run.check({ kind: 'create', elements: { parent }, values: { elementType: type.name, position: null, dropTarget: null, tool: null } })) {
+      // A name that is required and has no default starts as "New" and what the type is called: a host rule, see docs/disl-support.md.
+      const label = type.labelAttribute === undefined ? undefined : type.attributes[type.labelAttribute];
+      const named = label?.required === true && label.default === undefined && !('fixed' in label) ? { [type.labelAttribute!]: `New ${type.label.toLowerCase()}` } : {};
+      const made = run.add(type.name, named, undefined, parent);
+      if (made !== undefined) run.effects.push({ kind: type.labelAttribute === undefined ? 'select' : 'editLabel', elements: [made] });
+    }
+    return run.finish();
+  };
+
+  const pin: Behavior['pin'] = (model, element, at, situation) => {
+    const run = open(model, situation, 'change');
+    run.pin(element, at);
+    return run.finish();
+  };
+
+  const unpin: Behavior['unpin'] = (model, elements, situation) => {
+    const run = open(model, situation, 'change');
+    const all = elements ?? Object.keys(situation?.view?.pinned ?? {});
+    if (all.length === 0) run.refuse(NOTHING_PINNED);
+    for (const id of all) run.unpin(id);
+    return run.finish();
+  };
+
+  const fold: Behavior['fold'] = (model, element, group, collapsed, situation) => {
+    const run = open(model, situation, 'change');
+    run.group(element, group, collapsed);
+    return run.finish();
+  };
+
+  const filter: Behavior['filter'] = (model, id, value, situation) => {
+    const run = open(model, situation, 'change');
+    run.keep(id, value);
     return run.finish();
   };
 
@@ -1090,6 +1305,13 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
         const far = read(opposite?.attribute);
         if (opposite && far !== undefined) values[opposite.attribute] = far + (values[source.attribute] as number) - current;
       }
+      // A node no attribute places is where the layout put it: dragged, it is pinned where it is dropped (DISL 10.4).
+      const from = situation?.at?.(id);
+      const unplaced = (source: PlacementSource | undefined): boolean => source === undefined || source === 'free';
+      const moved = (allowed(node.placement.movable, 'x') && by.x !== 0) || (allowed(node.placement.movable, 'y') && by.y !== 0);
+      if (element && pins && from && unplaced(node.placement.x) && unplaced(node.placement.y) && moved) {
+        run.pin(id, { x: allowed(node.placement.movable, 'x') ? from.x + by.x : from.x, y: allowed(node.placement.movable, 'y') ? from.y + by.y : from.y });
+      }
       if (Object.keys(values).length === 0) continue;
       if (!run.check({ kind: 'placement', self: id, values: { gesture: 'move', oldBounds: boundsOf({}), newBounds: boundsOf(values), newParent: null } })) break;
       run.write(id, values, 'user', false);
@@ -1166,7 +1388,10 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
 
   const remove: Behavior['remove'] = (model, selection, situation) => {
     const run = open(model, situation, 'change');
-    run.drop(selection);
+    // A derived relation is not removed: removing it is the operation its `edits` name (DISL 4.11.4).
+    const derived = derivedIn(model).filter((relation) => selection.includes(relation.id));
+    for (const relation of derived) run.onDerived(relation, 'delete');
+    run.drop(selection.filter((id) => !derived.some((relation) => relation.id === id)));
     return run.finish();
   };
 
@@ -1217,8 +1442,12 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
         previous = entry.group;
         const state = entry.operation === undefined ? undefined : availability(model, entry.operation, id === undefined ? [] : [id], situation);
         if (!given(entry.visible, scope) || state?.offered === false) continue;
+        // `pin` is offered on a node that is not pinned and `unpin` on one that is; `unpinAll` has nothing to do while nothing is pinned (DISL 7.3).
+        const pinned = situation?.view?.pinned ?? {};
+        if ((entry.kind === 'pin' || entry.kind === 'unpin') && (id === undefined || (entry.kind === 'unpin') !== Object.hasOwn(pinned, id))) continue;
+        const idle = entry.kind === 'unpinAll' && Object.keys(pinned).length === 0 ? NOTHING_PINNED : undefined;
         const made = entry.via ?? entry.creates;
-        const reason = applicable(entry.unavailable, scope) ?? state?.reason ?? (entry.kind === 'operation' ? undefined : stopped);
+        const reason = applicable(entry.unavailable, scope) ?? state?.reason ?? (entry.kind === 'operation' ? undefined : stopped) ?? idle;
         group.push({
           kind: entry.kind,
           label: worded(entry.label, scope, state?.label ?? defaultLabels[entry.kind] ?? (made === undefined ? labelOf(entry.kind) : metamodel.types[made]?.label ?? labelOf(made))),
@@ -1234,7 +1463,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
   return {
     value: {
       messages, message, operations, ...(isObject(section.clipboard) ? { clipboard: section.clipboard } : {}),
-      availability, menu, deletion, create, connect, change, edit, editLabel, move, resize, dragHandle, reattach, remove, reparent, operate,
+      availability, menu, deletion, create, connect, change, edit, editLabel, move, resize, dragHandle, reattach, remove, reparent, operate, createChild, pin, unpin, fold, filter,
     },
     findings,
   };

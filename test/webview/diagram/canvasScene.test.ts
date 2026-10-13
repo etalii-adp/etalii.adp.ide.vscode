@@ -28,7 +28,7 @@ const scene: Scene = {
         { spacing: 4000, minSpacing: 64, ticks: [{ at: 0, label: '19th' }] },
       ],
     }],
-    filters: [{ id: 'tags', label: 'Filter by tags', control: 'chips', options: ['electronics', 'invention'], value: [], match: 'any', matchToggle: true }],
+    filters: [{ id: 'tags', label: 'Filter by tags', control: 'chips', options: ['electronics', 'invention'], value: [], match: 'any', matchToggle: true, kept: false }],
     toggles: [{ viewpoint: 'compact', label: 'Compact', on: false }],
     legend: [{ id: 'Phase.peak', label: 'Peak', fill: { token: 'ghg.peak' } }, { id: 'Note', label: 'Note', fill: '#fef9c3' }],
     background: '#fafafa',

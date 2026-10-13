@@ -484,3 +484,86 @@ body {
 .adp-menu-shortcut {
   color: var(--vscode-descriptionForeground);
 }
+
+/* A label the pointer rests on to read its text in full. */
+.adp-scene-label.adp-hover {
+  pointer-events: all;
+}
+
+/* A label of one line that is cut with an ellipsis where it does not fit. */
+.adp-ellipsis > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * A compartment of a node: its rows, each with a box the pointer reaches. A heading folds its
+ * group, an item that is an element is selected by itself, and a link symbol opens its link.
+ */
+.adp-hit {
+  fill: transparent;
+  pointer-events: all;
+}
+
+.adp-separator {
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.adp-row-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.adp-heading {
+  cursor: pointer;
+}
+
+.adp-heading .adp-row-text {
+  font-weight: 600;
+}
+
+.adp-chevron {
+  fill: none;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.adp-item.adp-selected > .adp-hit {
+  fill: var(--adp-highlight);
+  fill-opacity: 0.2;
+}
+
+.adp-link,
+.adp-badge[data-operation] {
+  cursor: pointer;
+}
+
+.adp-link path,
+.adp-badge path {
+  pointer-events: none;
+}
+
+.adp-heading:focus-visible > .adp-hit,
+.adp-link:focus-visible > .adp-hit,
+.adp-badge:focus-visible > .adp-hit {
+  stroke: var(--vscode-focusBorder);
+  vector-effect: non-scaling-stroke;
+}
+
+.adp-heading:focus,
+.adp-link:focus,
+.adp-badge:focus {
+  outline: none;
+}
+
+/* The switches of a scene's filters, in the panel beside the canvas. */
+.adp-switch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}

@@ -120,7 +120,7 @@ describe('the clipboard', () => {
 
 describe('persistence.view', () => {
   it('is read as written: nothing stored, folding and the viewport each viewer\'s own, a fold seeded from the file', () => {
-    expect(persistence.value.view).toEqual({ store: [], viewer: ['collapsed', 'viewport'], initial: { collapsed: { cel: 'self.folded' } } });
+    expect(persistence.value.view).toEqual({ store: [], viewer: ['collapsed', 'viewport'], initial: { collapsed: { cel: 'self.folded' } }, bind: {} });
     expect(persistence.value.view.initial).toEqual(at('persistence', 'view', 'initial'));
   });
 });

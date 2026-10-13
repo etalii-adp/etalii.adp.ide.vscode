@@ -68,6 +68,11 @@ export interface ViewOptions {
   readonly filters?: Readonly<Record<string, { readonly value?: unknown; readonly match?: 'any' | 'all' }>>;
   /** The nodes this viewer folded (true) or unfolded (false), by id; a node not named is as the definition says. */
   readonly collapsed?: Readonly<Record<string, boolean>>;
+  /**
+   * Where the centre of each node was on screen before the document last changed, by id: a layout
+   * that runs on every change starts from there, so what the change does not touch moves little.
+   */
+  readonly placed?: Readonly<Record<string, { readonly x: number; readonly y: number }>>;
 }
 
 export interface ToolboxEntry {
@@ -126,12 +131,14 @@ export type EditRequest =
   | { readonly kind: 'action'; readonly action: string; readonly id?: string; readonly x?: number; readonly y?: number }
   /** A node dragged onto another node, to become its child, at a position among its children when given. */
   | { readonly kind: 'reparent'; readonly id: string; readonly parent: string; readonly index?: number }
-  /** The children of a node hidden or shown. */
-  | { readonly kind: 'fold'; readonly id: string; readonly folded: boolean }
+  /** The children of a node hidden or shown; with `group`, the items of one group of the node's, by the group's key. */
+  | { readonly kind: 'fold'; readonly id: string; readonly folded: boolean; readonly group?: string }
   /** A node kept where it was put, or given back to the layout. */
   | { readonly kind: 'pin'; readonly id: string; readonly pinned: boolean }
-  /** The link of a node followed. */
-  | { readonly kind: 'openLink'; readonly id: string };
+  /** The link of a node followed; with `compartment` and `item`, the link of that item of the node's compartment, counted among its items as they are drawn. */
+  | { readonly kind: 'openLink'; readonly id: string; readonly compartment?: string; readonly item?: number }
+  /** A filter of the canvas that is kept with the diagram set to a value. */
+  | { readonly kind: 'filter'; readonly id: string; readonly value: unknown };
 
 /** One FBL splice of the body: a range of UTF-8 bytes of `Source.text` and what replaces it. */
 export interface TextSplice {

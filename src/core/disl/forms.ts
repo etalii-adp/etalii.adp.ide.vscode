@@ -3,7 +3,7 @@
 // item is shown, what it shows, what an entered text means) is a function over a model and an element.
 
 import type { Expressions, Scope, World } from './expressions';
-import { attributesOf, defaultOf, formatYearMonth, parseYearMonth, valueKind, type Metamodel } from './metamodel';
+import { attributesOf, defaultOf, formatYearMonth, parseYearMonth, takesLink, valueKind, type Metamodel } from './metamodel';
 import { finding, type Finding, type Loaded, type Model, type Value } from './model';
 import { isCel, isObject, labelOf, localized, type Attribute, type CelValue, type Doc, type Expression, type LocalizedText, type Message, type Reason, type Specification } from './specification';
 
@@ -415,6 +415,8 @@ export function interpretForms(specification: Specification, metamodel: Metamode
         const kind = valueKind(metamodel, attribute.type);
         const textual = kind.kind === 'primitive' && ['string', 'text', 'expression', 'uri', 'color'].includes(kind.primitive);
         if (input.trim() === '' && !textual) return { set: { [name]: null } };
+        // A link is a URI of a scheme the attribute allows, or a path where it takes paths (DISL 4.2).
+        if (kind.kind === 'primitive' && kind.primitive === 'uri' && input !== '' && !takesLink(attribute, input)) return { refused: `'${input}' is not a link ${label(on) || 'this'} takes.` };
         const one = read(input, attribute);
         return 'error' in one ? { refused: one.error } : { set: { [name]: one.value } };
       },

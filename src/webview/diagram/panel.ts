@@ -23,12 +23,13 @@ export class Panel {
   private readonly legend = html('ul', { class: 'adp-legend', 'aria-label': 'Legend' });
   private readonly compact = html('input', { type: 'checkbox', id: 'adp-compact' });
   private readonly compactRow = html('label', { class: 'adp-compact', for: 'adp-compact' });
+  private readonly switches = html('div', { class: 'adp-switches' });
   private tags: string[] = [];
 
   constructor(host: HTMLElement, private readonly changed: (options: Pick<ViewOptions, 'filterTags' | 'filterMode' | 'compact'>) => void) {
     this.filter.append(this.chips, this.input, this.suggestions, this.mode);
     this.compactRow.append(this.compact, 'Compact');
-    this.element.append(this.filter, this.legend, this.compactRow);
+    this.element.append(this.filter, this.switches, this.legend, this.compactRow);
     this.element.hidden = true;
     host.append(this.element);
 
@@ -70,6 +71,22 @@ export class Panel {
 
     this.compactRow.hidden = !hasCompact;
     this.compact.checked = chrome.compact === true;
+  }
+
+  /**
+   * Shows a switch for each filter of a scene that is one, after `show`: its label, whether it is
+   * on, and whether it can be changed. `changed` is told the filter and its new value.
+   */
+  showSwitches(switches: readonly { readonly id: string; readonly label: string; readonly on: boolean; readonly locked: boolean }[], changed: (id: string, on: boolean) => void): void {
+    this.switches.replaceChildren(...switches.map((entry) => {
+      const box = html('input', { type: 'checkbox' });
+      box.checked = entry.on;
+      box.disabled = entry.locked;
+      box.addEventListener('change', () => changed(entry.id, box.checked));
+      return html('label', { class: 'adp-switch', 'data-filter': entry.id }, box, entry.label);
+    }));
+    this.switches.hidden = switches.length === 0;
+    if (switches.length > 0) this.element.hidden = false;
   }
 
   /** Turns Compact on or off, as its switch does. */
