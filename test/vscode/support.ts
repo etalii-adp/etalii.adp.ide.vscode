@@ -24,6 +24,10 @@ export interface State {
   view?: { elements: { id: string; type: string; x: number; y: number; width: number; label: string }[]; relations: { id: string }[]; readOnly: boolean; notice?: string };
   /** What a tool type read from its definition was last sent: a scene, as `src/core/scene/scene.ts` has it. */
   scene?: { nodes: { id: string; fold?: 'folded' | 'unfolded'; labels: { text: string }[] }[]; edges: { id: string }[]; readOnly?: boolean; notice?: string };
+  /** What a designer was last sent: a table view, as `src/core/tool/tableView.ts` has it. */
+  table?: { name: string; readOnly: boolean; properties: { id: string; name: string }[]; rows: { id: string; title: string }[]; views: { id: string; name: string; active: boolean }[] };
+  /** What the tool type offers for the selection. */
+  actions?: { id: string; label: string; enabled: boolean; disabledReason?: string }[];
   kind: 'diagram' | 'designer';
   /** The view options the editor holds: what the canvas sent, and the folds of this viewer. */
   options: { collapsed?: Record<string, boolean> };
@@ -42,7 +46,7 @@ export async function state(): Promise<State | undefined> {
 export async function drawn(sinceVersion = 0): Promise<State> {
   return until('the diagram to be drawn', async () => {
     const current = await state();
-    return (current?.view ?? current?.scene) && current.version >= sinceVersion ? current : undefined;
+    return (current?.view ?? current?.scene ?? current?.table) && current.version >= sinceVersion ? current : undefined;
   });
 }
 
