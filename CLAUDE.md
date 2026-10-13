@@ -10,6 +10,18 @@ This repository's principles, which every plan for it is checked against, are in
 
 Specs say *what* and *why*; plans say *how*. Do not put implementation choices in a spec.
 
+## A tool type is its definition
+
+Every tool type is read from its definition, never written in code (etalii.adp spec 027). `README.md` says how one is added; these rules hold for every change.
+
+- `definitions/<tool>/` holds a tool type's specification, binding and companion, copied unchanged by `npm run sync-definitions`, which also writes the tool types' entries of `package.json`. Never edit a file under `definitions/`, nor those entries by hand: a correction goes to the repository the file came from and arrives with a newer copy. `npm run sync-definitions -- --check` holds both, and the Build workflow runs it.
+- Nothing under `src/core/disl/`, `src/core/desl/`, `src/core/scene/` or `src/core/tool/` names a tool type, one of its element types, attributes or message ids; `test/core/tool/words.test.ts` reads those folders for every such name. What a definition needs is built there once, for every tool type.
+- Code for one tool type is a plugin its definition names, under `src/core/plugins/<plugin>/` and registered by its id in `src/core/plugins/index.ts`. Anything else for one tool type needs a row under "Code for one tool type" in `docs/disl-support.md`, with its reason.
+- Nothing under `src/core/` imports `vscode` or uses the DOM. The extension opens, applies and reports; a webview draws what it is sent and computes nothing of a tool type.
+- An edit is the FBL library's splices, applied as one edit of the text document, so Visual Studio Code's undo takes it back.
+- `docs/disl-support.md` is changed by the change that builds a construct, carries a plugin, or meets a difference; `test/core/tool/supportRecord.test.ts` holds it to the code. `docs/tools.md` gets a row with a new tool type.
+- Where a definition and the standalone host disagree, or DISL, DESL or FBL cannot state what a tool needs, follow the definition, file an issue in etalii.adp, and add it to "Differences raised and not settled here". Do not settle it here.
+
 ## Branches and delivery
 
 - `develop` is the integration branch.
