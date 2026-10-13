@@ -5,7 +5,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import type { FblBinding } from '../../../src/core/fbl/documents/types';
 import { applySplices } from '../../../src/core/fbl/splice';
 import { decode, encode } from '../../../src/core/fbl/text/utf8';
-import type { DiagramToolType, EditOutcome, Source, TextSplice, ViewOptions } from '../../../src/core/frame/toolType';
+import type { DesignerToolType, DiagramToolType, EditOutcome, Source, TextSplice, ViewOptions } from '../../../src/core/frame/toolType';
 import type { Scene, SceneEnd } from '../../../src/core/scene/scene';
 import { readDefinitionFolder, type Definition } from '../../../src/core/tool/definitionFolder';
 import { pluginRegistry, type PluginRegistry, type Plugins } from '../../../src/core/tool/pluginRegistry';
@@ -68,6 +68,10 @@ export const altered = (definition: Definition, alter: (specification: Json) => 
 /** The diagram a definition gives. */
 export const diagramOf = (read: ReadFolder, plugins: PluginRegistry = pluginRegistry(noPlugins)): DiagramToolType =>
   toolTypeFrom(read.definition, read.bindings, plugins) as DiagramToolType;
+
+/** The designer a definition gives. */
+export const designerOf = (read: ReadFolder, plugins: PluginRegistry = pluginRegistry(noPlugins)): DesignerToolType =>
+  toolTypeFrom(read.definition, read.bindings, plugins) as DesignerToolType;
 
 /**
  * The view options a diagram read from its definition takes beside the viewport: the viewpoint to
