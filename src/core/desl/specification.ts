@@ -66,7 +66,7 @@ export function loadDesigner(json: unknown): Loaded<DesignerSpecification> {
   };
   if (!isObject(json)) return { value: error('This is not a DESL specification: its top level is not an object.'), findings };
 
-  const version = json.desl;
+  const version = json['desl'];
   const parts = typeof version === 'string' ? /^(\d+)\.(\d+)$/.exec(version) : null;
   if (!parts) return { value: error('The specification does not say which version of DESL it is written in.'), findings };
   if (Number(parts[1]) > 0) return { value: error(`The specification is written in DESL ${String(version)}, and this host reads DESL 0.${deslMinor}.`), findings };
