@@ -1,8 +1,9 @@
 // The metamodel of a specification (DISL 4), ready to ask: types with what they inherit, relations
 // with the types each end allows, enums in their order, and the diagram's own attributes.
 
-import { finding, type Attributes, type Finding, type Loaded, type Value } from './model';
-import { isCel, labelOf, localized, type Attribute, type DataType, type LocalizedText, type NodeType, type RelationEnd, type RelationType, type Specification } from './specification';
+import type { Expressions, World } from './expressions';
+import { finding, type Attributes, type Finding, type Loaded, type Model, type ModelRelation, type Value } from './model';
+import { isCel, isObject, labelOf, localized, type Attribute, type DataType, type LocalizedText, type NodeType, type RelationEnd, type RelationType, type Specification } from './specification';
 
 export interface MetaEnum {
   readonly name: string;
@@ -254,6 +255,97 @@ export function zeroOf(kind: ValueKind, many: boolean): Value {
 
 /** The ordinal of an enum value: its place in the enum, or -1. */
 export const ordinal = (metamodel: Metamodel, name: string, key: string): number => metamodel.enums[name]?.values.findIndex((value) => value.key === key) ?? -1;
+
+// ---- links (DISL 4.2) ----
+
+/**
+ * What the value of a `uri` attribute is: a URI when it starts with a scheme and a colon and that
+ * scheme is no drive letter, and a path otherwise, absolute or relative to the file it is stored in.
+ */
+export function linkKind(value: string): { readonly kind: 'uri'; readonly scheme: string } | { readonly kind: 'path' } {
+  const scheme = /^([A-Za-z][A-Za-z0-9+.-]*):/.exec(value)?.[1];
+  return scheme === undefined || scheme.length === 1 ? { kind: 'path' } : { kind: 'uri', scheme: scheme.toLowerCase() };
+}
+
+/** Whether a `uri` attribute takes a value: a URI of one of its `schemes`, any URI where it names none, and a path where it has `paths`. */
+export function takesLink(attribute: Attribute, value: string): boolean {
+  const kind = linkKind(value);
+  if (kind.kind === 'path') return attribute.paths === true;
+  return !Array.isArray(attribute.schemes) || attribute.schemes.includes(kind.scheme);
+}
+
+// ---- moments (DISL 4.2) ----
+
+/** A moment as it is stored when an action computes it: in the local time of the host with its offset, to the second. */
+export function formatMoment(moment: Date): string {
+  const two = (value: number): string => String(Math.trunc(Math.abs(value))).padStart(2, '0');
+  const offset = -moment.getTimezoneOffset();
+  return `${moment.getFullYear()}-${two(moment.getMonth() + 1)}-${two(moment.getDate())}T${two(moment.getHours())}:${two(moment.getMinutes())}:${two(moment.getSeconds())}`
+    + `${offset < 0 ? '-' : '+'}${two(offset / 60)}:${two(offset % 60)}`;
+}
+
+// ---- derived relations (DISL 4.11.3) ----
+
+/** A relation a type derives from the model, with the operations its gestures are carried out by. */
+export interface DerivedRelation extends ModelRelation {
+  readonly source: string;
+  readonly target: string;
+  /** The operation each gesture on it runs, by the gesture (`connect`, `delete`, ...): a gesture that names none is refused. */
+  readonly edits: Readonly<Record<string, string>>;
+}
+
+/**
+ * The relations the relation types derive from a model, in the order of the types and of each
+ * type's `from`. Its id is what `id` gives, else `<Type>:<source>-><target>`, with `#2`, `#3` on a
+ * repeat. An item whose ends are not elements of the types its relation allows is dropped, and
+ * said once for its type (`std.derivedEnds`), at the first of the dropped item's sources.
+ */
+export function derivedRelations(metamodel: Metamodel, expressions: Expressions, model: Model, world: World = expressions.over(model)): Loaded<readonly DerivedRelation[]> {
+  // simplified: of a derived relation its ends, its id, its sources and its edits are read; `attributes`, `key` and `owner` are not. Read them when a definition draws a derived relation from more than its two ends.
+  const relations: DerivedRelation[] = [];
+  const findings: Finding[] = [];
+  const elements = new Map(model.elements.map((element) => [element.id, element]));
+  for (const type of Object.values(metamodel.types)) {
+    const rule = isRelation(type) && isObject(type.declared.derived) ? type.declared.derived : undefined;
+    if (!isRelation(type) || !rule || (typeof rule.from !== 'string' && !isCel(rule.from))) continue;
+    const items = expressions.evaluate(rule.from, world.scope());
+    if (!items.ok || !Array.isArray(items.raw)) {
+      findings.push(finding('std.derivedFailed', 'warning', `The relations of the type \`${type.name}\` could not be derived, so none is drawn: ${items.ok ? '`from` did not give a list' : items.error}`));
+      continue;
+    }
+    const repeats = new Map<string, number>();
+    let dropped = false;
+    for (const item of items.raw as unknown[]) {
+      const read = (expression: unknown): Value | undefined => {
+        const result = typeof expression === 'string' || isCel(expression) ? expressions.evaluate(expression, world.scope(undefined, { item })) : undefined;
+        return result?.ok ? result.value : undefined;
+      };
+      const [source, target] = [read(rule.source), read(rule.target)];
+      if (typeof source !== 'string' || typeof target !== 'string') continue;
+      const from = read(rule.sources);
+      const first = (Array.isArray(from) ? from : [from]).find((id): id is string => typeof id === 'string' && elements.has(id));
+      if (!type.source.types.includes(elements.get(source)?.type ?? '') || !type.target.types.includes(elements.get(target)?.type ?? '')) {
+        if (!dropped) {
+          const line = first === undefined ? 0 : elements.get(first)!.line;
+          findings.push(finding('std.derivedEnds', 'warning', `A relation of the type \`${type.name}\` is derived between elements it cannot join, so it is not drawn.`, {
+            location: { file: '', line, column: line === 0 ? 0 : 1, length: 0 }, ...(first === undefined ? {} : { element: first }), detail: { relationType: type.name },
+          }));
+        }
+        dropped = true;
+        continue;
+      }
+      const own = read(rule.id);
+      const id = typeof own === 'string' && own !== '' ? own : `${type.name}:${source}->${target}`;
+      const count = (repeats.get(id) ?? 0) + 1;
+      repeats.set(id, count);
+      relations.push({
+        id: count === 1 ? id : `${id}#${count}`, type: type.name, attributes: {}, host: {}, ephemeral: true, line: first === undefined ? 0 : elements.get(first)!.line, source, target,
+        edits: Object.fromEntries(Object.entries(isObject(rule.edits) ? rule.edits : {}).filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
+      });
+    }
+  }
+  return { value: relations, findings };
+}
 
 // ---- year and month (DISL 4.2) ----
 

@@ -2,9 +2,9 @@
 // binding, how ids are made, and `typeMap`, which says what the binding's types and attributes are
 // in the metamodel. Reading a body is the FBL library's; this module types what it read.
 
-import { findRule, type FblBinding, type FblDocument, type Slot } from '../fbl/documents/types';
+import { allRules, findRule, type FblBinding, type FblDocument, type Slot } from '../fbl/documents/types';
 import { findingCodes } from '../fbl/finding';
-import type { FblElement, FblModel } from '../fbl/model';
+import type { FblElement, FblModel, IdRequest } from '../fbl/model';
 import { attributesOf, formatYearMonth, isRelation, parseYearMonth, valueKind, type Metamodel } from './metamodel';
 import { emptyModel, finding, type Finding, type Loaded, type Model, type ModelElement, type ModelRelation, type Value } from './model';
 import type { Expressions } from './expressions';
@@ -17,8 +17,40 @@ export interface InterpretedPersistence {
   readonly ids: IdStrategy & Required<Pick<IdStrategy, 'strategy' | 'encoding' | 'stable' | 'pattern' | 'missing' | 'compare'>>;
   /** By the binding's type names. A type that is not listed keeps its name and its attributes' names. */
   readonly typeMap: Readonly<Record<string, TypeMapEntry>>;
-  /** What of the view is stored, and what each viewer keeps (DISL 11.6). */
-  readonly view: { readonly store: readonly string[]; readonly viewer: readonly string[]; readonly initial: Readonly<Record<string, unknown>> };
+  /** What of the view is stored, and what each viewer keeps (DISL 11.6); `bind` is where a stored kind is kept in the body itself. */
+  readonly view: { readonly store: readonly string[]; readonly viewer: readonly string[]; readonly initial: Readonly<Record<string, unknown>>; readonly bind: ViewBind };
+}
+
+/** `persistence.view.bind` (DISL 11.6): each stored kind onto the entries of a type of the binding, by the binding's attribute names. */
+export interface ViewBind {
+  readonly pinned?: { readonly type: string; readonly element: string; readonly x: string; readonly y: string };
+  readonly groups?: { readonly type: string; readonly element: string; readonly group: string; readonly collapsed: string };
+  /** `values` is the binding attribute that holds each kept filter's value, by the filter's id. */
+  readonly filters?: { readonly type: string; readonly values: Readonly<Record<string, string>> };
+}
+
+/**
+ * The stored view data of a document (DISL 11.6): what is kept with the diagram and is the same
+ * for every viewer. It is no part of the model. A pinned element is here with its position, a
+ * group with its state while that differs from its default, by the element and the group's key,
+ * and a kept filter with its value while that differs from its default, by the filter's id.
+ */
+export interface StoredView {
+  readonly pinned: Readonly<Record<string, { readonly x: number; readonly y: number }>>;
+  readonly groups: Readonly<Record<string, Readonly<Record<string, boolean>>>>;
+  readonly filters: Readonly<Record<string, Value>>;
+}
+
+export const nothingStored: StoredView = { pinned: {}, groups: {}, filters: {} };
+
+/** What reading a body gives beside its model: the view data bound into it, and the entries of it that are about nothing. */
+export interface Read extends Loaded<Model> {
+  readonly view: StoredView;
+  /**
+   * The ids of the entries of bound view data that name an element the document does not have, or
+   * a key an earlier entry has. They are ignored and not reported, and go with the next write (DISL 11.6).
+   */
+  readonly stale: readonly string[];
 }
 
 const outside = ['diagram', 'header', 'unreadable'];
@@ -48,7 +80,59 @@ export function interpretPersistence(specification: Specification, metamodel: Me
   if (ids.strategy !== 'uuid-v4') findings.push(finding('disl.persistence', 'warning', `New elements get an id by the strategy \`uuid-v4\`, not by \`${ids.strategy}\`, which this add-on does not support.`));
   if (ids.types) findings.push(finding('disl.persistence', 'warning', 'The id rules for single types are not supported; every type follows the one rule.'));
 
-  return { value: { format, binding, ids, typeMap, view: { store: declared.view?.store ?? [], viewer: declared.view?.viewer ?? [], initial: isObject(declared.view?.initial) ? declared.view.initial : {} } }, findings };
+  const store = declared.view?.store ?? [];
+  const bind: { -readonly [Kind in keyof ViewBind]: ViewBind[Kind] } = {};
+  const named = (value: unknown): value is string => typeof value === 'string' && value !== '';
+  for (const [kind, bound] of Object.entries(isObject(declared.view?.bind) ? declared.view.bind : {})) {
+    if (!isObject(bound) || !named(bound.type)) problem(`\`view.bind\` binds \`${kind}\` onto no type of the binding.`);
+    else if (format !== 'fbl') problem(`\`view.bind\` binds \`${kind}\`, and only a model behind an FBL binding keeps view data in its body.`);
+    else if (!store.includes(kind)) problem(`\`view.bind\` binds \`${kind}\`, which \`view.store\` does not list.`);
+    // A bound type is no part of the model; of the three kinds only the filters may be kept on the entry that is read as the diagram.
+    else if (bound.type in metamodel.types || (Object.hasOwn(typeMap, bound.type) && (kind !== 'filters' || typeMap[bound.type].as in metamodel.types))) {
+      problem(`\`view.bind\` binds \`${kind}\` onto \`${bound.type}\`, which is read as a part of the model.`);
+    } else if (kind === 'pinned' && named(bound.element) && named(bound.x) && named(bound.y)) bind.pinned = { type: bound.type, element: bound.element, x: bound.x, y: bound.y };
+    else if (kind === 'groups' && named(bound.element) && named(bound.group) && named(bound.collapsed)) bind.groups = { type: bound.type, element: bound.element, group: bound.group, collapsed: bound.collapsed };
+    else if (kind === 'filters' && isObject(bound.values)) bind.filters = { type: bound.type, values: Object.fromEntries(Object.entries(bound.values).filter((entry): entry is [string, string] => named(entry[1]))) };
+    else problem(`\`view.bind\` binds \`${kind}\`, which is no kind that can be bound, or does not name the attributes its entries hold.`);
+  }
+
+  return { value: { format, binding, ids, typeMap, view: { store, viewer: declared.view?.viewer ?? [], initial: isObject(declared.view?.initial) ? declared.view.initial : {}, bind } }, findings };
+}
+
+/**
+ * The id of an entry of bound view data, which keeps none of its own: `pinned:<element>` and
+ * `groups:<element>#<key>` (DISL 11.6). It is what the FBL library is given to derive such an id by.
+ */
+export function viewEntryIds(persistence: InterpretedPersistence): (request: IdRequest) => string | undefined {
+  const { pinned, groups } = persistence.view.bind;
+  const named = (request: IdRequest, attribute: string): string => {
+    const value = request.attributes[attribute];
+    return value === undefined || value === null ? '' : String(value);
+  };
+  return (request) => {
+    if (pinned && request.type === pinned.type) return `pinned:${named(request, pinned.element)}`;
+    if (groups && request.type === groups.type) return `groups:${named(request, groups.element)}#${named(request, groups.group)}`;
+    return undefined;
+  };
+}
+
+/**
+ * The attributes of a binding that hold a moment, each as `rule.attribute`: those the metamodel
+ * types as a date or a date and time. The FBL library writes such a value plain where it would
+ * quote a string that only looks like one (FBL 6.3).
+ */
+export function momentAttributes(binding: FblBinding, metamodel: Metamodel, persistence: InterpretedPersistence): Set<string> {
+  const moments = new Set<string>();
+  for (const rule of allRules(binding)) {
+    const entry = entryOf(persistence, rule.type);
+    const attributes = attributesOf(metamodel, entry.as);
+    for (const [name] of rule.attributes) {
+      const target = mapped(entry, name);
+      const kind = target !== null && Object.hasOwn(attributes, target) ? valueKind(metamodel, attributes[target].type) : undefined;
+      if (kind?.kind === 'primitive' && (kind.primitive === 'date' || kind.primitive === 'datetime')) moments.add(`${rule.name}.${name}`);
+    }
+  }
+  return moments;
 }
 
 /**
@@ -103,8 +187,12 @@ const mapped = (entry: TypeMapEntry, name: string): string | null =>
  *   `std.references`, with `detail.missingId` and `detail.end`; that finding replaces the library's own.
  * - `std.duplicateId` gains `detail.id` and `detail.count`.
  */
-export function readModel(reading: Pick<FblModel, 'elements' | 'findings' | 'unreadable'>, binding: FblBinding, metamodel: Metamodel, persistence: InterpretedPersistence): Loaded<Model> {
-  if (reading.unreadable) return { value: emptyModel, findings: reading.findings };
+export function readModel(reading: Pick<FblModel, 'elements' | 'findings' | 'unreadable'>, binding: FblBinding, metamodel: Metamodel, persistence: InterpretedPersistence): Read {
+  if (reading.unreadable) return { value: emptyModel, findings: reading.findings, view: nothingStored, stale: [] };
+  const { bind } = persistence.view;
+  // The entries of bound view data: they are no elements, and are read once the elements are known.
+  const viewEntries = reading.elements.filter((entry) => entry.type === bind.pinned?.type || entry.type === bind.groups?.type);
+  const filters: Record<string, Value> = {};
 
   const findings: Finding[] = [];
   const file = reading.findings[0]?.location.file ?? 'body';
@@ -136,6 +224,13 @@ export function readModel(reading: Pick<FblModel, 'elements' | 'findings' | 'unr
   };
 
   for (const entry of reading.elements) {
+    if (viewEntries.includes(entry)) continue;
+    if (entry.type === bind.filters?.type) {
+      for (const [id, attribute] of Object.entries(bind.filters.values)) {
+        const value = plain(entry.attributes[attribute]);
+        if (value !== undefined && value !== null) filters[id] = value;
+      }
+    }
     const entryMap = entryOf(persistence, entry.type);
     if (entryMap.as === 'header') continue;
     if (entryMap.as === 'unreadable') unreadable(entry, findRule(binding, entry.rule)?.readOnly || 'This entry cannot be read, so it is kept as it is.');
@@ -158,6 +253,8 @@ export function readModel(reading: Pick<FblModel, 'elements' | 'findings' | 'unr
   const dangling = new Map<string, Finding[]>();
   for (const found of reading.findings) {
     const entry = owner(found.location.line);
+    // An entry of view data that is about nothing, or about what an earlier one is, is ignored and not reported (DISL 11.6).
+    if (entry && viewEntries.includes(entry) && (found.code === findingCodes.danglingReference || found.code === findingCodes.duplicateId)) continue;
     const element = entry && inModel.get(entry);
     if (found.code === findingCodes.danglingReference && element !== undefined) dangling.set(element, [...(dangling.get(element) ?? []), found]);
     else if (found.code === findingCodes.duplicateId && entry) {
@@ -196,8 +293,28 @@ export function readModel(reading: Pick<FblModel, 'elements' | 'findings' | 'unr
     elements: elements.map(resolved),
     relations: relations.map((relation) => ({ ...resolved(relation), source: end(relation, 'source'), target: end(relation, 'target') })),
   };
+  // The view data: the first entry for an element, or for a group of one, is the one that counts.
+  const drawn = new Set(elements.map((element) => element.id));
+  const pinned: Record<string, { x: number; y: number }> = {};
+  const groups: Record<string, Record<string, boolean>> = {};
+  const stale: string[] = [];
+  const number = (value: unknown): number | undefined => (typeof value === 'bigint' || (typeof value === 'number' && Number.isFinite(value)) ? Number(value) : undefined);
+  for (const entry of viewEntries) {
+    const about = String(entry.attributes[(entry.type === bind.pinned?.type ? bind.pinned : bind.groups!).element] ?? '');
+    if (bind.pinned && entry.type === bind.pinned.type) {
+      const [x, y] = [number(entry.attributes[bind.pinned.x]), number(entry.attributes[bind.pinned.y])];
+      if (drawn.has(about) && !Object.hasOwn(pinned, about) && x !== undefined && y !== undefined) pinned[about] = { x, y };
+      else stale.push(entry.id);
+    } else if (bind.groups) {
+      const key = String(entry.attributes[bind.groups.group] ?? '');
+      const collapsed = entry.attributes[bind.groups.collapsed];
+      if (drawn.has(about) && key !== '' && typeof collapsed === 'boolean' && !Object.hasOwn(groups[about] ?? {}, key)) groups[about] = { ...groups[about], [key]: collapsed };
+      else stale.push(entry.id);
+    }
+  }
+
   // In reading order (DISL 8.6); within a line, what this reading found comes before the library's.
-  return { value: model, findings: findings.sort((a, b) => a.location.line - b.location.line) };
+  return { value: model, findings: findings.sort((a, b) => a.location.line - b.location.line), view: { pinned, groups, filters }, stale };
 }
 
 /**

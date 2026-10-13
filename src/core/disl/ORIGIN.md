@@ -15,5 +15,6 @@
 
 - Imports name this repository's folders, and the tests read the definition from `definitions/gartner-hype-cycle-graph/`, the fixtures from `fixtures/gartner-hypecycle-graph/` and the examples from `examples/gartner-hypecycle-graph/`.
 - `model.ts`: a finding carries its own `detail`, since the FBL library at 0.6 gave its finding one of another type.
+- `fixtures/disl/disl.schema.json` is no longer the copy that came with them: it is `specifications/disl/disl.schema.json` of etalii.adp at `8e52c81`, the schema of DISL 0.4, taken when the interpreter learned to read 0.4 (etalii.adp spec 027, User Story 2).
 
 Every later change is in this repository's history and, where it adds a construct, in `docs/disl-support.md`.

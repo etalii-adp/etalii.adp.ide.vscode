@@ -3,10 +3,10 @@
 // model changes in the binding's names and the library's values, and the edits the library plans
 // for them, one after the other, become the splices of the text as it was before the request.
 
-import type { Change } from '../disl/behavior';
+import type { Change, ViewChange } from '../disl/behavior';
 import { attributesOf, type Metamodel } from '../disl/metamodel';
 import type { Model, Value } from '../disl/model';
-import { toBinding, type InterpretedPersistence } from '../disl/persistence';
+import { toBinding, type InterpretedPersistence, type ViewBind } from '../disl/persistence';
 import { allRules, type FblBinding } from '../fbl/documents/types';
 import type { FblModel } from '../fbl/model';
 import type { ModelChange } from '../fbl/planning/modelChange';
@@ -133,6 +133,52 @@ export function modelChangesOf(changes: readonly Change[], context: ChangeContex
   }
   // The diagram's entry was added under no id: the binding gives it none.
   return steps.map((step) => (step.kind === 'add' && step.id === '' ? { kind: 'add', type: step.type, attributes: step.attributes } : step));
+}
+
+/**
+ * The changes of one request to the stored view data as the steps the FBL library plans, where
+ * `persistence.view.bind` keeps that data in entries of the body (DISL 11.6): a pin, the state of
+ * a group and a kept filter are each the add, the set or the removal of the entry that holds it,
+ * named `pinned:<element>` or `groups:<element>#<key>`. What is not there is not removed. A kept
+ * filter back at its default is emptied where the binding removes an empty value, and written as
+ * its default, which `standard` gives, where the binding has no way to leave it out.
+ */
+export function viewStepsOf(changes: readonly ViewChange[], bind: ViewBind, binding: FblBinding, read: FblModel, standard: (filter: string) => Value | null): readonly ModelChange[] | Refused {
+  // simplified: stored view data is written where `view.bind` keeps it in the document; a kind a registration keeps is refused, until a definition read here stores one there.
+  const unbound: Refused = { refused: 'This is kept beside the document, which this host does not write for this tool yet.' };
+  const steps: ModelChange[] = [];
+  // Whether an entry is there once the steps so far are carried out.
+  const there = (id: string): boolean => {
+    const last = steps.map((step) => ('id' in step ? step.id : undefined)).lastIndexOf(id);
+    return last < 0 ? read.find(id) !== undefined : steps[last].kind !== 'remove';
+  };
+  for (const change of changes) {
+    if (change.kind === 'pin' || change.kind === 'unpin') {
+      const to = bind.pinned;
+      if (!to) return unbound;
+      const id = `pinned:${change.element}`;
+      if (change.kind === 'unpin') { if (there(id)) steps.push({ kind: 'remove', id }); }
+      else if (there(id)) steps.push({ kind: 'set', id, attributes: { [to.x]: change.x, [to.y]: change.y } });
+      else steps.push({ kind: 'add', type: to.type, id, attributes: { [to.element]: change.element, [to.x]: change.x, [to.y]: change.y } });
+    } else if (change.kind === 'group') {
+      const to = bind.groups;
+      if (!to) return unbound;
+      const id = `groups:${change.element}#${change.group}`;
+      if (change.collapsed === null) { if (there(id)) steps.push({ kind: 'remove', id }); }
+      else if (there(id)) steps.push({ kind: 'set', id, attributes: { [to.collapsed]: change.collapsed } });
+      else steps.push({ kind: 'add', type: to.type, id, attributes: { [to.element]: change.element, [to.group]: change.group, [to.collapsed]: change.collapsed } });
+    } else {
+      const to = bind.filters;
+      const attribute = to && Object.hasOwn(to.values, change.id) ? to.values[change.id] : undefined;
+      if (!to || attribute === undefined) return unbound;
+      const removable = allRules(binding).some((rule) => rule.type === to.type && rule.attributes.some(([name, slot]) => name === attribute && slot.empty === 'remove'));
+      const value = change.value === null && !removable ? standard(change.id) : change.value;
+      if (!takes(value)) return { refused: 'The document cannot hold the value given for this filter.' };
+      const entry = read.elements.find((element) => element.type === to.type);
+      steps.push(entry ? { kind: 'set', id: entry.id, attributes: { [attribute]: value } } : { kind: 'add', type: to.type, attributes: { [attribute]: value } });
+    }
+  }
+  return steps;
 }
 
 // A stretch of the body while edits are laid over it: bytes of the body as it was, or bytes an edit wrote.

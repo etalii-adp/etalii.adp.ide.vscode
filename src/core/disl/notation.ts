@@ -168,7 +168,48 @@ export interface Label {
   readonly wrap?: 'none' | 'word' | 'char';
   readonly overflow?: 'visible' | 'clip' | 'ellipsis' | 'shrink';
   readonly visible?: Bindable<boolean>;
+  readonly maxLines?: number;
+  readonly tooltip?: Message;
   readonly [name: string]: unknown;
+}
+
+/** `$defs/GroupBy` (DISL 6.9), with its defaults filled in. */
+export interface GroupBy {
+  /** An attribute of every item, whose type is an enumeration. */
+  readonly attribute: string;
+  /** Whether each group is collapsed by default, by the key of its value. */
+  readonly collapsed: Readonly<Record<string, boolean>>;
+  readonly count: boolean;
+  readonly empty: 'hide' | 'show';
+}
+
+/** `$defs/Compartment` (DISL 6.9), as far as it is read. */
+export interface Compartment {
+  readonly id: string;
+  readonly title?: LocalizedText;
+  /** The source list: a `many` attribute, children of certain types, or a CEL list. */
+  readonly items: { readonly attribute: string } | { readonly children: readonly string[]; readonly slot?: string } | CelValue;
+  readonly itemText?: Bindable<string>;
+  readonly itemLink?: Bindable<string>;
+  readonly itemOrder?: { readonly by: Expression; readonly direction: 'ascending' | 'descending' };
+  readonly groupBy?: GroupBy;
+  readonly separator?: Stroke;
+  readonly collapsible: boolean;
+  /** The default of the collapse state of a compartment that is `collapsible` without `groupBy`. */
+  readonly collapsed: Bindable<boolean>;
+  readonly visible?: Bindable<boolean>;
+}
+
+/** `$defs/Badge` (DISL 6.9), as far as it is read: an icon at a corner of the node. */
+export interface Badge {
+  readonly id: string;
+  readonly icon?: string;
+  readonly position?: Position;
+  readonly size?: number;
+  readonly visible?: Bindable<boolean>;
+  readonly tooltip?: Message;
+  /** The operation that activating the badge runs. */
+  readonly onClick?: string;
 }
 
 export interface AnchorPoint {
@@ -226,6 +267,8 @@ export interface Filter {
   readonly keep: Expression;
   readonly effect: 'hide' | 'dim';
   readonly position?: Position;
+  /** The value is kept with the diagram, the same for every viewer, and not each viewer's own (DISL 6.13.1). */
+  readonly persist: boolean;
 }
 
 export interface Legend {
@@ -251,6 +294,10 @@ export interface NodeNotation {
   readonly placement: Placement;
   readonly snapping?: Snapping;
   readonly labels: readonly Label[];
+  readonly compartments: readonly Compartment[];
+  readonly badges: readonly Badge[];
+  /** The styles laid over the node's own where their `when` holds, in their order (DISL 6.6). */
+  readonly conditions: readonly { readonly when: Expression; readonly style: Style }[];
   readonly anchors: AnchorSpec;
   /** What holds the node's children (DISL 6.9); of it, whether they can be hidden is read. */
   readonly container?: { readonly collapsible?: boolean; readonly [name: string]: unknown };
@@ -300,7 +347,7 @@ export interface Notation {
 }
 
 /** The shapes of DISL 6.7 this add-on draws; another one is drawn as a `rect` and reported. */
-export const builtInShapes: readonly string[] = ['rect', 'roundedRect', 'pill', 'ellipse', 'circle', 'text', 'none'];
+export const builtInShapes: readonly string[] = ['rect', 'roundedRect', 'pill', 'ellipse', 'circle', 'folder', 'hexagon', 'text', 'none'];
 
 /** The default size of a node that states none (DISL B.1). */
 export const defaultSize: readonly [number, number] = [120, 60];
@@ -374,6 +421,30 @@ export function readNotation(section: Section, metamodel: Metamodel): Loaded<Not
     ...(declared.style === undefined ? {} : { style: style(declared.style) }),
     ...(isObject(declared.partStyles) ? { partStyles: Object.fromEntries(Object.entries(declared.partStyles).map(([part, ref]) => [part, style(ref)])) } : {}),
   });
+  const list = (declared: unknown): Record<string, unknown>[] => (Array.isArray(declared) ? declared.filter(isObject) : []);
+  // A compartment with the defaults of DISL 6.9 filled in.
+  const compartment = (declared: Record<string, unknown>): Compartment => {
+    const grouped = isObject(declared.groupBy) && typeof declared.groupBy.attribute === 'string' ? declared.groupBy : undefined;
+    const order = isObject(declared.itemOrder) && (typeof declared.itemOrder.by === 'string' || isObject(declared.itemOrder.by)) ? declared.itemOrder : undefined;
+    return {
+      id: declared.id as string,
+      title: declared.title as LocalizedText | undefined,
+      items: declared.items as Compartment['items'],
+      itemText: declared.itemText as Bindable<string> | undefined,
+      itemLink: declared.itemLink as Bindable<string> | undefined,
+      itemOrder: order && { by: order.by as Expression, direction: order.direction === 'descending' ? 'descending' : 'ascending' },
+      groupBy: grouped && {
+        attribute: grouped.attribute as string,
+        collapsed: Object.fromEntries(Object.entries(map(grouped.collapsed)).map(([key, value]) => [key, value === true])),
+        count: grouped.count !== false,
+        empty: grouped.empty === 'show' ? 'show' : 'hide',
+      },
+      separator: isObject(declared.separator) ? (declared.separator as Stroke) : undefined,
+      collapsible: declared.collapsible === true,
+      collapsed: (declared.collapsed as Bindable<boolean> | undefined) ?? false,
+      visible: declared.visible as Bindable<boolean> | undefined,
+    };
+  };
   const variants = <T>(declared: unknown): T[] =>
     (Array.isArray(declared) ? declared : []).filter((variant) => isObject(variant) && (typeof variant.when === 'string' || isObject(variant.when))).map((variant) => common(variant as Record<string, unknown>) as T);
 
@@ -386,6 +457,9 @@ export function readNotation(section: Section, metamodel: Metamodel): Loaded<Not
     nodes[type] = {
       ...defaultNode(meta?.labelAttribute),
       ...declared,
+      compartments: list(declared.compartments).filter((entry) => typeof entry.id === 'string' && isObject(entry.items)).map(compartment),
+      badges: list(declared.badges).filter((entry) => typeof entry.id === 'string') as unknown as Badge[],
+      conditions: list(declared.conditions).filter((entry) => typeof entry.when === 'string' || isObject(entry.when)).map((entry) => ({ when: entry.when as Expression, style: style(entry.style) })),
       variants: variants<NodeVariant>(declared.variants),
     } as NodeNotation;
   }
@@ -418,6 +492,7 @@ export function readNotation(section: Section, metamodel: Metamodel): Loaded<Not
       keep: declared.keep as Expression,
       effect: declared.effect === 'dim' ? 'dim' : 'hide',
       position: declared.position as Position | undefined,
+      persist: declared.persist === true,
     };
   }
   const legend = isObject(canvas.legend)
@@ -457,6 +532,9 @@ const defaultNode = (labelAttribute?: string): NodeNotation => ({
   size: {},
   placement: {},
   labels: labelAttribute === undefined ? [] : [{ id: 'label', text: { attribute: labelAttribute }, position: 'center' }],
+  compartments: [],
+  badges: [],
+  conditions: [],
   anchors: {},
   variants: [],
   connectable: true,

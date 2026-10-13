@@ -22,6 +22,14 @@ export const supportedFeatures: readonly string[] = [
   'view.viewer',
 ];
 
+/**
+ * The minor version of DISL this interpreter reads; its major version is 0. A specification of a
+ * newer minor version opens with a finding that says so. DISL 0.4 names no feature identifier for
+ * what it adds (Appendix B.8 ends at 0.3), so what is read of it is in `docs/disl-support.md` by
+ * section, and not in the list above.
+ */
+export const dislMinor = 4;
+
 /** The conformance class this interpreter states (DISL 15.1). */
 export const conformance = 'standard';
 

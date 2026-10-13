@@ -517,7 +517,7 @@ describe('what else the definition is drawn and edited from', () => {
   });
 
   it('a `create-child` entry adds a child in its slot, with the defaults of its type and the moment it was made', () => {
-    const outcome = done(behavior.value.addChild(model, 's1', { env: { now: new Date('2026-10-09T09:15:00+02:00') } }));
+    const outcome = done(behavior.value.createChild(model, 's1', { env: { now: new Date('2026-10-09T09:15:00+02:00') } }));
     expect(outcome.changes).toHaveLength(1);
     const [added] = outcome.changes;
     expect(added).toMatchObject({ kind: 'add', type: 'Task', parent: 's1', attributes: { status: 'pending' } });
@@ -527,8 +527,8 @@ describe('what else the definition is drawn and edited from', () => {
     expect(new Date(String(attributes.updated)).getTime()).toBe(new Date('2026-10-09T09:15:00+02:00').getTime());
     expect(typeof attributes.title === 'string' && attributes.title.length > 0).toBe(true);
     expect(outcome.effects).toContainEqual({ kind: 'editLabel', elements: [added.id] });
-    expect(done(behavior.value.addChild(model, 'l1', {})).changes[0]).toMatchObject({ kind: 'add', type: 'PullRequest', parent: 'l1' });
-    expect(behavior.value.addChild(model, 'a1', {}).refused).toEqual(expect.any(String));
+    expect(done(behavior.value.createChild(model, 'l1', {})).changes[0]).toMatchObject({ kind: 'add', type: 'PullRequest', parent: 'l1' });
+    expect(behavior.value.createChild(model, 'a1', {}).refused).toEqual(expect.any(String));
   });
 
   it('`conditions`: a specification is outlined in the colour of its status, dashed when it is archived', () => {

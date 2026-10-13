@@ -158,7 +158,7 @@ export interface ToolGroup {
 
 /** One entry of a set of context tools: what it does, and the expressions that say when. */
 export interface ContextEntry {
-  /** `operation`, `delete`, `editLabel`, `connect`, `create-connected`, or another kind of DISL 7.3. */
+  /** `operation`, `delete`, `editLabel`, `connect`, `create-connected`, `create-child`, `pin`, `unpin`, `unpinAll`, or another kind of DISL 7.3. */
   readonly kind: string;
   readonly label?: Message;
   readonly icon?: string;
@@ -167,6 +167,8 @@ export interface ContextEntry {
   readonly group?: string;
   readonly operation?: string;
   readonly creates?: string;
+  /** For `create-child`: the slot of the element the new child goes in. */
+  readonly slot?: string;
   readonly via?: string;
   readonly direction?: 'outgoing' | 'incoming';
   readonly visible?: Expression;
@@ -280,7 +282,7 @@ export function interpretToolbox(specification: Specification, metamodel: Metamo
       if (entry.forEach !== undefined) report('A context tool is repeated for each item of a list (`forEach`), which this add-on does not support; it is shown once.');
       return {
         kind: entry.kind, label: entry.label, icon: text(entry.icon), shortcut: entry.shortcut, group: entry.group,
-        operation: entry.operation, creates: entry.creates, via: entry.via, direction: entry.direction,
+        operation: entry.operation, creates: entry.creates, slot: entry.slot, via: entry.via, direction: entry.direction,
         visible: entry.visible, enabled: entry.enabled, unavailable: entry.unavailable ?? [], args: entry.args ?? {},
       };
     }),

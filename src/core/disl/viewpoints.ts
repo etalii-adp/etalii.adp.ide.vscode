@@ -26,6 +26,8 @@ export interface Viewpoint {
   readonly coordinateSystem: string;
   /** The layout that places what the notation leaves to it. */
   readonly layout?: LayoutConfig;
+  /** Which positions a user gave survive that layout when it runs by itself (DISL 10). */
+  readonly respect: Layout['respect'];
   /** The types shown and hidden; without `include`, every type is shown. */
   readonly include?: readonly string[];
   readonly exclude: readonly string[];
@@ -74,10 +76,12 @@ export function interpretViewpoints(specification: Specification, metamodel: Met
   const report = (message: string): void => void findings.push(finding('disl.viewpoints', 'warning', message));
   const declared = specification.viewpoints ?? {};
   const names = Object.keys(declared).filter((name) => isObject(declared[name]));
-  // A layout that always runs places every viewpoint that names no layout of its own (DISL 10).
-  const always = parts.layout.trigger === 'always' && parts.layout.default !== undefined ? parts.layout.algorithms[parts.layout.default] : undefined;
+  // A layout that runs always, or whenever the model changes, places every viewpoint that names no layout of its own (DISL 10).
+  const byItself = parts.layout.trigger === 'always' || parts.layout.trigger === 'onChange';
+  const always = byItself && parts.layout.default !== undefined ? parts.layout.algorithms[parts.layout.default] : undefined;
+  const { respect } = parts.layout;
   if (names.length === 0) {
-    const main: Viewpoint = { name: 'main', label: 'Main', variants: [], coordinateSystem: parts.coordinates.default, layout: always, exclude: [], notation: parts.notation };
+    const main: Viewpoint = { name: 'main', label: 'Main', variants: [], coordinateSystem: parts.coordinates.default, layout: always, respect, exclude: [], notation: parts.notation };
     return { value: { all: { main }, default: 'main' }, findings };
   }
 
@@ -125,6 +129,7 @@ export function interpretViewpoints(specification: Specification, metamodel: Met
       toggle: under === undefined ? undefined : { label: (toggle?.label as Message | undefined) ?? label, icon: toggle?.icon, position: toggle?.position as Position | undefined },
       coordinateSystem: system,
       layout,
+      respect,
       include: from('include', strings),
       exclude: from('exclude', strings) ?? [],
       members: from('members', (value) => (typeof value === 'string' || isObject(value) ? (value as Expression) : undefined)),

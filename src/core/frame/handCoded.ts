@@ -11,7 +11,7 @@ export interface HandCodedSource {
 }
 
 /** The gestures of spec 006, which are all a hand-coded diagram type answers. */
-export type HandCodedRequest = Exclude<EditRequest, { readonly kind: 'reparent' | 'fold' | 'pin' | 'openLink' }>;
+export type HandCodedRequest = Exclude<EditRequest, { readonly kind: 'reparent' | 'fold' | 'pin' | 'openLink' | 'filter' }>;
 
 /** What an edit request came to in spec 006: an applied outcome carries the document's whole new text. */
 export type HandCodedOutcome =
@@ -75,7 +75,7 @@ export function fromHandCoded(type: HandCodedDiagramType): DiagramType {
     fields: (source, selection) => type.fields(source, selection),
     actions: (source, selection) => type.actions(source, selection),
     edit: (source, request, options, confirmed) => {
-      if (request.kind === 'reparent' || request.kind === 'fold' || request.kind === 'pin' || request.kind === 'openLink') {
+      if (request.kind === 'reparent' || request.kind === 'fold' || request.kind === 'pin' || request.kind === 'openLink' || request.kind === 'filter') {
         return { kind: 'refused', sentence: 'This diagram has nothing to do that with.' };
       }
       const outcome = type.edit(source, request, options, confirmed);

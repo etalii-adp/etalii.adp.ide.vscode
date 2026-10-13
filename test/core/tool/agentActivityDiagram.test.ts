@@ -203,9 +203,15 @@ describe('every kind of edit, as the bytes of etalii.adp\'s fixture agent-activi
     expect(refusal(send(oneDay, { kind: 'rename', id: 's-knowledge', text: '' }))).toEqual(expect.any(String));
   });
 
-  it('a task\'s status is written in its stored form', () => {
+  it('a task\'s status is written in its stored form, by the operation the definition sets it with, which also says when', () => {
     const { before, after: expected } = step('"status":"finished"');
-    expect(after(before, { kind: 'setField', id: 't-k6', field: 'status', value: 'Finished' })).toBe(expected);
+    const text = after(before, { kind: 'setField', id: 't-k6', field: 'status', value: 'Finished' });
+    // `setTaskStatus` sets the status and the moment it was set; the fixture's step is the status alone.
+    const { removed, added } = linesChanged(expected, text);
+    expect(removed).toEqual(['        updated: 2026-10-08T21:10:00+02:00']);
+    expect(added).toHaveLength(1);
+    expect(added[0]).toMatch(/^ {8}updated: \d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d$/);
+    expect(linesChanged(before.text, expected)).toEqual({ removed: ['        status: input-required'], added: ['        status: finished'] });
   });
 
   it('clearing a task\'s moment removes its key', () => {
@@ -294,8 +300,8 @@ describe('every kind of edit, as the bytes of etalii.adp\'s fixture agent-activi
     const { before, after: expected } = step('"showArchived":true');
     const text = after(before, { kind: 'filter', id: 'archived', value: true });
     expect(text).toBe(expected);
-    // Turned off again it is at its default, which is not kept: the key goes.
-    expect(after(sourceOf(text), { kind: 'filter', id: 'archived', value: false })).toBe(without(text, '  showArchived: true\r\n'));
+    // Turned off again it is at its default. The binding has no way to leave the key out, so the default is written, as the fixture's own undo writes it.
+    expect(after(sourceOf(text), { kind: 'filter', id: 'archived', value: false })).toBe(before.text);
   });
 
   it('removing a specification removes its group states, its placement, the agent\'s reference to it and its own entry with its tasks', () => {
@@ -308,13 +314,13 @@ describe('what the toolbox and the menus add', () => {
   it('an element dropped from the toolbox is added to its list and locked where it was dropped, as one edit', () => {
     const outcome = applied(send(oneDay, { kind: 'drop', entry: 'agent', x: 310, y: -45.25 }));
     const text = spliced(oneDay.text, outcome.splices);
-    const { removed, added } = linesChanged(oneDay.text, text);
-    expect(removed).toEqual([]);
     const id = outcome.select!;
     expect(id).toMatch(/^[0-9a-z]{25}$/);
-    expect(text).toContain(`    link: https://claude.ai/code\r\n  - id: ${id}\r\n    name: New agent\r\nlocations:\r\n`);
-    expect(text).toContain(`      y: -80\r\n    - element: ${id}\r\n      x: 310\r\n      y: -45.25\r\n  groups:\r\n`);
-    expect(added.length).toBeGreaterThanOrEqual(5);
+    // Two places of the file change and nothing else: the agents' list gains the agent, and the placements its lock.
+    expect(outcome.splices).toHaveLength(2);
+    expect(text).toBe(oneDay.text
+      .replace('    link: https://claude.ai/code\r\n', `    link: https://claude.ai/code\r\n  - id: ${id}\r\n    name: New agent\r\n`)
+      .replace('      y: -80\r\n', `      y: -80\r\n    - element: ${id}\r\n      x: 310\r\n      y: -45.25\r\n`));
     expect(outcome).toMatchObject({ editLabel: true, multiline: false });
     expect(nodeOf(type.view(sourceOf(text), {}), id)).toMatchObject({ type: 'Agent', pinned: true, box: { x: 310, y: -45.25 } });
   });
@@ -376,7 +382,9 @@ describe('an edit the definition refuses', () => {
   });
 
   it('opening a link an element does not have, with the sentence of the operation', () => {
-    expect(send(oneDay, { kind: 'action', action: 'openLink', id: 'p-adp' })).toEqual({ kind: 'refused', sentence: at(specification, 'behavior', 'operations', 'openLink', 'unavailable', '0', 'message') });
+    const [unavailable] = array(at(specification, 'behavior', 'operations', 'openLink', 'unavailable')).map(object);
+    expect(send(oneDay, { kind: 'action', action: 'openLink', id: 'p-adp' })).toEqual({ kind: 'refused', sentence: unavailable.message });
+    expect(unavailable.message).toBe('It has no link. Add one in the property grid.');
   });
 
   it('an entry that is not a mapping: it is kept as it is, with the binding\'s sentence', () => {
@@ -400,7 +408,7 @@ describe('an edit the definition refuses', () => {
 
 describe('the fixtures of standalone\'s tests, each with its finding on its line', () => {
   const findingsOf = (name: string): Finding[] => type.findings(fixture(`findings/${name}`));
-  const lineOf = (name: string, text: string): number => fixture(`findings/${name}`).text.split('\r\n').findIndex((line) => line.includes(text));
+  const lineOf = (name: string, text: string): number => fixture(`findings/${name}`).text.split(/\r?\n/).findIndex((line) => line.includes(text));
 
   it('has a test for every fixture', () => {
     expect(readdirSync('fixtures/tools/agent-activity-diagram/findings').sort()).toEqual([

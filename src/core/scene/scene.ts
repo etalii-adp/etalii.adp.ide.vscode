@@ -7,16 +7,18 @@ import {
   boxOutline, centreOf, cubicBetween, cubicPath, distance, leaving, movedPath, normalAt, normalOf, pathOutline, pointIn, pointOn, sideAt, sides, union,
   type Box, type Cubic, type Outline, type PathCommand, type Point, type Side,
 } from './geometry';
-import { scalesOf, type Coordinates, type PlacementSource } from '../disl/coordinates';
+import { scalesOf, type Coordinates, type Placement, type PlacementSource } from '../disl/coordinates';
 import type { Expressions, Scope } from '../disl/expressions';
+import { forceLayout, type ForceNode } from '../disl/forceLayout';
 import { assignRows, packAlongRows, type LayoutConfig, type LayoutPlugin, type PackedItem, type RowItem } from '../disl/layout';
-import { allowsEnd, attributesOf, defaultOf, isA, isRelation, valueKind, type Metamodel } from '../disl/metamodel';
+import { allowsEnd, attributesOf, defaultOf, derivedRelations, isA, isRelation, valueKind, type Metamodel } from '../disl/metamodel';
 import { finding, type Finding, type Model, type ModelElement, type ModelRelation, type Value } from '../disl/model';
 import {
   builtInShapes, defaultFontSize, defaultSize, edgeNotation, lineHeight, merged, nodeNotation, styleOf, textWidth,
-  type AnchorPoint, type CustomShape, type EdgeNotation, type EndAnchor, type GeomBox, type GeomExpr, type Label, type NodeNotation, type Paint, type PathDef,
+  type AnchorPoint, type Compartment, type CustomShape, type EdgeNotation, type EndAnchor, type GeomBox, type GeomExpr, type Label, type NodeNotation, type Paint, type PathDef,
   type Position, type ShapeRef, type Stroke, type Style,
 } from '../disl/notation';
+import type { StoredView } from '../disl/persistence';
 import { isCel, isObject, localized, type Expression } from '../disl/specification';
 import type { Viewpoint, Viewpoints } from '../disl/viewpoints';
 
@@ -42,6 +44,10 @@ export interface SceneOptions {
   readonly env?: Scope;
   /** The nodes that are folded for this viewer, by id (DISL 11.6): the children of one are not drawn. */
   readonly collapsed?: Readonly<Record<string, boolean>>;
+  /** The view data stored with the diagram (DISL 11.6): what is pinned and where, the groups that are not at their default, and the kept filters. */
+  readonly view?: StoredView;
+  /** Where the centre of each node was on screen before the document last changed: a layout that runs by itself starts from there (DISL 10.4). */
+  readonly placed?: Readonly<Record<string, Point>>;
   /** The host's measure of a text, for a specification whose text metric is `host`. */
   textWidth?(text: string, fontSize: number): number;
 }
@@ -88,6 +94,43 @@ export interface SceneLabel {
   readonly editable: false | 'inline' | 'multiline' | 'form';
   readonly wrap: 'none' | 'word' | 'char';
   readonly overflow: 'visible' | 'clip' | 'ellipsis' | 'shrink';
+  /** The most lines the text is drawn on, where the label states it. */
+  readonly maxLines?: number;
+  readonly tooltip?: string;
+}
+
+/**
+ * One line of a compartment (DISL 6.9). A heading names a group of items by the group's key, with
+ * how many items it holds and whether they are hidden. An item that is a child element carries
+ * that element's id, under which it is selected; any item may carry a link.
+ */
+export interface SceneRow {
+  readonly kind: 'heading' | 'item';
+  readonly box: Box;
+  readonly text: string;
+  readonly group?: string;
+  readonly count?: number;
+  readonly collapsed?: boolean;
+  readonly element?: string;
+  readonly link?: string;
+}
+
+/** A region of a node that lists items, with the line above it where the notation states one. */
+export interface SceneCompartment {
+  readonly id: string;
+  readonly box: Box;
+  readonly separator?: Stroke;
+  readonly rows: readonly SceneRow[];
+}
+
+/** A small indicator at a corner of a node (DISL 6.9): an icon by the name the definition gives it. */
+export interface SceneBadge {
+  readonly id: string;
+  readonly icon: string;
+  readonly box: Box;
+  readonly tooltip?: string;
+  /** The operation that activating the badge runs, on its node. */
+  readonly operation?: string;
 }
 
 export interface SceneNode {
@@ -106,6 +149,11 @@ export interface SceneNode {
   readonly parts: readonly ScenePart[];
   readonly handles: readonly SceneHandle[];
   readonly labels: readonly SceneLabel[];
+  /** The compartments that hold a line, from the top down. */
+  readonly compartments: readonly SceneCompartment[];
+  readonly badges: readonly SceneBadge[];
+  /** The node is pinned: a layout that runs by itself leaves it where it is kept (DISL 10.4). */
+  readonly pinned: boolean;
   readonly tooltip?: string;
   readonly movable: { readonly x: boolean; readonly y: boolean };
   readonly resizable: { readonly x: boolean; readonly y: boolean };
@@ -230,6 +278,8 @@ export interface SceneFilter {
   readonly match: 'any' | 'all';
   /** Whether the user may change `match`. */
   readonly matchToggle: boolean;
+  /** The value is kept with the diagram: changing it is an edit, and no view option (DISL 6.13.1). */
+  readonly kept: boolean;
 }
 
 export interface SceneToggle {
@@ -261,6 +311,25 @@ interface Placed {
 
 const number = (value: unknown): number | undefined => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);
 const fractions: Readonly<Record<string, number>> = { left: 0, top: 0, center: 0.5, right: 1, bottom: 1 };
+
+/** The point of a node its position refers to, as fractions of its width and its height (DISL 5.8): its top-left corner unless its placement says otherwise. */
+export function anchorOf(anchor: Placement['anchor']): readonly [number, number] {
+  if (anchor === undefined) return [0, 0];
+  if (typeof anchor !== 'string') return anchor;
+  return [fractions[anchor.split('-').find((word) => word === 'left' || word === 'right') ?? 'center'], fractions[anchor.split('-').find((word) => word === 'top' || word === 'bottom') ?? 'center']];
+}
+
+// What this host decides of a compartment, a badge and a label at an edge, where DISL states no number (docs/disl-support.md).
+/** The space above and below the text of a row, and above the first and below the last row of a compartment. */
+const rowSpace = 2;
+const compartmentSpace = 4;
+/** How far a label at the top or the bottom of its node, and a badge, stand clear of the node's edge. */
+const edgeSpace = 4;
+const badgeSize = 16;
+const hundredth = (value: number): number => Math.round(value * 100) / 100;
+
+// A value an item order sorts by: a moment by its time, whatever offset it is written with, and anything else as it is.
+const sortKey = (value: Value | undefined): Value | undefined => (typeof value === 'string' && /^\d{4}-\d\d-\d\dT/.test(value) && !Number.isNaN(Date.parse(value)) ? Date.parse(value) : value);
 
 /** A padding as its four sides: top, right, bottom, left. */
 function sidesOf(padding: Style['padding']): readonly [number, number, number, number] {
@@ -314,7 +383,8 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
   const notation = viewpoint.notation;
   const views = new Map<string, Scope>();
   // `self.view` (DISL 12.2): where the element is drawn, once that is known, and whether this viewer folded it.
-  const world = expressions.over(model, { env: { viewpoint: viewpoint.name, ...options.env }, view: (id) => ({ ...views.get(id), collapsed: options.collapsed?.[id] === true }) });
+  const pins = viewpoint.respect === 'pinned' ? options.view?.pinned ?? {} : {};
+  const world = expressions.over(model, { env: { viewpoint: viewpoint.name, ...options.env }, view: (id) => ({ ...views.get(id), collapsed: options.collapsed?.[id] === true, pinned: Object.hasOwn(pins, id) }) });
   const locale = typeof options.env?.locale === 'string' ? options.env.locale : undefined;
   const elements = new Map<string, ModelElement | ModelRelation>([...model.relations, ...model.elements].map((element) => [element.id, element]));
 
@@ -380,17 +450,109 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
 
   const diagram = { ...Object.fromEntries(Object.entries(metamodel.diagram).flatMap(([name, attribute]) => (defaultOf(attribute) === undefined ? [] : [[name, defaultOf(attribute)!]]))), ...model.diagram };
 
+  // ---- compartments (DISL 6.9): what each one lists ----
+
+  type Line = Omit<SceneRow, 'box'>;
+  interface Listed { readonly compartment: Compartment; readonly lines: readonly Line[] }
+
+  // The children of an element that a compartment of its notation lists: they are drawn there, and not as nodes.
+  // simplified: a child is listed by its type alone; read `items.slot` too when a definition lists two slots of one type apart.
+  const listedIn = (compartment: Compartment, element: ModelElement): readonly ModelElement[] => {
+    const { items } = compartment;
+    return 'children' in items ? model.elements.filter((child) => child.parent === element.id && items.children.some((type) => isA(metamodel, child.type, type))) : [];
+  };
+  const isItem = (element: ModelElement, of: Viewpoint): boolean => {
+    const parent = element.parent === undefined ? undefined : elements.get(element.parent);
+    return parent !== undefined && nodeNotation(of.notation, metamodel, parent.type).compartments.some((compartment) => listedIn(compartment, parent).includes(element));
+  };
+
+  const listed = (own: NodeNotation, element: ModelElement): readonly Listed[] => own.compartments.map((compartment): Listed => {
+    const self = element.id;
+    if (compartment.visible !== undefined && bound(compartment.visible, self) === false) return { compartment, lines: [] };
+    const { items, groupBy } = compartment;
+    // Each item as CEL holds it, with the child element it is when it is one.
+    let entries: { readonly item: unknown; readonly child?: ModelElement }[];
+    if ('children' in items) entries = listedIn(compartment, element).map((child) => ({ item: world.element(child.id), child }));
+    else {
+      const values = 'attribute' in items ? stored(element, items.attribute) : run(items, self);
+      entries = (Array.isArray(values) ? values : []).map((item: Value) => ({ item }));
+    }
+    const made = entries.map(({ item, child }, index) => {
+      const scope = { item, index: BigInt(index) };
+      const text = compartment.itemText === undefined ? (typeof item === 'string' ? item : child?.id ?? '') : String(bound(compartment.itemText, self, scope) ?? '');
+      const link = compartment.itemLink === undefined ? undefined : bound(compartment.itemLink, self, scope);
+      const line: Line = { kind: 'item', text, ...(child ? { element: child.id } : {}), ...(typeof link === 'string' && link !== '' ? { link } : {}) };
+      return { line, child, key: compartment.itemOrder ? sortKey(run(compartment.itemOrder.by, self, scope)) : undefined };
+    });
+    // In the order `itemOrder` states; an item without a value comes after all others, and a tie keeps the order of the source (DISL 6.9).
+    const order = compartment.itemOrder;
+    const absent = (key: Value | undefined): boolean => key === undefined || key === null || key === '';
+    const ordered = !order ? made : made.map((entry, index) => ({ entry, index })).sort((a, b) => {
+      if (absent(a.entry.key) || absent(b.entry.key)) return Number(absent(a.entry.key)) - Number(absent(b.entry.key)) || a.index - b.index;
+      const [one, other] = [a.entry.key as string | number, b.entry.key as string | number];
+      return (one < other ? -1 : one > other ? 1 : 0) * (order.direction === 'descending' ? -1 : 1) || a.index - b.index;
+    }).map(({ entry }) => entry);
+
+    const kept = options.view?.groups[self] ?? {};
+    const heading = (key: string, text: string, count: number, standard: boolean): Line => ({ kind: 'heading', group: key, text, count, collapsed: Object.hasOwn(kept, key) ? kept[key] : standard });
+    if (!groupBy) {
+      if (!compartment.collapsible) return { compartment, lines: ordered.map((entry) => entry.line) };
+      // simplified: a title is the heading of a compartment that can be collapsed, and a compartment without an item has no line at all; draw the title of any compartment, and `emptyText`, when a definition needs them.
+      if (ordered.length === 0) return { compartment, lines: [] };
+      const head = heading(compartment.id, localized(compartment.title, locale) ?? '', ordered.length, bound(compartment.collapsed, self) === true);
+      return { compartment, lines: [head, ...(head.collapsed ? [] : ordered.map((entry) => entry.line))] };
+    }
+    // One group for each value of the enum the items are grouped by, in the enum's order; then one for each value that is none of them.
+    const valueOf = (child: ModelElement | undefined): string => String((child && stored(child, groupBy.attribute)) ?? '');
+    const types = 'children' in items ? items.children : [];
+    const attribute = types.map((type) => attributesOf(metamodel, type)[groupBy.attribute]).find((candidate) => candidate !== undefined);
+    const kind = attribute && valueKind(metamodel, attribute.type);
+    const values = kind?.kind === 'enum' ? kind.enum.values : [];
+    const lines: Line[] = [];
+    const group = (key: string, text: string, members: typeof ordered, standard: boolean): void => {
+      if (members.length === 0 && groupBy.empty === 'hide') return;
+      const head = heading(key, text, members.length, standard);
+      lines.push(groupBy.count ? head : { ...head, count: undefined }, ...(head.collapsed ? [] : members.map((entry) => entry.line)));
+    };
+    for (const value of values) group(value.stored, value.label, ordered.filter((entry) => valueOf(entry.child) === value.key), groupBy.collapsed[value.key] === true);
+    for (const unknown of [...new Set(ordered.map((entry) => valueOf(entry.child)))].filter((value) => !values.some((known) => known.key === value))) {
+      group(unknown, unknown, ordered.filter((entry) => valueOf(entry.child) === unknown), false);
+    }
+    return { compartment, lines };
+  });
+
+  // The height of a row of a node's compartments, and where the first compartment begins: under the lowest label that stands inside the node.
+  const rowHeight = (style: Style): number => lineHeight(notation.textMetric, number(style.font?.size) ?? defaultFontSize, style.font) + 2 * rowSpace;
+  const headerOf = (own: NodeNotation, self: string, style: Style): number => {
+    const [, height = defaultSize[1]] = own.size.default ?? [];
+    const bottoms = own.labels.map((label) => {
+      if (bound(label.visible, self) === false) return 0;
+      const position = label.position ?? 'center';
+      const within = settled(styleOf(notation, { font: style.font }, label.style), self);
+      const tall = String(bound(label.text, self) ?? '').split('\n').length * lineHeight(notation.textMetric, number(within.font?.size) ?? defaultFontSize, within.font);
+      if (typeof position === 'string') return position.split('-').includes('top') ? edgeSpace + tall : 0;
+      const offset = settled(position.offset, self);
+      return (position.anchor?.[1] ?? 0.5) * (height ?? 0) + (Array.isArray(offset) ? number(offset[1]) ?? 0 : 0) + tall / 2;
+    });
+    return Math.max(0, ...bottoms) + compartmentSpace;
+  };
+
   // The size of what a node holds (DISL 6.9, `autoSize`): its first label that stands inside it, by the text metric, and its padding around that.
-  const content = (own: NodeNotation, self: string): readonly [number, number] => {
+  // With compartments, its height is what its labels take at the top and the lines of its compartments under them.
+  const content = (own: NodeNotation, element: ModelElement): readonly [number, number] => {
+    const self = element.id;
     const style = settled(styleOf(notation, own.style), self);
     const label = own.labels.find((candidate) => typeof (candidate.position ?? 'center') === 'string' && !String(candidate.position ?? 'center').startsWith('outside'));
     const within = label ? settled(styleOf(notation, { font: style.font }, label.style), self) : style;
     const fontSize = number(within.font?.size) ?? defaultFontSize;
     const lines = String((label && bound(label.text, self)) ?? '').split('\n');
     const [top, right, bottom, left] = sidesOf(style.padding);
+    const rows = listed(own, element).filter((entry) => entry.lines.length > 0);
     return [
       Math.max(...lines.map((line) => textWidth(notation.textMetric, line, fontSize, options.textWidth))) + left + right,
-      lines.length * lineHeight(notation.textMetric, fontSize, within.font) + top + bottom,
+      own.compartments.length === 0
+        ? lines.length * lineHeight(notation.textMetric, fontSize, within.font) + top + bottom
+        : headerOf(own, self, style) + rows.reduce((sum, entry) => sum + 2 * compartmentSpace + entry.lines.length * rowHeight(style), 0),
     ];
   };
 
@@ -430,8 +592,8 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
         const custom = customOf(own.shape);
         const stated = number(bound(axis === 'x' ? size.width : size.height, element.id));
         const limit = (value: number): number => Math.min(Math.max(value, size.min?.[index] ?? -Infinity), size.max?.[index] ?? Infinity);
-        const fitted = size.autoSize === 'fitContent' || size.autoSize === (axis === 'x' ? 'fitWidth' : 'fitHeight') ? content(own, element.id)[index] : undefined;
-        extent = size.fixed?.[index] ?? limit(fitted ?? stated ?? size.default?.[index] ?? custom?.defaultSize?.[index] ?? defaultSize[index]);
+        const fitted = size.autoSize === 'fitContent' || size.autoSize === (axis === 'x' ? 'fitWidth' : 'fitHeight') ? content(own, element)[index] : undefined;
+        extent = size.fixed?.[index] ?? limit(fitted === undefined ? stated ?? size.default?.[index] ?? custom?.defaultSize?.[index] ?? defaultSize[index] : hundredth(fitted));
       }
       return { at, extent, layout: start === 'layout' };
     };
@@ -439,10 +601,7 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     const y = along('y');
     // A node without a width or a height has nothing to draw.
     if (!x || !y || !(x.extent > 0) || !(y.extent > 0)) return undefined;
-    const anchor = placement.anchor ?? 'top-left';
-    const [fx, fy] = typeof anchor === 'string'
-      ? [fractions[anchor.split('-').find((word) => word === 'left' || word === 'right') ?? 'center'], fractions[anchor.split('-').find((word) => word === 'top' || word === 'bottom') ?? 'center']]
-      : anchor;
+    const [fx, fy] = anchorOf(placement.anchor);
     const box = { x: x.at - fx * x.extent, y: y.at - fy * y.extent, width: x.extent, height: y.extent };
     return { element, notation: own, system: system.name, box, layout: { x: x.layout, y: y.layout }, row: Math.floor(scales.y.toValue(box.y) + 1e-9) };
   };
@@ -463,7 +622,7 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
   const placedIn = (of: Viewpoint): Map<string, Placed> => {
     const result = new Map<string, Placed>();
     for (const element of model.elements) {
-      if (!member(element, of)) continue;
+      if (!member(element, of) || isItem(element, of)) continue;
       const place = placed(element, varied(nodeNotation(of.notation, metamodel, element.type), element.id), of.coordinateSystem);
       if (place) result.set(element.id, place);
     }
@@ -476,7 +635,8 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
   const filtered = new Set<string>();
   const dimmed = new Set<string>();
   for (const filter of Object.values(notation.canvas.filters)) {
-    const state = options.filters?.[filter.id];
+    // A kept filter has the value the diagram keeps for it; any other has this viewer's (DISL 6.13.1).
+    const state = filter.persist ? { value: options.view?.filters[filter.id], match: undefined } : options.filters?.[filter.id];
     const value = state?.value ?? (isCel(filter.default) ? run(filter.default, undefined) : filter.default) ?? null;
     const scope = { value, match: state?.match ?? filter.match.default };
     for (const { element } of places.values()) {
@@ -502,10 +662,37 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
 
   // ---- layout (DISL 10) ----
 
+  // The relations a type derives from the model (DISL 4.11.3): drawn, and no part of the model that is edited.
+  const derived = derivedRelations(metamodel, expressions, model, world).value;
+
   const config = viewpoint.layout;
   const laid = [...places.values()].filter((place) => place.layout.x || place.layout.y);
   const plugin = config?.plugin === undefined ? undefined : tool.layouts?.(config.plugin);
-  if (plugin && config) {
+  if (config?.force && !plugin) {
+    // Every node no attribute places is the layout's to place (DISL 10): a pinned one is where it is kept, and the others arrange themselves around it.
+    const unplaced = (source: PlacementSource | undefined): boolean => source === undefined || source === 'free' || (isObject(source) && 'layout' in source);
+    const free = [...places.values()].filter((place) => unplaced(place.notation.placement.x) && unplaced(place.notation.placement.y));
+    const among = new Set(free.map((place) => place.element.id));
+    const nodes = free.map((place): ForceNode => {
+      const { id } = place.element;
+      const { width, height } = place.box;
+      const [fx, fy] = anchorOf(place.notation.placement.anchor);
+      const tier = config.force!.tiers.findIndex((types) => types.some((type) => isA(metamodel, place.element.type, type)));
+      const kept = Object.hasOwn(pins, id) ? pins[id] : undefined;
+      const on = options.placed && Object.hasOwn(options.placed, id) ? options.placed[id] : undefined;
+      return {
+        id, width, height, ...(tier < 0 ? {} : { tier }),
+        ...(kept ? { pinned: { x: kept.x + (0.5 - fx) * width, y: kept.y + (0.5 - fy) * height } } : {}), ...(on ? { placed: on } : {}),
+      };
+    });
+    const links = [...model.relations, ...derived].flatMap((relation) => (relation.source !== undefined && relation.target !== undefined && among.has(relation.source) && among.has(relation.target) ? [[relation.source, relation.target] as const] : []));
+    const centres = forceLayout(nodes, links, { gap: config.force.gap });
+    for (const place of free) {
+      const centre = centres.get(place.element.id)!;
+      place.box = { ...place.box, x: hundredth(centre.x - place.box.width / 2), y: hundredth(centre.y - place.box.height / 2) };
+    }
+  }
+  else if (plugin && config) {
     // The plugin is given what is drawn and nothing of a fold: it places, and may size, the nodes it names.
     const drawn = (id: string | undefined): boolean => id !== undefined && places.has(id);
     try {
@@ -576,7 +763,10 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
   const draw = (place: Placed): Drawn => {
     const { element, notation: own, box } = place;
     const self = element.id;
-    const style = settled(styleOf(notation, own.style), self);
+    // The styles of the conditions that hold lie over the notation's own, the later over the earlier (DISL 6.1).
+    const conditional = own.conditions.reduce<Style>((under, condition) => (run(condition.when, self) === true ? merged(under, condition.style) : under), {});
+    const plain = settled(styleOf(notation, own.style), self);
+    const style = settled(merged(plain, conditional), self);
     const ref = own.shape;
     const custom = customOf(ref) ?? (typeof ref === 'object' && 'path' in ref ? { name: 'path', params: {}, path: ref.path, handles: [] } : undefined);
 
@@ -605,6 +795,27 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
       const path = definition?.path ?? (typeof shape === 'object' && 'path' in shape ? shape.path : undefined);
       const called = definition?.name ?? (typeof shape === 'string' ? shape : shape && 'type' in shape ? shape.type : 'rect');
       if (path) return { kind: 'path', name: called, box: within, commands: commandsOf(path, within, self, scope(within)), fillRule: path.fillRule };
+      if (!definition && (called === 'hexagon' || called === 'folder')) {
+        // Two built-in shapes that are no rectangle, by their parameters or the defaults of DISL B.2; a fraction is of the width.
+        const stated = typeof shape === 'object' && 'type' in shape ? shape.params ?? {} : {};
+        const param = (name: string, fallback: number): number => number(bound(stated[name], self)) ?? fallback;
+        const { width: w, height: h } = within;
+        let points: readonly (readonly [number, number])[];
+        if (called === 'hexagon') {
+          const inset = param('inset', 0.25);
+          points = bound(stated.orientation, self) === 'pointy'
+            ? [[w / 2, 0], [w, inset * h], [w, (1 - inset) * h], [w / 2, h], [0, (1 - inset) * h], [0, inset * h]]
+            : [[inset * w, 0], [(1 - inset) * w, 0], [w, h / 2], [(1 - inset) * w, h], [inset * w, h], [0, h / 2]];
+        } else {
+          const tab = param('tabWidth', 0.4) * w;
+          const top = Math.min(param('tabHeight', 12), h);
+          points = bound(stated.tabPosition, self) === 'right'
+            ? [[w - tab, 0], [w, 0], [w, h], [0, h], [0, top], [w - tab, top]]
+            : [[0, 0], [tab, 0], [tab, top], [w, top], [w, h], [0, h]];
+        }
+        const commands: PathCommand[] = [...points.map(([x, y], index): PathCommand => ({ op: index === 0 ? 'M' : 'L', x: within.x + x, y: within.y + y })), { op: 'Z' }];
+        return { kind: 'path', name: called, box: within, commands };
+      }
       if (called === 'ellipse') return { kind: 'ellipse', name: called, box: within };
       if (called === 'circle') {
         const across = Math.min(within.width, within.height);
@@ -644,8 +855,37 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     }));
 
     const labels = own.labels.flatMap((label, index) => {
-      const made = labelOf(label, index, box, style, self);
+      const made = labelOf(label, index, box, style, self, conditional);
       return made ? [made] : [];
+    });
+
+    // The compartments that hold a line, one under the other from where the labels at the top end.
+    const compartments: SceneCompartment[] = [];
+    let below = box.y + headerOf(own, self, plain);
+    for (const { compartment, lines } of own.compartments.length === 0 ? [] : listed(own, element)) {
+      if (lines.length === 0) continue;
+      const height = rowHeight(plain);
+      const top = below;
+      const rows = lines.map((line, index): SceneRow => ({ ...line, box: { x: box.x, y: top + compartmentSpace + index * height, width: box.width, height } }));
+      below = top + 2 * compartmentSpace + lines.length * height;
+      compartments.push({ id: compartment.id, box: { x: box.x, y: top, width: box.width, height: below - top }, ...(compartment.separator ? { separator: settled(compartment.separator, self) } : {}), rows });
+    }
+
+    // A badge where its `visible` holds, clear of the corner its position names.
+    const badges = own.badges.flatMap((badge): SceneBadge[] => {
+      if (badge.visible !== undefined && bound(badge.visible, self) !== true) return [];
+      const size = badge.size ?? badgeSize;
+      const words = typeof badge.position === 'string' ? badge.position.split('-') : ['top', 'right'];
+      const tooltip = message(badge.tooltip, self);
+      return [{
+        id: badge.id, icon: badge.icon ?? '',
+        box: {
+          x: words.includes('left') ? box.x + edgeSpace : words.includes('right') ? box.x + box.width - size - edgeSpace : box.x + (box.width - size) / 2,
+          y: words.includes('top') ? box.y + edgeSpace : words.includes('bottom') ? box.y + box.height - size - edgeSpace : box.y + (box.height - size) / 2,
+          width: size, height: size,
+        },
+        ...(tooltip === undefined ? {} : { tooltip }), ...(badge.onClick === undefined ? {} : { operation: badge.onClick }),
+      }];
     });
 
     const movable = own.placement.movable ?? true;
@@ -660,7 +900,8 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
       declared: (custom?.parts ?? []).map((part, index) => part.id ?? String(index)),
       notation: own,
       node: {
-        id: self, type: element.type, box, system: place.system, shape, outline, style, params, parts, handles, labels,
+        id: self, type: element.type, box, system: place.system, shape, outline, style, params, parts, handles, labels, compartments, badges,
+        pinned: Object.hasOwn(pins, self),
         tooltip: message(own.tooltip, self),
         movable: { x: free('x', movable), y: free('y', movable) },
         resizable: { x: free('x', resizable) && sizable !== false && sizable !== 'vertical', y: free('y', resizable) && sizable !== false && sizable !== 'horizontal' },
@@ -722,12 +963,14 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     return movedPath(commands, within.x, within.y);
   }
 
-  function labelOf(label: Label, index: number, box: Box, nodeStyle: Style, self: string): SceneLabel | undefined {
+  function labelOf(label: Label, index: number, box: Box, nodeStyle: Style, self: string, conditional: Style = {}): SceneLabel | undefined {
     if (bound(label.visible, self) === false) return undefined;
     const text = String(bound(label.text, self) ?? '');
     const edit = label.editText ?? (isObject(label.text) && 'attribute' in label.text ? label.text : undefined);
     const editText = isObject(edit) && 'attribute' in edit ? String(bound(edit, self) ?? '') : message(edit, self) ?? text;
-    const style = settled(styleOf(notation, { font: nodeStyle.font, padding: nodeStyle.padding }, label.style), self);
+    // What a condition that holds says of the text lies over the label's own style, as it lies over the node's (DISL 6.1).
+    const style = settled(styleOf(notation, { font: nodeStyle.font, padding: nodeStyle.padding }, label.style, conditional.font ? { font: conditional.font } : undefined), self);
+    const tooltip = message(label.tooltip, self);
     const fontSize = number(style.font?.size) ?? defaultFontSize;
     const lines = text.split('\n');
     const width = Math.max(...lines.map((line) => measure(line, fontSize)));
@@ -737,6 +980,7 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
       id: label.id ?? String(index), text, editText, position, fontSize, style,
       editable: label.editable ?? (isObject(label.text) && 'attribute' in label.text ? 'inline' as const : false as const),
       wrap: label.wrap ?? 'word', overflow: label.overflow ?? 'visible',
+      ...(label.maxLines === undefined ? {} : { maxLines: label.maxLines }), ...(tooltip === undefined || tooltip === '' ? {} : { tooltip }),
     };
 
     if (typeof position !== 'string') {
@@ -752,7 +996,10 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
       // Inside the node the text is laid out in the node less its padding, and held where the position says.
       const [top, right, bottom, left] = sidesOf(nodeStyle.padding);
       const align = words.includes('left') ? 'start' : words.includes('right') ? 'end' : 'center';
-      return { ...common, align, box: { x: box.x + left, y: box.y + top, width: Math.max(0, box.width - left - right), height: Math.max(0, box.height - top - bottom) } };
+      // A label at the top or the bottom of a node without padding there stands clear of the edge.
+      const above = top === 0 && words.includes('top') ? edgeSpace : top;
+      const under = bottom === 0 && words.includes('bottom') ? edgeSpace : bottom;
+      return { ...common, align, box: { x: box.x + left, y: box.y + above, width: Math.max(0, box.width - left - right), height: Math.max(0, box.height - above - under) } };
     }
     // Outside it the text stands clear of the node by the label's distance; plain `outside` is below.
     const gap = label.distance ?? 4;
@@ -831,33 +1078,6 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
 
   const directions: Readonly<Record<string, Point>> = { up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } };
 
-  // The relations a type derives from the model (DISL 4.11.3): drawn, and no part of the model that is edited.
-  // simplified: a derived relation has its ends and the default id; its `id`, `attributes`, `key` and `owner` are not read, and an expression of its notation sees no `self`. Read them when a definition draws a derived relation from more than its two ends.
-  const derived: ModelRelation[] = [];
-  for (const type of Object.values(metamodel.types)) {
-    const rule = isRelation(type) && isObject(type.declared.derived) ? type.declared.derived : undefined;
-    if (!rule || (typeof rule.from !== 'string' && !isCel(rule.from))) continue;
-    const items = expressions.evaluate(rule.from, world.scope());
-    if (!items.ok || !Array.isArray(items.raw)) {
-      report(`derived:${type.name}`, `The relations of the type \`${type.name}\` could not be derived, so none is drawn: ${items.ok ? '`from` did not give a list' : items.error}`);
-      continue;
-    }
-    const repeats = new Map<string, number>();
-    for (const item of items.raw as unknown[]) {
-      const end = (expression: unknown): string | undefined => {
-        const result = typeof expression === 'string' || isCel(expression) ? expressions.evaluate(expression, world.scope(undefined, { item })) : undefined;
-        return result?.ok && typeof result.value === 'string' ? result.value : undefined;
-      };
-      const source = end(rule.source);
-      const target = end(rule.target);
-      if (source === undefined || target === undefined) continue;
-      const id = `${type.name}:${source}->${target}`;
-      const count = (repeats.get(id) ?? 0) + 1;
-      repeats.set(id, count);
-      derived.push({ id: count === 1 ? id : `${id}#${count}`, type: type.name, attributes: {}, host: {}, ephemeral: true, line: 0, source, target });
-    }
-  }
-
   const edges: SceneEdge[] = [];
   for (const relation of [...model.relations, ...derived]) {
     const type = metamodel.types[relation.type];
@@ -924,6 +1144,9 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     findings: [...found.values()],
   };
 }
+
+/** Where the centre of each node of a scene is, by id: what a host hands back as `placed` when the document changes (DISL 10.4). */
+export const placesOf = (scene: Scene): Record<string, Point> => Object.fromEntries(scene.nodes.map((node) => [node.id, centreOf(node.box)]));
 
 // ---- the rows-only arrangement (DISL 10.2) ----
 

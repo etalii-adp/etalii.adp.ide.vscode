@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://etalii.net/adp/disl/schema/0.2/disl.schema.json",
-  "title": "DISL 0.3 (draft) — Diagram Specification Language",
+  "title": "DISL 0.4 (draft) — Diagram Specification Language",
   "description": "Specifications of diagram types ($defs/Specification), written by tool engineers. The root validates specifications. Stored diagrams are DID definitions, validated by did.schema.json, which references this schema's QualifiedId, SemVer and Point.",
   "$ref": "#/$defs/Specification",
   "$defs": {
@@ -1365,7 +1365,7 @@
         "disl": {
           "type": "string",
           "pattern": "^\\d+\\.\\d+$",
-          "description": "The DISL version the specification targets, as major.minor: 0.1, 0.2 or 0.3. A 0.3 runtime reads 0.1 and 0.2 specifications with their meaning. See DISL 0.3, section 2.9."
+          "description": "The DISL version the specification targets, as major.minor: 0.1, 0.2, 0.3 or 0.4. A 0.4 runtime reads 0.1, 0.2 and 0.3 specifications with their meaning. See DISL 0.4, section 2.9."
         },
         "dedl": {
           "type": "string",
@@ -1611,6 +1611,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "paths": {
+          "type": "boolean",
+          "description": "uri: a value may also be a path, absolute or relative to the folder of the file it is stored in; schemes then restricts URIs only. Defaults to false. See DISL 0.4, section 4.2."
         },
         "context": {
           "type": "string"
@@ -5906,6 +5910,36 @@
         "itemConditions": {
           "$ref": "#/$defs/Conditions"
         },
+        "itemLink": {
+          "description": "A link per item, in the compartmentItem context: where it is a non-empty string, a link symbol at the end of the item's line opens it with the open action. See DISL 0.4, section 6.9.",
+          "$ref": "#/$defs/BString"
+        },
+        "itemOrder": {
+          "description": "The order items are listed in, computed when drawing: by the value of by per item (compartmentItem context), ascending by default; items whose value is null come last, and ties keep the source order. See DISL 0.4, section 6.9.",
+          "type": "object",
+          "properties": {
+            "by": {
+              "$ref": "#/$defs/Expression"
+            },
+            "direction": {
+              "enum": [
+                "ascending",
+                "descending"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "by"
+          ],
+          "patternProperties": {
+            "^x-": true
+          }
+        },
+        "groupBy": {
+          "description": "Lists the items under one collapsible heading per value of an enum attribute of the items. See DISL 0.4, section 6.9.",
+          "$ref": "#/$defs/GroupBy"
+        },
         "layout": {
           "enum": [
             "vertical",
@@ -5964,6 +5998,7 @@
           "type": "boolean"
         },
         "collapsed": {
+          "description": "The default collapse state of the compartment; a stored state wins, and is stored only while it differs from this default. See DISL 0.4, section 6.9.",
           "$ref": "#/$defs/BBool"
         },
         "emptyText": {
@@ -6007,6 +6042,51 @@
       "required": [
         "id",
         "items"
+      ],
+      "patternProperties": {
+        "^x-": true
+      }
+    },
+    "GroupBy": {
+      "description": "Items of a compartment listed under one heading per value of an enumeration attribute, in the enumeration's declared order, each with a count and a collapse default per value; empty groups are left out unless empty is show. The group key is the value's stored form. See DISL 0.4, section 6.9.",
+      "type": "object",
+      "properties": {
+        "attribute": {
+          "description": "An attribute of every item type whose type is an enumeration.",
+          "$ref": "#/$defs/SimpleId"
+        },
+        "collapsed": {
+          "description": "Whether each group starts collapsed, by the enum value's key; a value not listed starts expanded.",
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/SimpleId"
+          },
+          "additionalProperties": {
+            "type": "boolean"
+          }
+        },
+        "count": {
+          "description": "Whether a heading shows how many items it holds; defaults to true.",
+          "type": "boolean"
+        },
+        "empty": {
+          "description": "Whether a group with no item has a heading: hide (the default) or show.",
+          "enum": [
+            "hide",
+            "show"
+          ]
+        },
+        "title": {
+          "description": "The heading's text, in the compartmentItem context with item bound to the value's key; defaults to the value's label.",
+          "$ref": "#/$defs/Message"
+        },
+        "doc": {
+          "$ref": "#/$defs/Doc"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "attribute"
       ],
       "patternProperties": {
         "^x-": true
@@ -8418,6 +8498,10 @@
           "description": "Where the control sits, outside the drawing surface. See DISL 0.2, section 6.13.1.",
           "$ref": "#/$defs/Position"
         },
+        "persist": {
+          "type": "boolean",
+          "description": "The value is view data of the kind filters, stored with the diagram and the same for every viewer, rather than viewer state; changing it is an edit. filters must then be in view.store. Defaults to false. See DISL 0.4, section 6.13.1."
+        },
         "doc": {
           "$ref": "#/$defs/Doc"
         }
@@ -9133,7 +9217,7 @@
       }
     },
     "ContextTool": {
-      "description": "One item of a context tool set, shown beside the selected element as the fastest way to grow a diagram. Its required kind is one of create-connected (a new node linked through the relation type in via, outgoing or incoming), connect, create-child (in a slot), operation, delete, duplicate, editLabel, openForm or plugin. Every kind accepts a label, icon, shortcut, enabled condition and position relative to the element. DISL 0.2 adds moveUp and moveDown, visible and unavailable, a picker of existing elements (target pick), and one entry per list item (forEach); DISL 0.3 adds the menu group an entry is shown in (group). See section 7.3.",
+      "description": "One item of a context tool set, shown beside the selected element as the fastest way to grow a diagram. Its required kind is one of create-connected (a new node linked through the relation type in via, outgoing or incoming), connect, create-child (in a slot), operation, delete, duplicate, editLabel, openForm or plugin. Every kind accepts a label, icon, shortcut, enabled condition and position relative to the element. DISL 0.2 adds moveUp and moveDown, visible and unavailable, a picker of existing elements (target pick), and one entry per list item (forEach); DISL 0.3 adds the menu group an entry is shown in (group); DISL 0.4 adds the standard entries pin, unpin and unpinAll. See section 7.3.",
       "type": "object",
       "properties": {
         "kind": {
@@ -9148,7 +9232,10 @@
             "openForm",
             "plugin",
             "moveUp",
-            "moveDown"
+            "moveDown",
+            "pin",
+            "unpin",
+            "unpinAll"
           ]
         },
         "creates": {
@@ -10519,7 +10606,7 @@
       ]
     },
     "Action": {
-      "description": "One declarative step from a small, closed set, used in hooks, operations, quick fixes, form buttons and field change handlers. Each action is an object with one leading key such as set, unset, create, connect, delete, move, resize, retype, reparent, let, if, forEach, select, reveal, highlight, editLabel, openForm, notify, layout, abort, call or plugin. All values are expressions, and every action may carry a when condition that skips it unless true. See section 9.4.",
+      "description": "One declarative step from a small, closed set, used in hooks, operations, quick fixes, form buttons and field change handlers. Each action is an object with one leading key such as set, unset, create, connect, delete, move, resize, retype, reparent, let, if, forEach, select, reveal, highlight, open, editLabel, openForm, notify, layout, abort, call or plugin. All values are expressions, and every action may carry a when condition that skips it unless true. See section 9.4.",
       "type": "object",
       "properties": {
         "set": {
@@ -10790,7 +10877,7 @@
           }
         },
         "view": {
-          "description": "Changes viewer state only, for target (default self): never persisted, never on undo, allowed in read-only mode. An operation whose actions are all view, select, reveal and highlight actions is offered in read-only mode and creates no undo step. See DISL 0.2, section 9.4.",
+          "description": "Changes view data of target (default self). Viewer state is never persisted, never on undo and allowed in read-only mode; DISL 0.4: a change to a stored kind (pinned, groups, a kept filter) is an edit, written and undone with its operation. An operation whose actions are all view, select, reveal and highlight actions on viewer state is offered in read-only mode and creates no undo step. See DISL 0.4, section 9.4.",
           "type": "object",
           "properties": {
             "collapsed": {
@@ -10810,12 +10897,30 @@
             "viewpoint": {
               "description": "The viewpoint, or variant, the viewer switches to. See DISL 0.2, section 9.4.",
               "$ref": "#/$defs/Expression"
+            },
+            "pinned": {
+              "description": "Whether target is pinned: true pins it at its current position, false removes the pin and its stored position. See DISL 0.4, sections 7.3 and 9.4.",
+              "$ref": "#/$defs/Expression"
+            },
+            "groups": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/Expression"
+              },
+              "description": "New collapse states of target's compartment groups, by group key; a state equal to the group's default removes the stored state. See DISL 0.4, sections 6.9 and 9.4."
             }
           },
           "additionalProperties": false,
           "patternProperties": {
             "^x-": true
           }
+        },
+        "open": {
+          "description": "Opens a link: an http or https URI in the platform's browser without access to the runtime, a path through the host's reveal (or shown with an offer to copy when the host cannot reveal it); anything else is refused. Changes no model, view data or history. See DISL 0.4, section 9.4.",
+          "$ref": "#/$defs/Expression"
         },
         "select": {
           "$ref": "#/$defs/Expression"
@@ -11465,7 +11570,7 @@
       "properties": {
         "algorithm": {
           "type": "string",
-          "description": "The algorithm: a name DISL lists (10), of which rowPacked, rows and tidyTree are standard and defined in 10.1 to 10.3, elk:<id> or plugin:<name>. See DISL 0.3, section 10."
+          "description": "The algorithm: a name DISL lists (10), of which rowPacked, rows and tidyTree are standard and defined in 10.1 to 10.3 and force with tiers has the properties of 10.4, elk:<id> or plugin:<name>. See DISL 0.4, section 10."
         },
         "direction": {
           "enum": [
@@ -11530,6 +11635,10 @@
           "description": "The options of the standard tidyTree algorithm; only with algorithm tidyTree. See DISL 0.3, section 10.",
           "$ref": "#/$defs/TidyTree"
         },
+        "force": {
+          "description": "The options of force: tiers of node types from the centre outwards and the least gap between nodes; only with algorithm force. See DISL 0.4, section 10.4.",
+          "$ref": "#/$defs/ForceLayout"
+        },
         "doc": {
           "$ref": "#/$defs/Doc"
         }
@@ -11580,6 +11689,20 @@
             "properties": {
               "algorithm": {
                 "const": "tidyTree"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "force"
+            ]
+          },
+          "then": {
+            "properties": {
+              "algorithm": {
+                "const": "force"
               }
             }
           }
@@ -11797,6 +11920,41 @@
           "patternProperties": {
             "^x-": true
           }
+        },
+        "doc": {
+          "$ref": "#/$defs/Doc"
+        }
+      },
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": true
+      }
+    },
+    "ForceLayout": {
+      "description": "The options of the force layout: tiers lists node types from the centre outwards, each entry one ring (a list puts several types on one ring), and gap is the least distance between the bounds of any two nodes. Its result keeps tiers in order, has no overlap, leaves pinned nodes where they are, is the same for the same input, moves little on a live change and is never written. See DISL 0.4, section 10.4.",
+      "type": "object",
+      "properties": {
+        "tiers": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TypeRef"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/TypeRef"
+                },
+                "minItems": 1
+              }
+            ]
+          },
+          "minItems": 1
+        },
+        "gap": {
+          "type": "number",
+          "minimum": 0
         },
         "doc": {
           "$ref": "#/$defs/Doc"
@@ -12642,6 +12800,25 @@
               "type": "boolean",
               "description": "Whether revealing or selecting an element inside a collapsed container expands its collapsed ancestors; defaults to true. See DISL 0.2, section 11.6."
             },
+            "bind": {
+              "description": "Only with format fbl: binds stored kinds of view data (pinned, groups, filters) onto entries of the body rather than the registration. Each kind names the binding type whose entries hold it and which of its attributes hold the element, the position, the group and its state, or the filters' values. See DISL 0.4, section 11.6.",
+              "type": "object",
+              "properties": {
+                "pinned": {
+                  "$ref": "#/$defs/ViewBind"
+                },
+                "groups": {
+                  "$ref": "#/$defs/ViewBind"
+                },
+                "filters": {
+                  "$ref": "#/$defs/ViewBind"
+                }
+              },
+              "additionalProperties": false,
+              "patternProperties": {
+                "^x-": true
+              }
+            },
             "doc": {
               "$ref": "#/$defs/Doc"
             }
@@ -12976,8 +13153,51 @@
         "^x-": true
       }
     },
+    "ViewBind": {
+      "description": "Where one kind of view data is kept in a format binding's body: the binding type whose entries hold it, and the binding attributes that hold the element the entry is about (a reference by id), the position (x, y) of a pinned element, the group key and collapsed state of a group, or each kept filter's value. Entries of a bound type are not elements of the model. See DISL 0.4, section 11.6.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "element": {
+          "type": "string"
+        },
+        "x": {
+          "type": "string"
+        },
+        "y": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        },
+        "collapsed": {
+          "type": "string"
+        },
+        "values": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/SimpleId"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "doc": {
+          "$ref": "#/$defs/Doc"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "patternProperties": {
+        "^x-": true
+      }
+    },
     "ViewKind": {
-      "description": "A kind of view data: the 0.1 kinds a view may store (bounds, waypoints, anchors, labelOffsets, collapsed, zIndex, rotation, params, ports, viewport, guides, pinned, settings) plus the viewer-only kinds selection, filters and viewpoint. persistence.view lists the kinds a view stores and the kinds each viewer holds; a kind may not be in both. See DISL 0.2, section 11.6.",
+      "description": "A kind of view data: the 0.1 kinds a view may store (bounds, waypoints, anchors, labelOffsets, collapsed, zIndex, rotation, params, ports, viewport, guides, pinned, settings), groups (DISL 0.4: the collapse states of compartment groups), and the viewer kinds selection, filters and viewpoint; filters may be stored too when a filter has persist (DISL 0.4). persistence.view lists the kinds a view stores and the kinds each viewer holds; a kind may not be in both. See DISL 0.4, section 11.6.",
       "enum": [
         "bounds",
         "waypoints",
@@ -12992,6 +13212,7 @@
         "guides",
         "pinned",
         "settings",
+        "groups",
         "selection",
         "filters",
         "viewpoint"

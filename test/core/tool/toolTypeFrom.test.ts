@@ -567,7 +567,7 @@ describe('what a scene carries beside its nodes and edges', () => {
 
   it('the filters of the canvas, each with what it offers and the value in use', () => {
     const declared = object(at(specification, 'notation', 'canvas', 'filters', 'tags'));
-    expect(scene.chrome?.filters).toEqual([{ id: 'tags', label: declared.label, control: declared.control, options: ['electronics', 'invention'], value: [], match: 'any', matchToggle: true }]);
+    expect(scene.chrome?.filters).toEqual([{ id: 'tags', label: declared.label, control: declared.control, options: ['electronics', 'invention'], value: [], match: 'any', matchToggle: true, kept: false }]);
     expect(scene.filtered).toEqual([]);
   });
 

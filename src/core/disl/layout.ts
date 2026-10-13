@@ -1,6 +1,7 @@
 // The layout of a specification (DISL 10): the configurations it names, when layout runs and what
 // it respects, and the standard algorithms `rowPacked` (10.1) and `rows` (10.2), whose results DISL
-// states. The algorithms work on plain items; the scene gives them the elements' places.
+// states. The algorithms work on plain items; the scene gives them the elements' places. The `force`
+// layout in tiers (10.4) is read here and run by `forceLayout.ts`.
 
 import type { GeomExpr } from './notation';
 import { finding, type Finding, type Loaded, type Model } from './model';
@@ -25,6 +26,14 @@ export interface RowsLayout {
   readonly swapPasses: number;
 }
 
+/** `$defs/ForceLayout` (DISL 10.4), with its defaults filled in. */
+export interface ForceLayout {
+  /** The node types of each tier, from the centre outwards. A type in none is placed by the forces alone. */
+  readonly tiers: readonly (readonly string[])[];
+  /** The least distance between the bounds of two nodes the layout places. */
+  readonly gap: number;
+}
+
 /** `$defs/LayoutConfig`: one named configuration. */
 export interface LayoutConfig {
   readonly name: string;
@@ -33,6 +42,7 @@ export interface LayoutConfig {
   readonly scope: 'all' | 'selection' | 'component';
   readonly rowPacked?: RowPacked;
   readonly rows?: RowsLayout;
+  readonly force?: ForceLayout;
   /** The id of the plugin that is the algorithm, for one named `plugin:<id>` (DISL 13.1). */
   readonly plugin?: string;
   /** `spacing` and `options` as they are written: a plugin's to read. */
@@ -74,7 +84,7 @@ export interface Layout {
 }
 
 /** The algorithms this add-on runs; a configuration of another one is kept and reported. */
-export const standardAlgorithms: readonly string[] = ['none', 'rowPacked', 'rows'];
+export const standardAlgorithms: readonly string[] = ['none', 'rowPacked', 'rows', 'force'];
 
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T => (allowed.includes(value as T) ? (value as T) : fallback);
 
@@ -91,7 +101,10 @@ export function readLayoutConfig(name: string, declared: Section, report: (messa
   };
   const packed = options('rowPacked');
   const rows = options('rows');
+  const force = options('force');
   const number = (value: unknown, fallback: number): number => (typeof value === 'number' && Number.isFinite(value) ? value : fallback);
+  // simplified: a `force` layout is run in tiers, as the first definition that names it states it; without `tiers` every node is placed by the forces alone, about the origin.
+  const tiers = (Array.isArray(force?.tiers) ? force.tiers : []).map((tier) => [tier].flat().filter((type): type is string => typeof type === 'string'));
   return {
     name, algorithm,
     direction: oneOf(declared.direction, ['right', 'down', 'left', 'up'], 'right'),
@@ -111,6 +124,7 @@ export function readLayoutConfig(name: string, declared: Section, report: (messa
       ties: oneOf(rows.ties, ['lower', 'upper'], 'lower'),
       swapPasses: number(rows.swapPasses, 0),
     },
+    force: force && { tiers, gap: number(force.gap, 24) },
     ...(plugin === undefined ? {} : { plugin }),
     spacing: Object.fromEntries(Object.entries(isObject(declared.spacing) ? declared.spacing : {}).filter((entry): entry is [string, number] => typeof entry[1] === 'number')),
     options: isObject(declared.options) ? declared.options : {},
