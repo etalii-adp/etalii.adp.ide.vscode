@@ -101,7 +101,7 @@ describe('a compartment of a node', () => {
     const separator = drawn.querySelector('.adp-separator')!;
     expect([separator.getAttribute('x1'), separator.getAttribute('x2'), separator.getAttribute('y1'), separator.getAttribute('y2')]).toEqual(['100', '340', '148', '148']);
     expect(separator.getAttribute('style')).toContain('stroke: #94a3b8');
-    expect([...drawn.querySelectorAll('.adp-row')].map((row) => row.querySelector('text')?.textContent)).toEqual(['Progressing (2)', 'Write the plan', 'Try it', 'Pending (3)']);
+    expect([...drawn.querySelectorAll('.adp-row')].map((row) => row.querySelector('.adp-row-text')?.textContent)).toEqual(['Progressing (2)', 'Write the plan', 'Try it', 'Pending (3)']);
   });
 
   it('draws a heading as a button that says whether its group is open', () => {
@@ -290,6 +290,7 @@ describe('a label of one line', () => {
   it('is cut with an ellipsis where it does not fit, and says its text in full when it is hovered', () => {
     const label = group('s1').querySelector('[data-label="name"]')!;
     expect(label.querySelector('title')?.textContent).toBe('Billing');
-    expect(label.querySelector('.adp-scene-text')?.getAttribute('style')).toContain('text-overflow: ellipsis');
+    expect(label.querySelector('.adp-scene-text')?.classList.contains('adp-ellipsis')).toBe(true);
+    expect(label.querySelector('.adp-scene-text')?.textContent).toBe('Billing');
   });
 });
