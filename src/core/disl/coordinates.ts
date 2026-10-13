@@ -167,6 +167,15 @@ const canvas: CoordinateSystem = { name: 'canvas', x: linear('px'), y: linear('p
 /** With no `coordinates`, one cartesian system `canvas` of two linear pixel axes (DISL 5.2). */
 export const defaultCoordinates: Coordinates = { axes: { px: linear('px') }, systems: { canvas }, default: 'canvas' };
 
+const fractions: Readonly<Record<string, number>> = { left: 0, top: 0, center: 0.5, right: 1, bottom: 1 };
+
+/** The point of a node its position refers to, as fractions of its width and its height (DISL 5.8): its top-left corner unless its placement says otherwise. */
+export function anchorOf(anchor: Placement['anchor']): readonly [number, number] {
+  if (anchor === undefined) return [0, 0];
+  if (typeof anchor !== 'string') return anchor;
+  return [fractions[anchor.split('-').find((word) => word === 'left' || word === 'right') ?? 'center'], fractions[anchor.split('-').find((word) => word === 'top' || word === 'bottom') ?? 'center']];
+}
+
 /** Interprets `coordinates`. What is not supported is read as the nearest thing that is, and reported. */
 export function interpretCoordinates(specification: Specification, metamodel: Metamodel): Loaded<Coordinates> {
   const section = specification.coordinates;

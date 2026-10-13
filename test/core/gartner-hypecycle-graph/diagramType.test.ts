@@ -1,230 +1,232 @@
 import { describe, expect, it } from 'vitest';
-import type { HandCodedOutcome as EditOutcome } from '../../../src/core/frame/handCoded';
-import type { ViewElement } from '../../../src/core/frame/toolType';
 import { viewTypeOf } from '../../../src/core/frame/toolType';
-import { attachmentPoint, bannerOf, boundaryLanding, evenFractions, nearestAttachment } from '../../../src/core/diagram/shapes/segments';
-import { actionIds, fieldIds, gartnerHypecycleGraph as type } from '../../../src/core/gartner-hypecycle-graph/index';
+import type { SceneNode } from '../../../src/core/scene/scene';
 import { filesUnder, read } from '../files';
-
-const text = read('fixtures/gartner-hypecycle-graph/triggers-and-notes.ghg');
-const source = { text };
-const element = (id: string, options = {}): ViewElement => type.view(source, options).elements.find((candidate) => candidate.id === id)!;
-const applied = (outcome: EditOutcome): string => {
-  if (outcome.kind !== 'applied') throw new Error(`not applied: ${JSON.stringify(outcome)}`);
-  return outcome.text;
-};
+import { applied, fixture, linesChanged, sourceOf, spliced, viewing } from '../tool/support';
+import { after, base, change, edit, graph, nodeOf, oneTrend, type, written } from './hypeCycle';
 
 describe('the hype cycle graph as a diagram type', () => {
   it('carries the names every ADP host uses', () => {
     expect(type.origin).toBe('gartner/hypecycle-graph');
     expect(type.displayName).toBe('Gartner hype cycle graph');
+    expect(type.kind).toBe('diagram');
     expect(viewTypeOf(type)).toBe('etalii.adp.gartner.hypecycle-graph');
-    expect(type.extensions).toEqual(['ghg']);
-    expect(type.shared).toBe(false);
+    expect(type.claims).toEqual([{ extensions: ['ghg'], shared: false, marker: false, registrationOnly: false }]);
   });
 
   it('starts a new document that reads cleanly and takes a first trend', () => {
     const created = type.newDocument('anything');
     expect(created).toBe('gartner-hypecycle-graph: 1\r\ntrends: []\r\ninfluences: []\r\n');
-    expect(type.findings({ text: created })).toEqual([]);
-    const withTrend = applied(type.edit({ text: created }, { kind: 'drop', entry: actionIds.addTrend, x: 0, y: 16 }, {}, false));
-    expect(withTrend).toContain('trends:\r\n  - id: ');
-    expect(type.view({ text: withTrend }, {}).elements).toHaveLength(1);
+    expect(type.findings(sourceOf(created))).toEqual([]);
+    const withTrend = after(sourceOf(created), { kind: 'drop', entry: 'ghg.add.trend', x: 0, y: 16 });
+    expect(withTrend.text).toContain('trends:\r\n  - id: ');
+    expect(type.view(withTrend, {}).nodes).toHaveLength(1);
   });
 });
 
 describe('what is drawn', () => {
   it('puts a trend at its start and row, as wide as its span, with its phases spread evenly', () => {
-    expect(element('transistors')).toMatchObject({ type: 'trend', x: 200, y: 56, width: 160, height: 32, label: 'Transistors' });
-    expect(element('transistors').data).toMatchObject({ phases: 4, boundaries: [0.25, 0.5, 0.75], phaseTooltips: ['Peak of Inflated Expectations', 'Trough of Disillusionment', 'Slope of Enlightenment', 'Plateau of Productivity'] });
-    expect(element('radio').data.phases).toBe(3);
+    const trend = nodeOf(base, 'transistors');
+    expect(trend).toMatchObject({ type: 'Trend', box: { x: 200, y: 56, width: 160, height: 32 } });
+    expect(trend.labels[0]).toMatchObject({ text: 'Transistors', editText: 'Transistors' });
+    // The phases a trend shows, and where each ends as a fraction of its span.
+    expect(trend.params).toEqual({ count: 4, b1: 0.25, b2: 0.5, b3: 0.75 });
+    expect(trend.parts.filter((part) => part.hit).map((part) => part.tooltip)).toEqual(['Peak of Inflated Expectations', 'Trough of Disillusionment', 'Slope of Enlightenment', 'Plateau of Productivity']);
+    expect(nodeOf(base, 'radio').params.count).toBe(3);
+    expect(nodeOf(base, 'radio').parts.filter((part) => part.hit)).toHaveLength(3);
   });
 
   it('centres a trigger on the start of its step and the middle of its row, labelled with its date in the unit', () => {
-    const trigger = element('transistor-invented');
-    expect(trigger.x + 8).toBeCloseTo(((1947 * 12 + 11 - 22800) * 4) / 12, 9);
-    expect(trigger).toMatchObject({ y: 56 + 16 - 8, width: 16, height: 16, label: 'Transistor invented', tooltip: 'Trigger: Transistor invented, 1947' });
-    expect(trigger.data.labelText).toBe('Transistor invented · 1947');
+    const trigger = nodeOf(base, 'transistor-invented');
+    expect(trigger.box.x + 8).toBeCloseTo(((1947 * 12 + 11 - 22800) * 4) / 12, 9);
+    expect(trigger).toMatchObject({ type: 'Trigger', box: { y: 56 + 16 - 8, width: 16, height: 16 }, tooltip: 'Trigger: Transistor invented, 1947' });
+    expect(trigger.labels[0]).toMatchObject({ editText: 'Transistor invented', text: 'Transistor invented · 1947' });
   });
 
   it('draws a note at its date and row with its own size', () => {
-    expect(element('note-1')).toMatchObject({ type: 'note', x: 200, y: 168, width: 160, height: 64 });
+    expect(nodeOf(base, 'note-1')).toMatchObject({ type: 'Note', box: { x: 200, y: 168, width: 160, height: 64 } });
   });
 
   it('sends an influence from a trigger without a source attachment', () => {
-    const relations = type.view(source, {}).relations;
-    expect(relations.map((relation) => relation.id)).toEqual(['i-12', 'i-13']);
-    expect(relations[0].data).toEqual({ source: undefined, target: { edge: 'top', region: 0, at: 0.2 }, hidden: false });
-    expect(relations[1].data.source).toEqual({ edge: 'bottom', region: 2, at: 0.5 });
+    const edges = type.view(base, {}).edges;
+    expect(edges.map((edge) => edge.id)).toEqual(['i-12', 'i-13']);
+    // docs/disl-support.md, "An end on a trigger": it is drawn from the outline, and names no part.
+    expect(edges[0].from).toMatchObject({ node: 'transistor-invented' });
+    expect(edges[0].from?.part).toBeUndefined();
+    expect(edges[0].to).toMatchObject({ node: 'transistors', part: 'peak', side: 'top', at: 0.2 });
+    expect(edges[0].hidden).toBeUndefined();
+    expect(edges[1].from).toMatchObject({ node: 'transistors', part: 'slope', side: 'bottom', at: 0.5 });
   });
 
   it('hides, and keeps, an influence attached to a phase its trend does not show', () => {
-    const view = type.view({ text: read('fixtures/gartner-hypecycle-graph/rule-duplicate-hidden.ghg') }, {});
-    expect(view.relations.map((relation) => [relation.id, relation.data.hidden])).toEqual([['ab', true], ['ab2', false]]);
+    const scene = type.view(fixture('rule-duplicate-hidden'), {});
+    expect(scene.edges.map((edge) => [edge.id, edge.hidden])).toEqual([['ab', 'part'], ['ab2', undefined]]);
   });
 
-  it('shows only what the tag filter matches, with notes always, and no influence to a hidden element', () => {
-    const any = type.view(source, { filterTags: ['ELECTRONICS', 'nothing'], filterMode: 'any' });
-    expect(any.elements.map((candidate) => candidate.id)).toEqual(['transistor-invented', 'note-1', 'note-2']);
-    expect(any.relations).toEqual([]);
-    const all = type.view(source, { filterTags: ['electronics', 'nothing'], filterMode: 'all' });
-    expect(all.elements.map((candidate) => candidate.id)).toEqual(['note-1', 'note-2']);
-  });
-
-  it('draws only what is in view, and both ends of an influence that crosses it', () => {
-    const view = type.view(source, { viewport: { x: 215, y: 100, width: 10, height: 10 } });
-    expect(view.elements.map((candidate) => candidate.id).sort()).toEqual(['radio', 'transistors']);
-    expect(view.relations.map((relation) => relation.id)).toEqual(['i-13']);
+  // The hand-coded diagram drew only what was in view. A scene holds every element: the part in view bounds the ticks of the ruler alone.
+  it('draws every element whatever is in view, and both ends of each influence', () => {
+    const whole = type.view(base, {});
+    const scene = type.view(base, { viewport: { x: 215, y: 100, width: 10, height: 10 } });
+    expect(scene.nodes.map((node) => node.id)).toEqual(['transistors', 'radio', 'transistor-invented', 'note-1', 'note-2']);
+    expect(scene.nodes).toEqual(whole.nodes);
+    expect(scene.edges).toEqual(whole.edges);
+    expect(scene.chrome!.rulers[0].levels[0].ticks.map((tick) => tick.label)).toEqual(['1954', '1955', '1956']);
   });
 
   it('declares its chrome: the unit, the ruler rungs a diagram of years can snap to, the tags in use and the legend', () => {
-    const chrome = type.view(source, {}).chrome;
-    expect(chrome).toMatchObject({ unit: 'year', compact: false, tags: ['electronics', 'invention'] });
-    expect((chrome.ruler as { every: string }[]).map((rung) => rung.every)).toEqual(['year', 'decade', 'century', 'millennium']);
-    expect((chrome.legend as { caption: string }[]).map((entry) => entry.caption)).toEqual(['Peak', 'Trough', 'Slope', 'Plateau']);
+    const chrome = type.view(base, {}).chrome!;
+    // A diagram of years: a tick each year, decade, century and millennium, and none for a month.
+    expect(chrome.rulers[0].levels.map((level) => level.spacing)).toEqual([4, 40, 400, 4000]);
+    expect(chrome.rulers[0].levels[1].ticks.map((tick) => tick.label)).toEqual(['1950', '1960', '1970', '1980', '1990']);
+    expect(chrome.toggles).toEqual([{ viewpoint: 'compact', label: 'Compact', on: false }]);
+    expect(chrome.filters.map((filter) => [filter.id, filter.options])).toEqual([['tags', ['electronics', 'invention']]]);
+    expect(chrome.legend.map((entry) => entry.label)).toEqual(['Peak', 'Trough', 'Slope', 'Plateau']);
   });
 
   it('opens a document that is not YAML as an empty, read-only diagram that says why', () => {
-    const view = type.view({ text: read('fixtures/gartner-hypecycle-graph/not-yaml.ghg') }, {});
-    expect(view).toMatchObject({ elements: [], relations: [], readOnly: true, notice: 'The graph could not be read, so it cannot be edited.' });
-    expect(type.actions({ text: read('fixtures/gartner-hypecycle-graph/not-yaml.ghg') }, [])).toEqual([]);
+    const broken = fixture('not-yaml');
+    expect(type.view(broken, {})).toMatchObject({ nodes: [], edges: [], readOnly: true, notice: 'The graph could not be read, so it cannot be edited.' });
+    expect(type.actions(broken, [])).toEqual([]);
   });
 });
 
 describe('Compact', () => {
   it.each(filesUnder('examples/gartner-hypecycle-graph', '.ghg'))('packs %s along its rows without overlap, in start order, with causes left of effects', (path) => {
-    const example = { text: read(path) };
+    const example = sourceOf(read(path), path);
     const trueTime = type.view(example, {});
-    const compact = type.view(example, { compact: true });
-    expect(compact.chrome).toMatchObject({ compact: true, ruler: [] });
-    expect(compact.elements.map((candidate) => candidate.id)).toEqual(trueTime.elements.map((candidate) => candidate.id));
+    const compact = type.view(example, viewing({ viewpoint: 'compact' }));
+    expect(compact.chrome).toMatchObject({ toggles: [{ viewpoint: 'compact', on: true }], rulers: [] });
+    expect(compact.nodes.map((candidate) => candidate.id)).toEqual(trueTime.nodes.map((candidate) => candidate.id));
 
-    const byId = new Map(compact.elements.map((candidate) => [candidate.id, candidate]));
-    for (const candidate of compact.elements) {
+    const trueBox = new Map(trueTime.nodes.map((candidate) => [candidate.id, candidate.box]));
+    const byId = new Map(compact.nodes.map((candidate) => [candidate.id, candidate.box]));
+    for (const candidate of compact.nodes) {
       // Every element keeps its row; only a trend takes the compact width, a share per phase.
-      expect(candidate.y).toBe(trueTime.elements.find((other) => other.id === candidate.id)!.y);
-      if (candidate.type === 'trend') expect(candidate.width).toBe(24 * (candidate.data.phases as number));
-      expect(candidate.data.movable).toBe(false);
+      expect(candidate.box.y).toBe(trueBox.get(candidate.id)!.y);
+      if (candidate.type === 'Trend') expect(candidate.box.width).toBe(24 * (candidate.params.count as number));
+      expect(candidate.movable).toEqual({ x: false, y: false });
     }
-    const sameRow = (a: ViewElement, b: ViewElement): boolean => a.y < b.y + b.height && b.y < a.y + a.height;
-    for (const a of compact.elements) {
-      for (const b of compact.elements) {
+    const sameRow = (a: SceneNode, b: SceneNode): boolean => a.box.y < b.box.y + b.box.height && b.box.y < a.box.y + a.box.height;
+    for (const a of compact.nodes) {
+      for (const b of compact.nodes) {
         if (a.id < b.id && sameRow(a, b)) {
-          expect(a.x + a.width <= b.x || b.x + b.width <= a.x, `${a.id} and ${b.id} overlap`).toBe(true);
+          expect(a.box.x + a.box.width <= b.box.x || b.box.x + b.box.width <= a.box.x, `${a.id} and ${b.id} overlap`).toBe(true);
         }
       }
     }
-    for (const relation of compact.relations) {
-      const from = byId.get(relation.from)!;
-      const to = byId.get(relation.to)!;
-      const fromStart = trueTime.elements.find((other) => other.id === relation.from)!.x;
-      const toStart = trueTime.elements.find((other) => other.id === relation.to)!.x;
-      // A target that starts after its source is placed after the middle of it.
-      if (toStart > fromStart) expect(to.x).toBeGreaterThan(from.x + from.width / 2);
+    for (const edge of compact.edges) {
+      const from = byId.get(edge.source)!;
+      const to = byId.get(edge.target)!;
+      // A target that starts after its source is placed at the middle of it or after it (`targetAfter: "sourceMiddle"`).
+      // The hand-coded diagram put it a gap and the width of its label further.
+      if (trueBox.get(edge.target)!.x > trueBox.get(edge.source)!.x) expect(to.x, `${edge.source} to ${edge.target}`).toBeGreaterThanOrEqual(from.x + from.width / 2);
     }
   });
 });
 
 describe('ADP Properties', () => {
   it('shows a trend its identity, time, phases and each phase\'s influences', () => {
-    const fields = type.fields(source, ['transistors']);
+    const fields = type.fields(base, ['transistors']);
     expect(fields.map((field) => `${field.group}/${field.label}`)).toEqual([
       'Identity/Name', 'Identity/Description', 'Identity/Tags', 'Time/Start', 'Time/Stop', 'Phases/Phases',
       'Phases/Peak ends', 'Phases/Trough ends', 'Phases/Slope ends',
       'Peak/Influence', 'Peak/Influenced by', 'Trough/Influence', 'Trough/Influenced by', 'Slope/Influence', 'Slope/Influenced by', 'Plateau/Influence', 'Plateau/Influenced by',
     ]);
     const byId = new Map(fields.map((field) => [field.id, field]));
-    expect(byId.get(fieldIds.phases)).toMatchObject({ control: 'slider', value: 'All four', options: ['Peak', 'Peak and Trough', 'Peak, Trough and Slope', 'All four'] });
-    expect(byId.get(fieldIds.tags)).toMatchObject({ control: 'tags', value: '', options: ['electronics', 'invention'] });
-    expect(byId.get(fieldIds.boundaries[0])?.value).toBe('1960-01');
+    expect(byId.get('ghg.phases')).toMatchObject({ control: 'slider', value: 'All four', options: ['Peak', 'Peak and Trough', 'Peak, Trough and Slope', 'All four'] });
+    expect(byId.get('ghg.tags')).toMatchObject({ control: 'tags', value: '', options: ['electronics', 'invention'] });
+    // A boundary that is not stored is shown where it is drawn.
+    expect(byId.get('ghg.peak-end')?.value).toBe('1960-01');
     expect(byId.get('ghg.peak-influenced-by')).toMatchObject({ value: 'Transistor invented', readOnly: 'Draw, reattach or delete an influence on the canvas.' });
     expect(byId.get('ghg.slope-influences')?.value).toBe('Transistor radio · Peak');
     expect(byId.get('ghg.plateau-influences')?.value).toBe('None');
   });
 
-  it('shows a trigger, a note and an influence the rows each has', () => {
-    expect(type.fields(source, ['transistor-invented']).map((field) => field.label)).toEqual(['Name', 'Description', 'Tags', 'Date']);
-    expect(type.fields(source, ['note-1']).map((field) => [field.label, field.value])).toEqual([['Text', 'Dates are illustrative.\n\nSee the readme.'], ['Size', '160 x 64']]);
-    expect(type.fields(source, ['i-13']).map((field) => [field.label, field.value])).toEqual([
-      ['Description', ''], ['From', 'Transistors · Slope'], ['To', 'Transistor radio · Peak'], ['From attachment', 'slope/bottom/0.5'], ['To attachment', 'peak/top/0.1'],
-    ]);
-    expect(type.fields(source, [])).toEqual([]);
-  });
-
   it('edits through the same edits the canvas makes, and refuses with a sentence at the field', () => {
-    const fewer = applied(type.edit(source, { kind: 'setField', id: 'transistors', field: fieldIds.phases, value: 'Peak and Trough' }, {}, false));
-    expect(fewer).toContain('    phases: 2\n');
-    expect(type.edit(source, { kind: 'setField', id: 'transistors', field: fieldIds.phases, value: 'Summit' }, {}, false))
+    expect(after(base, { kind: 'setField', id: 'transistors', field: 'ghg.phases', value: 'Peak and Trough' }).text).toContain('    phases: 2\n');
+    expect(edit(base, { kind: 'setField', id: 'transistors', field: 'ghg.phases', value: 'Summit' }))
       .toEqual({ kind: 'refused', sentence: "'Summit' is not one of Peak, Peak and Trough, Peak, Trough and Slope, All four." });
-    expect(type.edit(source, { kind: 'setField', id: 'i-13', field: fieldIds.toAttachment, value: 'nowhere' }, {}, false))
+    expect(edit(base, { kind: 'setField', id: 'i-13', field: 'ghg.to-attachment', value: 'nowhere' }))
       .toEqual({ kind: 'refused', sentence: "'nowhere' is not an attachment; write it as phase/edge/at, such as plateau/bottom/0.3." });
-    expect(type.edit(source, { kind: 'setField', id: 'note-1', field: fieldIds.start, value: '1950-01' }, {}, false))
-      .toEqual({ kind: 'refused', sentence: "'ghg.start' cannot be edited on this selection." });
+    // A row the selection does not have: the host's own sentence, where the hand-coded diagram named the row.
+    expect(edit(base, { kind: 'setField', id: 'note-1', field: 'ghg.start', value: '1950-01' })).toEqual({ kind: 'refused', sentence: 'This value cannot be changed here.' });
   });
 });
 
 describe('actions and gestures', () => {
   it('offers each kind of element what the definition gives it', () => {
-    const labels = (id?: string): string[] => type.actions(source, id ? [id] : []).map((action) => `${action.label}${action.shortcut ? ` (${action.shortcut})` : ''}`);
+    const labels = (id?: string): string[] => type.actions(base, id ? [id] : []).map((action) => `${action.label}${action.shortcut ? ` (${action.shortcut})` : ''}`);
     expect(labels('transistors')).toEqual(['Rename… (F2)', 'Remove (Delete)', 'Arrange diagram']);
     expect(labels('note-1')).toEqual(['Edit text… (F2)', 'Remove (Delete)', 'Arrange diagram']);
     expect(labels('i-12')).toEqual(['Remove influence (Delete)', 'Arrange diagram']);
-    expect(labels()).toEqual(['Arrange diagram']);
-    const dragged = applied(type.edit(source, { kind: 'handle', id: 'transistors', handle: 0, x: 240 }, {}, false));
-    expect(dragged).toContain('    peak-end: 1960-01\n');
-    expect(type.actions({ text: dragged }, ['transistors']).map((action) => action.label)).toContain('Even phases');
+    // docs/disl-support.md, "The empty canvas": the definition offers the three additions before "Arrange diagram".
+    expect(labels()).toEqual(['Add trend here', 'Add trigger here', 'Add note here', 'Arrange diagram']);
+    expect(type.actions(base, ['transistors']).map((action) => action.id)).toEqual(['ghg.rename', 'ghg.remove', 'ghg.arrange']);
+    expect(type.actions(base, ['i-12']).map((action) => action.id)).toEqual(['ghg.disconnect', 'ghg.arrange']);
+    const dragged = after(base, { kind: 'handle', id: 'transistors', handle: 0, x: 240 });
+    expect(dragged.text).toContain('    peak-end: 1960-01\n');
+    expect(type.actions(base, ['transistors']).map((action) => action.label)).not.toContain('Even phases');
+    expect(type.actions(dragged, ['transistors']).map((action) => action.label)).toContain('Even phases');
   });
 
   it('asks before removing something with influences, and removes at once when confirmed or when there are none', () => {
-    const request = { kind: 'action', action: actionIds.remove, id: 'transistor-invented' } as const;
-    expect(type.edit(source, request, {}, false)).toEqual({
+    const request = { kind: 'action', action: 'ghg.remove', id: 'transistor-invented' } as const;
+    expect(edit(base, request)).toEqual({
       kind: 'confirm', title: 'Remove', message: 'Removing this trigger also removes the 1 influence to or from it.', confirmLabel: 'Remove', danger: true,
     });
-    expect(applied(type.edit(source, request, {}, true))).not.toContain('transistor-invented');
-    expect(type.edit(source, { kind: 'action', action: actionIds.remove, id: 'note-2' }, {}, false).kind).toBe('applied');
+    expect(after(base, request, {}, true).text).not.toContain('transistor-invented');
+    expect(edit(base, { kind: 'action', action: 'ghg.remove', id: 'note-2' }).kind).toBe('applied');
   });
 
   it('renames in place: one line for a trend or trigger, several for a note', () => {
-    expect(type.edit(source, { kind: 'action', action: actionIds.rename, id: 'radio' }, {}, false)).toEqual({ kind: 'editInPlace', id: 'radio', multiline: false });
-    expect(type.edit(source, { kind: 'action', action: actionIds.rename, id: 'note-1' }, {}, false)).toEqual({ kind: 'editInPlace', id: 'note-1', multiline: true });
+    expect(edit(base, { kind: 'action', action: 'ghg.rename', id: 'radio' })).toEqual({ kind: 'editInPlace', id: 'radio', multiline: false });
+    expect(edit(base, { kind: 'action', action: 'ghg.rename', id: 'note-1' })).toEqual({ kind: 'editInPlace', id: 'note-1', multiline: true });
   });
 
-  it('opens a dropped note\'s editor at once, and selects whatever was dropped or drawn', () => {
-    const note = type.edit(source, { kind: 'drop', entry: actionIds.addNote, x: 200, y: 400 }, {}, false);
-    expect(note).toMatchObject({ kind: 'applied', editLabel: true });
-    const drawn = type.edit(source, { kind: 'connect', from: 'radio', to: 'transistors', fromEnd: 'peak/top/0.25', toEnd: 'plateau/bottom/0.75' }, {}, false);
-    expect(applied(drawn)).toContain('    from-phase: peak\n    from-edge: top\n    from-at: 0.25\n    to: transistors\n    to-phase: plateau\n    to-edge: bottom\n    to-at: 0.75\n');
-    expect(drawn).toHaveProperty('select');
-  });
-
-  it('turns a resize into the date of the edge that moved, and a note\'s into its size and place', () => {
-    const right = applied(type.edit(source, { kind: 'resize', id: 'radio', side: 'right', bounds: { x: 216, y: 112, width: 100, height: 32 } }, {}, false));
-    expect(right).toContain('    stop: 1979-01\n');
-    const note = applied(type.edit(source, { kind: 'resize', id: 'note-2', side: 'corner', bounds: { x: 240, y: 280, width: 130.5, height: 44 } }, {}, false));
-    expect(note).toContain('    at: 1960-01\n    row: 5\n    width: 130.5\n    height: 44\n');
+  it('opens a dropped note\'s editor at once, and selects it', () => {
+    const request = { kind: 'drop', entry: 'ghg.add.note', x: 200, y: 400 } as const;
+    const note = applied(edit(base, request));
+    expect(note).toMatchObject({ editLabel: true, multiline: true });
+    expect(linesChanged(base.text, spliced(base.text, note.splices)).added[0]).toBe(`  - id: ${note.select}`);
+    // docs/disl-support.md, "After a trend or a trigger is dropped" and "After an influence is drawn": nothing is selected.
+    expect(applied(edit(base, { kind: 'drop', entry: 'ghg.add.trend', x: 200, y: 400 })).select).toBeUndefined();
+    const drawn = { kind: 'connect', from: 'radio', to: 'transistors', fromEnd: 'peak/top/0.25', toEnd: 'plateau/bottom/0.75' } as const;
+    expect(after(base, drawn).text).toContain('    from-phase: peak\n    from-edge: top\n    from-at: 0.25\n    to: transistors\n    to-phase: plateau\n    to-edge: bottom\n    to-at: 0.75\n');
+    expect(applied(edit(base, drawn)).select).toBeUndefined();
   });
 });
 
+// A trend of forty months in a diagram of months: 160 wide at the origin, so its numbers are the banner's own.
 describe('the banner a trend is drawn as', () => {
-  const bounds = { x: 0, y: 0, width: 160, height: 32 };
-  const banner = bannerOf(bounds, 4, evenFractions(4));
+  const banner = oneTrend('1900-01', '1903-05', 4);
+  const trend = nodeOf(banner, 'a');
 
   it('ends its body 16 short of the right and its point at the full width', () => {
-    expect(banner.outline).toEqual([{ x: 0, y: 0 }, { x: 144, y: 0 }, { x: 160, y: 16 }, { x: 144, y: 32 }, { x: 0, y: 32 }]);
-    expect(banner.dividers.map((divider) => divider.x)).toEqual([40, 80, 120]);
-    expect(banner.dividers[0].points).toEqual([{ x: 24, y: 0 }, { x: 40, y: 16 }, { x: 24, y: 32 }]);
-    expect(banner.segments.map((segment) => [segment.from, segment.to])).toEqual([[0, 24], [24, 64], [64, 104], [104, 144]]);
+    expect(trend.box).toEqual({ x: 0, y: 0, width: 160, height: 32 });
+    expect(trend.outline).toEqual({ kind: 'polygon', points: [{ x: 0, y: 0 }, { x: 144, y: 0 }, { x: 160, y: 16 }, { x: 144, y: 32 }, { x: 0, y: 32 }] });
+    // A boundary is where its chevron points to, and where its handle is.
+    expect(trend.handles.map((handle) => [handle.x, handle.y, handle.visible])).toEqual([[40, 16, true], [80, 16, true], [120, 16, true]]);
+    const chevron = trend.parts.find((part) => part.id === 'chevron1')!.shape;
+    expect(chevron.kind === 'path' && chevron.commands).toEqual([{ op: 'M', x: 24, y: 0 }, { op: 'L', x: 40, y: 16 }, { op: 'L', x: 24, y: 32 }]);
+    // The stretch of the edge each phase has, which an end of an influence is anchored on.
+    expect(trend.parts.filter((part) => part.anchor === true).map((part) => [part.id, part.box.x, part.box.x + part.box.width])).toEqual([['peak', 0, 24], ['trough', 24, 64], ['slope', 64, 104], ['plateau', 104, 144]]);
   });
 
-  it('places an attachment along its phase\'s stretch of the edge, and finds the nearest one for a point', () => {
-    expect(attachmentPoint({ edge: 'bottom', region: 1, at: 0.5 }, bounds, banner)).toEqual({ x: 44, y: 32 });
-    expect(nearestAttachment({ x: 44, y: 30 }, bounds, banner)).toEqual({ edge: 'bottom', region: 1, at: 0.5 });
-    expect(nearestAttachment({ x: 500, y: -5 }, bounds, banner)).toEqual({ edge: 'top', region: 3, at: 1 });
+  it('places an attachment along its phase\'s stretch of the edge', () => {
+    const two = graph(
+      'trends:', '  - id: a', '    name: A', '    start: 1900-01', '    stop: 1903-05', '    row: 0', '    phases: 4', '  - id: b', '    name: B', '    start: 1900-01', '    stop: 1903-05', '    row: 2', '    phases: 4',
+      'influences:', '  - id: ba', '    from: b', '    from-phase: plateau', '    from-edge: top', '    from-at: 1', '    to: a', '    to-phase: trough', '    to-edge: bottom', '    to-at: 0.5',
+    );
+    const [edge] = type.view(two, {}).edges;
+    expect(edge.to).toMatchObject({ node: 'a', part: 'trough', side: 'bottom', at: 0.5, x: 44, y: 32 });
+    expect(edge.from).toMatchObject({ node: 'b', part: 'plateau', side: 'top', at: 1, x: 144, y: 112 });
   });
 
   it('lands a dragged boundary on a step, at least one step from its neighbours', () => {
-    expect(boundaryLanding(banner, bounds, 0, 21.9, 4)).toBe(20);
-    expect(boundaryLanding(banner, bounds, 0, -50, 4)).toBe(4);
-    expect(boundaryLanding(banner, bounds, 0, 500, 4)).toBe(76);
+    const landed = (x: number): string | undefined => written(change(banner, { kind: 'handle', id: 'a', handle: 0, x }).added, 'peak-end');
+    // A step is a month, four units wide: 21.9 lands on 20, and a drag past a neighbour stops a step short of it, at 4 and at 76.
+    expect(landed(21.9)).toBe('1900-06');
+    expect(landed(-50)).toBe('1900-02');
+    expect(landed(500)).toBe('1901-08');
   });
 });

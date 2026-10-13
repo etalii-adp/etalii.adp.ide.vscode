@@ -78,6 +78,7 @@ export interface ContextToolDeclaration {
   readonly unavailable?: readonly Reason[];
   readonly group?: string;
   readonly forEach?: Expression;
+  readonly as?: string;
   readonly args?: Readonly<Record<string, Expression>>;
   readonly doc?: Doc;
   readonly [name: string]: unknown;
@@ -174,7 +175,11 @@ export interface ContextEntry {
   readonly visible?: Expression;
   readonly enabled?: Expression;
   readonly unavailable: readonly Reason[];
+  /** The parameters the operation is run with, each an expression (DISL 7.3). */
   readonly args: Readonly<Record<string, Expression>>;
+  /** The list the entry is repeated for, one entry for each item, and the name each item is bound to. */
+  readonly forEach?: Expression;
+  readonly as: string;
 }
 
 export interface ContextSet {
@@ -215,7 +220,9 @@ export function interpretToolbox(specification: Specification, metamodel: Metamo
     const relation = isRelation(type) ? type : undefined;
     const kind = declared.kind ?? (relation ? 'create-edge' : type ? 'create-node' : declared.operation === undefined ? '' : 'operation');
     if (kind === '') report(`The tool \`${declared.id}\` has no \`kind\` and creates nothing, so it does nothing.`);
-    if (declared.drop?.targets?.length || declared.drop?.place !== undefined) report(`The tool \`${declared.id}\` chooses what a drop does by what lies under it, which this add-on does not support; it creates at the drop point.`);
+    const placements = isObject(specification.behavior) && isObject(specification.behavior.placements) ? specification.behavior.placements : {};
+    if (declared.drop?.targets?.length) report(`The tool \`${declared.id}\` chooses what a drop does by what lies under it, which this add-on does not support; it creates at the drop point.`);
+    else if (declared.drop?.place !== undefined && !Object.hasOwn(placements, declared.drop.place)) report(`The tool \`${declared.id}\` places what it creates by \`${declared.drop.place}\`, which is no placement of this specification; it creates at the drop point.`);
     const initial: Record<string, Value | CelValue> = {};
     for (const [name, value] of Object.entries(declared.initial ?? {})) initial[name] = isCel(value) ? value : (value as Value);
     const made: Tool = {
@@ -278,14 +285,12 @@ export function interpretToolbox(specification: Specification, metamodel: Metamo
     placement: set.placement ?? (menu ? 'menu' : 'around'),
     standardEntries: menu && set.standardEntries !== false,
     runSingle: set.runSingle === true,
-    entries: set.tools.map((entry) => {
-      if (entry.forEach !== undefined) report('A context tool is repeated for each item of a list (`forEach`), which this add-on does not support; it is shown once.');
-      return {
-        kind: entry.kind, label: entry.label, icon: text(entry.icon), shortcut: entry.shortcut, group: entry.group,
-        operation: entry.operation, creates: entry.creates, slot: entry.slot, via: entry.via, direction: entry.direction,
-        visible: entry.visible, enabled: entry.enabled, unavailable: entry.unavailable ?? [], args: entry.args ?? {},
-      };
-    }),
+    entries: set.tools.map((entry) => ({
+      kind: entry.kind, label: entry.label, icon: text(entry.icon), shortcut: entry.shortcut, group: entry.group,
+      operation: entry.operation, creates: entry.creates, slot: entry.slot, via: entry.via, direction: entry.direction,
+      visible: entry.visible, enabled: entry.enabled, unavailable: entry.unavailable ?? [], args: entry.args ?? {},
+      ...(entry.forEach === undefined ? {} : { forEach: entry.forEach }), as: entry.as ?? 'item',
+    })),
   }));
 
   return {

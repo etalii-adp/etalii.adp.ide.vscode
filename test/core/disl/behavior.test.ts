@@ -390,7 +390,7 @@ describe('a behavior', () => {
         ] },
         lockAll: { for: 'selection', actions: [{ forEach: 'selection', as: 's', do: [{ set: { locked: 'true' }, target: 's', when: '!s.locked' }] }, { notify: { message: "'Locked.'" } }] },
         clear: { for: 'diagram', enabled: 'diagram.nodes.size() > 0', confirm: 'Really?', actions: [{ delete: 'diagram.nodes' }] },
-        spin: { for: 'diagram', actions: [{ retype: { to: "'Final'" } }] },
+        spin: { for: 'diagram', actions: [{ resize: { width: '10' } }] },
         both: { for: 'diagram', actions: [{ call: 'spin' }, { call: 'clear' }] },
       },
       deletion: { Final: { relations: 'forbid' } },
@@ -401,7 +401,7 @@ describe('a behavior', () => {
   const model: Model = { diagram: {}, elements: [state('a', { title: 'A' })], relations: [] };
 
   it('reports an action it does not run, and skips it', () => {
-    expect(findings.map((finding) => finding.message)).toEqual(['An action of the operation `spin` is a `retype`, which this add-on does not run, so it is skipped.']);
+    expect(findings.map((finding) => finding.message)).toEqual(['An action of the operation `spin` is a `resize`, which this add-on does not run, so it is skipped.']);
     expect(changes(behavior.operate(model, 'spin', []))).toEqual([]);
   });
 

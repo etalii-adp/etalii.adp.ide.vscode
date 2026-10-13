@@ -142,6 +142,11 @@ export function createExpressions(specification: Specification, metamodel: Metam
   });
   register('Entity.positionIn(list<dyn>): int', (entity: Entity, items: unknown[]) => BigInt(items.indexOf(entity)));
   register('list.isUnique(): bool', (items: unknown[]) => new Set(items).size === items.length);
+  // The middle of a box, such as `self.view.bounds`, as its x and its y (DISL 12.2).
+  register('map.center(): list<double>', (box: unknown) => {
+    const side = (name: string): number => number(member(box, name) ?? 0);
+    return [side('x') + side('width') / 2, side('y') + side('height') / 2];
+  });
   options.library?.(register);
   register('Entity.label(): string', (entity: Entity) => String(member(entity, metamodel.types[factsOf(entity)?.type ?? '']?.labelAttribute ?? '') ?? ''));
 

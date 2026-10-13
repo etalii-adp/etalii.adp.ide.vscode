@@ -7,7 +7,7 @@
 import { interpretOperations } from '../desl/operations';
 import { expressionsOf, loadDesigner } from '../desl/specification';
 import { interpretSurface } from '../desl/surface';
-import { applyChanges, baseCoordinate, interpretBehavior, type Change, type EndPlace, type Outcome, type Point, type Situation } from '../disl/behavior';
+import { applyChanges, baseCoordinate, interpretBehavior, type Change, type EndPlace, type OfferedEntry, type Outcome, type Point, type Situation, type ViewChange } from '../disl/behavior';
 import { interpretConstraints } from '../disl/constraints';
 import { interpretCoordinates, rulerRows } from '../disl/coordinates';
 import { createExpressions } from '../disl/expressions';
@@ -37,7 +37,9 @@ import { claimingBinding, claimsOf, suggests } from './claims';
 import { readDefinitionFolder, type Definition } from './definitionFolder';
 import { composedSplices, modelChangesOf, viewStepsOf, type Refused } from './modelChanges';
 import { missingPlugins, pluginReferences, type PluginRegistry } from './pluginRegistry';
+import { layoutOf, newRegistration, withLayout, type Corner } from './registrationLayout';
 import { tableReader, type TableProperty, type TableRequest, type TableView } from './tableView';
+import { wireIdsOf } from './wireIds';
 
 // The host's own sentences, for what a definition has no words for.
 const GONE = 'That is no longer in this document.';
@@ -46,6 +48,7 @@ const NO_TEXT = 'This text cannot be changed here.';
 const NOT_HERE = 'This is not possible here.';
 const UNREADABLE = 'The document could not be read, so it cannot be edited.';
 const NO_LINK = 'There is no link to open.';
+const NO_PLACE = 'An end is put on a part of what it is on, on a side of that part, at a share of the side from 0 to 1.';
 
 const severities: Readonly<Record<string, Severity>> = { error: 'error', warning: 'warning', info: 'information', hint: 'hint' };
 const controls: Readonly<Record<string, Control>> = {
@@ -109,6 +112,10 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     rows: (config, model) => arrangedRows(sceneTool, model, createScene(sceneTool, model, measured), config),
   });
   const texts = createTexts(specification, expressions);
+  const wire = wireIdsOf(definition.specification);
+  const origin = typeof specification.language.origin === 'string' ? specification.language.origin : specification.language.id;
+  // Pins that no entry of the document holds are kept beside it: the layout of its registration, by the top-left corner of each element (DISL 11.6, FBL 8.3).
+  const keptBeside = persistence.value.view.store.includes('pinned') && persistence.value.view.bind.pinned === undefined;
 
   // What reading the definition found, and each required plugin that is missing: findings of every document.
   const ofDefinition: Finding[] = [
@@ -135,6 +142,8 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     readonly stale: readonly string[];
     /** The relations the model's relation types derive: drawn and edited, and no part of the model. */
     readonly derived: readonly DerivedRelation[];
+    /** The corners the registration keeps, by id, where pins are kept beside the document. */
+    readonly corners: Readonly<Record<string, Corner>>;
   }
 
   // What the FBL library asks of the tool type's specification: the id of an entry of bound view data, and which attributes hold a moment (FBL 5.3, 6.3).
@@ -147,7 +156,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   // The frame asks several things of one text in a row: the last reading is kept.
   let last: { readonly source: Source; readonly open: Open } | undefined;
   function opened(source: Source): Open {
-    if (last && last.source.text === source.text && last.source.fileName === source.fileName) return last.open;
+    if (last && last.source.text === source.text && last.source.fileName === source.fileName && last.source.registration === source.registration) return last.open;
     const binding = claimingBinding(bindings, source.fileName, source.text) ?? bindings[0];
     const body = bodyOf(binding, source);
     const read = body.model;
@@ -160,9 +169,11 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       ...derived.findings,
     ].map(framed);
     const gate = needed.length > 0 ? messages.pluginMissing(needed[0].id) : body.isReadOnly && !read.unreadable ? binding.readOnly || messages.readOnlyFile : undefined;
-    const kept = { view: typed.view, stale: typed.stale, derived: derived.value };
+    const kept = { view: typed.view, stale: typed.stale, derived: derived.value, corners: keptBeside ? layoutOf(source.registration) : {} };
+    // What is said of a document that cannot be read is the definition's sentence for one that cannot be edited, else the reader's finding.
+    const unread = behavior.value.message('std.readOnly', emptyModel) ?? found[0]?.message ?? UNREADABLE;
     const open: Open = read.unreadable
-      ? { binding, read, model, findings: found, unreadable: true, refusal: behavior.value.message('std.readOnly', emptyModel) ?? found[0]?.message ?? UNREADABLE, notice: found[0]?.message ?? UNREADABLE, ...kept }
+      ? { binding, read, model, findings: found, unreadable: true, refusal: unread, notice: unread, ...kept }
       : { binding, read, model, findings: found, unreadable: false, refusal: gate, notice: gate, ...kept };
     last = { source, open };
     return open;
@@ -183,6 +194,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       filters: options.filters as SceneOptions['filters'],
       collapsed: Object.fromEntries(open.model.elements.map((element) => [element.id, folded(element.id)])),
       view: open.view,
+      ...(keptBeside ? { corners: open.corners } : {}),
       ...(options.placed === undefined ? {} : { placed: options.placed }),
       ...(open.refusal === undefined ? {} : { env: { readOnly: true } }),
     };
@@ -190,17 +202,23 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     return drawn.scene;
   };
 
-  const situationOf = (open: Open, options: ViewOptions): Situation => ({
-    env: { viewpoint: viewpointOf(options), ...(open.refusal === undefined ? {} : { readOnly: true }) }, ...(options.collapsed === undefined ? {} : { collapsed: options.collapsed }),
-    view: open.view,
+  const situationOf = (open: Open, options: ViewOptions): Situation => {
     // Where a node is drawn, as the point of it its placement names: what is stored when it is pinned (DISL 11.6).
-    at: (id) => {
+    const at = (id: string): Point | undefined => {
       const node = sceneOf(open, options).nodes.find((candidate) => candidate.id === id);
       if (!node) return undefined;
       const [fx, fy] = anchorOf(nodeNotation(viewpoints.value.all[viewpointOf(options)].notation, metamodel.value, node.type).placement.anchor);
       return { x: node.box.x + fx * node.box.width, y: node.box.y + fy * node.box.height };
-    },
-  });
+    };
+    // An element the registration keeps a corner for is pinned where it is drawn.
+    const beside = Object.keys(open.corners);
+    const view = beside.length === 0 ? open.view : { ...open.view, pinned: { ...open.view.pinned, ...Object.fromEntries(beside.flatMap((id) => { const point = at(id); return point ? [[id, point]] : []; })) } };
+    return {
+      env: { viewpoint: viewpointOf(options), ...(open.refusal === undefined ? {} : { readOnly: true }) }, ...(options.collapsed === undefined ? {} : { collapsed: options.collapsed }),
+      view, at,
+      bounds: (id) => sceneOf(open, options).nodes.find((candidate) => candidate.id === id)?.box,
+    };
+  };
   const elementOf = (model: Model, id: string) => [...model.elements, ...model.relations].find((element) => element.id === id);
 
   // ---- what a scene carries beside its nodes and edges ----
@@ -287,7 +305,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     if (open.refusal !== undefined) return [];
     const scope = texts.scope({ model: open.model, env: situationOf(open, {}).env });
     const all = (groups: readonly ToolGroup[]): ToolboxEntry[] => groups.filter((group) => texts.holds(group.visible, scope, true)).flatMap((group) => [
-      ...group.tools.filter((tool) => texts.holds(tool.visible, scope, true)).map((tool) => ({ id: tool.id, label: texts.worded(tool.label, scope, tool.id), icon: tool.icon ?? '', description: tool.doc ?? '' })),
+      ...group.tools.filter((tool) => texts.holds(tool.visible, scope, true)).map((tool) => ({ id: wire.tool(tool.id), label: texts.worded(tool.label, scope, tool.id), icon: tool.icon ?? '', description: tool.doc ?? '' })),
       ...all(group.groups),
     ]);
     return all(groupsIn(toolbox.value, viewpoints.value.default));
@@ -297,7 +315,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   function rowsOf(on: Subject, type: string): { readonly item: FormItem; readonly group: string }[] {
     const rows = (items: readonly FormItem[], group: string): { readonly item: FormItem; readonly group: string }[] => items.flatMap((item) => {
       if (!item.visible(on)) return [];
-      if (item.kind === 'field' || item.kind === 'computed') return [{ item, group }];
+      if (item.kind === 'field' || item.kind === 'computed' || item.kind === 'type') return [{ item, group }];
       return rows(item.items, item.label(on) || group);
     });
     return rows(formFor(forms.value, type).items, '');
@@ -314,23 +332,30 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       const locked = item.readOnly(on);
       const readOnly = open.refusal ?? (locked.readOnly ? locked.reason ?? NO_ROW : undefined);
       return {
-        id: item.rowId(on), label: item.label(on), group, control: controls[item.widget] ?? 'text', value: item.display(on),
+        id: wire.property(item.rowId(on)), label: item.label(on), group, control: controls[item.widget] ?? 'text', value: item.display(on),
         ...(options.length > 0 ? { options } : {}), ...(readOnly === undefined ? {} : { readOnly }),
       };
     });
   }
+
+  /** The entries the menu of a target offers, each with the id it is asked for by. */
+  const offersOf = (open: Open, target: string | undefined, situation: Situation): { readonly entry: OfferedEntry; readonly id: string }[] => {
+    const type = target === undefined ? undefined : (elementOf(open.model, target) ?? open.derived.find((relation) => relation.id === target))?.type;
+    const lineage = type === undefined ? [] : metamodel.value.types[type]?.lineage ?? [type];
+    return behavior.value.menu(open.model, target, situation).groups.flat().map((entry) => ({ entry, id: wire.action(entry.operation ?? entry.kind, lineage, entry.args) }));
+  };
 
   function actions(source: Source, selection: readonly string[], options: ViewOptions = {}): Action[] {
     const open = opened(source);
     const line = selection.length === 1 ? open.derived.find((relation) => relation.id === selection[0]) : undefined;
     const target = selection.length === 1 && (line ?? elementOf(open.model, selection[0])) ? selection[0] : undefined;
     // In a document that cannot be edited, what is left is what changes nothing of it: a fold, a link followed.
-    const offered = behavior.value.menu(open.model, target, situationOf(open, options)).groups.flat()
-      .filter((entry) => open.refusal === undefined || (!open.unreadable && behavior.value.operations.find((operation) => operation.id === entry.operation)?.viewOnly === true));
+    const offered = offersOf(open, target, situationOf(open, options))
+      .filter(({ entry }) => open.refusal === undefined || (!open.unreadable && behavior.value.operations.find((operation) => operation.id === entry.operation)?.viewOnly === true));
     // A derived relation whose removal its definition maps to an operation, and that has no menu of its own, is removed by the host's own entry: see docs/disl-support.md.
     if (line && offered.length === 0 && open.refusal === undefined && Object.hasOwn(line.edits, 'delete')) return [{ id: 'delete', label: 'Delete', shortcut: 'Delete', enabled: true }];
-    return offered.map((entry): Action => ({
-      id: entry.operation ?? entry.kind, label: entry.label,
+    return offered.map(({ entry, id }): Action => ({
+      id, label: entry.label,
       ...(entry.icon === undefined ? {} : { icon: entry.icon }), ...(entry.shortcut === undefined ? {} : { shortcut: entry.shortcut }),
       enabled: entry.enabled, ...(entry.reason === undefined ? {} : { disabledReason: entry.reason }),
     }));
@@ -355,7 +380,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     if (!element) return undefined;
     const on: Subject = { model: open.model, element: id, env: situation.env };
     const row = rowsOf(on, element.type).find(({ item }) => item.attribute === attribute);
-    return row?.item.rowId(on);
+    return row && wire.property(row.item.rowId(on));
   };
 
   /** What an intent came to, as the outcome of the request: its changes planned by the library as splices of the text. */
@@ -370,15 +395,52 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       const computed = isCel(value) ? expressions.evaluate(value, texts.scope({ model: open.model })) : undefined;
       return computed ? (computed.ok ? computed.value : null) : (value as Value);
     };
-    const viewSteps = viewStepsOf(outcome.view, persistence.value.view.bind, open.binding, open.read, standard);
+    // A pin that is kept beside the document is a corner of its registration's layout, and no step of the body.
+    const pinning = (change: ViewChange): boolean => keptBeside && (change.kind === 'pin' || change.kind === 'unpin');
+    const viewSteps = viewStepsOf(outcome.view.filter((change) => !pinning(change)), persistence.value.view.bind, open.binding, open.read, standard);
     if ('refused' in viewSteps) return { kind: 'refused', sentence: viewSteps.refused };
+    // The corners after the request: each follows its element to the id that has afterwards, one of an element that is gone goes, and each pin is the corner of the box it is the placement's point of.
+    let registration: string | undefined;
+    if (keptBeside && (outcome.renamed.size > 0 || outcome.view.some(pinning))) {
+      const was = new Map([...outcome.renamed].map(([before, after]) => [after, before]));
+      const there = new Set(outcome.after.elements.map((element) => element.id));
+      const corners: Record<string, Corner> = {};
+      for (const [id, corner] of Object.entries(open.corners)) {
+        const now = outcome.renamed.get(id) ?? id;
+        if (there.has(now)) corners[now] = corner;
+      }
+      const drawn = sceneOf(open, options).nodes;
+      for (const change of outcome.view) {
+        if (change.kind === 'unpin') delete corners[change.element];
+        if (change.kind !== 'pin') continue;
+        const node = drawn.find((candidate) => candidate.id === (was.get(change.element) ?? change.element));
+        const [fx, fy] = node ? anchorOf(nodeNotation(viewpoints.value.all[viewpoint].notation, metamodel.value, node.type).placement.anchor) : [0, 0];
+        corners[change.element] = { x: change.x - fx * (node?.box.width ?? 0), y: change.y - fy * (node?.box.height ?? 0) };
+      }
+      // The registration is written when there is first something to keep in it.
+      const text = source.registration ?? (Object.keys(corners).length > 0 ? newRegistration(origin) : undefined);
+      const next = text === undefined ? undefined : withLayout(text, corners);
+      if (next !== source.registration) registration = next;
+    }
     // With any write go the entries of view data that are about nothing, the last first, so that one named by its place is still at that place (DISL 11.6).
     const written = modelSteps.length + viewSteps.length > 0;
     const steps = [...(written ? [...open.stale].reverse().map((id) => ({ kind: 'remove' as const, id })) : []), ...modelSteps, ...viewSteps];
     // Each step is planned against the body the one before left; FBL's own history is not used (research R5).
     const body = steps.length > 0 ? bodyOf(open.binding, source) : undefined;
     const edits: Edit[] = [];
-    for (const step of steps) {
+    // Values set on entries that are each named once touch no byte of one another: they are planned against the one body,
+    // which is read once and not once for every step, and are one edit.
+    const apart = steps.length > 1 && steps.every((step) => step.kind === 'set') && new Set(steps.map((step) => (step.kind === 'set' ? step.id : ''))).size === steps.length;
+    if (apart) {
+      const splices: Edit['splices'][number][] = [];
+      for (const step of steps) {
+        const planned = body!.plan(step);
+        if ('refused' in planned) return { kind: 'refused', sentence: planned.refused };
+        splices.push(...planned.planned.splices);
+      }
+      edits.push({ splices: splices.map((splice, index) => ({ splice, index })).sort((one, other) => one.splice.start - other.splice.start || one.index - other.index).map((entry) => entry.splice) });
+    }
+    for (const step of apart ? [] : steps) {
       const planned = body!.change(step);
       if ('refused' in planned) return { kind: 'refused', sentence: planned.refused };
       edits.push(planned.planned);
@@ -396,6 +458,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     }
     return {
       kind: 'applied', splices: edits.length === 0 ? [] : composedSplices(edits),
+      ...(registration === undefined ? {} : { registration }),
       ...(asked ? { select: asked.elements[0] } : {}),
       ...(editing === undefined ? {} : { editLabel: true, multiline: editing === 'multiline' }),
       ...(Object.keys(folds).length === 0 ? {} : { viewOptions: { ...options, collapsed: { ...options.collapsed, ...folds } } }),
@@ -407,10 +470,20 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     const { model } = open;
     const intents = behavior.value;
     // What changes nothing of the document is not an edit: a fold, and an operation of viewer state, are answered in a read-only document too (DISL 9.4).
-    const viewing = (request.kind === 'fold' && request.group === undefined) || request.kind === 'openLink'
-      || (request.kind === 'action' && intents.operations.find((operation) => operation.id === request.action)?.viewOnly === true);
-    if (open.refusal !== undefined && (open.unreadable || !viewing)) return { kind: 'refused', sentence: open.refusal };
     const situation = situationOf(open, options);
+    // What an action that is asked for is: the entry of the menu that has its id, with the arguments that entry gives; else what the id
+    // stands for by the definition's own mapping, the first that applies to what is selected; else the operation or the kind of that name.
+    const meant = (action: string, target: string | undefined): { readonly name: string; readonly args?: Readonly<Record<string, Value>> } => {
+      const offer = offersOf(open, target, situation).find((candidate) => candidate.id === action);
+      if (offer) return { name: offer.entry.operation ?? offer.entry.kind, ...(offer.entry.args ? { args: offer.entry.args } : {}) };
+      const candidates = wire.actionsOf(action);
+      const applying = candidates.find((candidate) => intents.availability(model, candidate.key, target === undefined ? [] : [target], situation).offered) ?? candidates[0];
+      return applying ? { name: applying.key, args: applying.args } : { name: action };
+    };
+    const acting = request.kind === 'action' ? meant(request.action, request.id) : undefined;
+    const viewing = (request.kind === 'fold' && request.group === undefined) || request.kind === 'openLink'
+      || (acting !== undefined && intents.operations.find((operation) => operation.id === acting.name)?.viewOnly === true);
+    if (open.refusal !== undefined && (open.unreadable || !viewing)) return { kind: 'refused', sentence: open.refusal };
     const viewpoint = viewpointOf(options);
     const refused = (sentence: string): EditOutcome => ({ kind: 'refused', sentence });
     const done = (outcome: Outcome): EditOutcome => carriedOut(source, open, outcome, viewpoint, options);
@@ -430,10 +503,11 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       case 'drop': {
         // A tool that runs an operation runs it on the element the point is on, the topmost there. Where the
         // operation needs an element and there is none, nothing happens: a host rule, see docs/disl-support.md.
-        const operation = Object.hasOwn(toolbox.value.tools, request.entry) ? toolbox.value.tools[request.entry].operation : undefined;
+        const entry = wire.toolOf(request.entry);
+        const operation = Object.hasOwn(toolbox.value.tools, entry) ? toolbox.value.tools[entry].operation : undefined;
         const under = operation === undefined ? undefined : [...sceneOf(open, options).nodes].reverse().find((node) => request.x >= node.box.x && request.x <= node.box.x + node.box.width && request.y >= node.box.y && request.y <= node.box.y + node.box.height)?.id;
         if (operation !== undefined && under === undefined && !intents.availability(model, operation, [], situation).offered) return { kind: 'applied', splices: [] };
-        return done(intents.create(model, request.entry, inBase({ x: request.x, y: request.y }), situation, under));
+        return done(intents.create(model, entry, inBase({ x: request.x, y: request.y }), situation, under));
       }
       case 'move': {
         const node = nodeOf(request.id);
@@ -469,15 +543,23 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
         if (joining === undefined) return refused(NOT_HERE);
         return done(intents.connect(model, joining, request.from, request.to, { source: endOf(request.fromEnd), target: endOf(request.toEnd) }, situation));
       }
-      case 'moveEnd':
-        return done(intents.reattach(model, request.id, request.end === 'from' ? 'source' : 'target', endOf(request.value) ?? {}, situation));
+      case 'moveEnd': {
+        // An end is put on a part its node draws that an end may be on, on a side of it, at a share of that side from 0 to 1.
+        const place = endOf(request.value);
+        const edge = sceneOf(open, options).edges.find((candidate) => candidate.id === request.id);
+        const on = nodeOf((request.end === 'from' ? edge?.source : edge?.target) ?? '');
+        const sides: readonly string[] = ['top', 'right', 'bottom', 'left'];
+        const placed = place && on?.parts.some((part) => part.id === place.part && part.anchor === true) === true && sides.includes(place.side ?? '') && place.at !== undefined && place.at >= 0 && place.at <= 1;
+        if (edge && on && on.parts.some((part) => part.anchor === true) && !placed) return refused(NO_PLACE);
+        return done(intents.reattach(model, request.id, request.end === 'from' ? 'source' : 'target', place ?? {}, situation));
+      }
       case 'rename':
         return done(intents.editLabel(model, request.id, request.text, situation));
       case 'setField': {
         const element = elementOf(model, request.id);
         if (!element) return refused(GONE);
         const on: Subject = { model, element: element.id, env: situation.env };
-        const row = rowsOf(on, element.type).find(({ item }) => item.rowId(on) === request.field);
+        const row = rowsOf(on, element.type).find(({ item }) => wire.property(item.rowId(on)) === request.field || item.rowId(on) === request.field);
         if (!row) return refused(NO_ROW);
         // An attribute that an operation of the definition sets from its one parameter is set by that operation, so that what it does beside is done too.
         const setting = row.item.attribute === undefined ? undefined : intents.operations.find((operation) => operation.asks === row.item.attribute && operation.param !== undefined && intents.availability(model, operation.id, [element.id], situation).offered);
@@ -493,15 +575,17 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
         const selection = id === undefined ? [] : [id];
         const asking = (question: { readonly title: string; readonly message: string; readonly confirmLabel: string; readonly danger: boolean }): EditOutcome =>
           ({ kind: 'confirm', title: question.title, message: question.message, confirmLabel: question.confirmLabel, danger: question.danger });
-        const operation = intents.operations.find((candidate) => candidate.id === request.action);
+        const { name, args } = acting!;
+        const operation = intents.operations.find((candidate) => candidate.id === name);
         if (operation) {
-          const state = intents.availability(model, request.action, selection, situation);
+          const state = intents.availability(model, name, selection, situation);
           if (state.offered && state.available && state.confirm && !confirmed) return asking(state.confirm);
           if (state.offered && state.available && operation.plugin !== undefined) {
             // The operation is a plugin's: what it answers is the outcome, and changes it makes are planned as any other.
             const result = plugins.action(operation.plugin)?.run({ source, model, selection });
             if (!result) return { kind: 'applied', splices: [] };
-            return result.kind === 'changes' ? done({ changes: result.changes, after: applyChanges(model, result.changes), created: [], effects: [], collapsed: {}, view: [] }) : result;
+            if (result.kind === 'pickPath') return { ...result, field: wire.property(result.field) };
+            return result.kind === 'changes' ? done({ changes: result.changes, after: applyChanges(model, result.changes), created: [], effects: [], collapsed: {}, view: [], renamed: new Map() }) : result;
           }
           // A request carries no parameters, and this host has no dialog to ask them in: the value is asked in ADP Properties, at the row of the attribute the operation sets.
           const field = state.offered && state.available && id !== undefined ? rowOf(open, situation, id, operation.asks) : undefined;
@@ -509,19 +593,20 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
           // Where the request names no point, the middle of what is shown is the point.
           const shown = options.viewport;
           const at = request.x !== undefined && request.y !== undefined ? { x: request.x, y: request.y } : shown ? { x: shown.x + shown.width / 2, y: shown.y + shown.height / 2 } : undefined;
-          return done(intents.operate(model, request.action, selection, situation, at && inBase(at)));
+          return done(intents.operate(model, name, selection, situation, at && inBase(at), args));
         }
-        if (request.action === 'delete' && id !== undefined) {
+        if (name === 'delete' && id !== undefined) {
           const removal = intents.deletion(model, selection, situation);
           if (removal.refused !== undefined) return refused(removal.refused);
           return removal.confirm && !confirmed ? asking(removal.confirm) : done(intents.remove(model, selection, situation));
         }
         // The standard entries of DISL 7.3 that a definition lists by their kind.
-        if (request.action === 'pin' && id !== undefined) return done(intents.pin(model, id, situation.at?.(id), situation));
-        if (request.action === 'unpin' && id !== undefined) return done(intents.unpin(model, [id], situation));
-        if (request.action === 'unpinAll') return done(intents.unpin(model, undefined, situation));
-        if (request.action === 'create-child' && id !== undefined) return done(intents.createChild(model, id, situation));
-        if (request.action === 'editLabel' && id !== undefined) {
+        if (name === 'pin' && id !== undefined) return done(intents.pin(model, id, situation.at?.(id), situation));
+        if (name === 'unpin' && id !== undefined) return done(intents.unpin(model, [id], situation));
+        if (name === 'unpinAll') return done(intents.unpin(model, undefined, situation));
+        if (name === 'create-child' && id !== undefined) return done(intents.createChild(model, id, situation));
+        if ((name === 'moveUp' || name === 'moveDown') && id !== undefined) return done(intents.shift(model, id, name === 'moveUp' ? -1 : 1, situation));
+        if (name === 'editLabel' && id !== undefined) {
           const editing = editedLabel(model, id, viewpoint);
           if (editing?.how !== 'form') return editing ? { kind: 'editInPlace', id, multiline: editing.how === 'multiline' } : refused(NO_TEXT);
           // A label the definition edits in a form is edited in ADP Properties, at the row of the attribute it shows.
@@ -569,7 +654,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
 
   const language = specification.language;
   return {
-    origin: typeof language.origin === 'string' ? language.origin : language.id,
+    origin,
     kind: 'diagram',
     displayName: texts.worded(language.label, {}, definition.name),
     claims: claimsOf(bindings),

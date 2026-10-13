@@ -54,6 +54,9 @@ export interface FormItemDeclaration {
   readonly value?: string | CelValue | { readonly attribute: string };
   readonly operation?: string;
   readonly actions?: readonly unknown[];
+  /** For an item of kind `type`: how a type on offer is named, with `item` bound to its name, and why a type that is not on offer is refused (DISL 7.5). */
+  readonly optionLabel?: Expression;
+  readonly refusals?: readonly Reason[];
   readonly doc?: Doc;
   readonly [name: string]: unknown;
 }
@@ -92,15 +95,17 @@ export interface Option {
 
 /**
  * What an entered value means: the attributes to set (null empties one), or the actions of the
- * item's `parse` to run with `value` bound to the text, or the sentence of a refusal.
+ * item's `parse` to run with `value` bound to the text, or the type the element is to become, or
+ * the sentence of a refusal.
  */
 export type Parsed =
   | { readonly set: Readonly<Record<string, Value | null>> }
   | { readonly write: readonly unknown[]; readonly value: string }
+  | { readonly retype: string }
   | { readonly refused: string };
 
 export interface FormItem {
-  /** `field`, `computed`, a container (`section`, `row`, `group`, `tabs`), or another kind of DISL 7.5. */
+  /** `field`, `computed`, `type` (the element's type, which it changes), a container (`section`, `row`, `group`, `tabs`), or another kind of DISL 7.5. */
   readonly kind: string;
   /** The attribute a field edits. */
   readonly attribute?: string;
@@ -291,8 +296,26 @@ export function interpretForms(specification: Specification, metamodel: Metamode
     }
   };
 
+  const retypes = isObject(specification.behavior) && isObject(specification.behavior.retype) ? specification.behavior.retype : {};
+
   const item = (form: string, type: string, own: FormItemDeclaration): FormItem => {
     const computed = own.kind === 'computed';
+    // An item of kind `type` shows the element's type and changes it (DISL 7.5).
+    const typed = own.kind === 'type';
+    const typeName = (on: Subject, name: string): string => {
+      const result = own.optionLabel === undefined ? undefined : expressions.evaluate(own.optionLabel, scope(on, { item: name }));
+      return result?.ok && typeof result.value === 'string' ? result.value : metamodel.types[name]?.label ?? name;
+    };
+    // The types on offer: those `options` gives, else the element's own and those `behavior.retype` lets it become.
+    const offered = (on: Subject): string[] => {
+      const evaluated = isCel(own.options) ? expressions.evaluate(own.options, scope(on)) : undefined;
+      const listed: readonly unknown[] | undefined = Array.isArray(own.options) ? own.options : evaluated?.ok && Array.isArray(evaluated.value) ? evaluated.value : undefined;
+      if (listed) return listed.filter((entry): entry is string => typeof entry === 'string');
+      const present = subject(on).type;
+      const from = (metamodel.types[present]?.lineage ?? [present]).map((name) => retypes[name]).find((entry) => isObject(entry));
+      const to = isObject(from) && Array.isArray(from.to) ? from.to.filter((entry): entry is string => typeof entry === 'string' && holds(from.when, scope(on, { target: entry }), true)) : [];
+      return [present, ...to.filter((entry) => entry !== present)];
+    };
     const kind = own.kind ?? (own.attribute === undefined ? 'text' : 'field');
     const name = own.attribute;
     const attributeOf = (on: Subject): Attribute | undefined => {
@@ -304,7 +327,7 @@ export function interpretForms(specification: Specification, metamodel: Metamode
     const owner = `the item \`${own.id ?? name ?? (typeof own.label === 'string' ? own.label : kind)}\` of the form \`${form}\``;
     unread(owner, {
       visible: own.visible, enabled: own.enabled, accepts: own.parse?.accepts, label: cel(own.label), title: cel(own.title), display: cel(own.display),
-      value: cel(own.value), options: cel(own.options), refusal: cel(own.parse?.refusal), readOnly: cel(own.readOnly),
+      value: cel(own.value), options: cel(own.options), refusal: cel(own.parse?.refusal), readOnly: cel(own.readOnly), optionLabel: own.optionLabel,
     });
     for (const validation of own.validate ?? []) unread(owner, { rule: validation.rule, message: cel(validation.message) });
 
@@ -322,9 +345,16 @@ export function interpretForms(specification: Specification, metamodel: Metamode
     };
     const entered = (on: Subject, input: Value): unknown => {
       const attribute = attributeOf(on);
-      return typeof input === 'string' || !attribute ? input : texts.world(on.model, on.env).toCel(input, attribute);
+      if (!attribute) return input;
+      // A text that reads as a number of a numeric attribute is judged as that number.
+      const kind = valueKind(metamodel, attribute.type);
+      const numeric = kind.kind === 'primitive' && (kind.primitive === 'int' || kind.primitive === 'number');
+      const one = typeof input === 'string' && numeric && attribute.many !== true ? read(input, attribute) : undefined;
+      const value = one && 'value' in one ? one.value : input;
+      return typeof value === 'string' ? value : texts.world(on.model, on.env).toCel(value, attribute);
     };
     const value = (on: Subject): Value | undefined => {
+      if (typed) return subject(on).type;
       if (!computed) return stored(on);
       if (isObject(own.value) && typeof own.value.attribute === 'string') return subject(on).attributes[own.value.attribute];
       if (!isCel(own.value)) return own.value as string | undefined;
@@ -348,17 +378,17 @@ export function interpretForms(specification: Specification, metamodel: Metamode
       if (reason !== undefined) return { readOnly: true, reason };
       const bindable = isObject(own.readOnly) && typeof own.readOnly.attribute === 'string' ? subject(on).attributes[own.readOnly.attribute] === true : holds(own.readOnly, bound, false);
       const locked = bindable || attribute?.readOnly === true || attribute?.derived !== undefined || 'fixed' in (attribute ?? {}) || !holds(own.enabled, bound, true);
-      return { readOnly: locked || (own.parse === undefined && attribute === undefined) };
+      return { readOnly: locked || (own.parse === undefined && attribute === undefined && !typed) };
     };
 
     return {
       kind,
       attribute: name,
       // A computed item that parses its own text is edited as text (DISL 7.5).
-      widget: own.widget ?? (!computed ? widgetOf(fixed) : own.parse ? 'text' : 'readonly'),
+      widget: own.widget ?? (typed ? 'select' : !computed ? widgetOf(fixed) : own.parse ? 'text' : 'readonly'),
       widgetOptions: own.widgetOptions ?? {},
       required: own.required === true || fixed?.required === true,
-      editable: name !== undefined || own.parse !== undefined,
+      editable: name !== undefined || own.parse !== undefined || typed,
       collapsible: own.collapsible === true || own.collapsed === true,
       collapsed: own.collapsed === true,
       operation: own.operation,
@@ -370,6 +400,7 @@ export function interpretForms(specification: Specification, metamodel: Metamode
       visible: (on) => holds(own.visible, scope(on, { value: held(on) }), true),
       readOnly,
       options: (on) => {
+        if (typed) return offered(on).map((entry) => ({ value: entry, label: typeName(on, entry) }));
         const kindOf = attributeOf(on) && valueKind(metamodel, attributeOf(on)!.type);
         const named = isObject(own.options) && typeof own.options.enum === 'string' ? metamodel.enums[own.options.enum] : own.options === undefined && kindOf?.kind === 'enum' ? kindOf.enum : undefined;
         if (named) return named.values.map((entry) => ({ value: entry.key, label: entry.label, icon: typeof entry.icon === 'string' ? entry.icon : undefined }));
@@ -381,6 +412,7 @@ export function interpretForms(specification: Specification, metamodel: Metamode
       },
       value,
       display: (on) => {
+        if (typed) return typeName(on, subject(on).type);
         const bound = scope(on, { value: held(on) });
         const present = value(on);
         if (own.display !== undefined) return worded(own.display, bound, present === undefined || present === null ? '' : shown(present, attributeOf(on)));
@@ -392,6 +424,15 @@ export function interpretForms(specification: Specification, metamodel: Metamode
       parse: (on, input) => {
         const locked = readOnly(on);
         if (locked.readOnly) return { refused: locked.reason ?? `${label(on) || 'This'} cannot be changed here.` };
+        if (typed) {
+          // A type on offer, by its name in the list or its own; any other is refused with the first of `refusals` that holds (DISL 7.5).
+          const text = String(input).trim();
+          const same = (candidate: string): boolean => candidate === text || typeName(on, candidate).toLowerCase() === text.toLowerCase();
+          const chosen = offered(on).find(same);
+          if (chosen !== undefined) return { retype: chosen };
+          const meant = Object.values(metamodel.types).find((candidate) => candidate.kind === 'node' && !candidate.abstract && same(candidate.name));
+          return { refused: (meant && applicable(own.refusals, scope(on, { newValue: meant.name }))) ?? `'${text}' is not one of the types this can become.` };
+        }
         const invalid = validate(on, input);
         if (invalid !== undefined) return { refused: invalid };
         if (own.parse && typeof input === 'string') {
@@ -476,5 +517,5 @@ export const formFor = (forms: Forms, type: string | undefined, usage: Usage = '
 
 /** The rows of a form: its fields and computed items, those inside its containers included, in order. */
 export function rowsOf(items: readonly FormItem[]): FormItem[] {
-  return items.flatMap((entry) => (containers.includes(entry.kind) ? rowsOf(entry.items) : entry.kind === 'field' || entry.kind === 'computed' ? [entry] : []));
+  return items.flatMap((entry) => (containers.includes(entry.kind) ? rowsOf(entry.items) : entry.kind === 'field' || entry.kind === 'computed' || entry.kind === 'type' ? [entry] : []));
 }

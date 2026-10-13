@@ -11,6 +11,7 @@ export const supportedFeatures: readonly string[] = [
   'ruler.adaptive',
   'snap.byGesture',
   'anchor.part',
+  'anchor.sides',
   'canvas.filters',
   'viewpoint.variants',
   'placement.bound',

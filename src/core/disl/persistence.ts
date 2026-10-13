@@ -77,7 +77,10 @@ export function interpretPersistence(specification: Specification, metamodel: Me
   }
 
   const ids: InterpretedPersistence['ids'] = { strategy: 'uuid-v7', encoding: 'hex', stable: true, pattern: '^[A-Za-z0-9_.:#-]{1,128}$', missing: 'assign', compare: 'exact', ...declared.ids };
-  if (ids.strategy !== 'uuid-v4') findings.push(finding('disl.persistence', 'warning', `New elements get an id by the strategy \`uuid-v4\`, not by \`${ids.strategy}\`, which this add-on does not support.`));
+  // A derived id is its expression's value (DISL 11.5.2); any other strategy is read as `uuid-v4`.
+  const derived = ids.strategy === 'derived' && (typeof ids.expression === 'string' || isCel(ids.expression));
+  if (ids.strategy === 'derived' && !derived) problem('The ids are derived, and `ids.expression` does not say from what.');
+  else if (ids.strategy !== 'uuid-v4' && !derived) findings.push(finding('disl.persistence', 'warning', `New elements get an id by the strategy \`uuid-v4\`, not by \`${ids.strategy}\`, which this add-on does not support.`));
   if (ids.types) findings.push(finding('disl.persistence', 'warning', 'The id rules for single types are not supported; every type follows the one rule.'));
 
   const store = declared.view?.store ?? [];
@@ -169,6 +172,55 @@ export function newId(persistence: InterpretedPersistence, type: string): string
   return (typeof prefix === 'string' ? prefix : prefix?.[type] ?? '') + text;
 }
 
+/**
+ * A model with the ids its `derived` strategy computes (DISL 11.5.2): each node's id is the value
+ * of `ids.expression` for it, ancestors before descendants, and whatever names a node by its id
+ * (a parent, an end of a relation) follows. `renamed` holds each id that changed, by what it was.
+ * A model whose ids are the derived ones already is given back as it is, and so is the model of a
+ * specification with another strategy. An expression that fails for a node leaves its id as it was.
+ */
+export function derivedIds(persistence: InterpretedPersistence, expressions: Expressions, model: Model): { readonly model: Model; readonly renamed: ReadonlyMap<string, string> } {
+  const expression = persistence.ids.strategy === 'derived' ? persistence.ids.expression : undefined;
+  if (typeof expression !== 'string' && !isCel(expression)) return { model, renamed: new Map() };
+  // simplified: nodes are renamed, and a parent and an end of a relation follow; a reference attribute that names a node is not rewritten, until a definition with derived ids has one.
+  const depths = new Map<string, number>();
+  const parents = new Map(model.elements.map((element) => [element.id, element.parent]));
+  const depthOf = (id: string): number => {
+    if (!depths.has(id)) {
+      depths.set(id, 0);
+      const parent = parents.get(id);
+      depths.set(id, parent === undefined || !parents.has(parent) ? 0 : depthOf(parent) + 1);
+    }
+    return depths.get(id)!;
+  };
+  // Each node with the id it was read or made with; its present id changes level by level.
+  let nodes = model.elements.map((element) => ({ was: element.id, depth: depthOf(element.id), element }));
+  let relations = model.relations;
+  const deepest = Math.max(-1, ...nodes.map((node) => node.depth));
+  for (let depth = 0; depth <= deepest; depth++) {
+    const world = expressions.over({ diagram: model.diagram, elements: nodes.map((node) => node.element), relations });
+    const next = new Map<string, string>();
+    for (const node of nodes) {
+      if (node.depth !== depth) continue;
+      const result = expressions.evaluate(expression, world.scope(node.element.id));
+      if (result.ok && typeof result.value === 'string' && result.value !== '' && result.value !== node.element.id) next.set(node.element.id, result.value);
+    }
+    if (next.size === 0) continue;
+    const now = (id: string | undefined): string | undefined => (id === undefined ? undefined : next.get(id) ?? id);
+    nodes = nodes.map((node) => {
+      const { element } = node;
+      const [id, parent] = [now(element.id)!, now(element.parent)];
+      return id === element.id && parent === element.parent ? node : { ...node, element: { ...element, id, ...(parent === undefined ? {} : { parent }) } };
+    });
+    relations = relations.map((relation) => {
+      const [source, target] = [now(relation.source), now(relation.target)];
+      return source === relation.source && target === relation.target ? relation : { ...relation, source, target };
+    });
+  }
+  const renamed = new Map(nodes.flatMap((node) => (node.was === node.element.id ? [] : [[node.was, node.element.id] as const])));
+  return renamed.size === 0 ? { model, renamed } : { model: { diagram: model.diagram, elements: nodes.map((node) => node.element), relations }, renamed };
+}
+
 /** What `typeMap` says of a binding type: its entry, or the type under its own name. */
 export const entryOf = (persistence: InterpretedPersistence, type: string): TypeMapEntry =>
   Object.hasOwn(persistence.typeMap, type) ? persistence.typeMap[type] : { as: type };
@@ -243,7 +295,7 @@ export function readModel(reading: Pick<FblModel, 'elements' | 'findings' | 'unr
       const named = read(entry, entryMap, entryMap.as, attributes, host);
       // An attribute mapped to `id` is the element's id only where the library found none in the body.
       const element: ModelElement = {
-        id: entry.idIsStored ? entry.id : named.id ?? entry.id, type: entryMap.as, attributes, host, parent: entry.parentId, ephemeral: !entry.idIsStored && named.id === undefined, line: entry.line,
+        id: entry.idIsStored ? entry.id : named.id ?? entry.id, type: entryMap.as, attributes, host, parent: entry.parentId, ephemeral: !entry.idIsStored && named.id === undefined && persistence.ids.strategy !== 'derived', line: entry.line,
         ...(entry.parentSlot === undefined ? {} : { slot: entry.parentSlot }),
       };
       inModel.set(entry, element.id);
