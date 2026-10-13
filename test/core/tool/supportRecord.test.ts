@@ -95,4 +95,24 @@ describe('the support record', () => {
       expect(subsections.filter((name) => section(body, 3, name).trim() === '')).toEqual([]);
     });
   });
+
+  describe('its differences raised and not settled here', () => {
+    /** The numbers of the issues of etalii.adp a text links. */
+    const issues = (part: string): string[] => [...part.matchAll(/etalii\.adp\/issues\/(\d+)/g)].map((match) => match[1]);
+    const raised = rows(section(text, 2, 'Differences raised and not settled here'));
+
+    it('are one row for each issue, its number first and what it is about beside it', () => {
+      expect(raised.length).toBeGreaterThan(0);
+      expect(raised.filter((cells) => cells.length !== 2 || issues(cells[0]).length !== 1 || cells[1] === '')).toEqual([]);
+      const numbers = raised.flatMap((cells) => issues(cells[0]));
+      expect(numbers).toEqual([...new Set(numbers)]);
+    });
+
+    it('hold every issue a difference names, and no table of differences holds a row of them', () => {
+      const differences = section(text, 2, 'Differences from each definition');
+      const numbers = new Set(raised.flatMap((cells) => issues(cells[0])));
+      expect([...new Set(issues(differences))].filter((number) => !numbers.has(number))).toEqual([]);
+      expect(rows(differences).filter((cells) => issues(cells[0]).length > 0)).toEqual([]);
+    });
+  });
 });

@@ -41,3 +41,17 @@ The diagram is read from its definition (etalii.adp spec 027). Where the definit
 | "Edit notes…" takes the focus to the Notes row of ADP Properties. | The standalone host asks for notes in a dialog; Visual Studio Code has no multi-line input dialog, and the property grid has the room. |
 | The Explorer does not offer "Open as Agent Behavior Modelling". "Open With" and the Command Palette offer it for every Markdown file. | The definition's binding does not say which Markdown file looks like a behavior model (etalii.adp issue 150), and nothing here names a tool type to say it instead. |
 | While a node is dragged, the lines to what moves are drawn again between their ends, and the siblings it has passed step aside. | As the standalone canvas shows it; the arithmetic is the tidy tree's own, which the scene carries to the canvas. |
+
+## Native dialogs, seen in a real window
+
+A test in a real Visual Studio Code cannot answer a native dialog, so each one the three new tool types raise is looked at once by a person (etalii.adp spec 027, FR-015). Peter Vrenken saw them on 2026-10-13 in Visual Studio Code 1.141.0 on Windows, with the Development build of the plug-in at `9849baf`. Each appeared and read as its definition states.
+
+| Tool type | Dialog | Raised by |
+|---|---|---|
+| Mind map | The confirmation "Delete branch?", which names the node and the number of nodes under it | Deleting a node that has children |
+| Mind map | The choice between a file and a folder, then the platform's open dialog | "Link to" |
+| Knowledge | The confirmation before a property goes with its values | Deleting a property that has values |
+| Knowledge | The confirmation before an option goes and the rows that use it are cleared | Deleting an option that rows use |
+| Mind map, agent activity diagram, Knowledge | Visual Studio Code's save prompt | Closing a document that was edited |
+
+A tool type that is added, or a definition that gains a dialog, gets its row here when a person has seen it.
