@@ -7,7 +7,7 @@ import type { Change, ViewChange } from '../disl/behavior';
 import { attributesOf, type Metamodel } from '../disl/metamodel';
 import type { Model, Value } from '../disl/model';
 import { toBinding, type InterpretedPersistence, type ViewBind } from '../disl/persistence';
-import { allRules, type FblBinding } from '../fbl/documents/types';
+import { allRules, findRule, type FblBinding } from '../fbl/documents/types';
 import type { FblModel } from '../fbl/model';
 import type { ModelChange } from '../fbl/planning/modelChange';
 import type { Edit } from '../fbl/splice';
@@ -41,7 +41,10 @@ const takes = (value: unknown): boolean => scalar(value) || (Array.isArray(value
  *
  * - The values a change gives one entry are one step: a `set` after an `add` or a `set` of the same entry joins it.
  * - A removal the binding's own cascade makes is left out, so that nothing is removed twice. So is
- *   the removal of an element that lies in another one the request removes: it goes with that one.
+ *   the removal of an element that lies in another one the request removes: it goes with that one,
+ *   and the emptying of a reference to a removed element in an entry that the cascade takes with it.
+ * - A declared binding appends what is added where its insert rule says (FBL 6.2): an element that
+ *   is added at a place among its siblings is added, and then moved there.
  * - A binding read by a plugin declares no rule: a type is named as `typeMap` reads it, an attribute
  *   by the metamodel's name, and what the body can take is the plugin's to say when it plans.
  * - A `set` on the diagram (id `''`) is a `set` of the entry the binding reads as the diagram, or an `add` of it when the document has none.
@@ -95,6 +98,17 @@ export function modelChangesOf(changes: readonly Change[], context: ChangeContex
     });
   }
 
+  // Whether a change only empties references to elements this request removes, in an entry the binding's cascade removes with one of them.
+  const taken = (id: string, attributes: Readonly<Record<string, Value | null>>): boolean => {
+    const entry = context.read.find(id);
+    const held = [...model.elements, ...model.relations].find((element) => element.id === id)?.attributes ?? {};
+    return entry !== undefined && Object.entries(attributes).some(([name, value]) => {
+      const named = held[name];
+      const gone = value === null && typeof named === 'string' && removed.has(named) ? context.read.find(named) : undefined;
+      return gone !== undefined && findRule(binding, gone.rule)?.remove?.cascade.includes(entry.rule) === true;
+    });
+  };
+
   const steps: Step[] = [];
   const merge = (id: string, attributes: Readonly<Record<string, unknown>>): boolean => {
     const index = steps.map((step) => step.id).lastIndexOf(id);
@@ -116,12 +130,16 @@ export function modelChangesOf(changes: readonly Change[], context: ChangeContex
       const written = Object.fromEntries(Object.entries(change.attributes).filter(([name]) => !Object.hasOwn(declared, name) || declared[name].readOnly !== true));
       const found = stored(change.type, change.id, { ...written, ...ends });
       if ('refused' in found) return found;
-      steps.push({ kind: 'add', type: found.type, id: change.id, attributes: found.attributes, ...(change.parent === undefined ? {} : { parent: change.parent }), ...(change.position === undefined ? {} : { position: change.position }) });
+      const placed = binding.plugin === undefined ? undefined : change.position;
+      steps.push({ kind: 'add', type: found.type, id: change.id, attributes: found.attributes, ...(change.parent === undefined ? {} : { parent: change.parent }), ...(change.slot === undefined ? {} : { slot: change.slot }), ...(placed === undefined ? {} : { position: placed }) });
+      if (change.position !== undefined && placed === undefined) steps.push({ kind: 'move', id: change.id, ...(change.parent === undefined ? {} : { parent: change.parent }), position: change.position });
     } else if (change.id === '') {
       const found = stored(DIAGRAM, '', change.attributes);
       if ('refused' in found) return found;
       const entry = context.read.elements.find((element) => element.type === found.type);
       if (!merge(entry?.id ?? '', found.attributes)) steps.push(entry ? { kind: 'set', id: entry.id, attributes: found.attributes } : { kind: 'add', type: found.type, id: '', attributes: found.attributes });
+    } else if (taken(change.id, change.attributes)) {
+      continue;
     } else {
       const added = changes.find((other) => other.kind === 'add' && other.id === change.id);
       const type = added?.kind === 'add' ? added.type : typeOf(change.id);

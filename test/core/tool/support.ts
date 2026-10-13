@@ -71,7 +71,7 @@ export const diagramOf = (read: ReadFolder, plugins: PluginRegistry = pluginRegi
 
 /** The designer a definition gives. */
 export const designerOf = (read: ReadFolder, plugins: PluginRegistry = pluginRegistry(noPlugins)): DesignerToolType =>
-  toolTypeFrom(read.definition, read.bindings, plugins) as DesignerToolType;
+  toolTypeFrom(read.definition, read.bindings, plugins) as unknown as DesignerToolType;
 
 /**
  * The view options a diagram read from its definition takes beside the viewport: the viewpoint to

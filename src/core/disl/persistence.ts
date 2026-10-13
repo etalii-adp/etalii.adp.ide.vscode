@@ -358,9 +358,10 @@ export function fromStored(stored: unknown, attribute: Attribute, metamodel: Met
     if (kind.kind === 'reference') return scalar ? String(value) : undefined;
     if (kind.kind === 'struct') return plain(value);
     switch (kind.primitive) {
-      case 'int': return typeof value === 'bigint' || (typeof value === 'number' && Number.isInteger(value)) ? Number(value) : undefined;
-      case 'number': return typeof value === 'bigint' || (typeof value === 'number' && Number.isFinite(value)) ? Number(value) : undefined;
-      case 'bool': return typeof value === 'boolean' ? value : undefined;
+      // A family whose values are all text, as xml's attributes are, gives a number and a boolean as they are written.
+      case 'int': return typeof value === 'bigint' || (typeof value === 'number' && Number.isInteger(value)) || (typeof value === 'string' && /^-?(0|[1-9]\d*)$/.test(value)) ? Number(value) : undefined;
+      case 'number': return typeof value === 'bigint' || (typeof value === 'number' && Number.isFinite(value)) || (typeof value === 'string' && /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?$/.test(value)) ? Number(value) : undefined;
+      case 'bool': return typeof value === 'boolean' ? value : value === 'true' ? true : value === 'false' ? false : undefined;
       case 'yearMonth': return typeof value === 'string' ? parseYearMonth(value) : undefined;
       case 'json': case 'binary': return plain(value);
       default: return scalar ? String(value) : undefined;

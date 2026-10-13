@@ -252,7 +252,9 @@ describe('a document that cannot be shown as it is', () => {
 
   it('shows a column of a value type the definition does not have as text that is not edited', () => {
     const odd = view({ ...cities, text: cities.text.replace('type: time', 'type: duration') });
-    expect(odd.properties.find((property) => property.id === 'p9')).toMatchObject({ valueType: 'duration', editor: undefined, readOnly: expect.any(String) as string });
+    const column = odd.properties.find((property) => property.id === 'p9')!;
+    expect(column).toMatchObject({ valueType: 'duration', readOnly: expect.any(String) as string });
+    expect(column.editor).toBeUndefined();
   });
 
   it('is shown as one view without settings when the document has none', () => {

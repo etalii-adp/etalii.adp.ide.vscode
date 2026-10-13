@@ -9,6 +9,7 @@ import { isObject } from '../disl/specification';
 import type { FblBinding } from '../fbl/documents/types';
 import type { PersistencePlugin } from '../fbl/plugins/persistencePlugin';
 import type { EditOutcome, Source } from '../frame/toolType';
+import type { ViewLogic } from './tableView';
 
 // A layout plugin is called by the scene, which does not import this folder: its interface is the interpreter's.
 export type { LayoutPlugin, LayoutRequest } from '../disl/layout';
@@ -31,6 +32,8 @@ export interface PluginRegistry {
   persistence(id: string): PersistencePlugin | undefined;
   layout(id: string): LayoutPlugin | undefined;
   action(id: string): ActionPlugin | undefined;
+  /** What a definition cannot state of a view, for the tool type of an origin: no plugin a definition names, and carried as one is. */
+  views(origin: string): ViewLogic | undefined;
 }
 
 /** The plugins a host carries, by what each provides. */
@@ -38,11 +41,12 @@ export interface Plugins {
   readonly persistence: readonly PersistencePlugin[];
   readonly layout: readonly LayoutPlugin[];
   readonly action: readonly ActionPlugin[];
+  readonly views?: readonly ViewLogic[];
 }
 
 export function pluginRegistry(plugins: Plugins): PluginRegistry {
   const by = <T extends { readonly id: string }>(list: readonly T[]) => (id: string): T | undefined => list.find((plugin) => plugin.id === id);
-  return { persistence: by(plugins.persistence), layout: by(plugins.layout), action: by(plugins.action) };
+  return { persistence: by(plugins.persistence), layout: by(plugins.layout), action: by(plugins.action), views: by(plugins.views ?? []) };
 }
 
 type Provides = 'persistence' | 'layout' | 'action';
@@ -80,5 +84,5 @@ export function pluginReferences(specification: Readonly<Record<string, unknown>
 }
 
 /** The references the registry lacks: for something they provide, or because they provide nothing a registry holds. */
-export const missingPlugins = (references: readonly PluginReference[], registry: PluginRegistry): PluginReference[] =>
+export const missingPlugins = (references: readonly PluginReference[], registry: Pick<PluginRegistry, Provides>): PluginReference[] =>
   references.filter((reference) => reference.provides.length === 0 || reference.provides.some((point) => registry[point](reference.id) === undefined));

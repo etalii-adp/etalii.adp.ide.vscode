@@ -4,7 +4,10 @@
 // interpreter; a request is one intent of the interpreted behavior, whose changes the library plans
 // as splices of the text. Every method is a function of its arguments.
 
-import { applyChanges, baseCoordinate, interpretBehavior, type EndPlace, type Outcome, type Point, type Situation } from '../disl/behavior';
+import { interpretOperations } from '../desl/operations';
+import { expressionsOf, loadDesigner } from '../desl/specification';
+import { interpretSurface } from '../desl/surface';
+import { applyChanges, baseCoordinate, interpretBehavior, type Change, type EndPlace, type Outcome, type Point, type Situation } from '../disl/behavior';
 import { interpretConstraints } from '../disl/constraints';
 import { interpretCoordinates, rulerRows } from '../disl/coordinates';
 import { createExpressions } from '../disl/expressions';
@@ -13,11 +16,12 @@ import { interpretLayout } from '../disl/layout';
 import { defaultOf, derivedRelations, interpretMetamodel, isRelation, linkKind, type DerivedRelation } from '../disl/metamodel';
 import { emptyModel, type Finding as Found, type Model, type Value } from '../disl/model';
 import { edgeNotation, interpretNotation, nodeNotation, styleOf, type Paint } from '../disl/notation';
-import { foldsOf, interpretPersistence, momentAttributes, readModel, viewEntryIds, type StoredView } from '../disl/persistence';
-import { isCel, isObject, loadSpecification } from '../disl/specification';
+import { entryOf, foldsOf, interpretPersistence, momentAttributes, newId, readModel, viewEntryIds, type StoredView } from '../disl/persistence';
+import { isCel, isObject, loadSpecification, localized } from '../disl/specification';
 import { groupsIn, interpretToolbox, type ToolGroup } from '../disl/toolbox';
 import { interpretViewpoints } from '../disl/viewpoints';
-import type { FblBinding } from '../fbl/documents/types';
+import { findRule, type FblBinding } from '../fbl/documents/types';
+import { extensionOf, nameOf } from '../fbl/files/paths';
 import { findingCodes } from '../fbl/finding';
 import { OpenBody } from '../fbl/history/openBody';
 import { messages } from '../fbl/messages';
@@ -26,16 +30,17 @@ import { PluginBody } from '../fbl/plugins/pluginBody';
 import { produceTemplate } from '../fbl/routing/templateWriter';
 import type { Edit } from '../fbl/splice';
 import { decode, encode } from '../fbl/text/utf8';
-import type { Action, Control, DiagramToolType, EditOutcome, EditRequest, Field, Finding, Severity, Source, ToolboxEntry, ViewOptions } from '../frame/toolType';
+import type { Action, Control, DesignerToolType, DiagramToolType, EditOutcome, EditRequest, Field, Finding, Severity, Source, ToolboxEntry, ViewOptions } from '../frame/toolType';
 import { anchorOf, arrangedRows, createScene, type Scene, type SceneChrome, type SceneOptions, type SceneRuler, type SceneTool, type SceneToken } from '../scene/scene';
 import { widthOfText } from '../text/textMetric';
 import { claimingBinding, claimsOf, suggests } from './claims';
 import { readDefinitionFolder, type Definition } from './definitionFolder';
-import { composedSplices, modelChangesOf, viewStepsOf } from './modelChanges';
+import { composedSplices, modelChangesOf, viewStepsOf, type Refused } from './modelChanges';
 import { missingPlugins, pluginReferences, type PluginRegistry } from './pluginRegistry';
+import { tableReader, type TableProperty, type TableRequest, type TableView } from './tableView';
 
 // The host's own sentences, for what a definition has no words for.
-const GONE = 'That is no longer in this diagram.';
+const GONE = 'That is no longer in this document.';
 const NO_ROW = 'This value cannot be changed here.';
 const NO_TEXT = 'This text cannot be changed here.';
 const NOT_HERE = 'This is not possible here.';
@@ -72,7 +77,11 @@ function withFallbacks(specification: Readonly<Record<string, unknown>>, fallbac
 }
 
 /** A definition, its bindings and the plugins it may name, as one tool type. Never throws. */
-export function toolTypeFrom(definition: Definition, bindings: readonly FblBinding[], plugins: PluginRegistry): DiagramToolType {
+export function toolTypeFrom(definition: Definition, bindings: readonly FblBinding[], plugins: PluginRegistry): DiagramToolType | DesignerToolType {
+  return definition.kind === 'designer' ? designerFrom(definition, bindings, plugins) : diagramFrom(definition, bindings, plugins);
+}
+
+function diagramFrom(definition: Definition, bindings: readonly FblBinding[], plugins: PluginRegistry): DiagramToolType {
   // ---- the definition, interpreted once ----
 
   const missing = missingPlugins(pluginReferences(definition.specification, bindings), plugins);
@@ -582,19 +591,254 @@ export function toolTypeFrom(definition: Definition, bindings: readonly FblBindi
   };
 }
 
+// ---- a designer ----
+
+const emptyTable = (notice: string): TableView => ({ name: '', properties: [], rows: [], total: 0, views: [], settings: [], operations: {}, readOnly: true, notice });
+
+/** An element of a model the FBL library read, by where it stands in the reading: the same place in two readings of one body is the same entry. */
+const placesOf = (before: FblModel, after: FblModel): Map<string, string> => new Map(before.elements.map((element, index) => [element.id, after.elements[index]?.id ?? element.id]));
+
+/**
+ * A designer's definition as a tool type (DESL 11, "Host"): its documents are read through the
+ * binding their format family has, shown as the table its surface names, and changed by its
+ * operations, each one transaction that the FBL library plans as splices of the text.
+ */
+function designerFrom(definition: Definition, bindings: readonly FblBinding[], plugins: PluginRegistry): DesignerToolType {
+  // ---- the definition, interpreted once ----
+
+  const loaded = loadDesigner(definition.specification);
+  const designer = loaded.value;
+  const { persistence } = designer;
+  const metamodel = interpretMetamodel(designer.interpreted);
+  const expressions = expressionsOf(designer, metamodel.value);
+  const constraints = interpretConstraints(designer.interpreted, metamodel.value, expressions);
+  const surface = interpretSurface(designer.surface, metamodel.value);
+  const operations = surface.value && interpretOperations(designer, surface.value, metamodel.value, expressions, constraints.value);
+  const language = designer.interpreted.language;
+  const origin = typeof language.origin === 'string' ? language.origin : language.id;
+  const table = surface.value && operations && tableReader({ surface: surface.value, metamodel: metamodel.value, operations: operations.value.all, logic: plugins.views(origin) });
+  const needed = missingPlugins(pluginReferences({}, bindings), plugins);
+
+  const ofDefinition: Finding[] = [...loaded.findings, ...metamodel.findings, ...expressions.findings, ...constraints.findings, ...surface.findings, ...(operations?.findings ?? [])].map(framed);
+  const ofPlugins: Finding[] = needed.map((reference) => ({ rule: findingCodes.pluginMissing, severity: 'warning', message: messages.pluginMissing(reference.id), line: 0 }));
+  // A document of a surface this host does not lay out opens read-only, with the reason (DESL 11).
+  const unshown = surface.value ? undefined : surface.findings[0]?.message ?? loaded.findings[0]?.message ?? UNREADABLE;
+
+  // ---- a document ----
+
+  interface Open {
+    readonly binding: FblBinding;
+    readonly read: FblModel;
+    readonly model: Model;
+    readonly findings: readonly Finding[];
+    /** Why nothing may be edited: absent for a document that is editable. */
+    readonly refusal?: string;
+    readonly unreadable: boolean;
+  }
+
+  const bodyOf = (binding: FblBinding, source: Source): OpenBody | PluginBody => {
+    const bytes = encode(source.text);
+    return binding.plugin ? PluginBody.open(bytes, binding, plugins.persistence(binding.plugin.plugin), source.fileName) : OpenBody.open(bytes, binding, { fileName: nameOf(source.fileName), ...operations?.value.reading(binding) });
+  };
+
+  let last: { readonly source: Source; readonly open: Open } | undefined;
+  function opened(source: Source): Open {
+    if (last && last.source.text === source.text && last.source.fileName === source.fileName) return last.open;
+    const binding = claimingBinding(bindings, source.fileName, source.text) ?? bindings[0];
+    const body = bodyOf(binding, source);
+    const read = body.model;
+    const typed = readModel(read, binding, metamodel.value, persistence);
+    const model = read.unreadable ? emptyModel : typed.value;
+    const found = constraints.value.check(model, typed.findings, { file: nameOf(source.fileName) }).filter((finding) => finding.code !== findingCodes.pluginMissing).map(framed);
+    const gate = unshown ?? (needed.length > 0 ? messages.pluginMissing(needed[0].id) : body.isReadOnly && !read.unreadable ? binding.readOnly || messages.readOnlyFile : undefined);
+    const open: Open = { binding, read, model, findings: found, unreadable: read.unreadable, refusal: read.unreadable ? found[0]?.message ?? UNREADABLE : gate };
+    last = { source, open };
+    return open;
+  }
+
+  // ---- what is shown ----
+
+  const view = (source: Source): TableView => {
+    const open = opened(source);
+    if (!table || open.unreadable) return emptyTable(open.refusal ?? UNREADABLE);
+    return table.view(open.model, { readOnly: open.refusal !== undefined, ...(open.refusal === undefined ? {} : { notice: open.refusal }) });
+  };
+
+  const isRow = (model: Model, id: string): boolean => model.elements.some((element) => element.id === id && element.type === surface.value?.rows.type);
+  const editors: Readonly<Record<string, Control>> = { number: 'number', checkbox: 'choice', choice: 'choice', choices: 'tags', rows: 'tags' };
+
+  // The cells of one selected row are the rows of ADP Properties, a column each.
+  function fields(source: Source, selection: readonly string[]): Field[] {
+    const open = opened(source);
+    if (!table || selection.length !== 1 || !isRow(open.model, selection[0])) return [];
+    const row = table.rowsOf(open.model).find((candidate) => candidate.id === selection[0]);
+    return table.propertiesOf(open.model).map((property): Field => {
+      const cell = row?.cells[property.id];
+      const names = property.options.map((option) => option.name);
+      const options = property.editor === 'checkbox' ? ['', 'true', 'false'] : property.editor === 'choice' ? ['', ...names] : property.editor === 'choices' ? names : undefined;
+      const readOnly = open.refusal ?? property.readOnly;
+      return {
+        id: property.id, label: property.name, group: '', control: (property.editor && editors[property.editor]) ?? 'text',
+        value: property.editor === 'rows' ? (cell?.items ?? []).map((item) => item.value).join(', ') : cell?.text ?? '',
+        ...(options ? { options } : {}), ...(readOnly === undefined ? {} : { readOnly }),
+      };
+    });
+  }
+
+  function actions(source: Source, selection: readonly string[]): Action[] {
+    const open = opened(source);
+    if (!operations || open.refusal !== undefined) return [];
+    return operations.value.all.flatMap((operation): Action[] => {
+      const state = operations.value.availability(open.model, operation.id, selection);
+      return state.offered ? [{ id: operation.id, label: state.label, enabled: state.available, ...(state.reason === undefined ? {} : { disabledReason: state.reason }) }] : [];
+    });
+  }
+
+  // ---- an edit ----
+
+  /** Changes of the model as the outcome of a request: planned by the library, one after the other, as splices of the text. */
+  function written(source: Source, open: Open, changes: readonly Change[], select?: string): EditOutcome {
+    const steps = modelChangesOf(changes, { binding: open.binding, metamodel: metamodel.value, persistence, read: open.read }, open.model);
+    if ('refused' in steps) return { kind: 'refused', sentence: steps.refused };
+    const body = steps.length > 0 ? bodyOf(open.binding, source) : undefined;
+    const edits: Edit[] = [];
+    for (const step of steps) {
+      const planned = body!.change(step);
+      if ('refused' in planned) return { kind: 'refused', sentence: planned.refused };
+      edits.push(planned.planned);
+    }
+    return { kind: 'applied', splices: edits.length === 0 ? [] : composedSplices(edits), ...(select === undefined ? {} : { select }) };
+  }
+
+  /** What a field of ADP Properties was given, as the values its column takes: a value of a cell, or the ones a cell is to hold. */
+  function given(open: Open, row: string, column: TableProperty, text: string): { readonly value: Value | null } | { readonly items: readonly string[] } | Refused {
+    const typed = text.trim();
+    const listed = typed === '' ? [] : typed.split(',').map((part) => part.trim()).filter((part) => part !== '');
+    const optionOf = (name: string): string | undefined => column.options.find((option) => option.name.toLowerCase() === name.toLowerCase())?.id;
+    const unknown = (name: string): Refused => ({ refused: `\`${name}\` is not one of the values this column takes.` });
+    switch (column.editor) {
+      case 'number': return typed === '' ? { value: null } : Number.isFinite(Number(typed)) ? { value: Number(typed) } : { refused: `\`${typed}\` is not a number.` };
+      case 'checkbox': return typed === '' ? { value: null } : typed === 'true' || typed === 'false' ? { value: typed === 'true' } : unknown(typed);
+      case 'choice': return typed === '' ? { value: null } : optionOf(typed) === undefined ? unknown(typed) : { value: optionOf(typed)! };
+      case 'choices': {
+        const missing = listed.find((name) => optionOf(name) === undefined);
+        return missing === undefined ? { items: listed.map((name) => optionOf(name)!) } : unknown(missing);
+      }
+      case 'rows': return { items: listed };
+      case 'text': return { value: text };
+      default: return column.editor === undefined ? { refused: column.readOnly ?? NO_ROW } : { value: typed === '' ? null : typed };
+    }
+  }
+
+  function edit(source: Source, request: TableRequest, options: ViewOptions, confirmed: boolean): EditOutcome {
+    const open = opened(source);
+    if (!operations || !table || open.refusal !== undefined) return { kind: 'refused', sentence: open.refusal ?? UNREADABLE };
+    const run = operations.value;
+
+    // An entry that was written without an id is given one by the first edit that writes the document, in the same step
+    // (DESL 5.3.4): the ids are written first, and the request is made of the document that has them.
+    const nameless = open.read.elements.filter((element) => !element.idIsStored && findRule(open.binding, element.rule)?.id?.from !== undefined);
+    if (nameless.length > 0) {
+      const body = bodyOf(open.binding, source);
+      const edits: Edit[] = [];
+      for (const element of nameless) {
+        const planned = body.change({ kind: 'storeId', id: element.id, newId: newId(persistence, entryOf(persistence, element.type).as) });
+        if ('refused' in planned) return { kind: 'refused', sentence: planned.refused };
+        edits.push(planned.planned);
+      }
+      const named = placesOf(open.read, body.model);
+      const now = (id: string): string => named.get(id) ?? id;
+      const asked: TableRequest = request.kind === 'operation'
+        ? { ...request, ...(request.on ? { on: request.on.map(now) } : {}), ...(request.args ? { args: Object.fromEntries(Object.entries(request.args).map(([name, value]) => [name, typeof value === 'string' ? now(value) : value])) } : {}) }
+        : request.kind === 'show' ? { ...request, view: now(request.view) }
+          : request.kind === 'setField' ? { ...request, id: now(request.id), field: now(request.field) }
+            : { ...request, row: now(request.row), property: now(request.property), ...(typeof request.value === 'string' ? { value: now(request.value) } : {}) } as TableRequest;
+      const outcome = edit({ ...source, text: decode(body.bytes) }, asked, options, confirmed);
+      if (outcome.kind !== 'applied' || outcome.splices.length === 0) return outcome;
+      const rest: Edit = { splices: outcome.splices.map((splice) => ({ operation: 'replace-value', start: splice.offset, end: splice.offset + splice.length, text: splice.text })) };
+      return { ...outcome, splices: composedSplices([...edits, rest]) };
+    }
+
+    const done = (outcome: Outcome): EditOutcome => {
+      if (outcome.refused !== undefined) return { kind: 'refused', sentence: outcome.refused };
+      // What a request made is shown: the first row or column of it.
+      const made = outcome.created.find((id) => outcome.after.elements.some((element) => element.id === id && (element.type === surface.value!.rows.type || element.type === surface.value!.columns.type)));
+      return written(source, open, outcome.changes, made);
+    };
+
+    switch (request.kind) {
+      case 'operation': {
+        const selection = request.on ?? [];
+        const state = run.availability(open.model, request.operation, selection);
+        if (!state.offered) return { kind: 'refused', sentence: NOT_HERE };
+        if (!state.available) return { kind: 'refused', sentence: state.reason ?? `${state.label} cannot be done now.` };
+        if (state.confirm && !confirmed) return { kind: 'confirm', title: state.confirm.title, message: state.confirm.message, confirmLabel: state.confirm.confirmLabel, danger: state.confirm.danger };
+        const args = Object.fromEntries(Object.entries(request.args ?? {}).filter((entry): entry is [string, string | number | boolean] => entry[1] !== null));
+        return done(run.run(open.model, request.operation, selection, args));
+      }
+      case 'cell':
+        return done(run.setCell(open.model, request.row, request.property, request.value));
+      case 'item':
+        return done(run.setItem(open.model, request.row, request.property, request.value, request.present));
+      case 'show':
+        return done(run.activate(open.model, request.view));
+      case 'setField': {
+        const column = table.propertiesOf(open.model).find((property) => property.id === request.field);
+        if (!column || !isRow(open.model, request.id)) return { kind: 'refused', sentence: GONE };
+        const asked = given(open, request.id, column, request.value);
+        if ('refused' in asked) return { kind: 'refused', sentence: asked.refused };
+        if ('value' in asked) return done(run.setCell(open.model, request.id, column.id, asked.value));
+        // Several values: each one that is new is added and each one that is gone taken away, as one step.
+        const held = (table.rowsOf(open.model).find((row) => row.id === request.id)?.cells[column.id]?.items ?? []).map((item) => item.value);
+        const changes: Change[] = [];
+        let model = open.model;
+        for (const [value, present] of [...held.filter((value) => !asked.items.includes(value)).map((value) => [value, false] as const), ...asked.items.filter((value) => !held.includes(value)).map((value) => [value, true] as const)]) {
+          const outcome = run.setItem(model, request.id, column.id, value, present);
+          if (outcome.refused !== undefined) return { kind: 'refused', sentence: outcome.refused };
+          changes.push(...outcome.changes);
+          model = outcome.after;
+        }
+        return written(source, open, changes);
+      }
+      default:
+        return { kind: 'refused', sentence: NOT_HERE };
+    }
+  }
+
+  return {
+    origin,
+    kind: 'designer',
+    displayName: localized(language.label, language.defaultLocale ?? 'en') ?? definition.name,
+    claims: claimsOf(bindings),
+    claimed: (fileName, text) => claimingBinding(bindings, fileName, text) !== undefined,
+    suggests: (fileName, text) => suggests(bindings, fileName, text),
+    findings: (source) => [...opened(source).findings, ...ofDefinition, ...ofPlugins],
+    view,
+    toolbox: () => [],
+    fields,
+    actions,
+    edit,
+    // A new document is in the format of the name it is given: the template of the binding that claims that name (DESL 5.1).
+    newDocument: (name) => {
+      const extension = extensionOf(nameOf(name)).toUpperCase();
+      const binding = bindings.find((candidate) => candidate.claims.extensions.some((claimed) => claimed.toUpperCase() === extension)) ?? bindings[0];
+      const made = produceTemplate(binding, undefined, name, (rule) => newId(persistence, entryOf(persistence, findRule(binding, rule)?.type ?? rule).as), binding.plugin && plugins.persistence(binding.plugin.plugin));
+      return made ? decode(made) : '';
+    },
+  };
+}
+
 /**
  * The tool types of the folders of `definitions/`, each folder given as its files' bytes by name,
  * in the order of the folders' names. A folder that is no tool type is left out, with the reason.
  */
 export function toolTypesFrom(folders: ReadonlyMap<string, ReadonlyMap<string, Uint8Array>>, plugins: PluginRegistry):
-{ readonly types: readonly DiagramToolType[]; readonly skipped: readonly { readonly folder: string; readonly reason: string }[] } {
-  const types: DiagramToolType[] = [];
+{ readonly types: readonly (DiagramToolType | DesignerToolType)[]; readonly skipped: readonly { readonly folder: string; readonly reason: string }[] } {
+  const types: (DiagramToolType | DesignerToolType)[] = [];
   const skipped: { readonly folder: string; readonly reason: string }[] = [];
   for (const folder of [...folders.keys()].sort()) {
     const read = readDefinitionFolder(folder, folders.get(folder)!);
     if ('reason' in read) skipped.push({ folder, reason: read.reason });
-    // simplified: a designer is left out until `toolTypeFrom` makes one; say so here until then.
-    else if (read.definition.kind !== 'diagram') skipped.push({ folder, reason: 'The definition is a designer, which this host does not show yet.' });
     else types.push(toolTypeFrom(read.definition, read.bindings, plugins));
   }
   return { types, skipped };
