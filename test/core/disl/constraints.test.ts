@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { interpretConstraints, type ConstraintsSection, type Gesture } from '../../../src/core/disl/constraints';
-import { parseYearMonth } from '../../../src/core/disl/metamodel';
-import { hypeCycleJson, tool } from './tool';
+import { createExpressions } from '../../../src/core/disl/expressions';
+import { interpretMetamodel, parseYearMonth } from '../../../src/core/disl/metamodel';
+import type { Model } from '../../../src/core/disl/model';
+import { loadSpecification } from '../../../src/core/disl/specification';
+import { hypeCycleJson, json, tool } from './tool';
 
 const header = 'gartner-hypecycle-graph: 1\n';
 const trends = 'trends:\n  - id: a\n    name: A\n    start: 1900-01\n    stop: 1920-01\n  - id: b\n    name: B\n    start: 1910-01\n    stop: 1930-01\n';
@@ -241,5 +244,24 @@ describe('what refuses a gesture', () => {
     expect(preventing.constraints.refusals(move, withPhases('a', 8), withPhases('a', 9))).toEqual([]);
     expect(preventing.constraints.refusals(move, { ...model, elements: model.elements.filter((element) => element.id !== 'a') }, withPhases('a', 9))).toHaveLength(1);
     expect(shipped.constraints.refusals(move, model, withPhases('a', 9))).toEqual([]);
+  });
+});
+
+// DISL 0.6, section 4.7: etalii.adp's example definition of inherited relation flags gives the findings its file states.
+describe('the findings of inherited relation flags', () => {
+  it('are the two std.endpoints findings of service-calls.findings.json, in its order', () => {
+    const folder = 'fixtures/disl/flag-inheritance';
+    const specification = loadSpecification(json(`${folder}/service-calls.dis`)).value;
+    const metamodel = interpretMetamodel(specification).value;
+    const constraints = interpretConstraints(specification, metamodel, createExpressions(specification, metamodel)).value;
+    const definition = json(`${folder}/service-calls.did`) as { elements: { id: string; type: string; attributes: Record<string, string> }[]; relations: { id: string; type: string; source: string; target: string }[] };
+    const model: Model = {
+      diagram: {},
+      elements: definition.elements.map((element, index) => ({ ...element, host: {}, ephemeral: false, line: index + 1 })),
+      relations: definition.relations.map((relation, index) => ({ ...relation, attributes: {}, host: {}, ephemeral: false, line: definition.elements.length + index + 1 })),
+    };
+    const expected = (json(`${folder}/service-calls.findings.json`) as { findings: { constraintId: string; severity: string; elementId: string }[] }).findings;
+    expect(constraints.check(model).map((found) => ({ constraintId: found.constraint, severity: found.severity, elementId: found.element })))
+      .toEqual(expected.map(({ constraintId, severity, elementId }) => ({ constraintId, severity, elementId })));
   });
 });

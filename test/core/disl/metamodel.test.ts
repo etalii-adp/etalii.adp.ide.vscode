@@ -3,7 +3,7 @@ import {
   allowsEnd, attributesOf, defaultOf, defaultsOf, formatYearMonth, interpretMetamodel, isA, isRelation, ordinal, parseYearMonth, valueKind, yearMonthOf, zeroOf,
 } from '../../../src/core/disl/metamodel';
 import { loadSpecification } from '../../../src/core/disl/specification';
-import { hypeCycleJson, mindmapJson } from './tool';
+import { hypeCycleJson, json, mindmapJson } from './tool';
 
 const interpret = (json: unknown) => interpretMetamodel(loadSpecification(json).value);
 const specification = (metamodel: object) => ({ disl: '0.3', language: { id: 'a.b', version: '1.0.0' }, metamodel });
@@ -144,6 +144,35 @@ describe('inheritance', () => {
     expect(messages).toContain('`C` extends `Nowhere`');
     expect(messages).toContain('names `Gone`');
     expect(broken.findings.every((finding) => finding.code === 'disl.metamodel' && finding.severity === 'error')).toBe(true);
+  });
+});
+
+// DISL 0.6, section 4.7: a relation type's flags are inherited along its linearisation and only narrowed, and
+// supertypes that differ in a flag the type does not state are an error. The documents are etalii.adp's.
+describe('relation flags', () => {
+  const folder = 'fixtures/disl/flag-inheritance';
+
+  it('reads the example with the effective values of its relation types', () => {
+    const { value: metamodel, findings } = interpret(json(`${folder}/service-calls.dis`));
+    expect(findings).toEqual([]);
+    const flags = (name: string) => {
+      const type = metamodel.types[name];
+      return isRelation(type) ? [type.directed, type.allowSelfLoops, type.allowParallel] : undefined;
+    };
+    expect(['Call', 'SyncCall', 'AsyncCall', 'Observation', 'TracedCall'].map(flags)).toEqual([
+      [true, true, false], [true, true, false], [true, true, false], [true, false, true], [true, false, false],
+    ]);
+  });
+
+  it.each([
+    ['relation-flag-widened.dis', ['`Strong`', '`allowParallel`', '`Link`']],
+    ['relation-flag-directed.dis', ['`Mutual`', '`directed`', '`Link`']],
+    ['relation-flag-conflict.dis', ['`Both`', '`allowSelfLoops`', '`Loop`', '`Plain`']],
+  ])('refuses %s with one problem naming the type, the flag and the supertypes', (file, names) => {
+    const { findings } = interpret(json(`${folder}/${file}`));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({ code: 'disl.metamodel', severity: 'error' });
+    for (const name of names) expect(findings[0].message).toContain(name);
   });
 });
 
