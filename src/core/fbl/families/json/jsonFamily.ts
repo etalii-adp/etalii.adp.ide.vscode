@@ -170,9 +170,15 @@ export class JsonFamily extends TreeFamily {
       });
     } else {
       const members: string[] = [];
+      // A constant is written as it is, as its JSON type: at its place in `insert.keys` when they name
+      // it, else after the other keys, in the constant's member order (FBL 0.8 6.2).
+      const constant = new Map(settings.constant ?? []);
       for (const key of settings.keys) {
-        const value = wireValue(request, key);
+        const value = constant.has(key) ? writeJson(constant.get(key), undefined) : wireValue(request, key);
         if (value !== undefined) members.push(`${quote(key)}: ${value}`);
+      }
+      for (const [key, value] of constant) {
+        if (!settings.keys.includes(key)) members.push(`${quote(key)}: ${writeJson(value, undefined)}`);
       }
       text = this.newObject(members, beside);
     }

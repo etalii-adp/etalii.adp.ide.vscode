@@ -220,6 +220,12 @@ export interface InsertSettings {
   readonly emit?: string;
   readonly skeleton?: string;
   readonly when?: string;
+  /**
+   * The keys and values every new entry is given as they are (FBL 0.8 6.2), in the constant's member
+   * order: a string, a number, a boolean or null; undefined for a member that is none of them, which
+   * loading refuses.
+   */
+  readonly constant?: readonly (readonly [string, string | number | boolean | null | undefined])[];
 }
 
 /** How a missing container is created: `at` is "end-of-document", "before", "after", "under" or (FBL 0.4) "end". */

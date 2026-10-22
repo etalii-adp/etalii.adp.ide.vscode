@@ -7,12 +7,27 @@
 //   node scripts/sync-fbl.mjs <path to etalii.adp> <path to etalii.adp.ide.standalone> [<etalii.adp ref>] [<standalone ref>]
 //
 // Both refs default to origin/develop.
+//
+// A few files are taken from a later etalii.adp commit than the rest, each pinned below with the commit
+// and the reason, and copied into the same folder; once the etalii.adp ref has them, they are copied
+// with the rest and the pinned source is left out.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 const [adp, standalone, adpRef = 'origin/develop', standaloneRef = 'origin/develop'] = process.argv.slice(2);
+
+// The files of a feature whose conformance this library takes up before the whole corpus is copied again.
+// insert-constant: etalii.adp spec 033, the insert constant of FBL 0.8, at the merge of etalii.adp #427.
+const pinned = [
+  {
+    name: 'insert-constant',
+    commit: '59e2117738fb0e254f961d093b25038c90af78fe',
+    why: 'the insert constant of FBL 0.8, etalii.adp spec 033',
+    files: (file) => /^specifications\/fbl\/(fixtures\/insert-constant-[^/]+\/|refused\/[^/]+\.fbl$)/.test(file),
+  },
+];
 if (!adp || !standalone) {
   console.error('Usage: node scripts/sync-fbl.mjs <path to etalii.adp> <path to etalii.adp.ide.standalone> [<etalii.adp ref>] [<standalone ref>]');
   process.exit(1);
@@ -51,13 +66,30 @@ const adpCommit = adpGit('rev-parse', adpRef).toString().trim();
 const fbl = 'specifications/fbl/';
 const conformance = list(adpGit, adpCommit, fbl).filter((file) => {
   const relative = file.slice(fbl.length);
-  return (!relative.includes('/') && relative.endsWith('.fbl')) || relative.startsWith('fixtures/') || relative.startsWith('registrations/');
+  return (!relative.includes('/') && relative.endsWith('.fbl')) || relative.startsWith('fixtures/') || relative.startsWith('registrations/') || (relative.startsWith('refused/') && relative.endsWith('.fbl'));
 });
 console.log(`etalii.adp at ${adpCommit}`);
 count('bindings', conformance.filter((file) => file.endsWith('.fbl')).length, 1);
 count('fixtures', conformance.filter((file) => file.endsWith('/fixture.json')).length, 1);
 count('registrations (conformance)', conformance.filter((file) => file.startsWith(`${fbl}registrations/`)).length, 1);
 const conformanceDigests = copy(adpGit, adpCommit, conformance, fbl, 'fixtures/fbl/conformance/');
+
+// The pinned files the etalii.adp ref does not have yet, beside the rest and without clearing them.
+const pinnedSources = [];
+for (const source of pinned) {
+  const files = list(adpGit, source.commit, fbl).filter((file) => source.files(file) && !(file.slice(fbl.length) in conformanceDigests));
+  if (files.length === 0) continue;
+  const digests = {};
+  for (const file of files.sort()) {
+    const bytes = adpGit('show', `${source.commit}:${file}`);
+    const relative = file.slice(fbl.length);
+    mkdirSync(dirname('fixtures/fbl/conformance/' + relative), { recursive: true });
+    writeFileSync('fixtures/fbl/conformance/' + relative, bytes);
+    digests[relative] = createHash('sha256').update(bytes).digest('hex');
+  }
+  count(`pinned ${source.name}`, files.length);
+  pinnedSources.push({ ...source, digests });
+}
 
 // ---- definitions: the files under definitions/ a fixture names, and the specification beside each binding ----
 
@@ -147,6 +179,7 @@ const sources = [
   { name: 'conformance', repository: 'https://github.com/etalii-adp/etalii.adp', commit: adpCommit, licence: 'Apache-2.0', from: fbl, to: 'fixtures/fbl/conformance/', files: conformanceDigests },
   { name: 'definitions', repository: 'https://github.com/etalii-adp/etalii.adp', commit: adpCommit, licence: 'Apache-2.0', from: definitionsFolder, to: 'fixtures/fbl/definitions/', files: definitionsDigests },
   { name: 'real-files', repository: 'https://github.com/etalii-adp/etalii.adp.ide.standalone', commit: standaloneCommit, licence: 'Apache-2.0', from: '', to: 'fixtures/fbl/real-files/', files: realDigests },
+  ...pinnedSources.map((source) => ({ name: source.name, repository: 'https://github.com/etalii-adp/etalii.adp', commit: source.commit, licence: 'Apache-2.0', from: fbl, to: 'fixtures/fbl/conformance/', files: source.digests })),
 ];
 writeFileSync('fixtures/fbl/manifest.json', JSON.stringify({ sources }, null, 2) + '\n');
 writeFileSync('fixtures/fbl/PROVENANCE.md', `# Where the files under fixtures/fbl/ come from
@@ -158,7 +191,7 @@ They are copied unchanged, byte for byte, from two repositories, both licensed u
 | \`fixtures/fbl/conformance/\` | [etalii-adp/etalii.adp](https://github.com/etalii-adp/etalii.adp), \`specifications/fbl/\`: the example bindings (\`*.fbl\`), \`fixtures/\` and \`registrations/\` | \`${adpCommit}\` | Apache-2.0 |
 | \`fixtures/fbl/definitions/\` | [etalii-adp/etalii.adp](https://github.com/etalii-adp/etalii.adp), \`definitions/\`: the bindings and inputs a fixture names, and the specification beside each such binding | \`${adpCommit}\` | Apache-2.0 |
 | \`fixtures/fbl/real-files/\` | [etalii-adp/etalii.adp.ide.standalone](https://github.com/etalii-adp/etalii.adp.ide.standalone), the files under \`src/\` its FBL tests read, under the paths they have there | \`${standaloneCommit}\` | Apache-2.0 |
-
+${pinnedSources.map((source) => `| \`fixtures/fbl/conformance/\`: ${Object.keys(source.digests).map((file) => `\`${file.slice(0, file.lastIndexOf('/') + 1)}\``).filter((folder, index, all) => all.indexOf(folder) === index).join(', ')} | [etalii-adp/etalii.adp](https://github.com/etalii-adp/etalii.adp), \`specifications/fbl/\`, taken ahead of the rest for ${source.why} | \`${source.commit}\` | Apache-2.0 |\n`).join('')}
 ## Third-party notices
 
 Some of the real files came to standalone from elsewhere. The notice standalone keeps beside them is copied with them:

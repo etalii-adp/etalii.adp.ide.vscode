@@ -107,6 +107,10 @@ export const messages = {
   // This host: the checks of FBL 5.2 and 5.7 that standalone's loader does not make.
   scalarReadingFamily: (name: string) => `'${name}' says what a slot reads from a yaml or json scalar; this family reads text and nothing else (FBL §5.2).`,
   scalarReadingSlot: (name: string) => `'${name}' is not given on a value or a capture slot (FBL §5.2).`,
+  constantFamily: "An insert's constant is given only in the yaml and json families (FBL 0.8 §6.2).",
+  constantWithEmit: 'An insert has a constant or an emit, not both (FBL 0.8 §6.2).',
+  constantValue: "A constant's value is a string, a number, a boolean or null (FBL 0.8 §6.2).",
+  constantWritten: (key: string, writer: string) => `The constant's key '${key}' is written by the rule's ${writer} too, and a place has one writer (FBL 0.8 §14.1).`,
   referenceByIdNeedsId: (rule: string) => `A reference by id names '${rule}', which stores no id with id.from (FBL §5.7).`,
 
   // ---- reading a body (FBL 5, 7.4, 7.5) ----

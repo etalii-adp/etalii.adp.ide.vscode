@@ -260,3 +260,54 @@ describe('writing yaml values', () => {
     expect(textOf(body.bytes)).toBe('items:\n  - id: a');
   });
 });
+
+describe('an insert constant', () => {
+  // FBL 0.8 6.2 (etalii.adp spec 033): the keys and values an insert writes into every new entry as
+  // they are. One that insert.keys names is written at its place there, every other after the
+  // entry's other keys in the constant's member order, each as its JSON type; no other edit writes it.
+  // Counterpart of standalone's Planning/InsertConstant.Tests.cs.
+  const constant = '{ "kind": "task", "size": 3, "done": false, "format": "1.0", "none": null }';
+  const withConstant = (family: string, keys: string): FblBinding => {
+    const json = `{ "fbl": "0.8", "bindings": { "t": { "claims": { "extensions": [".t"] }, "body": { "kind": "file", "family": "${family}" }, "reader": "declared", "text": { "quote": "double" }, "elements": [{
+      "name": "item", "type": "Item", "at": "/items/*", "id": { "from": { "key": "id" } },
+      "attributes": { "name": { "key": "name" } },
+      "insert": { "place": "end", "container": "/items", "keys": ${keys}, "constant": ${constant} },
+      "remove": {}
+    }] } } }`;
+    const { document, problems } = loadDocument(utf8(json));
+    const errors = problems.filter((problem) => problem.severity === 'error');
+    if (!document || errors.length > 0) throw new Error(`The inline binding does not load: ${errors.map((problem) => `${problem.pointer}: ${problem.message}`).join('; ')}`);
+    return document.bindings.get('t')!;
+  };
+  const addB: ModelChange = { kind: 'add', type: 'Item', id: 'b', attributes: { name: 'B' } };
+
+  it('a yaml constant named by keys is written at its place, and the others after, in member order', () => {
+    const body = OpenBody.open(utf8('items:\n  - id: a\n    kind: task\n    name: A\n'), withConstant('yaml', '["id", "kind", "name"]'));
+    expect(operationsOf(body.change(addB))).toEqual(['insert-entry']);
+    // kind second; the rest after the name, as their JSON types, the string 1.0 quoted because it is not plain-safe (FBL 6.3).
+    expect(textOf(body.bytes)).toBe('items:\n  - id: a\n    kind: task\n    name: A\n  - id: b\n    kind: task\n    name: B\n    size: 3\n    done: false\n    format: "1.0"\n    none: null\n');
+  });
+
+  it('a yaml constant not named by keys follows the keys the rule writes', () => {
+    const body = OpenBody.open(utf8('items:\n  - id: a\n    name: A\n'), withConstant('yaml', '[]'));
+    expect(operationsOf(body.change(addB))).toEqual(['insert-entry']);
+    expect(textOf(body.bytes)).toBe('items:\n  - id: a\n    name: A\n  - id: b\n    name: B\n    kind: task\n    size: 3\n    done: false\n    format: "1.0"\n    none: null\n');
+  });
+
+  it('a json constant is written as its JSON type', () => {
+    const body = OpenBody.open(utf8('{\n  "items": [\n    {\n      "id": "a",\n      "name": "A"\n    }\n  ]\n}\n'), withConstant('json', '["id", "kind", "name"]'));
+    expect(operationsOf(body.change(addB))).toEqual(['insert-entry']);
+    // A number, a bool and null as such, never as strings; the string 1.0 stays a string; kind second.
+    expect(textOf(body.bytes)).toBe('{\n  "items": [\n    {\n      "id": "a",\n      "name": "A"\n    },\n    {\n      "id": "b",\n      "kind": "task",\n      "name": "B",\n      "size": 3,\n      "done": false,\n      "format": "1.0",\n      "none": null\n    }\n  ]\n}\n');
+  });
+
+  it.each([
+    ['yaml', 'items:\n  - id: a\n    kind: task\n    name: A\n', 'items:\n  - id: a\n    kind: task\n    name: Renamed\n'],
+    ['json', '{ "items": [ { "id": "a", "kind": "task", "name": "A" } ] }\n', '{ "items": [ { "id": "a", "kind": "task", "name": "Renamed" } ] }\n'],
+  ])('a set leaves a constant as it is: %s', (family, text, expected) => {
+    // An entry that holds one constant and lacks the others: only the name changes (FBL 6.4).
+    const body = OpenBody.open(utf8(text), withConstant(family, '["id", "kind", "name"]'));
+    expect(operationsOf(body.change({ kind: 'set', id: 'a', attributes: { name: 'Renamed' } }))).toEqual(['replace-value']);
+    expect(textOf(body.bytes)).toBe(expected);
+  });
+});

@@ -751,6 +751,29 @@
         "src/examples/diagrams/wardley-map/example 2/unmodelled-statements.adp": "d62262c46c9611c6102bb6fac8a186669bb4587102d09bd9717f26f664aed631",
         "src/examples/diagrams/wardley-map/map2.adp": "d62262c46c9611c6102bb6fac8a186669bb4587102d09bd9717f26f664aed631"
       }
+    },
+    {
+      "name": "insert-constant",
+      "repository": "https://github.com/etalii-adp/etalii.adp",
+      "commit": "59e2117738fb0e254f961d093b25038c90af78fe",
+      "licence": "Apache-2.0",
+      "from": "specifications/fbl/",
+      "to": "fixtures/fbl/conformance/",
+      "files": {
+        "fixtures/insert-constant-json-read/board.fbl": "e480737670f258239a49adb8a10e1931c174bd0a3760fab39b895c13c9e833a0",
+        "fixtures/insert-constant-json-read/board.json": "2f2c28d47febe7ddaaa35f1c13a61a8e755348f9aeca4b9a89cf812707660bfc",
+        "fixtures/insert-constant-json-read/fixture.json": "16273b6de92c47b293ec9a45487dd7c6f511012931ae5e48d4b1e7d764c3e0b6",
+        "fixtures/insert-constant-json/board.fbl": "e480737670f258239a49adb8a10e1931c174bd0a3760fab39b895c13c9e833a0",
+        "fixtures/insert-constant-json/board.json": "58a1ab5077f5a71083cf2db22ad4201ebafca9533376a8e769418be19a485ef8",
+        "fixtures/insert-constant-json/fixture.json": "577a0e96e84689a697bc7900451ce8eeb74ffc0e4adc24f28d975ac6a1ff9ff9",
+        "fixtures/insert-constant-yaml-read/board.fbl": "e24bc65658e6b6b9e47d564e88c1e493dabb4049e8a3ea104baf12b60c829b8c",
+        "fixtures/insert-constant-yaml-read/board.yaml": "632d3f7287ca8b8bf24bc4e8a0d5d2232725b01de14a8a4ad967e618ad02ca94",
+        "fixtures/insert-constant-yaml-read/fixture.json": "cc75a5945115cd52182e0b94b1dd64b5f2a70220a41fde00595602f638b227ac",
+        "fixtures/insert-constant-yaml/board.fbl": "e24bc65658e6b6b9e47d564e88c1e493dabb4049e8a3ea104baf12b60c829b8c",
+        "fixtures/insert-constant-yaml/board.yaml": "a52bc5737c23d46dba274bc5b62f77d91424bc890f43bad824d30475f097a6c2",
+        "fixtures/insert-constant-yaml/fixture.json": "f7515d4a68feb522fff8b701e3ab2b805f698c6f165e937f107fdf8931b3eacc",
+        "refused/insert-constant-collision.fbl": "89463661304529151ba76e339c6f3d01e5764ac74982e4276c8e4d0452c62897"
+      }
     }
   ]
 }

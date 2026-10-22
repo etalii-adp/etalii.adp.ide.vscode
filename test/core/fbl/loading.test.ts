@@ -165,3 +165,39 @@ describe('loading an FBL document', () => {
     expect(document!.bindings.size).toBeGreaterThan(0);
   });
 });
+
+describe('an insert constant (FBL 0.8 14.1, step 6)', () => {
+  // Given only in the yaml and json families and never beside emit, its values scalars, and its key not
+  // one the same rule writes: a writable attribute binding, id.from, or a relation's source or target.
+  // Counterparts of the cases of standalone's Loading/Loading.Tests.cs for etalii.adp spec 033.
+  const bindingIn = (family: string, element: string, relations = ''): string =>
+    `{ "claims": { "extensions": [".t"] }, "body": { "kind": "file", "family": "${family}" }, "reader": "declared", "elements": [${element}]${relations} }`;
+
+  it.each([
+    ['yaml', '{ "name": "item", "type": "Item", "at": "/items/*", "id": { "from": { "key": "id" } }, "attributes": { "kind": { "key": "type" } }, "insert": { "place": "end", "container": "/items", "constant": { "type": "task" } } }', '/bindings/t/elements/0/insert/constant/type'],
+    ['json', '{ "name": "item", "type": "Item", "at": "/items/*", "id": { "from": { "key": "type" } }, "insert": { "place": "end", "container": "/items", "constant": { "type": "task" } } }', '/bindings/t/elements/0/insert/constant/type'],
+    ['yaml', '{ "name": "item", "type": "Item", "at": "/items/*", "id": { "from": { "key": "id" } }, "insert": { "place": "end", "container": "/items", "emit": "- id: {id}", "constant": { "type": "task" } } }', '/bindings/t/elements/0/insert/constant'],
+    ['lines', '{ "name": "item", "type": "Item", "line": "^(?<id>.*)$", "id": { "from": { "group": "id" } }, "insert": { "place": "end", "emit": "{id}", "constant": { "type": "task" } } }', '/bindings/t/elements/0/insert/constant'],
+    ['xml', '{ "name": "item", "type": "Item", "at": "/items/item", "id": { "from": { "attribute": "id" } }, "insert": { "place": "end", "container": "/items", "constant": { "type": "task" } } }', '/bindings/t/elements/0/insert/constant'],
+    ['yaml', '{ "name": "item", "type": "Item", "at": "/items/*", "id": { "from": { "key": "id" } }, "insert": { "place": "end", "container": "/items", "constant": { "type": ["task"] } } }', '/bindings/t/elements/0/insert/constant/type'],
+  ])('a constant is refused where step 6 forbids it: %s at %s', (family, element, pointer) => {
+    expect(errorAt(load(bindingIn(family, element), '0.8'), pointer)).toBe(true);
+  });
+
+  it.each([['source', 'from'], ['target', 'to']])('a constant on a relation\'s %s key is refused', (_, key) => {
+    const relation = `, "relations": [{ "name": "link", "type": "Link", "at": "/links/*", "source": { "key": "from", "reference": { "to": ["item"] } }, "target": { "key": "to", "reference": { "to": ["item"] } }, "insert": { "place": "end", "container": "/links", "constant": { "${key}": "a" } } }]`;
+    expect(errorAt(load(bindingIn('yaml', item, relation), '0.8'), `/bindings/t/relations/0/insert/constant/${key}`)).toBe(true);
+  });
+
+  it('a constant on a key the rule only reads is accepted', () => {
+    // The attribute is read-only, so the constant is the key's one writer.
+    const element = '{ "name": "item", "type": "Item", "at": "/items/*", "id": { "from": { "key": "id" } }, "attributes": { "kind": { "key": "type", "readOnly": true } }, "insert": { "place": "end", "container": "/items", "keys": ["id", "type"], "constant": { "type": "task", "size": 3, "done": false, "none": null } } }';
+    expect(load(bindingIn('yaml', element), '0.8').filter((problem) => problem.severity === 'error')).toEqual([]);
+  });
+
+  it('the copied refused binding is refused for its rule task only', () => {
+    const { problems } = loadDocumentAt(join(conformance, 'refused', 'insert-constant-collision.fbl'), nodeFiles);
+    // Refused at the task's constant; its note, which reads the same key read-only, is not.
+    expect(problems.filter((problem) => problem.severity === 'error').map((problem) => problem.pointer)).toEqual(['/bindings/board/elements/0/insert/constant/type']);
+  });
+});
