@@ -389,6 +389,20 @@ describe('what a slot reads from a scalar', () => {
     expect(model.find('c1')).toMatchObject({ source: '007', target: 'b' });
   });
 
+  it('a host asks a reading which element a reference names', () => {
+    // The Notion add-ons' store turns a reference into a row through referencedBy, from outside the
+    // library: the first element, in document order, of the rules it may name, whose key is the text.
+    const binding = inlineBinding(`[
+      { "name": "person", "type": "Person", "at": "/people/*", "id": { "from": { "key": "id" } }, "attributes": { "name": { "key": "name" } } },
+      { "name": "task", "type": "Task", "at": "/tasks/*", "id": { "from": { "key": "id" } }, "attributes": { "owner": { "key": "owner", "reference": { "to": ["person"], "by": "name" } } } }
+    ]`);
+    const reading = readBody(utf8('people:\n  - id: p1\n    name: Ann\n  - id: p2\n    name: Ann\n  - id: p3\n    name: Bob\ntasks:\n  - id: t1\n    owner: Bob\n'), binding, { fileName: 'plan.t' });
+    const reference = binding.elements.find((rule) => rule.name === 'task')!.attributes.find(([name]) => name === 'owner')![1].reference!;
+    expect(reading.referencedBy(reference, 'Bob')?.id).toBe('p3');
+    expect(reading.referencedBy(reference, 'Ann')?.id).toBe('p1');
+    expect(reading.referencedBy(reference, 'Cy')).toBeUndefined();
+  });
+
   it('a rule sees the written text and the style of a scalar beside its typed value', () => {
     // FBL 2.4: `text.label` is "yes" where `entry.label` is true; `style` names how it is written.
     const binding = inlineBinding(`[
