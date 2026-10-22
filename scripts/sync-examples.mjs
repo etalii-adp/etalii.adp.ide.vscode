@@ -39,6 +39,10 @@ const copies = [
   [adpName, 'specifications/desl/minimal-table.fbl', 'fixtures/tools/desl/minimal-table.fbl'],
   // DESL's own schema: what a test reads for the words that are DESL's.
   [adpName, 'specifications/desl/desl.schema.json', 'fixtures/tools/desl/desl.schema.json'],
+  // DISL 0.6, etalii.adp spec 034: the example of inherited relation flags, its definition and findings, and the
+  // three specifications that must be refused.
+  ...['service-calls.dis', 'service-calls.did', 'service-calls.findings.json'].map((name) => [adpName, `specifications/disl/${name}`, `fixtures/disl/flag-inheritance/${name}`]),
+  ...['relation-flag-widened.dis', 'relation-flag-directed.dis', 'relation-flag-conflict.dis'].map((name) => [adpName, `specifications/disl/refused/${name}`, `fixtures/disl/flag-inheritance/${name}`]),
 ];
 
 const clone = (path, gitRef) => {
@@ -72,7 +76,7 @@ for (const [repository, from, to] of copies) {
 
 writeFileSync(provenance, `# Where the examples and fixtures come from
 
-The files under \`examples/\` and \`fixtures/\` are copied unchanged, byte for byte, from [etalii-adp/etalii.adp.ide.standalone](https://github.com/etalii-adp/etalii.adp.ide.standalone) and, for DESL's smallest example, from [etalii-adp/etalii.adp](https://github.com/etalii-adp/etalii.adp), both licensed under the Apache License 2.0, as this repository is. They are what both hosts must agree on: every example opens and round-trips here as it does there, and every fixture yields the same findings. This record covers the folders of its table; \`fixtures/fbl/\` has a record of its own.
+The files under \`examples/\` and \`fixtures/\` are copied unchanged, byte for byte, from [etalii-adp/etalii.adp.ide.standalone](https://github.com/etalii-adp/etalii.adp.ide.standalone) and, for DESL's smallest example and DISL's example of inherited relation flags, from [etalii-adp/etalii.adp](https://github.com/etalii-adp/etalii.adp), both licensed under the Apache License 2.0, as this repository is. They are what both hosts must agree on: every example opens and round-trips here as it does there, and every fixture yields the same findings. This record covers the folders of its table; \`fixtures/fbl/\` has a record of its own.
 
 - Refresh them with \`node scripts/sync-examples.mjs <path to a checkout of etalii.adp.ide.standalone> [<git ref>] [<path to a checkout of etalii.adp> [<git ref>]]\`; do not edit them by hand.
 
