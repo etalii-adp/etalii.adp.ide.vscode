@@ -459,15 +459,27 @@ export class YamlFamily extends TreeFamily {
     return line.split('\n').map((part, index) => (index > 0 && trimEndOf(part, '\r').length > 0 ? this.indentation(keyIndent) + part : part)).join('\n');
   }
 
-  /** The key lines of a new item in `insert.keys` order, then the skeleton's lines. */
+  /**
+   * The key lines of a new item in `insert.keys` order, then the skeleton's lines. A constant is written
+   * as it is: at its place in `insert.keys` when they name it, else after the other keys, in the
+   * constant's member order (FBL 0.8 6.2).
+   */
   private itemLines(request: InsertRequest): string[] {
     const rule = request.rule;
     const settings = rule.insert!;
+    const constant = new Map(settings.constant ?? []);
     const lines: string[] = [];
     for (const key of keyOrder(rule, undefined)) {
       if (settings.keys.length > 0 && !settings.keys.includes(key)) continue;
+      if (constant.has(key)) {
+        if (settings.keys.includes(key)) lines.push(`${key}: ${this.scalar(constant.get(key), undefined, undefined, 0)}`);
+        continue;
+      }
       const value = this.wireValue(request, key);
       if (value !== undefined) lines.push(`${key}: ${value}`);
+    }
+    for (const [key, value] of constant) {
+      if (!settings.keys.includes(key)) lines.push(`${key}: ${this.scalar(value, undefined, undefined, 0)}`);
     }
     if (settings.skeleton !== undefined) {
       const rendered = render(settings.skeleton, (name) => {

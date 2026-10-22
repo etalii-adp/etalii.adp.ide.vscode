@@ -298,6 +298,7 @@ function readRule(json: JsonNode, relation: boolean): Rule {
       emit: str(insertJson, 'emit'),
       skeleton: str(insertJson, 'skeleton'),
       when: str(insertJson, 'when'),
+      constant: readConstant(memberOf(insertJson, 'constant')),
     };
   }
   const removeJson = memberOf(json, 'remove');
@@ -441,6 +442,7 @@ function checkBinding(binding: FblBinding, pointer: string, problems: LoadProble
     }
     if (rule.source) checkSlot(rule.source, context, `${at}/source`, problems);
     if (rule.target) checkSlot(rule.target, context, `${at}/target`, problems);
+    if (rule.insert?.constant) checkConstant(binding, rule, rule.insert.constant, `${at}/insert/constant`, problems);
   });
 
   if (!binding.plugin) {
@@ -465,6 +467,58 @@ function checkSlot(slot: Slot, context: CelContext, pointer: string, problems: L
 }
 
 /** Whether every reading of the body is the xml family's, which reads text and nothing else (FBL 4.1.5). */
+/** An insert's constant (FBL 0.8 6.2), each member in order, a member that is not a scalar as undefined. */
+function readConstant(json: JsonNode | undefined): InsertSettings['constant'] {
+  if (json?.kind !== 'object') return undefined;
+  return json.members.map((member) => {
+    const value = member.value;
+    switch (value.kind) {
+      case 'string': return [member.name, value.value] as const;
+      case 'number': return [member.name, Number(value.raw)] as const;
+      case 'true': return [member.name, true] as const;
+      case 'false': return [member.name, false] as const;
+      case 'null': return [member.name, null] as const;
+      default: return [member.name, undefined] as const;
+    }
+  });
+}
+
+/**
+ * FBL 0.8 14.1 step 6: an insert's constant is given only in the yaml and json families and never
+ * beside `emit`, its values are scalars, and none of its keys is one the same rule writes, by a
+ * writable attribute binding, `id.from`, `source` or `target`, since a place has one writer (3.3). A
+ * read-only binding may read its key.
+ */
+function checkConstant(binding: FblBinding, rule: Rule, constant: NonNullable<InsertSettings['constant']>, pointer: string, problems: LoadProblem[]): void {
+  const families = familiesOf(binding, rule);
+  if (families.length === 0 || families.some((family) => family !== 'yaml' && family !== 'json')) problems.push(error(pointer, messages.constantFamily));
+  if (rule.insert?.emit !== undefined) problems.push(error(pointer, messages.constantWithEmit));
+  for (const [key, value] of constant) {
+    const at = `${pointer}/${pointerToken(key)}`;
+    if (value === undefined) problems.push(error(at, messages.constantValue));
+    const writer = writerOf(rule, key);
+    if (writer !== undefined) problems.push(error(at, messages.constantWritten(key, writer)));
+  }
+}
+
+/** What of a rule writes the key of its own entry, or undefined when nothing does. */
+function writerOf(rule: Rule, key: string): string | undefined {
+  const writes = (slot: Slot | undefined): boolean => slot?.key === key && slot.child === undefined;
+  if (writes(rule.id?.from)) return 'id.from';
+  if (writes(rule.source)) return 'source';
+  if (writes(rule.target)) return 'target';
+  if (rule.readOnly !== undefined) return undefined;
+  const attribute = rule.attributes.find(([, slot]) => writes(slot) && slot.readOnly === undefined);
+  return attribute ? `attribute '${attribute[0]}'` : undefined;
+}
+
+/** The families a rule reads: those of the file rules it names, else the body's, else those of every file rule. */
+function familiesOf(binding: FblBinding, rule: Rule): string[] {
+  if (rule.files.length > 0) return binding.body.files.filter((file) => file.name !== undefined && rule.files.includes(file.name)).flatMap((file) => file.family ?? []);
+  if (binding.body.family !== undefined) return [binding.body.family];
+  return binding.body.files.flatMap((file) => file.family ?? []);
+}
+
 const readAsXmlOnly = (binding: FblBinding): boolean => binding.body.family === 'xml' && binding.body.alsoRead.every((family) => family === 'xml');
 
 /**
