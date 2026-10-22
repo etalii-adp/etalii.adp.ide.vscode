@@ -589,9 +589,10 @@ export class BodyReading implements Reading {
   /**
    * The first element, in document order, that `reference` can name and whose key is `key`. Read
    * once the elements are final, so each reference's keys are indexed on first use and not
-   * searched for each key.
+   * searched for each key. Public: a host resolves a reference through it too, as the Notion
+   * add-ons' store turns a reference into a row.
    */
-  private referencedBy(reference: ReferenceBinding, key: string): ReadElement | undefined {
+  referencedBy(reference: ReferenceBinding, key: string): ReadElement | undefined {
     let index = this.referenced.get(reference);
     if (!index) {
       index = new Map();
