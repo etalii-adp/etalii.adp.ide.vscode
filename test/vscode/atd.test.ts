@@ -105,10 +105,10 @@ suite('.atd tool descriptions', () => {
       const document = await vscode.workspace.openTextDocument(uriOf(file));
       assert.strictEqual(document.languageId, 'atd', `${file} opens as ATD`);
     }
-    // The server is up once the examples' diagnostics, none, have been published for the files opened.
+    // The server is up once it gives a file's outline.
     await until('the server to answer', async () => {
-      const hovers = await vscode.commands.executeCommand<vscode.Hover[]>('vscode.executeHoverProvider', uriOf(walk.files[0]), new vscode.Position(0, 0));
-      return hovers !== undefined ? true : undefined;
+      const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>('vscode.executeDocumentSymbolProvider', uriOf(walk.files[0]));
+      return symbols?.length ? true : undefined;
     });
 
     const failures: string[] = [];

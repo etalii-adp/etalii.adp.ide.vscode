@@ -392,7 +392,13 @@
         "scopeName": "source.atd",
         "path": "./syntaxes/atd.tmLanguage.json"
       }
-    ]
+    ],
+    "configurationDefaults": {
+      "[atd]": {
+        "editor.wordBasedSuggestions": "off",
+        "editor.semanticHighlighting.enabled": true
+      }
+    }
   },
   "scripts": {
     "prebuild": "node scripts/ensure-dependencies.mjs && node scripts/fetch-atd-lsp.mjs --if-missing",
