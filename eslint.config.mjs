@@ -26,7 +26,7 @@ const webview = [
 ];
 
 export default tseslint.config(
-  { ignores: ['dist', 'out', 'node_modules', 'reports', '.vscode-test', '.debug', 'examples', 'fixtures'] },
+  { ignores: ['dist', 'out', 'node_modules', 'reports', '.vscode-test', '.debug', 'examples', 'fixtures', 'vendor'] },
   ...tseslint.configs.recommended,
   {
     files: ['src/core/**/*.ts'],

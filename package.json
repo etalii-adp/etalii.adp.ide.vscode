@@ -22,6 +22,7 @@
   "main": "./dist/extension.js",
   "activationEvents": [
     "onLanguage:ghg",
+    "onLanguage:atd",
     "onStartupFinished"
   ],
   "capabilities": {
@@ -40,6 +41,17 @@
           ".ghg"
         ],
         "configuration": "./language/ghg.language-configuration.json"
+      },
+      {
+        "id": "atd",
+        "aliases": [
+          "ADP tool description",
+          "atd"
+        ],
+        "extensions": [
+          ".atd"
+        ],
+        "configuration": "./language/atd.language-configuration.json"
       }
     ],
     "customEditors": [
@@ -373,17 +385,30 @@
         "key": "ctrl+shift+z",
         "when": "activeCustomEditorId =~ /^etalii\\.adp\\./ && !etalii.adp.editingText && !focusedView && etalii.adp.layoutRedo"
       }
-    ]
+    ],
+    "grammars": [
+      {
+        "language": "atd",
+        "scopeName": "source.atd",
+        "path": "./syntaxes/atd.tmLanguage.json"
+      }
+    ],
+    "configurationDefaults": {
+      "[atd]": {
+        "editor.wordBasedSuggestions": "off",
+        "editor.semanticHighlighting.enabled": true
+      }
+    }
   },
   "scripts": {
-    "prebuild": "node scripts/ensure-dependencies.mjs",
+    "prebuild": "node scripts/ensure-dependencies.mjs && node scripts/fetch-atd-lsp.mjs --if-missing",
     "build": "node esbuild.mjs",
-    "prewatch": "node scripts/ensure-dependencies.mjs",
+    "prewatch": "node scripts/ensure-dependencies.mjs && node scripts/fetch-atd-lsp.mjs --if-missing",
     "watch": "node esbuild.mjs --watch",
     "precheck": "node scripts/ensure-dependencies.mjs",
     "check": "tsc --noEmit -p tsconfig.json && eslint .",
     "test": "npm run check && npm run test:unit && npm run test:vscode",
-    "pretest:unit": "node scripts/ensure-dependencies.mjs",
+    "pretest:unit": "node scripts/ensure-dependencies.mjs && node scripts/fetch-atd-lsp.mjs --if-missing",
     "test:unit": "vitest run",
     "test:vscode": "npm run package && node scripts/unpack-plugin.mjs && tsc -p test/vscode/tsconfig.json && vscode-test",
     "package": "npm run build -- --production && node scripts/package.mjs",
@@ -391,7 +416,8 @@
     "sync-fbl": "node scripts/sync-fbl.mjs",
     "sync-definitions": "node scripts/sync-definitions.mjs",
     "prepare-debug-examples": "node scripts/prepare-debug-examples.mjs",
-    "look": "npm run build && node scripts/harness.mjs"
+    "look": "npm run build && node scripts/harness.mjs",
+    "fetch-atd-lsp": "node scripts/fetch-atd-lsp.mjs"
   },
   "devDependencies": {
     "@marcbachmann/cel-js": "^8.0.0",
@@ -411,6 +437,9 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.71.0",
     "vitest": "^5.0.3",
+    "vscode-languageclient": "^9.0.1",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2",
     "yaml": "^2.9.1"
   }
 }
