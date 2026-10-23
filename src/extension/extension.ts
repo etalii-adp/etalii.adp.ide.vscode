@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { viewTypeOf } from '../core/frame/toolType';
 import * as fbl from '../core/fbl';
+import { startAtd } from './atd/client';
 import { registerCommands } from './commands';
 import { Findings } from './findings';
 import { claimantOf } from './opening';
@@ -60,6 +61,9 @@ export function activate(context: vscode.ExtensionContext): AdpApi {
     }),
     vscode.workspace.onDidCloseTextDocument((document) => findings.clear(document.uri)),
   );
+
+  // `.atd` tool descriptions get the ADP tool language's server (etalii.adp spec 035).
+  startAtd(context);
 
   return { viewTypes: types.map(viewTypeOf), fbl };
 }

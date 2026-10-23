@@ -25,6 +25,15 @@ const builds = [
     format: 'cjs',
     external: ['vscode'],
   },
+  // The ADP tool language's server runs on a worker thread of its own (etalii.adp spec 035, T112).
+  {
+    ...shared,
+    entryPoints: ['src/extension/atd/worker.ts'],
+    outfile: 'dist/atd-worker.js',
+    platform: 'node',
+    target: 'node22',
+    format: 'cjs',
+  },
   {
     ...shared,
     entryPoints: { canvas: 'src/webview/diagram/main.ts', table: 'src/webview/table/main.ts', properties: 'src/webview/properties/main.ts', toolbox: 'src/webview/toolbox/main.ts' },

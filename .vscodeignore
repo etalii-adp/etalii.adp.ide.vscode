@@ -2,6 +2,8 @@
 !dist/**
 !package.json
 !language/**
+!syntaxes/**
+!vendor/atd-lsp/**
 !media/**
 !definitions/**
 !README.md

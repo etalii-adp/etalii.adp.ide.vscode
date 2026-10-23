@@ -15,3 +15,7 @@ reports/
 
 # The copy of the examples a debug session edits
 .debug/
+
+# The ADP tool language's server and walk, fetched by `npm run fetch-atd-lsp` from the release vendor/atd-lsp.lock names
+/vendor/atd-lsp/
+/vendor/atd-walk/

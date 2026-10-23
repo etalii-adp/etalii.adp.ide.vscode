@@ -43,6 +43,8 @@ npm run package      # writes etalii-adp-<version>.vsix
 | `npm run test:unit` | The core (files, models, rules, edits) without Visual Studio Code, and the webview (canvas, table, toolbox, property grid) in a simulated browser. |
 | `npm run test:vscode` | The packaged plug-in, unpacked and run in a real Visual Studio Code, on a copy of the examples. A window opens while it runs. |
 
+The build fetches the language server of `.atd` tool descriptions from the desktop host's release that `vendor/atd-lsp.lock` names, checking its SHA-256 ([docs/atd.md](docs/atd.md)); `npm run fetch-atd-lsp` does it again.
+
 Reports are written to `reports/`. On Windows, keep the clone at a short path: the Visual Studio Code the tests download does not start from a path near the 260-character limit.
 
 Every pull request into `develop` and every change to `develop` is checked by the Build workflow (`.github/workflows/build.yml`), which runs the same commands. Its summary lists the tests that were skipped and why, and its test reports are kept with the run.
