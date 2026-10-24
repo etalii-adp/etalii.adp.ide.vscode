@@ -25,10 +25,18 @@ const repository = resolve(here, '../..');
 const viewport = { width: 1600, height: 900, deviceScaleFactor: 1 };
 const port = 9333;
 
-/** Every image: the document it opens, under examples/, its theme and the element it selects. */
+/**
+ * Every image: the document it opens, under examples/, its theme and the element it selects:
+ * `select` names one by its id, `nearest` takes the one matching it nearest the middle of the
+ * editor. `drawn` is what counts as drawn, for a designer that draws no canvas, such as a table,
+ * and `toolbox: false` marks a designer whose toolbox has nothing to offer.
+ */
 const images = [
   { file: 'agent-behavior-modelling.png', document: 'agent-behavior-modelling/research-assistant/research-assistant.adp', theme: 'dark', select: '1.2' },
-  { file: 'gartner-hypecycle-graph-light.png', document: 'gartner-hypecycle-graph/digital-trends/digital-trends.ghg', theme: 'light', select: 'middle-trend' },
+  { file: 'gartner-hypecycle-graph-light.png', document: 'gartner-hypecycle-graph/digital-trends/digital-trends.ghg', theme: 'light', nearest: '.adp-node-segmented' },
+  { file: 'mindmap.png', document: 'mindmap/example 1/mindmap.mm', theme: 'dark', nearest: '.adp-content .adp-element' },
+  { file: 'knowledge.png', document: 'knowledge/cities.yaml', theme: 'dark', drawn: 'tr.adp-table-row', toolbox: false, nearest: 'tr.adp-table-row td' },
+  { file: 'agent-activity-diagram.png', document: 'agent-activity-diagram/adp-one-day/adp-one-day.aad', theme: 'dark', nearest: '.adp-content .adp-element' },
 ];
 
 const themes = { dark: 'Default Dark Modern', light: 'Default Light Modern' };
@@ -121,14 +129,16 @@ async function capture(executable, image) {
       await command(page, 'View: Close Panel');
     }
 
-    const canvas = await frameWith(page, '.adp-content [data-id]');
-    await frameWith(page, '.adp-toolbox-entry');
-    const drawn = await canvas.$$eval('.adp-content [data-id]', (groups) => groups.length);
+    const drawing = image.drawn ?? '.adp-content [data-id]';
+    const canvas = await frameWith(page, drawing);
+    if (image.toolbox !== false) await frameWith(page, '.adp-toolbox-entry');
+    const drawn = await canvas.$$eval(drawing, (groups) => groups.length);
     if (drawn === 0) throw new Error(`${image.document} drew nothing`);
 
     // The drawing's middle in the middle of the editor, at the size the editor first drew it.
     await canvas.evaluate(() => {
       const surface = document.querySelector('.adp-surface');
+      if (!surface) return;
       const content = document.querySelector('.adp-content').getBoundingClientRect();
       const view = surface.getBoundingClientRect();
       const dx = content.left + content.width / 2 - (view.left + view.width / 2);
@@ -139,19 +149,22 @@ async function capture(executable, image) {
 
     // One element selected, so ADP Properties shows its rows: a named one, or the one of a kind
     // nearest the middle of the editor, so the selection is in view.
-    const element = image.select === 'middle-trend'
-      ? await canvas.evaluateHandle(() => {
-        const view = document.querySelector('.adp-surface').getBoundingClientRect();
+    const element = image.nearest
+      ? await canvas.evaluateHandle((nearest) => {
+        const view = (document.querySelector('.adp-surface') ?? document.body).getBoundingClientRect();
         const distance = (node) => {
           const box = node.getBoundingClientRect();
           return Math.hypot(box.left + box.width / 2 - (view.left + view.width / 2), box.top + box.height / 2 - (view.top + view.height / 2));
         };
-        return [...document.querySelectorAll('.adp-content .adp-node-segmented')].reduce((best, node) => (distance(node) < distance(best) ? node : best));
-      })
+        return [...document.querySelectorAll(nearest)].reduce((best, node) => (distance(node) < distance(best) ? node : best));
+      }, image.nearest)
       : await canvas.waitForSelector(`.adp-content [data-id="${image.select}"] .adp-node`);
     await element.click();
     const properties = await frameWith(page, '.adp-properties');
     await until('properties of the selection', () => properties.$eval('.adp-properties', (root) => root.childElementCount > 0 && !root.querySelector('.adp-properties-empty')));
+    // Again, since a notification can arrive after the first clearing, such as the one saying
+    // every other extension is disabled.
+    await command(page, 'Notifications: Clear All Notifications');
     await sleep(500);
 
     await page.screenshot({ path: join(here, image.file), clip: { x: 0, y: 0, ...viewport } });
