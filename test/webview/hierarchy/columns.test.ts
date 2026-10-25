@@ -30,6 +30,12 @@ const widen = (width: number): void => {
   Object.defineProperty(document.querySelector('.hs-page'), 'clientWidth', { value: width, configurable: true });
   window.dispatchEvent(new Event('resize'));
 };
+/** Answers the `index`th edit the page sent, the last by default, as the extension does after the view it makes. */
+function answer(result: 'applied' | 'refused', index?: number): void {
+  const edits = sent.filter((message) => message.type === 'edit') as Extract<FromCanvas, { type: 'edit' }>[];
+  const edit = index === undefined ? edits.at(-1)! : edits[index];
+  page.receive({ v: 2, type: 'outcome', seq: edit.seq, result, ...(result === 'refused' ? { sentence: 'The document already has `column/1`.' } : {}) });
+}
 /** Drags a column's edge by `by` pixels, letting it go unless `end` is false. */
 function drag(column: number, by: number, end = true): void {
   pointer(edge(column), 'pointerdown', 500, 5);
@@ -97,11 +103,10 @@ describe('the widths of the columns', () => {
     expect(key(edge(2), { key: 'Home' })).toBe(false);
     edge(3).focus();
     key(edge(3), { key: 'ArrowLeft' });
-    // The first column keeps no width: a double click and Home on it send nothing.
+    // The first column keeps no width: a double click on it sends nothing. Home on a column whose width is on its way waits for its answer.
     expect(requests(sent)).toEqual([
       { kind: 'operation', operation: 'resetColumnWidth', on: [column] },
       { kind: 'operation', operation: 'addColumnWidth', args: { level: '1', width: 256 } },
-      { kind: 'operation', operation: 'resetColumnWidth', on: [column] },
       { kind: 'operation', operation: 'addColumnWidth', args: { level: '3', width: 224 } },
     ]);
     // The edge keeps the focus while the page is drawn again.
@@ -117,6 +122,106 @@ describe('the widths of the columns', () => {
     expect(widthOf('ITEM-0001')).toBe('240px');
     show(page, viewOf({}, withWidths('1: 500')), 2);
     expect(widthOf('ITEM-0001')).toBe('500px');
+  });
+
+  it('asks for one width of a column at a time: two quick presses on a new column add it, then set the last width once the first is answered', () => {
+    show(page, viewOf());
+    key(edge(1), { key: 'ArrowRight' });
+    key(edge(1), { key: 'ArrowRight' });
+    expect(requests(sent)).toEqual([{ kind: 'operation', operation: 'addColumnWidth', args: { level: '1', width: 256 } }]);
+    expect(widthOf('ITEM-0001')).toBe('272px');
+    // The view of the first comes before its answer: the column still shows the width wanted.
+    const after = applied(source, requests(sent)[0]);
+    show(page, viewOf({}, after), 2);
+    expect(widthOf('ITEM-0001')).toBe('272px');
+    expect(requests(sent)).toHaveLength(1);
+    answer('applied');
+    const column = viewOf({}, after).widths[0].id;
+    expect(requests(sent)).toEqual([
+      { kind: 'operation', operation: 'addColumnWidth', args: { level: '1', width: 256 } },
+      { kind: 'operation', operation: 'setColumnWidth', on: [column], args: { width: 272 } },
+    ]);
+    show(page, viewOf({}, applied(after, requests(sent)[1])), 3);
+    answer('applied');
+    expect(widthOf('ITEM-0001')).toBe('272px');
+    expect(requests(sent)).toHaveLength(2);
+  });
+
+  it('gives a column the page\'s own width, then adds the next width once the removal is answered', () => {
+    const kept = withWidths('1: 400');
+    show(page, viewOf({}, kept));
+    const column = viewOf({}, kept).widths[0].id;
+    key(edge(1), { key: 'Home' });
+    key(edge(1), { key: 'ArrowRight' });
+    expect(requests(sent)).toEqual([{ kind: 'operation', operation: 'resetColumnWidth', on: [column] }]);
+    expect(widthOf('ITEM-0001')).toBe('256px');
+    show(page, viewOf({}, applied(kept, requests(sent)[0])), 2);
+    answer('applied');
+    expect(requests(sent)).toEqual([
+      { kind: 'operation', operation: 'resetColumnWidth', on: [column] },
+      { kind: 'operation', operation: 'addColumnWidth', args: { level: '1', width: 256 } },
+    ]);
+  });
+
+  it('keeps every press of a held key on a kept column, with one width on its way at a time', () => {
+    let kept = withWidths('1: 400');
+    show(page, viewOf({}, kept));
+    const column = viewOf({}, kept).widths[0].id;
+    for (let press = 0; press < 5; press += 1) key(edge(1), { key: 'ArrowRight' });
+    expect(widthOf('ITEM-0001')).toBe('480px');
+    expect(requests(sent)).toEqual([{ kind: 'operation', operation: 'setColumnWidth', on: [column], args: { width: 416 } }]);
+    kept = applied(kept, requests(sent)[0]);
+    show(page, viewOf({}, kept), 2);
+    expect(widthOf('ITEM-0001')).toBe('480px');
+    answer('applied');
+    expect(requests(sent)).toEqual([
+      { kind: 'operation', operation: 'setColumnWidth', on: [column], args: { width: 416 } },
+      { kind: 'operation', operation: 'setColumnWidth', on: [column], args: { width: 480 } },
+    ]);
+    kept = applied(kept, requests(sent)[1]);
+    show(page, viewOf({}, kept), 3);
+    answer('applied');
+    expect(requests(sent)).toHaveLength(2);
+    expect(kept.registration).toContain('1: 480');
+    expect(widthOf('ITEM-0001')).toBe('480px');
+  });
+
+  it('loses no press of a held key while the answers come between them', () => {
+    let kept = withWidths('1: 400');
+    show(page, viewOf({}, kept));
+    let version = 1;
+    let answered = 0;
+    const answerNext = (): void => {
+      kept = applied(kept, requests(sent)[answered]);
+      show(page, viewOf({}, kept), (version += 1));
+      answer('applied', answered);
+      answered += 1;
+    };
+    for (let press = 0; press < 5; press += 1) {
+      key(edge(1), { key: 'ArrowRight' });
+      // No more than one width is on its way; the host answers every other press, the view first.
+      expect(requests(sent).length - answered).toBeLessThanOrEqual(1);
+      if (press % 2 === 1) answerNext();
+      expect(widthOf('ITEM-0001')).toBe(`${400 + (press + 1) * 16}px`);
+    }
+    while (requests(sent).length > answered) answerNext();
+    expect(requests(sent).map((request) => (request as { args?: { width?: number } }).args?.width)).toEqual([416, 432, 464, 480]);
+    expect(kept.registration).toContain('1: 480');
+    expect(widthOf('ITEM-0001')).toBe('480px');
+  });
+
+  it('puts a column back to the width it keeps when its gesture is refused, dropping what was wanted meanwhile', () => {
+    show(page, viewOf({}, withWidths('1: 400')));
+    key(edge(1), { key: 'ArrowRight' });
+    key(edge(1), { key: 'ArrowRight' });
+    expect(widthOf('ITEM-0001')).toBe('432px');
+    answer('refused');
+    expect(widthOf('ITEM-0001')).toBe('400px');
+    expect(requests(sent)).toHaveLength(1);
+    // The next press is asked for at once.
+    key(edge(1), { key: 'ArrowLeft' });
+    expect(requests(sent)).toHaveLength(2);
+    expect(widthOf('ITEM-0001')).toBe('384px');
   });
 
   it('counts the kept widths in the levels that fit', () => {

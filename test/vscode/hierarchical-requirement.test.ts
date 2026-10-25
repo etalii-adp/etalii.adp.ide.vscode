@@ -215,6 +215,26 @@ suite('The Hierarchical Requirement Designer in Visual Studio Code', () => {
     await until('the width to be written again', async () => (await registrationText(registration)) === widened);
   });
 
+  test('two quick widths of a new column: asked together the second is not made; asked as the page does, one after the answer of the other, both are', async () => {
+    const { registration } = await open();
+    const before = await registrationText(registration);
+    const nl = before.includes('\r\n') ? '\r\n' : '\n';
+    // Two additions of the same column on their way at once: the second finds it already kept.
+    const together = await Promise.all([
+      edit({ kind: 'operation', operation: 'addColumnWidth', args: { level: '1', width: 256 } }),
+      edit({ kind: 'operation', operation: 'addColumnWidth', args: { level: '1', width: 272 } }),
+    ]);
+    assert.deepStrictEqual(together.map((outcome) => outcome?.result === 'applied'), [true, false], JSON.stringify(together));
+    await until('the first width to be written', async () => (await registrationText(registration)) === `${before}widths:${nl}  1: 256${nl}`);
+
+    // What the page sends instead: the second press waits for the first's answer, and is then a change of the width kept.
+    await until('the page to keep it', async () => (await state())?.hierarchy?.widths.some((column) => column.level === '1' && column.width === 256) === true);
+    const column = (await state())?.hierarchy?.widths.find((kept) => kept.level === '1')?.id;
+    assert.ok(column);
+    assert.deepStrictEqual(await edit({ kind: 'operation', operation: 'setColumnWidth', on: [column], args: { width: 272 } }), { result: 'applied' });
+    await until('the last width to be written', async () => (await registrationText(registration)) === `${before}widths:${nl}  1: 272${nl}`);
+  });
+
   test('a rename of a tag edits the Markdown and the registration, and one Undo gives back both, and Redo writes both again', async () => {
     const { uri, registration, document, original, bytes, registrationBytes } = await open();
     const before = await registrationText(registration);
