@@ -331,20 +331,20 @@ The mind map is read from its definition alone, with the three plugins it names.
 
 ### Hierarchical Requirement Designer
 
-The Hierarchical Requirement Designer is read from its definition alone: it names no plugin. Its surface is of the kind `hierarchy` (DESL 0.2, 7.7), which the core serves as a page of boxes, with ADP Toolbox and ADP Properties; Visual Studio Code draws it for now as an outline of the levels and entries, with their folds. What the interpreter reads of DESL 0.2 for it is in "What is read of each section", and what this host chose where the definition is silent in "What this host decides". No row is raised yet: the issues are still to be filed in etalii.adp.
+The Hierarchical Requirement Designer is read from its definition alone: it names no plugin. Its surface is of the kind `hierarchy` (DESL 0.2, 7.7), which the core serves as a page of boxes, with ADP Toolbox and ADP Properties; Visual Studio Code draws it for now as an outline of the levels and entries, with their folds. What the interpreter reads of DESL 0.2 for it is in "What is read of each section", and what this host chose where the definition is silent in "What this host decides". Every row that names an issue is part of issue [526](https://github.com/etalii-adp/etalii.adp/issues/526), which also asks what DESL 0.2 cannot state of it.
 
 | What | The definition, followed here | The standalone module | Issue |
 | --- | --- | --- | --- |
 | A document | Opens in the designer, served by the core as a page of boxes and drawn for now as an outline of its levels and entries | Opens in the designer, drawn as boxes that contain boxes | None: the page is being built |
-| The name of the page | The name of the file, since DESL names no title of a document | The first heading of level one, else the file's name | Not raised yet |
-| How a finding weighs | As DESL gives it: `std.unreadableEntry`, `std.duplicateId` and `std.containment` are warnings | Every finding is an error but `std.missingId` and `std.mentions`, warnings, and `fbl.unknown-block`, information | Not raised yet |
-| A registration of another designer type | Reported as `ded.designer` and ignored, as DED 4 asks | The other registration is refused | Not raised yet |
-| Giving an entry a new number | Offered for a later holder of a number and for one written with the placeholder | No such gesture | Not raised yet |
-| What a picked mention writes | The literal text around the group `id` of the pattern, `[` and `]`, see "What this host decides" | Typing `#` opens the lookup, as the companion says, and the number is written in square brackets | Not raised yet |
-| The colours of the lists | The theme's colour of each of the ten names | The Knowledge designer's own pairs | Not raised yet |
-| The looks of the labels | Every label drawn alike from the view, since the surface names no look | Tags, the category and the state each drawn their own way | Not raised yet |
-| A second entry with the number of another | Read under the id of its place, `requirement@<line>`, ephemeral, with `std.duplicateId`, a warning (DESL 5.3.4) | Keeps the written number, so two entries have one id, and reports the duplicate | Not raised yet |
-| The line of a mention that names nothing | `std.mentions` on the line of the item, requirement or assessment that holds it, see "What this host decides" | The line the mention stands on, within a description of several lines | Not raised yet |
+| The name of the page | The name of the file, since DESL names no title of a document | The first heading of level one, else the file's name | [526](https://github.com/etalii-adp/etalii.adp/issues/526) |
+| How a finding weighs | As DESL gives it: `std.unreadableEntry`, `std.duplicateId` and `std.containment` are warnings | Every finding is an error but `std.missingId` and `std.mentions`, warnings, and `fbl.unknown-block`, information | [526](https://github.com/etalii-adp/etalii.adp/issues/526) |
+| A registration of another designer type | Reported as `ded.designer` and ignored, as DED 4 asks | The other registration is refused | [526](https://github.com/etalii-adp/etalii.adp/issues/526) |
+| Giving an entry a new number | Offered for a later holder of a number and for one written with the placeholder | No such gesture | [526](https://github.com/etalii-adp/etalii.adp/issues/526) |
+| What a picked mention writes | The literal text around the group `id` of the pattern, `[` and `]`, see "What this host decides" | Typing `#` opens the lookup, as the companion says, and the number is written in square brackets | [526](https://github.com/etalii-adp/etalii.adp/issues/526) |
+| The colours of the lists | The theme's colour of each of the ten names | The Knowledge designer's own pairs | [526](https://github.com/etalii-adp/etalii.adp/issues/526) |
+| The looks of the labels | Every label drawn alike from the view, since the surface names no look | Tags, the category and the state each drawn their own way | [526](https://github.com/etalii-adp/etalii.adp/issues/526) |
+| A second entry with the number of another | Read under the id of its place, `requirement@<line>`, ephemeral, with `std.duplicateId`, a warning (DESL 5.3.4) | Keeps the written number, so two entries have one id, and reports the duplicate | [526](https://github.com/etalii-adp/etalii.adp/issues/526) |
+| The line of a mention that names nothing | `std.mentions` on the line of the item, requirement or assessment that holds it, see "What this host decides" | The line the mention stands on, within a description of several lines | [526](https://github.com/etalii-adp/etalii.adp/issues/526) |
 
 ## Differences raised and not settled here
 
@@ -371,3 +371,4 @@ The plug-in changes neither a specification nor a binding. Where they and the ho
 | [159](https://github.com/etalii-adp/etalii.adp/issues/159) | The agent activity diagram: where its specification, its binding, its companion, DISL, a fixture and the standalone module differ, what the reference layout does not keep of DISL 10.4, and what the specification cannot state |
 | [162](https://github.com/etalii-adp/etalii.adp/issues/162) | The Knowledge designer: what DESL 0.1 cannot state of a view and of what an action assigns, which gesture runs which operation, where the definition, its fixtures and its companion differ, and what a second host had to choose |
 | [165](https://github.com/etalii-adp/etalii.adp/issues/165) | Agent Behavior Modelling and the hype cycle graph read from their definitions: what a second host could not decide, and where the result differs from the diagrams this plug-in had written by hand |
+| [526](https://github.com/etalii-adp/etalii.adp/issues/526) | The Hierarchical Requirement Designer: what DESL 0.2 and the definition leave a second host to decide (which gesture runs which operation, the looks and colours of the labels, how filter words combine, a move without a parent, what opens the mention lookup, a side pane beside a hierarchy), and where the plug-in and standalone differ |
