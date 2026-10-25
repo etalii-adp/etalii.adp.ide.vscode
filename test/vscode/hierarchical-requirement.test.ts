@@ -190,6 +190,31 @@ suite('The Hierarchical Requirement Designer in Visual Studio Code', () => {
     await until('the redo', () => document.getText() === changed);
   });
 
+  test('a column\'s edge let go writes its width in the registration\'s widths block as one undo step, and Undo removes it', async () => {
+    const { uri, registration, document, original, bytes, registrationBytes } = await open();
+    const before = await registrationText(registration);
+    const nl = before.includes('\r\n') ? '\r\n' : '\n';
+    // What the page asks when the first column's edge is let go 60 pixels to the right of the page's own width.
+    assert.deepStrictEqual(await edit({ kind: 'operation', operation: 'addColumnWidth', args: { level: '1', width: 300 } }), { result: 'applied' });
+    const widened = `${before}widths:${nl}  1: 300${nl}`;
+    await until('the width to be written', async () => (await registrationText(registration)) === widened);
+    await until('the page to keep it', async () => (await state())?.hierarchy?.widths.some((column) => column.level === '1' && column.width === 300) === true);
+    assert.strictEqual(fs.readFileSync(registration.fsPath, 'utf8'), widened, 'the registration is saved at once');
+    assert.strictEqual(document.getText(), original, 'the Markdown is not edited');
+    assert.deepStrictEqual(await next(), { undo: true, redo: false }, 'the width is one step of the history');
+
+    // Ctrl+Z in the designer, while this step is next in line.
+    await vscode.commands.executeCommand('etalii.adp.undoLayout');
+    await until('the width to be removed', async () => (await registrationText(registration)) === before);
+    await until('the registration to be saved', () => fs.readFileSync(registration.fsPath).equals(registrationBytes));
+    await until('the page to give the column its own width again', async () => (await state())?.hierarchy?.widths.length === 0);
+    assert.deepStrictEqual(await next(), { undo: false, redo: true });
+    assert.ok(fs.readFileSync(uri.fsPath).equals(bytes), 'the Markdown\'s bytes are as they were');
+
+    await vscode.commands.executeCommand('etalii.adp.redoLayout');
+    await until('the width to be written again', async () => (await registrationText(registration)) === widened);
+  });
+
   test('a rename of a tag edits the Markdown and the registration, and one Undo gives back both, and Redo writes both again', async () => {
     const { uri, registration, document, original, bytes, registrationBytes } = await open();
     const before = await registrationText(registration);

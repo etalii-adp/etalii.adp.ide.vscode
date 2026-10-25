@@ -41,6 +41,7 @@ export interface State {
     notes: { id: string; aboutId?: string; textRaw: string; resolved: boolean }[];
     lists: { label: string; gestures: Partial<Record<'add' | 'remove' | 'set' | 'clear', { operation: string; params: Record<string, string> }>> }[];
     applied?: { query: string; shown: number; total: number };
+    widths: { id: string; level: string; width: number }[];
   };
   /** What the tool type offers for the selection. */
   actions?: { id: string; label: string; enabled: boolean; disabledReason?: string }[];

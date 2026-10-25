@@ -4,11 +4,11 @@ import type { TableValue } from '../../core/tool/tableView';
 import { html } from '../diagram/dom';
 import { icon } from '../diagram/icons';
 import { toolboxEntryMime, toolboxMime } from '../toolbox/toolbox';
-import { dropOf, slotIndex, type DropHint } from './drag';
+import { dropOf, slotIndex, type DropHint, type EntryDrop } from './drag';
 import { FilterBar } from './filterBar';
 import { headerEnd, headerWidth, iconsLayoutOf, textWidth } from './iconsLayout';
 import { editable, LabelField, labelElement, ListEditor, pluralOf } from './labels';
-import { ancestorsOf, indexOf, LEVEL_WIDTH, levelsBelow, levelsThatFit, revealOf, type HierarchyIndex } from './layout';
+import { ancestorsOf, indexOf, keptWidthsOf, LEVEL_WIDTH, levelsBelow, levelsThatFit, revealOf, WIDTH_STEP, widthRangeOf, type HierarchyIndex, type KeptWidth } from './layout';
 import { ADD_NOTE_ICON, NoteList, SEVERAL_NOTES_ICON } from './notes';
 import { placePopup, SearchList } from './searchList';
 
@@ -28,6 +28,15 @@ import { placePopup, SearchList } from './searchList';
 // popups a box opens: the list of its notes (`notes.ts`), a label's list and the editor of the list
 // (`labels.ts`), and the lookup `#` opens in a description. An ADP Toolbox entry dropped on the page
 // goes where a box dragged there would, as the drop the view's frame takes.
+//
+// The right edge of each level's box is the edge of its column (DESL 7.7.1, standalone #696): dragged,
+// every box of that depth follows the pointer, and letting go keeps the width as the gesture the view
+// names, one undo step; a double click or Home gives the column the page's own width again, the arrow
+// keys move a focused edge by a step, and a refused gesture puts the column back.
+//
+// Everything a pointer does has a key: the arrow keys move the selection through the boxes as a tree,
+// Alt with an arrow moves the selected box earlier or later among its kind, out of its level or into
+// the level before it, as the move a drag makes.
 
 const HIDDEN_LEVELS_ICON = 'mdi-chevron-double-right';
 const FOCUS_ICON = 'mdi-target';
@@ -64,6 +73,8 @@ interface NodeElements {
   readonly role: HierarchyNode['role'];
   readonly wrapper: HTMLElement;
   readonly levelBox?: HTMLElement;
+  /** The right edge of a level's column, kept so that a focused edge keeps the focus. */
+  readonly edge?: HTMLElement;
   content?: HTMLElement;
 }
 
@@ -92,11 +103,16 @@ const numberOf = (node: HierarchyNode): string => node.shownId ?? '';
 /** Every level and entry inside a level, at any depth. */
 const inside = (node: HierarchyNode): HierarchyNode[] => [...node.entries, ...node.levels].flatMap((child) => [child, ...inside(child)]);
 const nameOf = (node: HierarchyNode): string => (node.shownId === undefined ? node.title : `${node.shownId} ${node.title}`);
+/** The id of the element of a level or an entry, which the tree names as its active one. */
+const elementIdOf = (id: string): string => `hs-node-${id.replace(/\s/g, '_')}`;
+/** Where the selected box goes for a key: earlier or later among its kind, out of its level, or into the level before it. */
+type Move = 'earlier' | 'later' | 'out' | 'in';
+const MOVES: Readonly<Record<string, Move>> = { ArrowUp: 'earlier', ArrowDown: 'later', ArrowLeft: 'out', ArrowRight: 'in' };
 const isTyping = (target: EventTarget | null): boolean => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
 
 export class HierarchyPage {
   private readonly trail = html('nav', { class: 'hs-trail', 'aria-label': 'Trail' });
-  private readonly help = html('div', { class: 'hs-help', role: 'region', 'aria-label': 'Keys', hidden: '' });
+  private readonly help = html('div', { id: 'hs-help', class: 'hs-help', role: 'region', 'aria-label': 'Keys', hidden: '' });
   private readonly notice = html('p', { class: 'hs-read-only adp-hierarchy-notice', role: 'alert', hidden: '' });
   private readonly conflictBar = html('div', { class: 'hs-conflict', role: 'alert', hidden: '' });
   private readonly orphan = html('div', { class: 'hs-orphan-field', hidden: '' });
@@ -144,6 +160,14 @@ export class HierarchyPage {
   private listEditor: { readonly editor: ListEditor; readonly at: DOMRect } | undefined;
   /** The lookup `#` opened in a description: where the `#` stands, and the list. */
   private lookup: { readonly at: number; readonly list: SearchList; readonly element: HTMLElement; done: boolean } | undefined;
+  /** The widths the document keeps, by the depth of their column. */
+  private kept: ReadonlyMap<number, KeptWidth> = new Map();
+  /** The widths shown before the document has them, by depth: while an edge is dragged, and until the view that keeps them. */
+  private readonly widthShown = new Map<number, number>();
+  /** The column each width gesture on its way is for, by its request's number, to put it back when it is refused. */
+  private readonly widthAsked = new Map<number, number>();
+  /** The edge of a column being dragged: its depth, and where the pointer and the width stood when it was pressed. */
+  private edgeDrag: { readonly level: number; readonly x: number; readonly width: number } | undefined;
 
   constructor(host: HTMLElement, private readonly send: (message: FromCanvas) => void) {
     host.append(this.root);
@@ -177,6 +201,9 @@ export class HierarchyPage {
         this.view = view;
         this.version = message.version;
         this.index = indexOf(view);
+        this.kept = keptWidthsOf(view);
+        // What a drag showed is the document's now, or was refused; the column being dragged keeps following the pointer.
+        for (const level of [...this.widthShown.keys()]) if (level !== this.edgeDrag?.level) this.widthShown.delete(level);
         // The level a viewer narrowed to is the page's own once it is drawn; a page opened again starts from the one the editor kept.
         if (!this.focusRead) {
           this.focus = { id: view.focus ?? '', inside: false };
@@ -196,8 +223,18 @@ export class HierarchyPage {
         else if (pending && (view.applied?.query ?? '') !== this.appliedQuery()) this.pendingReveal = pending;
         return;
       }
-      case 'outcome':
+      case 'outcome': {
         if (message.seq === this.seq || message.seq === 0) this.status.textContent = message.result === 'refused' ? message.sentence ?? '' : '';
+        const column = this.widthAsked.get(message.seq);
+        this.widthAsked.delete(message.seq);
+        // A refused width leaves the document as it was: the column goes back to the width it keeps.
+        if (column !== undefined && message.result === 'refused' && this.widthShown.delete(column)) this.render();
+        return;
+      }
+      case 'command':
+        // The Command Palette's moves, which the keys of the page also make.
+        if (message.command === 'moveEarlier') this.move('earlier');
+        else if (message.command === 'moveLater') this.move('later');
         return;
       case 'reveal':
         if (!this.index.byId.has(message.id)) {
@@ -229,7 +266,24 @@ export class HierarchyPage {
   }
 
   private fit(): number {
-    return levelsThatFit(this.width, () => LEVEL_WIDTH);
+    const left = this.leftLevel();
+    return levelsThatFit(this.width, (column) => this.widthOf(left + column));
+  }
+
+  /** The depth of the page's left column, 1 for the top levels: a column's width is kept by its depth. */
+  private leftLevel(): number {
+    const focused = this.focused();
+    return focused === undefined ? 1 : focused.depth + (this.focus.inside ? 1 : 0);
+  }
+
+  /** The width of the column of levels at a depth: as it is being dragged, as the document keeps it, or the page's own. */
+  private widthOf(level: number): number {
+    return this.widthShown.get(level) ?? this.kept.get(level)?.width ?? LEVEL_WIDTH;
+  }
+
+  /** Whether a column's edge is offered: the view names how a width is kept, and the document can be changed. */
+  private get resizable(): boolean {
+    return !this.readOnly && this.view?.pageGestures.addWidth !== undefined;
   }
 
   private focused(): HierarchyNode | undefined {
@@ -269,6 +323,9 @@ export class HierarchyPage {
       this.listNames = JSON.stringify(view.lists.map((list) => [list.label, list.name, list.prefix, list.many, editable(list, view.readOnly)]));
       this.drawPage(view);
       this.drawDialog();
+      const active = this.selected === '' ? undefined : this.elements.get(this.selected)?.wrapper;
+      if (active?.isConnected) this.page.setAttribute('aria-activedescendant', active.id);
+      else this.page.removeAttribute('aria-activedescendant');
     } finally {
       this.rendering = false;
     }
@@ -299,7 +356,7 @@ export class HierarchyPage {
         : html('button', { type: 'button', class: `hs-trail-link${name}`, 'data-action': 'trail', 'data-id': id }, text);
     };
     const helpButton = html('button', {
-      type: 'button', class: 'hs-help-button', 'data-action': 'help', title: 'Keys', 'aria-label': 'Keys', 'aria-expanded': String(this.helpOpen),
+      type: 'button', class: 'hs-help-button', 'data-action': 'help', title: 'Keys', 'aria-label': 'Keys', 'aria-controls': 'hs-help', 'aria-expanded': String(this.helpOpen),
     }, icon('mdi-keyboard-outline'));
     reconcile(this.trail, [
       step(view.name === '' ? 'Document' : view.name, '', focused === ''),
@@ -326,7 +383,11 @@ export class HierarchyPage {
       ['Ctrl+Enter in a description', 'Keep the description typed'],
       ['Escape', 'Drop what was typed'],
       ['Drag a box by its grip', 'Move it with everything in it'],
+      ['Alt+Up, Alt+Down', label(level?.gestures.move ?? entry?.gestures.move) && `${label(level?.gestures.move ?? entry?.gestures.move)} it earlier or later among its kind`],
+      ['Alt+Left, Alt+Right', label(level?.gestures.move ?? entry?.gestures.move) && `${label(level?.gestures.move ?? entry?.gestures.move)} it out of its ${(level?.type ?? 'level').toLowerCase()}, or into the one before it`],
+      ['Drag the right edge of a column', view.pageGestures.addWidth && 'Change the width of the column; double-click it or press Home for the page\'s own width, the arrow keys move it by 16 pixels'],
     ];
+    rows.push(['Arrow keys, Home, End', 'Select the box above, below, inside or around; Left and Right also collapse and expand']);
     const shown = rows.filter((row): row is [string, string] => row[1] !== undefined);
     reconcile(this.help, [shown.length === 0
       ? html('p', {}, 'Nothing on this page can be changed.')
@@ -397,7 +458,10 @@ export class HierarchyPage {
     let elements = this.elements.get(node.id);
     if (!elements || elements.role !== node.role) {
       elements = level
-        ? { role: node.role, wrapper: html('div'), levelBox: html('div', { class: 'hs-level-box', style: `flex: 0 0 ${LEVEL_WIDTH}px; width: ${LEVEL_WIDTH}px` }) }
+        ? {
+          role: node.role, wrapper: html('div'), levelBox: html('div', { class: 'hs-level-box' }),
+          edge: html('span', { class: 'hs-column-edge', role: 'separator', 'aria-orientation': 'vertical', tabindex: 0, title: 'Drag to change the column\'s width; double-click for the default' }),
+        }
         : { role: node.role, wrapper: html('div') };
       this.elements.set(node.id, elements);
     }
@@ -406,8 +470,11 @@ export class HierarchyPage {
     const hidden = level && !node.collapsed && !showsLevels ? levelsBelow(node) : 0;
     const box = this.boxOf(node, hidden);
     wrapper.className = `hs-${node.role}${this.hint?.dragged.id === node.id ? ' hs-dragging' : ''}`;
+    wrapper.id = elementIdOf(node.id);
     wrapper.setAttribute('role', 'treeitem');
     wrapper.setAttribute('aria-label', nameOf(node));
+    // Counted from the page's left edge: a level by its column, an entry one below the level it stands in.
+    wrapper.setAttribute('aria-level', String(level ? depth + 1 : node.parent === undefined ? 1 : depth + 2));
     wrapper.setAttribute('aria-selected', String(this.selected === node.id));
     wrapper.dataset.node = node.id;
     if (node.gestures.fold) wrapper.setAttribute('aria-expanded', String(!node.collapsed));
@@ -417,7 +484,13 @@ export class HierarchyPage {
       return wrapper;
     }
     const levelBox = elements.levelBox!;
-    reconcile(levelBox, [box]);
+    const width = this.widthOf(node.depth);
+    levelBox.style.flex = `0 0 ${width}px`;
+    levelBox.style.width = `${width}px`;
+    levelBox.dataset.column = String(node.depth);
+    const edge = elements.edge!;
+    if (this.resizable) this.drawEdge(edge, node.depth);
+    reconcile(levelBox, this.resizable ? [box, edge] : [box]);
     const shown = node.collapsed ? [] : [...node.entries, ...(showsLevels ? node.levels : [])];
     const gestures = node.gestures;
     const adds: [string, HierarchyGestureState, string][] = node.collapsed || this.readOnly ? [] : [
@@ -742,6 +815,11 @@ export class HierarchyPage {
 
   private doubleClick(event: MouseEvent): void {
     if (this.question !== undefined) return;
+    const edge = (event.target as Element).closest<HTMLElement>('.hs-column-edge');
+    if (edge) {
+      this.resetWidth(Number(edge.dataset.column));
+      return;
+    }
     // A reference shows what it names; it opens no field.
     if ((event.target as Element).closest('.hs-reference, .hs-label-open')) return;
     const edit = (event.target as Element).closest<HTMLElement>('[data-edit]');
@@ -767,6 +845,11 @@ export class HierarchyPage {
       this.endDrag(undefined);
       return;
     }
+    const edge = event.target instanceof Element ? event.target.closest<HTMLElement>('.hs-column-edge') : null;
+    if (edge) {
+      this.edgeKey(event, Number(edge.dataset.column));
+      return;
+    }
     // A reference and a label's values are buttons: Enter or Space shows what the one names and opens the other's list.
     const button = event.target instanceof Element ? event.target.closest<HTMLElement>('.hs-reference[data-action], .hs-label-values[data-action]') : null;
     if (button && (event.key === 'Enter' || event.key === ' ')) {
@@ -784,6 +867,18 @@ export class HierarchyPage {
     if (event.key === 'Escape' && this.helpOpen) {
       this.helpOpen = false;
       this.render();
+      return;
+    }
+    const inPage = event.target instanceof Node && this.page.contains(event.target);
+    if (inPage && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && MOVES[event.key] !== undefined) {
+      // Kept from Visual Studio Code, whose Alt+Left and Alt+Right go back and forward between editors.
+      event.preventDefault();
+      event.stopPropagation();
+      this.move(MOVES[event.key]);
+      return;
+    }
+    if (event.target === this.page && !event.altKey && !event.ctrlKey && !event.metaKey && this.navigate(event.key)) {
+      event.preventDefault();
       return;
     }
     const node = this.index.byId.get(this.selected);
@@ -1262,9 +1357,206 @@ export class HierarchyPage {
     if (focused) this.page.focus();
   }
 
+  // ---- moving the selection and a box by keys ----
+
+  /** Moves the selection through the boxes as the page draws them, as a tree's keys do; false for a key that is not one of them. */
+  private navigate(key: string): boolean {
+    const order = [...this.page.querySelectorAll<HTMLElement>('[data-node]')].map((element) => element.dataset.node ?? '');
+    if (order.length === 0) return false;
+    const at = order.indexOf(this.selected);
+    const node = this.index.byId.get(this.selected);
+    let next: string | undefined;
+    switch (key) {
+      case 'ArrowDown':
+        next = order[at < 0 ? 0 : Math.min(order.length - 1, at + 1)];
+        break;
+      case 'ArrowUp':
+        next = order[at < 0 ? 0 : Math.max(0, at - 1)];
+        break;
+      case 'Home':
+        next = order[0];
+        break;
+      case 'End':
+        next = order[order.length - 1];
+        break;
+      case 'ArrowRight':
+        if (node?.role === 'level' && node.collapsed && node.gestures.fold !== undefined) {
+          this.run(node.gestures.fold, node.id);
+          return true;
+        }
+        next = order.slice(at + 1).find((id) => this.index.byId.get(id)?.parent === this.selected && this.selected !== '');
+        break;
+      case 'ArrowLeft':
+        if (node?.role === 'level' && !node.collapsed && node.gestures.fold !== undefined && order.some((id) => this.index.byId.get(id)?.parent === node.id)) {
+          this.run(node.gestures.fold, node.id);
+          return true;
+        }
+        next = node?.parent !== undefined && order.includes(node.parent) ? node.parent : undefined;
+        break;
+      default:
+        return false;
+    }
+    if (next !== undefined && next !== this.selected) {
+      this.revealing = next;
+      this.select(next);
+    }
+    return true;
+  }
+
+  /**
+   * Moves the selected box with everything in it, by the operation its move gesture runs, as a drag
+   * would: earlier or later among its kind in its level, out of its level to stand after it, or into
+   * the level before it among its kind, for an entry the first level its own holds.
+   */
+  private move(kind: Move): void {
+    const node = this.index.byId.get(this.selected);
+    const view = this.view;
+    if (node === undefined || view === undefined || this.readOnly || node.gestures.move === undefined) return;
+    const parent = node.parent === undefined ? undefined : this.index.byId.get(node.parent);
+    const siblings = node.role === 'entry' ? parent?.entries ?? [] : parent?.levels ?? view.roots;
+    const at = siblings.findIndex((sibling) => sibling.id === node.id);
+    let drop: EntryDrop | undefined;
+    if (kind === 'earlier' && at > 0) drop = { into: parent?.id ?? '', after: siblings[at - 2]?.id ?? '' };
+    else if (kind === 'later' && at >= 0 && at < siblings.length - 1) drop = { into: parent?.id ?? '', after: siblings[at + 1].id };
+    else if (kind === 'out' && parent !== undefined && (node.role === 'level' || parent.parent !== undefined)) {
+      drop = node.role === 'level' ? { into: parent.parent ?? '', after: parent.id } : { into: parent.parent!, after: '' };
+    } else if (kind === 'in') {
+      const into = node.role === 'level' ? (at > 0 ? siblings[at - 1] : undefined) : parent?.levels[0];
+      if (into !== undefined) drop = { into: into.id, after: '' };
+    }
+    if (drop === undefined) {
+      this.status.textContent = `${numberOf(node) || node.title} cannot be moved further that way.`;
+      return;
+    }
+    this.revealing = node.id;
+    this.runMove(node, drop);
+  }
+
+  /** Asks for the move of a node into a level, after a sibling there, by the parameters its move gesture names. */
+  private runMove(node: HierarchyNode, drop: EntryDrop): void {
+    const gesture = node.gestures.move;
+    if (gesture === undefined) return;
+    const args: Record<string, TableValue> = {};
+    if (gesture.params.into !== undefined && drop.into !== '') args[gesture.params.into] = drop.into;
+    if (gesture.params.after !== undefined && drop.after !== '') args[gesture.params.after] = drop.after;
+    this.run(gesture, node.id, args);
+  }
+
+  // ---- the widths of the columns ----
+
+  /** What the edge of a column says of it: its column, its width and the range the width is held to. */
+  private drawEdge(edge: HTMLElement, level: number): void {
+    const { min, max } = widthRangeOf(this.view);
+    edge.dataset.column = String(level);
+    edge.setAttribute('aria-label', `Width of column ${level}`);
+    edge.setAttribute('aria-valuenow', String(this.widthOf(level)));
+    edge.setAttribute('aria-valuemin', String(min));
+    edge.setAttribute('aria-valuemax', String(max));
+  }
+
+  /** A press on a column's edge: the column follows the pointer until it is let go, when its width is kept. */
+  private edgeDown(event: MouseEvent, edge: HTMLElement): void {
+    const level = Number(edge.dataset.column);
+    event.preventDefault();
+    event.stopPropagation();
+    this.edgeDrag = { level, x: event.clientX, width: this.widthOf(level) };
+    const move = (moved: MouseEvent): void => {
+      const drag = this.edgeDrag;
+      if (drag) this.previewWidth(drag.level, drag.width + moved.clientX - drag.x);
+    };
+    const end = (released: MouseEvent, kept: boolean): void => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
+      const drag = this.edgeDrag;
+      this.edgeDrag = undefined;
+      if (drag === undefined) return;
+      if (kept) this.commitWidth(drag.level, drag.width + released.clientX - drag.x);
+      else {
+        this.widthShown.delete(drag.level);
+        this.render();
+      }
+    };
+    const up = (released: MouseEvent): void => end(released, true);
+    const cancel = (released: MouseEvent): void => end(released, false);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
+  }
+
+  /** The keys of a focused edge: the arrow keys move it by a step, Home gives the column the page's own width. */
+  private edgeKey(event: KeyboardEvent, level: number): void {
+    const by = event.key === 'ArrowRight' ? WIDTH_STEP : event.key === 'ArrowLeft' ? -WIDTH_STEP : 0;
+    if (by === 0 && event.key !== 'Home') return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (by !== 0) this.commitWidth(level, this.widthOf(level) + by);
+    else this.resetWidth(level);
+  }
+
+  private clampWidth(width: number): number {
+    const { min, max } = widthRangeOf(this.view);
+    return Math.min(max, Math.max(min, Math.round(width)));
+  }
+
+  /** Shows a column at a width while its edge is dragged: every box of that depth follows at once, and nothing is sent. */
+  private previewWidth(level: number, width: number): void {
+    const shown = this.clampWidth(width);
+    if (this.widthShown.get(level) === shown) return;
+    this.widthShown.set(level, shown);
+    for (const box of this.page.querySelectorAll<HTMLElement>(`.hs-level-box[data-column="${level}"]`)) {
+      box.style.flex = `0 0 ${shown}px`;
+      box.style.width = `${shown}px`;
+    }
+    for (const edge of this.page.querySelectorAll<HTMLElement>(`.hs-column-edge[data-column="${level}"]`)) edge.setAttribute('aria-valuenow', String(shown));
+  }
+
+  /**
+   * Keeps a width for a column, held to the range: its first by the gesture of the page that adds
+   * one, or a change of the one the document keeps. The width it has already sends nothing.
+   */
+  private commitWidth(level: number, width: number): void {
+    const view = this.view;
+    const wanted = this.clampWidth(width);
+    const stored = this.kept.get(level);
+    if (view === undefined || wanted === (stored?.width ?? LEVEL_WIDTH)) {
+      this.widthShown.delete(level);
+      this.render();
+      return;
+    }
+    const gesture = stored === undefined ? view.pageGestures.addWidth : stored.gestures.resize;
+    const args: Record<string, TableValue> = {};
+    if (gesture?.params.width !== undefined) args[gesture.params.width] = wanted;
+    if (stored === undefined && gesture?.params.level !== undefined) args[gesture.params.level] = String(level);
+    this.widthShown.set(level, wanted);
+    this.askWidth(level, gesture, stored?.id, args);
+  }
+
+  /** Gives a column the page's own width again, removing the width the document keeps; one it does not keep sends nothing. */
+  private resetWidth(level: number): void {
+    const stored = this.kept.get(level);
+    if (stored === undefined) return;
+    this.widthShown.set(level, LEVEL_WIDTH);
+    this.askWidth(level, stored.gestures.remove, stored.id, {});
+  }
+
+  /** Asks for a width's gesture, remembering its column to put it back when it is refused; one that is not asked puts it back now. */
+  private askWidth(level: number, gesture: HierarchyGestureState | undefined, on: string | undefined, args: Readonly<Record<string, TableValue>>): void {
+    const before = this.seq;
+    this.run(gesture, on, args);
+    if (this.seq !== before) this.widthAsked.set(this.seq, level);
+    else this.widthShown.delete(level);
+    this.render();
+  }
+
   // ---- dragging ----
 
   private pointerDown(event: MouseEvent): void {
+    const edge = (event.target as Element).closest<HTMLElement>('.hs-column-edge');
+    if (edge !== null) {
+      if (event.button === 0 && !this.readOnly && this.question === undefined) this.edgeDown(event, edge);
+      return;
+    }
     const grip = (event.target as Element).closest<HTMLElement>('[data-grip]');
     if (grip === null || event.button !== 0 || this.readOnly || this.question !== undefined) return;
     event.preventDefault();
@@ -1325,11 +1617,6 @@ export class HierarchyPage {
     this.hint = undefined;
     this.render();
     if (hint === undefined) return;
-    const gesture = hint.dragged.gestures.move;
-    if (gesture === undefined) return;
-    const args: Record<string, TableValue> = {};
-    if (gesture.params.into !== undefined && hint.drop.into !== '') args[gesture.params.into] = hint.drop.into;
-    if (gesture.params.after !== undefined && hint.drop.after !== '') args[gesture.params.after] = hint.drop.after;
-    this.run(gesture, hint.dragged.id, args);
+    this.runMove(hint.dragged, hint.drop);
   }
 }

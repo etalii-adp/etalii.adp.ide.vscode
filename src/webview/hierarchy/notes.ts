@@ -50,6 +50,9 @@ export interface NoteListContent {
 export const wordOf = (gesture: HierarchyGestureState | undefined, operations: HierarchyView['operations'], fallback: string): string =>
   gesture === undefined ? fallback : gesture.label ?? operations[gesture.operation]?.label ?? fallback;
 
+/** How many lists of kinds were made, which names each apart. */
+let kindLists = 0;
+
 export class NoteList {
   readonly element = html('div', { class: 'hs-note-list', role: 'dialog' });
   private content: NoteListContent | undefined;
@@ -153,7 +156,7 @@ export class NoteList {
     const number = this.number();
     const add = this.addGesture();
     this.element.setAttribute('aria-label', `${content.notes.length === 1 ? 'Note' : 'Notes'} of ${number}`);
-    const list = html('ul', { class: 'hs-notes' }, ...content.notes.map((note) => this.noteView(note)));
+    const list = html('ul', { class: 'hs-notes', 'aria-label': `${content.notes.length === 1 ? 'Note' : 'Notes'} about ${number}` }, ...content.notes.map((note) => this.noteView(note)));
     const parts: Node[] = [list];
     if (!content.readOnly && add !== undefined) {
       const word = wordOf(add, content.operations, 'Add');
@@ -308,13 +311,16 @@ export class NoteList {
     const button = html('button', {
       type: 'button', role: 'combobox', class: 'hs-field hs-kind-button', 'aria-label': label, 'aria-haspopup': 'listbox', 'aria-expanded': 'false',
     }, icon(chosen?.icon ?? SEVERAL_NOTES_ICON), html('span', { class: 'hs-kind-name' }, chosen?.label ?? value), icon('mdi-chevron-down'));
-    const list = html('ul', { class: 'hs-kind-list', role: 'listbox', 'aria-label': label, hidden: '' });
+    const listId = `hs-kinds-${(kindLists += 1)}`;
+    button.setAttribute('aria-controls', listId);
+    const list = html('ul', { id: listId, class: 'hs-kind-list', role: 'listbox', 'aria-label': label, hidden: '' });
     const wrapper = html('div', { class: 'hs-kind' }, button, list);
     let active = Math.max(0, kinds.findIndex((kind) => kind.key === value));
     const open = (shown: boolean): void => {
       list.hidden = !shown;
       button.setAttribute('aria-expanded', String(shown));
       if (shown) drawList();
+      else button.removeAttribute('aria-activedescendant');
     };
     const choose = (key: string | undefined): void => {
       open(false);
@@ -322,7 +328,7 @@ export class NoteList {
     };
     const drawList = (): void => {
       list.replaceChildren(...kinds.map((kind, at) => {
-        const option = html('li', { role: 'option', 'aria-selected': String(kind.key === value), class: `hs-kind-option${at === active ? ' hs-kind-active' : ''}`, 'data-kind': kind.key },
+        const option = html('li', { id: `${listId}-${at}`, role: 'option', 'aria-selected': String(kind.key === value), class: `hs-kind-option${at === active ? ' hs-kind-active' : ''}`, 'data-kind': kind.key },
           icon(kind.icon ?? SEVERAL_NOTES_ICON), html('span', {}, kind.label));
         option.addEventListener('pointerenter', () => {
           active = at;
@@ -331,6 +337,7 @@ export class NoteList {
         option.addEventListener('click', () => choose(kind.key));
         return option;
       }));
+      button.setAttribute('aria-activedescendant', `${listId}-${active}`);
     };
     button.addEventListener('click', () => {
       active = Math.max(0, kinds.findIndex((kind) => kind.key === value));

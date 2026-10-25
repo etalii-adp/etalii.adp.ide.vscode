@@ -44,7 +44,8 @@ export function sortIn(text: string, sortWord: string): string {
 export class FilterBar {
   readonly element = html('div', { class: 'hs-filter-bar', role: 'search', 'aria-label': 'Narrow and sort' });
   private readonly field = html('input', {
-    type: 'text', class: 'hs-filter-query', 'aria-label': 'Filter', 'aria-autocomplete': 'list', 'aria-controls': 'hs-filter-completions', spellcheck: 'false', autocomplete: 'off',
+    type: 'text', class: 'hs-filter-query', role: 'combobox', 'aria-label': 'Filter', 'aria-autocomplete': 'list', 'aria-controls': 'hs-filter-completions', 'aria-expanded': 'false',
+    spellcheck: 'false', autocomplete: 'off',
   });
   private readonly completions = html('ul', { id: 'hs-filter-completions', class: 'hs-filter-completions', role: 'listbox', 'aria-label': 'Completions', hidden: '' });
   private readonly sort = html('select', { 'aria-label': 'Sort' });
@@ -241,6 +242,7 @@ export class FilterBar {
     const offered = this.offered();
     const marked = Math.min(this.active, offered.length - 1);
     this.completions.hidden = offered.length === 0;
+    this.field.setAttribute('aria-expanded', String(offered.length > 0));
     if (offered.length > 0) this.field.setAttribute('aria-activedescendant', `hs-filter-completion-${marked}`);
     else this.field.removeAttribute('aria-activedescendant');
     this.completions.replaceChildren(...offered.map((word, at) => {

@@ -1,4 +1,4 @@
-import type { HierarchyNode, HierarchyView } from '../../core/tool/hierarchyView';
+import type { HierarchyGestures, HierarchyNode, HierarchyView } from '../../core/tool/hierarchyView';
 
 // Where the levels and entries of a page of boxes stand, as the standalone host's page lays them
 // out (its `layout.ts`): how many levels fit the page's width, the levels above a node and below a
@@ -27,6 +27,41 @@ export function levelsThatFit(width: number, columnWidth: (column: number) => nu
     fit += 1;
   }
   return Math.max(1, fit);
+}
+
+/** How far an arrow key moves a column's right edge, in pixels. */
+export const WIDTH_STEP = 16;
+
+/** A width the document keeps for a column of levels: the one it names, and the width the page reads of it, absent where it reads none. */
+export interface KeptWidth {
+  readonly id: string;
+  readonly width?: number;
+  readonly gestures: HierarchyGestures;
+}
+
+/** The narrowest and the widest a column may be: the view's range, else the page's own width. */
+export function widthRangeOf(view: HierarchyView | undefined): { readonly min: number; readonly max: number } {
+  return { min: view?.widthRange?.min ?? LEVEL_WIDTH, max: view?.widthRange?.max ?? LEVEL_WIDTH };
+}
+
+/**
+ * The widths the document keeps, by the depth of their column, 1 for the top levels, as the
+ * standalone host reads them: a column named by no whole number from 1 is no column, and a width
+ * that is no whole number or lies outside the view's range is a column the page gives its own
+ * width. Of two for one depth, the first counts.
+ */
+export function keptWidthsOf(view: HierarchyView): ReadonlyMap<number, KeptWidth> {
+  const range = view.widthRange;
+  const kept = new Map<number, KeptWidth>();
+  for (const column of view.widths) {
+    if (!/^[1-9][0-9]*$/.test(column.level)) continue;
+    const level = Number(column.level);
+    if (kept.has(level)) continue;
+    const { width } = column;
+    const fits = Number.isInteger(width) && width > 0 && width >= (range?.min ?? 1) && width <= (range?.max ?? Number.POSITIVE_INFINITY);
+    kept.set(level, { id: column.id, ...(fits ? { width } : {}), gestures: column.gestures });
+  }
+  return kept;
 }
 
 /** The levels and entries of one view, by id, each with what it holds as the page draws it: its entries, then its levels. */
