@@ -29,7 +29,9 @@ const port = 9333;
  * Every image: the document it opens, under examples/, its theme and the element it selects:
  * `select` names one by its id, `nearest` takes the one matching it nearest the middle of the
  * editor. `drawn` is what counts as drawn, for a designer that draws no canvas, such as a table,
- * and `toolbox: false` marks a designer whose toolbox has nothing to offer.
+ * and `toolbox: false` marks a designer whose toolbox has nothing to offer. `editor` names the
+ * editor of a document whose file type opens as text by default, such as Markdown, which the
+ * profile associates with the document's file.
  */
 const images = [
   { file: 'agent-behavior-modelling.png', document: 'agent-behavior-modelling/research-assistant/research-assistant.adp', theme: 'dark', select: '1.2' },
@@ -37,6 +39,7 @@ const images = [
   { file: 'mindmap.png', document: 'mindmap/example 1/mindmap.mm', theme: 'dark', nearest: '.adp-content .adp-element' },
   { file: 'knowledge.png', document: 'knowledge/cities.yaml', theme: 'dark', drawn: 'tr.adp-table-row', toolbox: false, nearest: 'tr.adp-table-row td' },
   { file: 'agent-activity-diagram.png', document: 'agent-activity-diagram/adp-one-day/adp-one-day.aad', theme: 'dark', nearest: '.adp-content .adp-element' },
+  { file: 'hierarchical-requirement.png', document: 'hierarchical-requirement/web-shop.md', theme: 'dark', editor: 'etalii.adp.etalii.hierarchical-requirement', drawn: '.hs-box[data-id]', nearest: '.hs-box[data-id="REQ-0004"] .hs-box-header' },
 ];
 
 const themes = { dark: 'Default Dark Modern', light: 'Default Light Modern' };
@@ -92,6 +95,7 @@ async function capture(executable, image) {
     'update.mode': 'none',
     'telemetry.telemetryLevel': 'off',
     'extensions.ignoreRecommendations': true,
+    ...(image.editor ? { 'workbench.editorAssociations': { [`**/${image.document.split('/').pop()}`]: image.editor } } : {}),
   }, null, 2));
 
   const code = spawn(executable, [

@@ -538,3 +538,46 @@ describe('an element relocated into another parent (DESL 8.2 `move`, here `reloc
     expect(refusal(run('c', { parent: 'a', after: 'b' }))).toBe('It can only be put next to what lies in the place it is moved to.');
   });
 });
+
+describe('an operation\'s parameters held to their facets (DISL 4.2 and 8.7, DESL 4.3)', () => {
+  const specification = {
+    disl: '0.3', language: { id: 'a.b', version: '1.0.0' },
+    metamodel: {
+      diagram: { children: { allowed: ['Task'] } },
+      types: { Task: { attributes: { name: { type: 'string' }, tries: { type: 'int' }, share: { type: 'number' }, code: { type: 'string' } } } },
+    },
+    behavior: {
+      operations: {
+        rename: { for: ['Task'], params: { name: { type: 'string', required: true, minLength: 1 } }, actions: [{ set: { name: 'p.name' } }] },
+        retry: { for: ['Task'], params: { tries: { type: 'int', label: 'Attempts', min: 1, max: 5 } }, actions: [{ set: { tries: 'p.tries' }, when: 'has(p.tries)' }] },
+        share: { for: ['Task'], params: { share: { type: 'number', facets: { exclusiveMin: 0, max: 1 } } }, actions: [{ set: { share: 'p.share' } }] },
+        code: { for: ['Task'], params: { code: { type: 'string', pattern: '^[A-Z]{3}$', maxLength: 3 } }, actions: [{ set: { code: 'p.code' } }] },
+        note: { for: ['Task'], params: { name: { type: 'string', minLength: 2, maxLength: 4 } }, actions: [{ set: { name: 'p.name' } }] },
+      },
+    },
+  };
+  const { behavior } = interpret(specification);
+  const model: Model = { diagram: {}, relations: [], elements: [{ id: 't', type: 'Task', attributes: { name: 't' }, host: {}, ephemeral: false, line: 1 }] };
+  const run = (operation: string, args: Readonly<Record<string, unknown>>): Outcome => behavior.operate(model, operation, ['t'], undefined, undefined, args as never);
+
+  it('refuses a value outside them with a sentence naming the parameter, and runs one within them', () => {
+    expect(refusal(run('retry', { tries: 0 }))).toBe('Attempts is a whole number from 1 to 5.');
+    expect(refusal(run('retry', { tries: 6 }))).toBe('Attempts is a whole number from 1 to 5.');
+    expect(refusal(run('retry', { tries: 2.5 }))).toBe('Attempts is a whole number from 1 to 5.');
+    expect(refusal(run('retry', { tries: 'two' }))).toBe('Attempts is a whole number from 1 to 5.');
+    expect(changes(run('retry', { tries: 5 }))).toEqual([{ kind: 'set', id: 't', attributes: { tries: 5 } }]);
+    expect(changes(run('retry', {}))).toEqual([]);
+    expect(refusal(run('share', { share: 0 }))).toBe('Share is a number more than 0 and no more than 1.');
+    expect(changes(run('share', { share: 0.5 }))).toEqual([{ kind: 'set', id: 't', attributes: { share: 0.5 } }]);
+    expect(refusal(run('code', { code: 'abc' }))).toBe('Code does not have the form it must have.');
+    expect(refusal(run('code', { code: 'ABCD' }))).toBe('Code is at most 3 characters long.');
+    expect(changes(run('code', { code: 'ABC' }))).toEqual([{ kind: 'set', id: 't', attributes: { code: 'ABC' } }]);
+    expect(refusal(run('note', { name: 'a' }))).toBe('Name is 2 to 4 characters long.');
+  });
+
+  it('refuses a required parameter that is not given, and an empty one that must hold a character', () => {
+    expect(refusal(run('rename', {}))).toBe('Name must be given.');
+    expect(refusal(run('rename', { name: '' }))).toBe('Name cannot be empty.');
+    expect(changes(run('rename', { name: 'u' }))).toEqual([{ kind: 'set', id: 't', attributes: { name: 'u' } }]);
+  });
+});

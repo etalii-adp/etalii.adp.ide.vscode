@@ -398,6 +398,24 @@ describe('the widths of the columns', () => {
     expect(view.widths[0].gestures).toMatchObject({ resize: { operation: 'setColumnWidth', params: { width: 'width' } }, remove: { operation: 'resetColumnWidth' } });
   });
 
+  it('refuses a width outside the parameter\'s range of 120 to 2000, and a level not in the parameter\'s pattern, writing nothing', () => {
+    // The core holds an operation's parameters to their facets (DESL 4.3), whatever the page asks: the sentence is this host's, naming the parameter and its range.
+    const kept = widened(numbered, operation('addColumnWidth', [], { level: '1', width: 360 }));
+    const column = columnOf(kept, '1');
+    for (const width of [119, 2001]) {
+      const outcome = type.edit(kept, operation('setColumnWidth', [column], { width }), {}, false);
+      expect(outcome.kind).toBe('refused');
+      expect(refusal(outcome)).toBe('Width is a whole number from 120 to 2000.');
+      expect(refusal(type.edit(numbered, operation('addColumnWidth', [], { level: '2', width }), {}, false))).toBe('Width is a whole number from 120 to 2000.');
+    }
+    expect(refusal(type.edit(kept, operation('setColumnWidth', [column], { width: 'wide' }), {}, false))).toBe('Width is a whole number from 120 to 2000.');
+    expect(refusal(type.edit(numbered, operation('addColumnWidth', [], { level: '0', width: 300 }), {}, false))).toBe('Level does not have the form it must have.');
+    expect(refusal(type.edit(numbered, operation('addColumnWidth', [], { level: 'top', width: 300 }), {}, false))).toBe('Level does not have the form it must have.');
+    // The bounds themselves are widths.
+    expect(type.view(widened(kept, operation('setColumnWidth', [column], { width: 120 })), {}).widths[0].width).toBe(120);
+    expect(type.view(widened(kept, operation('setColumnWidth', [column], { width: 2000 })), {}).widths[0].width).toBe(2000);
+  });
+
   it('serves a width that is no number or lies outside the range as written, for the page to give that column its own width', () => {
     const odd = { ...numbered, registration: `${registration}widths:${nl}  1: 400${nl}  2: wide${nl}  3: 50${nl}  0: 300${nl}  4: 2000${nl}` };
     expect(type.view(odd, {}).widths.map((column) => [column.level, column.width])).toEqual([['1', 400], ['2', 0], ['3', 50], ['0', 300], ['4', 2000]]);
