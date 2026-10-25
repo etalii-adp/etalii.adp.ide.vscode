@@ -206,6 +206,32 @@ describe('a bullets binding with a header, unreadable types and many-valued word
   });
 });
 
+describe('an id stored in place of the one an entry holds', () => {
+  it('is refused without `replace`, as the entry has an id already', () => {
+    const body = open('## Topics\n- [new] A\n');
+    expect(body.change({ kind: 'storeId', id: 'new', newId: 't1' })).toHaveProperty('refused');
+  });
+
+  it('replaces the written id with `replace`: of a placeholder, and of a later holder of a duplicated id', () => {
+    const body = open('## Topics\n- [new] A\n- [a] B\n- [a] C\n');
+    expect(ids(body)).toEqual(['new', 'a', 'topic@4']);
+    expect(body.changeAll([
+      { kind: 'storeId', id: 'new', newId: 't1', replace: true },
+      { kind: 'storeId', id: 'topic@4', newId: 't2', replace: true },
+    ])).toEqual({ planned: { splices: [
+      { operation: 'replace-value', start: 13, end: 16, text: 't1' },
+      { operation: 'replace-value', start: 31, end: 32, text: 't2' },
+    ] } });
+    expect(textOf(body.bytes)).toBe('## Topics\n- [t1] A\n- [a] B\n- [t2] C\n');
+    expect(ids(body)).toEqual(['t1', 'a', 't2']);
+  });
+
+  it('is refused with `replace` when another entry has the new id', () => {
+    const body = open('## Topics\n- [new] A\n- [a] B\n');
+    expect(body.change({ kind: 'storeId', id: 'new', newId: 'a', replace: true })).toHaveProperty('refused');
+  });
+});
+
 describe('a transaction whose changes touch the same text (FBL 6.4)', () => {
   it('makes the sets of one element one set, the later value winning', () => {
     const body = open('## Topics\n- [a] A\n');

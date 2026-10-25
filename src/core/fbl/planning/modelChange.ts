@@ -23,7 +23,9 @@ export type ChangePosition = { readonly index: number } | { readonly after: stri
  * - `place`: places an element on the canvas: an edit of the registration, not of the body (FBL 8.3).
  * - `identify`: stores the id of the element with a natural key in the registration's `identities` (FBL 8.6).
  * - `storeId`: writes an id into an entry of the body that keeps its id in the body and has none
- *   yet: the entry is from then on found by `newId`, and can be named by it.
+ *   yet: the entry is from then on found by `newId`, and can be named by it. With `replace`, the
+ *   entry may hold an id already, which is replaced where it is written: a placeholder, or the id
+ *   of an entry that another holds first (DESL 5.3.4, 5.3.5).
  * - `setting` *(FBL 0.7)*: changes the entry `key` of a block the binding declares in the registration
  *   (FBL 8.1, 8.4, 15.3): `value` sets or adds it, `rename` renames its key, `remove` removes it,
  *   and `position` places it in a `kept` block, among its entries as they are without it.
@@ -40,7 +42,7 @@ export type ModelChange =
   | { readonly kind: 'remove'; readonly id: string }
   | { readonly kind: 'place'; readonly id: string; readonly x: number; readonly y: number }
   | { readonly kind: 'identify'; readonly key: string; readonly id: string }
-  | { readonly kind: 'storeId'; readonly id: string; readonly newId: string }
+  | { readonly kind: 'storeId'; readonly id: string; readonly newId: string; readonly replace?: true }
   | {
     readonly kind: 'setting'; readonly block: string; readonly key: string; readonly value?: string;
     readonly position?: ChangePosition; readonly rename?: string; readonly remove?: boolean;

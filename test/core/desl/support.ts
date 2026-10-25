@@ -9,7 +9,7 @@ import { interpretConstraints, type Constraints } from '../../../src/core/disl/c
 import type { Expressions } from '../../../src/core/disl/expressions';
 import { interpretMetamodel, type Metamodel } from '../../../src/core/disl/metamodel';
 import type { Finding, Model } from '../../../src/core/disl/model';
-import { readModel } from '../../../src/core/disl/persistence';
+import { readModel, type Read } from '../../../src/core/disl/persistence';
 import { loadDocument } from '../../../src/core/fbl/documents/documentLoader';
 import type { FblBinding } from '../../../src/core/fbl/documents/types';
 import { OpenBody } from '../../../src/core/fbl/history/openBody';
@@ -75,3 +75,23 @@ export const knowledgeYaml = (): FblBinding => bindingAt(`${knowledgeFolder}/kno
 export const webShop = (): string => readFileSync('examples/hierarchical-requirement/web-shop.md', 'utf8');
 export const webShopRegistration = (): string => readFileSync('examples/hierarchical-requirement/web-shop.adp', 'utf8');
 export const hierarchyMarkdown = (): FblBinding => bindingAt(`${hierarchyFolder}/hierarchical-requirement.fbl`, 'markdown');
+
+/**
+ * A requirement document read through its binding with what the specification says of its
+ * attributes (their types, which hold several values, the types read as unreadable), as the
+ * designer reads it, before anything DESL adds to the reading.
+ */
+export function readHierarchy(text: string, fileName = 'web-shop.md'): Read {
+  const designer = loadDesigner(hierarchySpecification()).value;
+  const metamodel = interpretMetamodel(designer.interpreted).value;
+  const binding = hierarchyMarkdown();
+  const as = (type: string): string => designer.persistence.typeMap[type]?.as ?? type;
+  const attribute = (type: string, name: string) => (as(type) === 'diagram' ? metamodel.diagram : metamodel.types[as(type)]?.attributes ?? {})[name];
+  const body = OpenBody.open(encode(text), binding, {
+    fileName,
+    attributeType: (type, name) => attribute(type, name)?.type,
+    many: (type, name) => attribute(type, name)?.many === true,
+    unreadableTypes: new Set(Object.entries(designer.persistence.typeMap).filter(([, mapped]) => mapped.as === 'unreadable').map(([type]) => type)),
+  });
+  return readModel(body.model, binding, metamodel, designer.persistence);
+}
