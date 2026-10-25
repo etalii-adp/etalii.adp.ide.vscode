@@ -220,6 +220,7 @@ export class ListEditor extends Popup {
   show(list: HierarchyList): void {
     this.list = list;
     this.element.setAttribute('aria-label', pluralOf(list.name));
+    this.lines.setAttribute('aria-label', pluralOf(list.name));
     this.addRow.hidden = list.add?.enabled !== true;
     this.adding.setAttribute('aria-label', `New ${list.name.toLowerCase()}`);
     // A line whose name is being typed is kept, so the typing goes on.
@@ -277,12 +278,21 @@ export class ListEditor extends Popup {
       this.run(move, member.id, after === undefined ? {} : argsOf(move, 'after', after));
     };
     const movable = move?.enabled === true;
-    return html('li', { class: 'hs-list-line', 'data-member': member.id },
+    const line = html('li', { class: 'hs-list-line', 'data-member': member.id },
       html('span', { class: 'hs-list-look' }, labelElement(this.list, member.name, member)),
       name, colour,
       button('mdi-chevron-up', `Move ${member.name} up`, movable && index > 0, () => moveTo(index - 1)),
       button('mdi-chevron-down', `Move ${member.name} down`, movable && index < count - 1, () => moveTo(index + 1)),
       button('mdi-trash-can-outline', `${remove?.label ?? 'Delete'} ${member.name}`, remove?.enabled === true, () => this.run(remove, member.id)));
+    // Alt+Up and Alt+Down move the member wherever in its line the focus is, as its buttons do.
+    line.addEventListener('keydown', (event) => {
+      const by = event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey ? (event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0) : 0;
+      if (by === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (movable && index + by >= 0 && index + by < count) moveTo(index + by);
+    });
+    return line;
   }
 
   private add(): void {

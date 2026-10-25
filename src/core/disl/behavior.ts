@@ -1351,10 +1351,14 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     const label = worded(known.label, scope, labelOf(id));
     if (target === undefined && !whole && !known.for.includes('diagram')) return { offered: false, available: false, label };
     const reason = (free(operation.actions) ? undefined : gate(model, situation)) ?? applicable(operation.unavailable, scope);
-    return {
-      offered: true, available: reason === undefined && given(operation.enabled, scope), reason, label, target,
-      confirm: promptOf(operation.confirm, scope, false, label),
-    };
+    const state = { offered: true, available: reason === undefined && given(operation.enabled, scope), reason, label, target };
+    // The question is worked out when it is asked for: its count can range over the whole model, which a
+    // page that asks what every element offers would otherwise pay for every element (etalii.adp spec 036, SC-005).
+    let prompt: { readonly value: Prompt | undefined } | undefined;
+    return Object.defineProperty(state, 'confirm', {
+      enumerable: true,
+      get: () => (prompt ??= { value: promptOf(operation.confirm, scope, false, label) }).value,
+    }) as Availability;
   };
 
   const done = (outcome: Outcome): outcome is Exclude<Outcome, { readonly refused: string }> => outcome.refused === undefined;

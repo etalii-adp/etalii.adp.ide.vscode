@@ -1,7 +1,7 @@
 /*
  * The page of boxes of a designer (DESL 7.7.1), in the standalone host's sizes: 6px inside every
  * box and between its text and its controls, 12px from its left edge to its labels, its description
- * and a wrapped title's later lines, 12px below its description, levels 240px wide. Every colour is
+ * and a wrapped title's later lines, 12px below its description, levels 240px wide unless their column keeps a width. Every colour is
  * the theme's own; in high contrast every edge is the contrast border and the selection is
  * outlined, so nothing is told by a fill alone.
  */
@@ -19,6 +19,16 @@ body.vscode-high-contrast-light {
   --hs-line: var(--vscode-contrastBorder);
   --hs-raised: var(--vscode-editor-background);
   --hs-accent: var(--vscode-contrastActiveBorder, var(--vscode-focusBorder));
+}
+
+/* In high contrast the focus is drawn in the contrast's active border, dashed and two pixels wide, so it is told from the
+   selection and from every edge. */
+body.vscode-high-contrast .hs-surface :focus-visible,
+body.vscode-high-contrast-light .hs-surface :focus-visible,
+body.vscode-high-contrast .hs-overlay :focus-visible,
+body.vscode-high-contrast-light .hs-overlay :focus-visible {
+  outline: 2px dashed var(--vscode-contrastActiveBorder, var(--vscode-focusBorder));
+  outline-offset: -2px;
 }
 
 html,
@@ -221,6 +231,21 @@ body {
   outline: none;
 }
 
+/* The page keeps the focus while the arrow keys move the selection: the selected box shows it, and the page while none is. */
+.hs-page:focus-visible:not([aria-activedescendant]) {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.hs-page:focus-visible .hs-box.hs-selected {
+  outline: 2px solid var(--vscode-focusBorder);
+}
+
+body.vscode-high-contrast .hs-page:focus-visible .hs-box.hs-selected,
+body.vscode-high-contrast-light .hs-page:focus-visible .hs-box.hs-selected {
+  outline: 2px dashed var(--vscode-contrastActiveBorder, var(--vscode-focusBorder));
+}
+
 .hs-level,
 .hs-entry {
   display: flex;
@@ -238,6 +263,46 @@ body {
   position: relative;
   display: flex;
   box-sizing: border-box;
+}
+
+/* The right edge of a column of levels, dragged to change its width (DESL 7.7.1): 8px to take, a 2px line when it is
+   under the pointer, dragged or focused. */
+.hs-column-edge {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.hs-column-edge::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+}
+
+.hs-column-edge:hover::after,
+.hs-column-edge:active::after,
+.hs-column-edge:focus-visible::after {
+  background: var(--hs-accent);
+}
+
+.hs-surface .hs-column-edge:focus-visible {
+  outline: none;
+}
+
+body.vscode-high-contrast .hs-column-edge:focus-visible::after,
+body.vscode-high-contrast-light .hs-column-edge:focus-visible::after {
+  left: 2px;
+  width: 4px;
+  background: var(--vscode-contrastActiveBorder, var(--vscode-focusBorder));
 }
 
 .hs-level-content {

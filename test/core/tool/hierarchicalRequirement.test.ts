@@ -365,3 +365,41 @@ describe('a requirement document this host does not change', () => {
     expect(refusal(type.edit(foreign, operation('toggleCollapsed', ['REQ-0001']), {}, false))).toBe('The registration beside this document is of another designer type, so nothing is kept in it.');
   });
 });
+
+describe('the widths of the columns', () => {
+  /** The document after a width's gesture: the registration alone is written, as one step of the history. */
+  function widened(on: Source, request: HierarchyRequest): Source {
+    const outcome = applied(type.edit(on, request, {}, false));
+    expect(outcome.splices).toEqual([]);
+    expect(outcome.history).toBeUndefined();
+    expect(typeof outcome.registration).toBe('string');
+    return { ...on, registration: outcome.registration! };
+  }
+  const columnOf = (on: Source, level: string): string => type.view(on, {}).widths.find((column) => column.level === level)!.id;
+
+  it('writes the registration\'s widths block as the standalone host does after the same drags, and a reset removes its line', () => {
+    // standalone ColumnOperationsTests: set column 1 to 360, change it to 420, set column 2 to 300, then reset column 1.
+    let on = widened(numbered, operation('addColumnWidth', [], { level: '1', width: 360 }));
+    on = widened(on, operation('setColumnWidth', [columnOf(on, '1')], { width: 420 }));
+    on = widened(on, operation('addColumnWidth', [], { level: '2', width: 300 }));
+    expect(on.registration).toBe(`${registration}widths:${nl}  1: 420${nl}  2: 300${nl}`);
+    expect(on.registration!.endsWith(`filters:${nl}  Open security: #security @proposed sort:state${nl}  Backend: item:back* sort:number${nl}widths:${nl}  1: 420${nl}  2: 300${nl}`)).toBe(true);
+    expect(type.view(on, {}).widths.map((column) => [column.level, column.width])).toEqual([['1', 420], ['2', 300]]);
+    on = widened(on, operation('resetColumnWidth', [columnOf(on, '1')]));
+    expect(on.registration).toBe(`${registration}widths:${nl}  2: 300${nl}`);
+    expect(on.text).toBe(numberedText);
+  });
+
+  it('offers the gestures of a width: the page adds one, a kept one is changed and reset, with the range of 120 to 2000 pixels the page holds them to', () => {
+    const on = widened(numbered, operation('addColumnWidth', [], { level: '1', width: 360 }));
+    const view = type.view(on, {});
+    expect(view.widthRange).toEqual({ min: 120, max: 2000 });
+    expect(view.pageGestures.addWidth).toMatchObject({ operation: 'addColumnWidth', enabled: true, params: { level: 'level', width: 'width' } });
+    expect(view.widths[0].gestures).toMatchObject({ resize: { operation: 'setColumnWidth', params: { width: 'width' } }, remove: { operation: 'resetColumnWidth' } });
+  });
+
+  it('serves a width that is no number or lies outside the range as written, for the page to give that column its own width', () => {
+    const odd = { ...numbered, registration: `${registration}widths:${nl}  1: 400${nl}  2: wide${nl}  3: 50${nl}  0: 300${nl}  4: 2000${nl}` };
+    expect(type.view(odd, {}).widths.map((column) => [column.level, column.width])).toEqual([['1', 400], ['2', 0], ['3', 50], ['0', 300], ['4', 2000]]);
+  });
+});

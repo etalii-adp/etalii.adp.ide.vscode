@@ -24,9 +24,14 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
 
   // A command runs the action the diagram type offers for the selection; which one is found by
   // what the type says about it, so a command means the same in every diagram type.
-  const runAction = (command: string, pick: { shortcut?: string; label?: RegExp }, onDiagram = false): void => {
+  const runAction = (command: string, pick: { shortcut?: string; label?: RegExp }, onDiagram = false, onPage?: string): void => {
     register(command, async () => {
       const active = tools.active;
+      // On a page of boxes the page moves its selected box, as its own keys do, by the move a drag makes.
+      if (onPage !== undefined && active?.type.kind === 'designer' && active.type.page === 'hierarchy') {
+        active.post({ v: 2, type: 'command', command: onPage });
+        return;
+      }
       // These commands are the canvas's: a designer's operations are run from its table.
       if (!active || active.type.kind !== 'diagram' || active.readOnly || active.lastView?.readOnly) return;
       const selection = onDiagram ? [] : active.selection;
@@ -44,8 +49,8 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
   runAction('etalii.adp.rename', { shortcut: 'F2' });
   runAction('etalii.adp.remove', { shortcut: 'Delete' });
   runAction('etalii.adp.evenPhases', { label: /^Even phases$/ });
-  runAction('etalii.adp.moveEarlier', { shortcut: 'Alt+Up' });
-  runAction('etalii.adp.moveLater', { shortcut: 'Alt+Down' });
+  runAction('etalii.adp.moveEarlier', { shortcut: 'Alt+Up' }, false, 'moveEarlier');
+  runAction('etalii.adp.moveLater', { shortcut: 'Alt+Down' }, false, 'moveLater');
   runAction('etalii.adp.arrangeDiagram', { label: /^Arrange diagram$/ }, true);
 
   // Undo and Redo of a change that touched the registration alone, such as a row dragged or a

@@ -424,7 +424,17 @@ export function interpretOperations(designer: DesignerSpecification, surface: Su
 
   // ---- what is offered ----
 
-  const typeOf = (model: Model, id: string): string | undefined => model.elements.find((element) => element.id === id)?.type;
+  // The type of each element by its id, read once for each model: a page asks for every element in turn.
+  const types = new WeakMap<Model, ReadonlyMap<string, string>>();
+  const typeOf = (model: Model, id: string): string | undefined => {
+    let known = types.get(model);
+    if (known === undefined) {
+      const byId = new Map<string, string>();
+      for (const element of model.elements) if (!byId.has(element.id)) byId.set(element.id, element.type);
+      types.set(model, known = byId);
+    }
+    return known.get(id);
+  };
   const selectable: readonly string[] = surface.kind === 'table' ? [surface.rows.type] : [surface.levels.type, surface.entries.type];
   const unoffered: Availability = { offered: false, available: false, label: '' };
   const availability: Operations['availability'] = (model, id, selection) => {
