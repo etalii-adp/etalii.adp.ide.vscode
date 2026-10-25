@@ -238,6 +238,73 @@ suite('The Hierarchical Requirement Designer in Visual Studio Code', () => {
     await until('the move to be taken back', () => document.getText() === original);
   });
 
+  test('a note added from its box is written as one step, and resolving it changes one byte', async () => {
+    const { document } = await open();
+    assert.deepStrictEqual(await edit({ kind: 'operation', operation: 'addAssessment', on: ['REQ-0001'], args: { kind: 'remark', text: 'Which search engine?' } }), { result: 'applied' });
+    await until('the note', () => /^- \[ \] Remark REQ-0001: Which search engine\?\r?$/m.test(document.getText()));
+    const note = await until('the page to list it', async () => (await state())?.hierarchy?.notes.find((candidate) => candidate.aboutId === 'REQ-0001'));
+    assert.strictEqual(note.resolved, false);
+    const before = document.getText();
+    assert.deepStrictEqual(await edit({ kind: 'operation', operation: 'resolveAssessment', on: [note.id] }), { result: 'applied' });
+    await until('the note to be resolved', () => document.getText() !== before);
+    const after = document.getText();
+    assert.strictEqual(after.length, before.length);
+    assert.deepStrictEqual([...after].flatMap((character, at) => (character === before[at] ? [] : [`${before[at]}>${character}`])), [' >x'], 'one byte changes');
+    await until('the page to follow', async () => (await state())?.hierarchy?.notes.find((candidate) => candidate.id === note.id)?.resolved === true);
+  });
+
+  test('a tag added from the page by the gesture the view names writes the Markdown and the tag list', async () => {
+    const { document, registration } = await open();
+    const add = (await state())?.hierarchy?.lists.find((list) => list.label === 'tags')?.gestures.add;
+    assert.ok(add, 'the page offers to add a tag');
+    assert.deepStrictEqual(await edit({ kind: 'operation', operation: add.operation, on: ['REQ-0003'], args: { [add.params.value]: 'checkout' } }), { result: 'applied' });
+    await until('the tag in the Markdown', () => /REQ-0003 A customer pays by card, iDEAL or PayPal\. #checkout category:functional state:accepted/.test(document.getText()));
+    await until('the tag in the list', async () => (await registrationText(registration)).includes('  checkout: default'));
+  });
+
+  test('a filter typed narrows the page and writes nothing', async () => {
+    const { uri, registration, document, bytes, registrationBytes } = await open();
+    const version = document.version;
+    await vscode.commands.executeCommand('etalii.adp.test.viewOptions', { query: '#security' });
+    const narrowed = await until('the page to be narrowed', async () => {
+      const shown = (await state())?.hierarchy;
+      return shown?.applied?.query === '#security' ? shown : undefined;
+    });
+    assert.deepStrictEqual(narrowed.roots.map((node) => [node.id, node.entries.map((entry) => entry.id)]), [['ITEM-0004', ['REQ-0006', 'REQ-0007']]]);
+    assert.strictEqual(narrowed.applied?.shown, 3);
+    assert.strictEqual(document.version, version);
+    assert.strictEqual(document.isDirty, false);
+    assert.ok(fs.readFileSync(uri.fsPath).equals(bytes));
+    assert.ok(fs.readFileSync(registration.fsPath).equals(registrationBytes));
+    assert.deepStrictEqual(await next(), { undo: false, redo: false });
+  });
+
+  test('a Requirement from ADP Toolbox dropped onto an item is written there, as one undo step', async () => {
+    const { document, original } = await open();
+    const toolbox = await vscode.commands.executeCommand<{ entries: { id: string }[] }>('etalii.adp.test.toolbox');
+    assert.deepStrictEqual(toolbox.entries.map((entry) => entry.id), ['Item', 'Requirement']);
+    assert.deepStrictEqual(await edit({ kind: 'drop', entry: 'Requirement', parent: 'ITEM-0006' }), { result: 'applied' });
+    await until('the requirement', () => /REQ-0010 Personal data is removed on request within 30 days\. #legal #privacy category:non-functional\r?\n {2}- REQ-0014 New requirement\r?$/m.test(document.getText()));
+    await until('the page to show it in the item', async () => (await nodeOf('ITEM-0006'))?.entries.some((entry) => entry.id === 'REQ-0014') === true);
+    await vscode.commands.executeCommand('undo');
+    await until('the drop to be taken back', () => document.getText() === original);
+  });
+
+  test('ADP Properties shows the selected requirement, and a title typed there edits the Markdown', async () => {
+    const { document } = await open();
+    await vscode.commands.executeCommand('etalii.adp.test.select', ['REQ-0001']);
+    const rows = await until('the rows', async () => {
+      const fields = (await state())?.fields ?? [];
+      return fields.length > 0 ? fields : undefined;
+    });
+    assert.deepStrictEqual(rows.map((row) => [row.id, row.value]), [
+      ['id', 'REQ-0001'], ['title', 'A customer finds a product by its name or its description.'], ['description', ''], ['tags', 'search'], ['category', 'functional'], ['state', 'accepted'],
+    ]);
+    assert.deepStrictEqual(await edit({ kind: 'setField', id: 'REQ-0001', field: 'title', value: 'A customer finds a product.' }), { result: 'applied' });
+    await until('the title in the Markdown', () => /^ {2}[-*+] REQ-0001 A customer finds a product\. #search category:functional state:accepted\r?$/m.test(document.getText()));
+    await until('the row to follow', async () => (await state())?.fields.find((row) => row.id === 'title')?.value === 'A customer finds a product.');
+  });
+
   test('a change of the document made outside the designer is told to the page as such', async () => {
     const { uri, document } = await open();
     const change = new vscode.WorkspaceEdit();

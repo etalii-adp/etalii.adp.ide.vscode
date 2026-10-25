@@ -108,6 +108,17 @@ describe('the Hierarchical Requirement Designer', () => {
     expect(Object.keys(view.operations)).toContain('moveRequirement');
   });
 
+  it('names its parts for the page: the types of the levels and entries, what a picked mention writes, the words of a filter, and the parameters of each gesture by the part they play', () => {
+    const view = type.view(source, {});
+    expect(view.roles).toEqual({ level: 'Item', entry: 'Requirement' });
+    expect(view.mentions).toEqual({ Item: { before: '[', after: ']', types: ['Item', 'Requirement'] }, Requirement: { before: '[', after: ']', types: ['Item', 'Requirement'] } });
+    expect(view.queryWords).toEqual({ level: 'item:', sort: 'sort:' });
+    expect(view.roots[0].gestures.addNote).toMatchObject({ operation: 'addAssessment', params: { kind: 'kind', text: 'text' } });
+    expect(view.notes[0].gestures.change).toMatchObject({ operation: 'changeAssessment', params: { kind: 'kind', text: 'text', detail: 'detail' } });
+    expect(view.lists[2].add).toMatchObject({ operation: 'addState', params: { name: 'name', colour: 'colour' } });
+    expect(view.pageGestures.addFilter).toMatchObject({ operation: 'storeFilter', params: { name: 'name', query: 'query' } });
+  });
+
   it('shows what a filter a viewer applied leaves, ordered as it says', () => {
     const view = type.view(source, { query: '#security sort:number' });
     expect(view.applied).toEqual({ query: '#security sort:number', shown: 3, total: 17 });
@@ -268,6 +279,11 @@ describe('a gesture of the frame', () => {
     const written = after(numbered, { kind: 'drop', entry: 'Requirement', parent: 'ITEM-0004', after: 'REQ-0006' });
     expect(written).toContain(`Activity is any request the customer makes. See [REQ-0007] for signing in.${nl}  - REQ-0014 New requirement${nl}  - REQ-0007`);
     expect(written).toContain('<!-- last: ITEM-0007 REQ-0014 -->');
+  });
+
+  it('drops a requirement into an item first among its requirements when the sibling it goes after is empty', () => {
+    const written = after(numbered, { kind: 'drop', entry: 'Requirement', parent: 'ITEM-0004', after: '' });
+    expect(written).toContain(`Everything behind the public interface.${nl}  - REQ-0014 New requirement${nl}  - REQ-0006`);
   });
 
   it('refuses a requirement dropped outside an item, and what it does not offer', () => {

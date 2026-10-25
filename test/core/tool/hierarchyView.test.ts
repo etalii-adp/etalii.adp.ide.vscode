@@ -40,7 +40,10 @@ describe('the view of a page of boxes', () => {
   it('runs each gesture by the operation the definition gives it, offered as the operation is', () => {
     const view = reader.view(model, state());
     const entry = all(view.roots).find((node) => node.role === 'entry')!;
-    expect(entry.gestures.rename).toEqual({ operation: gestures.on[entry.type]!.rename!.operation, enabled: true, params: gestures.on[entry.type]!.rename!.params });
+    expect(entry.gestures.rename).toEqual({ operation: gestures.on[entry.type]!.rename!.operation, label: 'Title', enabled: true, params: gestures.on[entry.type]!.rename!.params });
+    // A label the definition words by what the gesture is made on is that one's.
+    const note = view.notes.find((candidate) => candidate.resolved)!;
+    expect([note.gestures.resolve?.label, view.notes.find((candidate) => !candidate.resolved)!.gestures.resolve?.label]).toEqual(['Reopen', 'Resolve']);
     // An operation that is not offered for what the gesture is made on is no gesture of it.
     const none = reader.view(model, state({ availability: () => ({ offered: false, available: false }) }));
     expect(none.roots[0].gestures).toEqual({});
