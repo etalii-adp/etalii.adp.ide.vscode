@@ -629,6 +629,7 @@ export class BodyReading implements Reading {
       this.elements.map((element) => ({
         id: element.id,
         idIsStored: element.idStored,
+        ...(element.rule.id?.from && element.idRead?.present === true ? { writtenId: writtenText(element.idRead) } : {}),
         type: element.rule.type,
         rule: element.rule.name,
         isRelation: element.isRelation,

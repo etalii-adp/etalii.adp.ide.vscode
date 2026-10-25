@@ -4,11 +4,8 @@ import { loadDesigner } from '../../../src/core/desl/specification';
 import { interpretMetamodel, type Metamodel } from '../../../src/core/disl/metamodel';
 import type { Model, ModelElement } from '../../../src/core/disl/model';
 import type { Specification } from '../../../src/core/disl/specification';
-import { readModel } from '../../../src/core/disl/persistence';
 import { BoundedRegex } from '../../../src/core/fbl/expressions/regexMatcher';
-import { OpenBody } from '../../../src/core/fbl/history/openBody';
-import { encode } from '../../../src/core/fbl/text/utf8';
-import { hierarchyMarkdown, hierarchySpecification, object, webShop, type Json } from './support';
+import { hierarchySpecification, object, readHierarchy, webShop, type Json } from './support';
 
 // Mentions (DESL 4.3, 6.5): the text of an attribute names elements by id where a match of its
 // pattern has the group `id`. Read of the Hierarchical Requirement Designer's definition, whose
@@ -29,19 +26,7 @@ const facetOf = (where: string): MentionFacet => {
   return facet;
 };
 
-/** A document read through the binding, with the types of its attributes, as the designer reads it. */
-function modelOf(text: string): Model {
-  const binding = hierarchyMarkdown();
-  const entry = (type: string): string => (designer.persistence.typeMap[type]?.as ?? type);
-  const attribute = (type: string, name: string) => (entry(type) === 'document' || entry(type) === 'diagram' ? metamodel.diagram : metamodel.types[entry(type)]?.attributes ?? {})[name];
-  const body = OpenBody.open(encode(text), binding, {
-    fileName: 'web-shop.md',
-    attributeType: (type, name) => attribute(type, name)?.type,
-    many: (type, name) => attribute(type, name)?.many === true,
-    unreadableTypes: new Set(Object.entries(designer.persistence.typeMap).filter(([, mapped]) => mapped.as === 'unreadable').map(([type]) => type)),
-  });
-  return readModel(body.model, binding, metamodel, designer.persistence).value;
-}
+const modelOf = (text: string): Model => readHierarchy(text).value;
 
 const title = (element: ModelElement): string | undefined => {
   const value = element.attributes[metamodel.types[element.type]?.labelAttribute ?? ''];

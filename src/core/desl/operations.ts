@@ -24,6 +24,7 @@ import { celOf, isCel, isObject, labelOf, localized, type Attribute, type IdRule
 import { interpretToolbox } from '../disl/toolbox';
 import { findRule, type FblBinding } from '../fbl/documents/types';
 import type { FblOptions, IdRequest } from '../fbl/model';
+import { counterRules, markSets, nextCounted } from './counters';
 import { scoped, type DesignerSpecification } from './specification';
 import type { Surface, ValueType } from './surface';
 
@@ -59,8 +60,8 @@ export interface Operations {
   setItem(model: Model, row: string, column: string, value: Value, present: boolean): Outcome;
   /** A view made the one the document is left in. */
   activate(model: Model, view: string): Outcome;
-  /** What the FBL library asks of the specification to read a body through a binding: the derived ids, and the types of the attributes. */
-  reading(binding: FblBinding): Pick<FblOptions, 'deriveId' | 'attributeType' | 'timeAttributes'>;
+  /** What the FBL library asks of the specification to read a body through a binding: the derived ids, the types of the attributes, which hold several values, and the types read as unreadable. */
+  reading(binding: FblBinding): Pick<FblOptions, 'deriveId' | 'attributeType' | 'timeAttributes' | 'many' | 'unreadableTypes'>;
 }
 
 const NOT_HERE = 'This cannot be done with what is selected.';
@@ -188,6 +189,8 @@ export function interpretOperations(designer: DesignerSpecification, surface: Su
 
   const rules = persistence.ids.types ?? {};
   const ruleOf = (type: string): IdRule | undefined => (Object.hasOwn(rules, type) && rules[type].strategy === 'derived' && rules[type].expression !== undefined ? rules[type] : undefined);
+  const counters = counterRules(persistence);
+  const counterOf = (type: string) => counters.find((rule) => rule.type === type);
   // An element of a type whose id is derived is made under a name of its own, and renamed once the transaction has given it what its id is derived from.
   let made = 0;
   const pending = '\u0001';
@@ -197,7 +200,7 @@ export function interpretOperations(designer: DesignerSpecification, surface: Su
     layout: interpretLayout(specification).value,
     coordinates: interpretCoordinates(specification, metamodel).value,
     toolbox: interpretToolbox(specification, metamodel).value,
-    newId: (type) => (ruleOf(type) ? provisional() : newId(persistence, type)),
+    newId: (type) => (ruleOf(type) || counterOf(type) ? provisional() : newId(persistence, type)),
   });
   findings.push(...behavior.findings);
   for (const [type, rule] of Object.entries(rules)) {
@@ -211,14 +214,19 @@ export function interpretOperations(designer: DesignerSpecification, surface: Su
     return result.ok && typeof result.value === 'string' && result.value !== '' ? result.value : undefined;
   };
 
+  /** The attribute of the metamodel a binding's attribute of a binding's type is read as, when there is one. */
+  const declaredOf = (type: string, attribute: string): Attribute | undefined => {
+    const entry = entryOf(persistence, type);
+    const named = mapped(entry, attribute);
+    const known = typesOf(entry.as);
+    return named !== null && Object.hasOwn(known, named) ? known[named] : undefined;
+  };
+  const unreadableTypes = new Set(Object.entries(persistence.typeMap).filter(([, entry]) => entry.as === 'unreadable').map(([type]) => type));
   const reading: Operations['reading'] = (binding) => ({
     timeAttributes: momentAttributes(binding, metamodel, persistence),
-    attributeType: (type, attribute) => {
-      const entry = entryOf(persistence, type);
-      const named = mapped(entry, attribute);
-      const known = typesOf(entry.as);
-      return named !== null && Object.hasOwn(known, named) ? known[named].type : undefined;
-    },
+    attributeType: (type, attribute) => declaredOf(type, attribute)?.type,
+    many: (type, attribute) => declaredOf(type, attribute)?.many === true,
+    unreadableTypes,
     // The identity context (DESL 9.3) over what the reader knows when it asks: the element with its attributes, its
     // parent, the siblings read before it in its slot, and what its references name.
     // simplified: the siblings stand in as elements of its own type, and of its ancestors only the parent is there; read more of the body when a rule derives an id from more.
@@ -365,6 +373,17 @@ export function interpretOperations(designer: DesignerSpecification, surface: Su
     changes = unstored(changes, model)
       .map((change) => (change.kind !== 'set' ? change : { ...change, attributes: Object.fromEntries(Object.entries(change.attributes).filter(([name, value]) => changes.some((other) => other.kind === 'add' && other.id === change.id) || JSON.stringify(held(change.id, name)) !== JSON.stringify(value))) }))
       .filter((change) => change.kind !== 'set' || Object.keys(change.attributes).length > 0);
+    // The counted ids (DESL 5.3.5), in the order the transaction made them, and one set of each mark to the last id it gave.
+    const counted: string[] = [];
+    const known: Model = { diagram: model.diagram, elements: [...model.elements, ...outcome.after.elements], relations: [] };
+    for (const added of changes.filter((change) => change.kind === 'add' && change.id.startsWith(pending))) {
+      const rule = added.kind === 'add' ? counterOf(added.type) : undefined;
+      if (!rule) continue;
+      const id = nextCounted(rule, known, counted);
+      changes = renamed(changes, added.id, id);
+      counted.push(id);
+    }
+    changes = [...changes, ...markSets(counters, model, counted)];
     // The derived ids, parents before children: a change that adds an element comes after the one that adds what it lies in.
     for (const added of changes.filter((change) => change.kind === 'add' && change.id.startsWith(pending))) {
       const rule = added.kind === 'add' ? ruleOf(added.type) : undefined;
