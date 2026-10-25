@@ -52,7 +52,8 @@ describe('a DESL specification', () => {
 
   it('of DESL 0.2 is read with nothing found: counted ids, mentions, settings and the children of the document', () => {
     const hierarchy = hierarchySpecification();
-    expect(hierarchy.desl).toBe('0.2');
+    const { desl: version } = hierarchy;
+    expect(version).toBe('0.2');
     const loaded = loadDesigner(hierarchy);
     expect(loaded.findings).toEqual([]);
     const metamodel = interpretMetamodel(loaded.value.interpreted);
