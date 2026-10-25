@@ -4,12 +4,18 @@
 import { readFileSync } from 'node:fs';
 import { interpretOperations, type Operations } from '../../../src/core/desl/operations';
 import { expressionsOf, loadDesigner, type DesignerSpecification } from '../../../src/core/desl/specification';
-import { interpretSurface, type Surface } from '../../../src/core/desl/surface';
+import { interpretSurface, type Surface, type TableSurface } from '../../../src/core/desl/surface';
 import { interpretConstraints, type Constraints } from '../../../src/core/disl/constraints';
 import type { Expressions } from '../../../src/core/disl/expressions';
 import { interpretMetamodel, type Metamodel } from '../../../src/core/disl/metamodel';
 import type { Finding, Model } from '../../../src/core/disl/model';
 import { readModel, type Read } from '../../../src/core/disl/persistence';
+import { counterRules, numbered, type Numbered } from '../../../src/core/desl/counters';
+import { withImplicitMembers } from '../../../src/core/desl/hierarchy';
+import { interpretMentions, type Mentions } from '../../../src/core/desl/mentions';
+import { derivedIds, interpretSettings, withSettings, type Settings, type StoredBlocks } from '../../../src/core/desl/settings';
+import type { HierarchySurface } from '../../../src/core/desl/surface';
+import { OpenRegistration } from '../../../src/core/fbl/registration/openRegistration';
 import { loadDocument } from '../../../src/core/fbl/documents/documentLoader';
 import type { FblBinding } from '../../../src/core/fbl/documents/types';
 import { OpenBody } from '../../../src/core/fbl/history/openBody';
@@ -42,14 +48,21 @@ export interface Interpreted {
   readonly metamodel: Metamodel;
   readonly expressions: Expressions;
   readonly constraints: Constraints;
-  readonly surface: Surface;
+  readonly surface: TableSurface;
   readonly operations: Operations;
   /** What reading the specification found, of every part. */
   readonly findings: readonly Finding[];
 }
 
-/** A specification interpreted as a tool type interprets it. One whose surface cannot be read fails the test. */
+/** A specification interpreted as a tool type interprets it. One whose surface cannot be read, or is no table, fails the test. */
 export function interpreted(json: unknown): Interpreted {
+  const parts = interpretedAny(json);
+  if (parts.surface.kind !== 'table') throw new Error('The surface is no table.');
+  return { ...parts, surface: parts.surface };
+}
+
+/** A specification interpreted as a tool type interprets it, with a surface of any kind. One whose surface cannot be read fails the test. */
+export function interpretedAny(json: unknown): Omit<Interpreted, 'surface'> & { readonly surface: Surface } {
   const designer = loadDesigner(json);
   const metamodel = interpretMetamodel(designer.value.interpreted);
   const expressions = expressionsOf(designer.value, metamodel.value);
@@ -75,6 +88,34 @@ export const knowledgeYaml = (): FblBinding => bindingAt(`${knowledgeFolder}/kno
 export const webShop = (): string => readFileSync('examples/hierarchical-requirement/web-shop.md', 'utf8');
 export const webShopRegistration = (): string => readFileSync('examples/hierarchical-requirement/web-shop.adp', 'utf8');
 export const hierarchyMarkdown = (): FblBinding => bindingAt(`${hierarchyFolder}/hierarchical-requirement.fbl`, 'markdown');
+
+/** A requirement document opened as the designer opens it: numbered, with its registration's settings and its implicit members. */
+export interface OpenHierarchy {
+  readonly parts: ReturnType<typeof interpretedAny>;
+  readonly surface: HierarchySurface;
+  readonly settings: Settings;
+  readonly mentions: Mentions;
+  readonly model: Model;
+  readonly findings: readonly Finding[];
+  readonly unnumbered: Numbered['unnumbered'];
+  readonly stored: StoredBlocks;
+  readonly implied: ReadonlySet<string>;
+}
+
+/** The Hierarchical Requirement Designer's specification interpreted, and a document of it opened with its registration, or with none for null. */
+export function openHierarchy(text: string = webShop(), registration: string | null = webShopRegistration()): OpenHierarchy {
+  const parts = interpretedAny(hierarchySpecification());
+  if (parts.surface.kind !== 'hierarchy') throw new Error('The surface is no hierarchy.');
+  const binding = hierarchyMarkdown();
+  const derive = derivedIds(parts.expressions, parts.designer.persistence);
+  const settings = interpretSettings(parts.designer.settings, parts.metamodel, parts.designer.persistence, [binding]).value;
+  const mentions = interpretMentions(parts.metamodel).value;
+  const body = OpenBody.open(encode(text), binding, { fileName: 'web-shop.md', ...parts.operations.reading(binding) });
+  const read = numbered(readModel(body.model, binding, parts.metamodel, parts.designer.persistence), counterRules(parts.designer.persistence));
+  const kept = withSettings(read.model, registration === null ? undefined : OpenRegistration.open(encode(registration), binding), settings, parts.metamodel, derive);
+  const implicit = withImplicitMembers(kept.model, parts.surface, derive);
+  return { parts, surface: parts.surface, settings, mentions, model: implicit.model, findings: read.findings, unnumbered: read.unnumbered, stored: kept.stored, implied: implicit.implied };
+}
 
 /**
  * A requirement document read through its binding with what the specification says of its

@@ -113,6 +113,7 @@ export class ReadElement {
 
   /** The element's zero-based place among those of the same parent and slot, in document order. */
   positionInSlot = 0;
+  earlierTypes: readonly string[] = [];
 
   sourceRead?: SlotRead;
 
