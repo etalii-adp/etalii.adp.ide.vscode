@@ -26,7 +26,7 @@ import { findRule, type FblBinding } from '../fbl/documents/types';
 import type { FblOptions, IdRequest } from '../fbl/model';
 import { counterRules, markSets, nextCounted } from './counters';
 import { scoped, type DesignerSpecification } from './specification';
-import type { Surface, ValueType } from './surface';
+import type { Surface, TableSurface, ValueType } from './surface';
 
 /** One parameter of an operation: an attribute, given by the gesture (DESL 8.1). */
 export interface Parameter {
@@ -47,6 +47,13 @@ export interface DesignerOperation {
   readonly params: readonly Parameter[];
 }
 
+/** One operation of several run as one transaction: its id, what it runs on (nothing for the document), and its parameters. */
+export interface RunStep {
+  readonly operation: string;
+  readonly on?: readonly string[];
+  readonly args?: Readonly<Record<string, Value>>;
+}
+
 export interface Operations {
   /** The operations the specification declares, in its order. */
   readonly all: readonly DesignerOperation[];
@@ -54,7 +61,13 @@ export interface Operations {
   availability(model: Model, operation: string, selection: readonly string[]): Availability;
   /** One operation run on a selection, or on the document when that is empty, as one transaction. */
   run(model: Model, operation: string, selection: readonly string[], args?: Readonly<Record<string, Value>>): Outcome;
-  /** The value of a row for a column set, or emptied with null: the quick change of a cell. */
+  /**
+   * Several operations run one after another as one transaction: a gesture that is two operations, such as an element
+   * made and then moved to where it was dropped. A step given as a function is made from the ids the steps before it
+   * created, in order. The first refusal refuses the whole.
+   */
+  runAll(model: Model, steps: readonly (RunStep | ((created: readonly string[]) => RunStep))[]): Outcome;
+  /** The value of a row for a column set, or emptied with null: the quick change of a cell. Refused on a surface that is no table. */
   setCell(model: Model, row: string, column: string, value: Value | null): Outcome;
   /** One of several values of a row for a column added or taken away. */
   setItem(model: Model, row: string, column: string, value: Value, present: boolean): Outcome;
@@ -133,56 +146,60 @@ export function interpretOperations(designer: DesignerSpecification, surface: Su
   }));
   const declaredIds = new Set(all.map((operation) => operation.id));
 
-  // The quick changes of the surface (DESL 10.3), each written as the operation it is: what a cell holds under the key of
+  // The quick changes of a table (DESL 10.3), each written as the operation it is: what a cell holds under the key of
   // a value type set or emptied, one of several values added or taken away, and a view shown. Their names are no
-  // identifiers of DESL, so they are none of a specification's.
-  const { cells, columns, rows, views } = surface;
-  const quote = (name: string): string => `'${name}'`;
-  const cellOf = `self.childrenOfType(${quote(cells.type)}).filter(c, c.${cells.column} == p.column)`;
-  const cellSlot = slotFor(rows.type, cells.type);
-  const itemSlot = cells.items === undefined ? undefined : slotFor(cells.type, cells.items);
-  const within = (slot: string | undefined): Record<string, string> => (slot === undefined ? {} : { slot: quote(slot) });
-  const column = { type: columns.type, required: true };
-  const quick: Record<string, unknown> = {};
-  for (const valueType of Object.values(surface.valueTypes)) {
-    const { key } = valueType;
-    if (!valueType.many) {
-      quick[`=${key}`] = {
-        for: [rows.type], params: { column, value: { type: typesOf(cells.type)[key]?.type ?? 'string' } },
-        actions: [
-          { let: { cell: cellOf } },
-          {
-            if: 'cell.size() == 0',
-            then: [{ create: { type: quote(cells.type), parent: 'self', ...within(cellSlot), attributes: { [cells.column]: 'p.column', [key]: 'p.value' } }, when: 'has(p.value)' }],
-            else: [{ set: { [key]: 'p.value' }, target: 'cell[0]', when: 'has(p.value)' }, { unset: [key], target: 'cell[0]', when: '!has(p.value)' }],
-          },
-        ],
-      };
-    } else if (cells.items !== undefined) {
-      const item = { create: { type: quote(cells.items), ...within(itemSlot), attributes: { [key]: 'p.value' } } };
-      const params = { column, value: { type: typesOf(cells.items)[key]?.type ?? 'string', required: true } };
-      const held = (cell: string): string => `${cell}.childrenOfType(${quote(cells.items!)}).filter(i, i.${key} == p.value)`;
-      quick[`+${key}`] = {
-        for: [rows.type], params,
-        actions: [
-          { let: { cell: cellOf } },
-          {
-            if: 'cell.size() == 0',
-            then: [
-              { create: { type: quote(cells.type), parent: 'self', ...within(cellSlot), attributes: { [cells.column]: 'p.column' } }, as: 'made' },
-              { create: { ...item.create, parent: 'made' } },
-            ],
-            else: [{ create: { ...item.create, parent: 'cell[0]' }, when: `${held('cell[0]')}.size() == 0` }],
-          },
-        ],
-      };
-      quick[`-${key}`] = {
-        for: [rows.type], params,
-        actions: [{ let: { cell: cellOf } }, { if: 'cell.size() > 0', then: [{ forEach: held('cell[0]'), as: 'i', do: [{ delete: 'i' }] }] }],
-      };
+  // identifiers of DESL, so they are none of a specification's. A hierarchy has none.
+  const table = surface.kind === 'table' ? surface : undefined;
+  const quick: Record<string, unknown> = table ? quickChanges(table) : {};
+  function quickChanges({ cells, columns, rows, views, valueTypes }: TableSurface): Record<string, unknown> {
+    const quote = (name: string): string => `'${name}'`;
+    const cellOf = `self.childrenOfType(${quote(cells.type)}).filter(c, c.${cells.column} == p.column)`;
+    const cellSlot = slotFor(rows.type, cells.type);
+    const itemSlot = cells.items === undefined ? undefined : slotFor(cells.type, cells.items);
+    const within = (slot: string | undefined): Record<string, string> => (slot === undefined ? {} : { slot: quote(slot) });
+    const column = { type: columns.type, required: true };
+    const quick: Record<string, unknown> = {};
+    for (const valueType of Object.values(valueTypes)) {
+      const { key } = valueType;
+      if (!valueType.many) {
+        quick[`=${key}`] = {
+          for: [rows.type], params: { column, value: { type: typesOf(cells.type)[key]?.type ?? 'string' } },
+          actions: [
+            { let: { cell: cellOf } },
+            {
+              if: 'cell.size() == 0',
+              then: [{ create: { type: quote(cells.type), parent: 'self', ...within(cellSlot), attributes: { [cells.column]: 'p.column', [key]: 'p.value' } }, when: 'has(p.value)' }],
+              else: [{ set: { [key]: 'p.value' }, target: 'cell[0]', when: 'has(p.value)' }, { unset: [key], target: 'cell[0]', when: '!has(p.value)' }],
+            },
+          ],
+        };
+      } else if (cells.items !== undefined) {
+        const item = { create: { type: quote(cells.items), ...within(itemSlot), attributes: { [key]: 'p.value' } } };
+        const params = { column, value: { type: typesOf(cells.items)[key]?.type ?? 'string', required: true } };
+        const held = (cell: string): string => `${cell}.childrenOfType(${quote(cells.items!)}).filter(i, i.${key} == p.value)`;
+        quick[`+${key}`] = {
+          for: [rows.type], params,
+          actions: [
+            { let: { cell: cellOf } },
+            {
+              if: 'cell.size() == 0',
+              then: [
+                { create: { type: quote(cells.type), parent: 'self', ...within(cellSlot), attributes: { [cells.column]: 'p.column' } }, as: 'made' },
+                { create: { ...item.create, parent: 'made' } },
+              ],
+              else: [{ create: { ...item.create, parent: 'cell[0]' }, when: `${held('cell[0]')}.size() == 0` }],
+            },
+          ],
+        };
+        quick[`-${key}`] = {
+          for: [rows.type], params,
+          actions: [{ let: { cell: cellOf } }, { if: 'cell.size() > 0', then: [{ forEach: held('cell[0]'), as: 'i', do: [{ delete: 'i' }] }] }],
+        };
+      }
     }
+    if (views.active !== undefined) quick['>'] = { for: [views.type], actions: [{ set: { [views.active]: 'self' }, target: 'document' }] };
+    return quick;
   }
-  if (views.active !== undefined) quick['>'] = { for: [views.type], actions: [{ set: { [views.active]: 'self' }, target: 'document' }] };
 
   const operations: Record<string, unknown> = { ...quick };
   for (const [id, operation] of Object.entries(designer.operations)) {
@@ -234,7 +251,7 @@ export function interpretOperations(designer: DesignerSpecification, surface: Su
     unreadableTypes,
     // The identity context (DESL 9.3) over what the reader knows when it asks: the element with its attributes, its
     // parent, the siblings read before it in its slot, and what its references name.
-    // simplified: the siblings stand in as elements of its own type, and of its ancestors only the parent is there; read more of the body when a rule derives an id from more.
+    // simplified: the siblings stand in as elements with their types and no attributes, and of its ancestors only the parent is there; read more of the body when a rule derives an id from more.
     deriveId: (request: IdRequest): string | undefined => {
       const entry = entryOf(persistence, request.type);
       const rule = ruleOf(entry.as);
@@ -256,7 +273,8 @@ export function interpretOperations(designer: DesignerSpecification, surface: Su
       const elements = [
         ...(request.parentId !== undefined && parentRule ? [stub(request.parentId, entryOf(persistence, parentRule.type).as)] : []),
         ...named.filter((element, index) => element.id !== request.parentId && named.findIndex((other) => other.id === element.id) === index),
-        ...Array.from({ length: request.positionInSlot }, (_sibling, index) => stub(`${self}${index}`, entry.as, place)),
+        // The siblings read before it stand in for them, each of its own type where the library says it, else of this one's.
+        ...Array.from({ length: request.positionInSlot }, (_sibling, index) => stub(`${self}${index}`, request.earlierTypes?.[index] === undefined ? entry.as : entryOf(persistence, request.earlierTypes[index]).as, place)),
         stub(self, entry.as, { attributes, ...place }),
       ];
       return derived({ diagram: {}, elements, relations: [] }, self, rule);
@@ -319,12 +337,15 @@ export function interpretOperations(designer: DesignerSpecification, surface: Su
    */
   function conversions(before: Model, after: Model): Change[] {
     const changes: Change[] = [];
+    if (!table) return changes;
+    const { cells, columns } = table;
+    const itemSlot = cells.items === undefined ? undefined : slotFor(cells.type, cells.items);
     const itemsOf = (cell: string): ModelElement[] => (cells.items === undefined ? [] : after.elements.filter((element) => element.parent === cell && element.type === cells.items));
     for (const changed of after.elements.filter((element) => element.type === columns.type)) {
       const was = before.elements.find((element) => element.id === changed.id)?.attributes[columns.valueType];
       const now = changed.attributes[columns.valueType];
-      const from: ValueType | undefined = typeof was === 'string' && Object.hasOwn(surface.valueTypes, was) ? surface.valueTypes[was] : undefined;
-      const to: ValueType | undefined = typeof now === 'string' && Object.hasOwn(surface.valueTypes, now) ? surface.valueTypes[now] : undefined;
+      const from: ValueType | undefined = typeof was === 'string' && Object.hasOwn(table.valueTypes, was) ? table.valueTypes[was] : undefined;
+      const to: ValueType | undefined = typeof now === 'string' && Object.hasOwn(table.valueTypes, now) ? table.valueTypes[now] : undefined;
       const conversion = from && to && from !== to && Object.hasOwn(from.converts, to.id) ? from.converts[to.id] : undefined;
       if (!from || !to || conversion === undefined) continue;
       const source = typesOf(from.many ? cells.items ?? cells.type : cells.type)[from.key];
@@ -404,12 +425,14 @@ export function interpretOperations(designer: DesignerSpecification, surface: Su
   // ---- what is offered ----
 
   const typeOf = (model: Model, id: string): string | undefined => model.elements.find((element) => element.id === id)?.type;
+  const selectable: readonly string[] = surface.kind === 'table' ? [surface.rows.type] : [surface.levels.type, surface.entries.type];
   const unoffered: Availability = { offered: false, available: false, label: '' };
   const availability: Operations['availability'] = (model, id, selection) => {
     const operation = all.find((candidate) => candidate.id === id);
     if (!operation) return unoffered;
-    // On a table the selection is rows (DESL 7.2): an operation for the selection is for them, one for a type for the one element selected, and one for the document for nothing selected.
-    const whole = operation.for.includes('selection') && selection.length > 0 && selection.every((selected) => typeOf(model, selected) === rows.type);
+    // On a table the selection is rows (DESL 7.2), on a hierarchy levels and entries (7.7): an operation for the selection is for them,
+    // one for a type for the one element selected, and one for the document for nothing selected.
+    const whole = operation.for.includes('selection') && selection.length > 0 && selection.every((selected) => selectable.includes(typeOf(model, selected) ?? ''));
     const one = selection.length === 1 && operation.for.includes(typeOf(model, selection[0]) ?? '');
     const none = selection.length === 0 && operation.for.includes('document');
     return whole || one || none ? behavior.value.availability(model, id, selection) : unoffered;
@@ -423,14 +446,39 @@ export function interpretOperations(designer: DesignerSpecification, surface: Su
 
   /** The value type of a column of a model, when the specification has it. */
   const valueTypeOf = (model: Model, id: string): ValueType | undefined => {
-    const element = model.elements.find((candidate) => candidate.id === id && candidate.type === columns.type);
-    const name = element?.attributes[columns.valueType];
-    return typeof name === 'string' && Object.hasOwn(surface.valueTypes, name) ? surface.valueTypes[name] : undefined;
+    if (!table) return undefined;
+    const element = model.elements.find((candidate) => candidate.id === id && candidate.type === table.columns.type);
+    const name = element?.attributes[table.columns.valueType];
+    return typeof name === 'string' && Object.hasOwn(table.valueTypes, name) ? table.valueTypes[name] : undefined;
+  };
+
+  // Several operations as one transaction (DESL 10.3): each runs on the model the ones before it left, with what they
+  // made under the names the transaction gives it until its end, and the transaction is concluded once.
+  const runAll: Operations['runAll'] = (model, steps) => {
+    const changes: Change[] = [];
+    const created: string[] = [];
+    let after = model;
+    let last: Exclude<Outcome, { readonly refused: string }> | undefined;
+    for (const given of steps) {
+      const step = typeof given === 'function' ? given(created) : given;
+      const selection = step.on ?? [];
+      const state = declaredIds.has(step.operation) ? availability(after, step.operation, selection) : behavior.value.availability(after, step.operation, selection);
+      if (!state.offered) return { refused: NOT_HERE };
+      if (!state.available) return { refused: state.reason ?? `${state.label} cannot be done now.` };
+      const outcome = behavior.value.operate(after, step.operation, selection, undefined, undefined, step.args);
+      if (outcome.refused !== undefined) return outcome;
+      changes.push(...outcome.changes);
+      created.push(...outcome.created);
+      after = outcome.after;
+      last = outcome;
+    }
+    if (!last) return { changes: [], after: model, created: [], effects: [], collapsed: {}, view: [], renamed: new Map() };
+    return concluded(model, { ...last, changes, created, after });
   };
 
   return {
     value: {
-      all, availability, run, reading,
+      all, availability, run, runAll, reading,
       setCell: (model, row, column, value) => {
         const valueType = valueTypeOf(model, column);
         if (!valueType || valueType.many) return { refused: NO_VALUE };
@@ -441,7 +489,7 @@ export function interpretOperations(designer: DesignerSpecification, surface: Su
         if (!valueType?.many) return { refused: NO_VALUE };
         return run(model, `${present ? '+' : '-'}${valueType.key}`, [row], { column, value });
       },
-      activate: (model, view) => (views.active === undefined ? { refused: NOT_HERE } : run(model, '>', [view])),
+      activate: (model, view) => (table?.views.active === undefined ? { refused: NOT_HERE } : run(model, '>', [view])),
     },
     findings,
   };

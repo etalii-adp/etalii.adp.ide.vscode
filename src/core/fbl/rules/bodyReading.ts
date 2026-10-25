@@ -494,6 +494,7 @@ export class BodyReading implements Reading {
       }
     }
     const positions = new Map<ReadElement | undefined, Map<string | undefined, number>>();
+    const typedPositions = new Map<ReadElement | undefined, Map<string, readonly string[]>>();
     for (const element of this.elements) {
       let slots = positions.get(element.parent);
       if (!slots) {
@@ -503,6 +504,14 @@ export class BodyReading implements Reading {
       const slot = element.parent ? element.rule.parent?.slot : undefined;
       element.positionInSlot = slots.get(slot) ?? 0;
       slots.set(slot, element.positionInSlot + 1);
+      const earlier = `${slot ?? ''}`;
+      let typed = typedPositions.get(element.parent);
+      if (!typed) {
+        typed = new Map();
+        typedPositions.set(element.parent, typed);
+      }
+      element.earlierTypes = typed.get(earlier) ?? [];
+      typed.set(earlier, [...element.earlierTypes, element.rule.type]);
     }
     const nodes = this.elements.filter((element) => !element.isRelation);
     for (const element of nodes) this.assignId(element);
@@ -567,6 +576,7 @@ export class BodyReading implements Reading {
       parentId: element.parent?.id,
       parentSlot: element.parent ? rule.parent?.slot : undefined,
       positionInSlot: element.positionInSlot,
+      earlierTypes: element.earlierTypes,
     }) ?? placeId(element);
   }
 

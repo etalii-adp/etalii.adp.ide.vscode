@@ -698,16 +698,18 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
   const expressions = expressionsOf(designer, metamodel.value);
   const constraints = interpretConstraints(designer.interpreted, metamodel.value, expressions);
   const surface = interpretSurface(designer.surface, metamodel.value);
+  // simplified: a hierarchy surface is read and not yet shown, so its documents open read-only, until its page is built.
+  const tableSurface = surface.value?.kind === 'table' ? surface.value : undefined;
   const operations = surface.value && interpretOperations(designer, surface.value, metamodel.value, expressions, constraints.value);
   const language = designer.interpreted.language;
   const origin = typeof language.origin === 'string' ? language.origin : language.id;
-  const table = surface.value && operations && tableReader({ surface: surface.value, metamodel: metamodel.value, operations: operations.value.all, logic: plugins.views(origin) });
+  const table = tableSurface && operations && tableReader({ surface: tableSurface, metamodel: metamodel.value, operations: operations.value.all, logic: plugins.views(origin) });
   const needed = missingPlugins(pluginReferences({}, bindings), plugins);
 
   const ofDefinition: Finding[] = [...loaded.findings, ...metamodel.findings, ...expressions.findings, ...constraints.findings, ...surface.findings, ...(operations?.findings ?? [])].map(framed);
   const ofPlugins: Finding[] = needed.map((reference) => ({ rule: findingCodes.pluginMissing, severity: 'warning', message: messages.pluginMissing(reference.id), line: 0 }));
   // A document of a surface this host does not lay out opens read-only, with the reason (DESL 11).
-  const unshown = surface.value ? undefined : surface.findings[0]?.message ?? loaded.findings[0]?.message ?? UNREADABLE;
+  const unshown = tableSurface ? undefined : surface.value ? `This tool lays its documents out as \`${surface.value.kind}\`, which this host does not show yet, so its documents open read-only.` : surface.findings[0]?.message ?? loaded.findings[0]?.message ?? UNREADABLE;
 
   // ---- a document ----
 
@@ -749,7 +751,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     return table.view(open.model, { readOnly: open.refusal !== undefined, ...(open.refusal === undefined ? {} : { notice: open.refusal }) });
   };
 
-  const isRow = (model: Model, id: string): boolean => model.elements.some((element) => element.id === id && element.type === surface.value?.rows.type);
+  const isRow = (model: Model, id: string): boolean => model.elements.some((element) => element.id === id && element.type === tableSurface?.rows.type);
   const editors: Readonly<Record<string, Control>> = { number: 'number', checkbox: 'choice', choice: 'choice', choices: 'tags', rows: 'tags' };
 
   // The cells of one selected row are the rows of ADP Properties, a column each.
@@ -847,7 +849,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     const done = (outcome: Outcome): EditOutcome => {
       if (outcome.refused !== undefined) return { kind: 'refused', sentence: outcome.refused };
       // What a request made is shown: the first row or column of it.
-      const made = outcome.created.find((id) => outcome.after.elements.some((element) => element.id === id && (element.type === surface.value!.rows.type || element.type === surface.value!.columns.type)));
+      const made = outcome.created.find((id) => outcome.after.elements.some((element) => element.id === id && (element.type === tableSurface!.rows.type || element.type === tableSurface!.columns.type)));
       return written(source, open, outcome.changes, made);
     };
 

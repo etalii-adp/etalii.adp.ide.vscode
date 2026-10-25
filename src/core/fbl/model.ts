@@ -89,6 +89,12 @@ export interface IdRequest {
    * order: what an id strategy that addresses an element by its position derives from.
    */
   readonly positionInSlot: number;
+  /**
+   * The types of the elements before it of the same parent and slot, in document order, one for
+   * each of its `positionInSlot` places: what a derivation that counts some of its siblings and not
+   * others works from.
+   */
+  readonly earlierTypes?: readonly string[];
 }
 
 /** The caller's settings for reading and writing one body. */

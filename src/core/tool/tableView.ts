@@ -4,7 +4,7 @@
 // beyond the ids, the names and the values the document and the definition give.
 
 import type { DesignerOperation, Parameter } from '../desl/operations';
-import type { Editor, Surface, ValueType } from '../desl/surface';
+import type { Editor, TableSurface, ValueType } from '../desl/surface';
 import { attributesOf, defaultOf, valueKind, type Metamodel } from '../disl/metamodel';
 import type { Model, ModelElement, Value } from '../disl/model';
 import { isCel, localized } from '../disl/specification';
@@ -198,7 +198,7 @@ export interface ShownView {
 
 /** What a table view is made of. */
 export interface TableParts {
-  readonly surface: Surface;
+  readonly surface: TableSurface;
   readonly metamodel: Metamodel;
   readonly operations: readonly DesignerOperation[];
   readonly logic?: ViewLogic;
