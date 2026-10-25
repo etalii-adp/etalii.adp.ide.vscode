@@ -1,0 +1,729 @@
+{
+  "cases": [
+    {
+      "name": "duplicate-id",
+      "passed": false,
+      "differences": [
+        {
+          "step": null,
+          "part": "reading",
+          "expected": "[{\"id\":\"ID_1\",\"type\":\"Node\",\"parent\":null,\"attributes\":{\"text\":\"Plan\",\"folded\":\"false\"}},{\"id\":\"ID_2\",\"type\":\"Node\",\"parent\":\"ID_1\",\"attributes\":{\"text\":\"Scope\",\"folded\":\"false\"}},{\"id\":\"ID_2\\u00002\",\"type\":\"Node\",\"parent\":\"ID_1\",\"attributes\":{\"text\":\"Budget\",\"folded\":\"false\"}}]",
+          "actual": "[{\"id\":\"ID_1\",\"type\":\"Node\",\"parent\":null,\"attributes\":{\"text\":\"Plan\"}},{\"id\":\"ID_2\",\"type\":\"Node\",\"parent\":\"ID_1\",\"attributes\":{\"text\":\"Scope\"}},{\"id\":\"node@4\",\"type\":\"Node\",\"parent\":\"ID_1\",\"attributes\":{\"text\":\"Budget\"}}]",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 28,
+            "column": 3,
+            "endLine": 55,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": null,
+          "part": "reading",
+          "expected": "[{\"id\":\"Branch:ID_1->ID_2\",\"type\":\"Branch\",\"source\":\"ID_1\",\"target\":\"ID_2\",\"attributes\":{}},{\"id\":\"Branch:ID_1->ID_2\\u00002\",\"type\":\"Branch\",\"source\":\"ID_1\",\"target\":\"ID_2\\u00002\",\"attributes\":{}}]",
+          "actual": "[{\"id\":\"Branch:ID_1->ID_2\",\"type\":\"Branch\",\"source\":\"ID_1\",\"target\":\"ID_2\",\"attributes\":{}},{\"id\":\"Branch:ID_1->node@4\",\"type\":\"Branch\",\"source\":\"ID_1\",\"target\":\"node@4\",\"attributes\":{}}]",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 62,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": null,
+          "part": "findings",
+          "expected": "[{\"rule\":\"mindmap.duplicate-id\",\"severity\":\"error\",\"element\":\"ID_2\",\"message\":\"Two nodes share the id 'ID_2' ('Scope' and 'Budget').\"}]",
+          "actual": "[]",
+          "at": {
+            "file": "mindmap.atd",
+            "line": 251,
+            "column": 5,
+            "endLine": 259,
+            "endColumn": 6
+          }
+        },
+        {
+          "step": null,
+          "part": "drawing",
+          "expected": "elements ID_1: {\"id\":\"ID_1\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":0,\"y\":0,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Plan\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":60,\"y\":24}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}},\"children\":[\"ID_2\",\"ID_2\\u00002\"]}",
+          "actual": "elements ID_1: {\"id\":\"ID_1\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":0,\"y\":0,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Plan\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":60,\"y\":24}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}},\"children\":[\"ID_2\",\"node@4\"]}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        }
+      ]
+    },
+    {
+      "name": "example-1",
+      "passed": false,
+      "differences": [
+        {
+          "step": null,
+          "part": "reading",
+          "expected": "[{\"id\":\"ID_5eb2r180uk2p4ys1q0tkiwil6\",\"type\":\"Node\",\"parent\":null,\"attributes\":{\"text\":\"Rendering engine\",\"folded\":\"false\",\"link\":\"../src/core/Engine.cs\"}},{\"id\":\"ID_1guw8w5hp34usdnp25phle3s4\",\"type\":\"Node\",\"parent\":\"ID_5eb2r180uk2p4ys1q0tkiwil6\",\"attributes\":{\"text\":\"Scene graph\",\"folded\":\"false\"}},{\"id\":\"ID_cqa3pgradk667j4k35pr7kgts\",\"type\":\"Node\",\"parent\":\"ID_1guw8w5hp34usdnp25phle3s4\",\"attributes\":{\"text\":\"Node lifecycle\",\"folded\":\"false\"}},{\"id\":\"ID_a937863j5r3fjwlgwak0fgiqo\",\"type\":\"Node\",\"parent\":\"ID_1guw8w5hp34usdnp25phle3s4\",\"attributes\":{\"text\":\"Transforms\",\"folded\":\"false\"}},{\"id\":\"ID_bdcsfkucxiu7a7ia1rpy4ixtq\",\"type\":\"Node\",\"parent\":\"ID_1guw8w5hp34usdnp25phle3s4\",\"attributes\":{\"text\":\"Bounding boxes\",\"folded\":\"false\"}},{\"id\":\"ID_2ls7h8mwx8yobgdtjlzhbsgm0\",\"type\":\"Node\",\"parent\":\"ID_1guw8w5hp34usdnp25phle3s4\",\"attributes\":{\"text\":\"Hit testing\",\"folded\":\"false\"}},{\"id\":\"ID_f08i7uiwmzgo6z1whb7ye3hrp\",\"type\":\"Node\",\"parent\":\"ID_1guw8w5hp34usdnp25phle3s4\",\"attributes\":{\"text\":\"Z-ordering\",\"folded\":\"false\"}},{\"id\":\"ID_cfszit7hnta23frsv88kmqg1z\",\"type\":\"Node\",\"parent\":\"ID_5eb2r180uk2p4ys1q0tkiwil6\",\"attributes\":{\"text\":\"Layout\",\"folded\":\"false\"}},{\"id\":\"ID_56kq0gezao11kk77h11qmd35j\",\"type\":\"Node\",\"parent\":\"ID_cfszit7hnta23frsv88kmqg1z\",\"attributes\":{\"text\":\"Measure pass\",\"folded\":\"false\"}},{\"id\":\"ID_0ryf1obir7ntkbby84jz3kcbn\",\"type\":\"Node\",\"parent\":\"ID_cfszit7hnta23frsv88kmqg1z\",\"attributes\":{\"text\":\"Arrange pass\",\"folded\":\"false\"}},{\"id\":\"ID_ar3l23j7ktrbok9ljafioyamz\",\"type\":\"Node\",\"parent\":\"ID_cfszit7hnta23frsv88kmqg1z\",\"attributes\":{\"text\":\"Incremental relayout on edit\",\"folded\":\"false\"}},{\"id\":\"ID_43s3dbv7dz34umql6dwza7lwb\",\"type\":\"Node\",\"parent\":\"ID_cfszit7hnta23frsv88kmqg1z\",\"attributes\":{\"text\":\"Constraints\",\"folded\":\"false\"}},{\"id\":\"ID_7o7qnujtgpeb9b1eqe9xokzgn\",\"type\":\"Node\",\"parent\":\"ID_43s3dbv7dz34umql6dwza7lwb\",\"attributes\":{\"text\":\"Alignment\",\"folded\":\"false\"}},{\"id\":\"ID_ez1aq7z5vdbb6be63bx0l45pf\",\"type\":\"Node\",\"parent\":\"ID_43s3dbv7dz34umql6dwza7lwb\",\"attributes\":{\"text\":\"Spacing\",\"folded\":\"false\"}},{\"id\":\"ID_dc4nmzrb52ldb33c5jl8fl8hy\",\"type\":\"Node\",\"parent\":\"ID_43s3dbv7dz34umql6dwza7lwb\",\"attributes\":{\"text\":\"Anchoring\",\"folded\":\"false\"}},{\"id\":\"ID_70c25zb7brn5jb4yhf7q5kk1q\",\"type\":\"Node\",\"parent\":\"ID_43s3dbv7dz34umql6dwza7lwb\",\"attributes\":{\"text\":\"Aspect ratio\",\"folded\":\"false\"}},{\"id\":\"ID_ac6qkn600eah6ncfjkp1fppvb\",\"type\":\"Node\",\"parent\":\"ID_43s3dbv7dz34umql6dwza7lwb\",\"attributes\":{\"text\":\"Minimum sizes\",\"folded\":\"false\"}},{\"id\":\"ID_0jkyc0uyotnmbcen585kev647\",\"type\":\"Node\",\"parent\":\"ID_cfszit7hnta23frsv88kmqg1z\",\"attributes\":{\"text\":\"Overflow handling\",\"folded\":\"false\"}},{\"id\":\"ID_atstvbrrkv6i03q4lscue6ugo\",\"type\":\"Node\",\"parent\":\"ID_5eb2r180uk2p4ys1q0tkiwil6\",\"attributes\":{\"text\":\"Rendering pipeline\",\"folded\":\"false\"}},{\"id\":\"ID_ctln538jyv19c90ma73k8mi2d\",\"type\":\"Node\",\"parent\":\"ID_atstvbrrkv6i03q4lscue6ugo\",\"attributes\":{\"text\":\"Rasterization\",\"folded\":\"false\"}},{\"id\":\"ID_ch4kzh4cv3c453c74uefqou4d\",\"type\":\"Node\",\"parent\":\"ID_ctln538jyv19c90ma73k8mi2d\",\"attributes\":{\"text\":\"Culling\",\"folded\":\"false\"}},{\"id\":\"ID_ebx3qory5nercb6g9ljf4u2x3\",\"type\":\"Node\",\"parent\":\"ID_ch4kzh4cv3c453c74uefqou4d\",\"attributes\":{\"text\":\"Frustum tests\",\"folded\":\"false\"}},{\"id\":\"ID_a47ytjhzn52khh2mdvsl73dgv\",\"type\":\"Node\",\"parent\":\"ID_ctln538jyv19c90ma73k8mi2d\",\"attributes\":{\"text\":\"Batching\",\"folded\":\"false\"}},{\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"parent\":\"ID_ctln538jyv19c90ma73k8mi2d\",\"attributes\":{\"text\":\"Caching\",\"folded\":\"false\"}},{\"id\":\"ID_89va8he7cvg922e381578w2ls\",\"type\":\"Node\",\"parent\":\"ID_ctln538jyv19c90ma73k8mi2d\",\"attributes\":{\"text\":\"Dirty regions\",\"folded\":\"false\"}},{\"id\":\"ID_ekgw89i7db808gat8wz1yzz0h\",\"type\":\"Node\",\"parent\":\"ID_ctln538jyv19c90ma73k8mi2d\",\"attributes\":{\"text\":\"Antialiasing\",\"folded\":\"false\"}},{\"id\":\"ID_9o38xbexna2fbd10cf7h1fhho\",\"type\":\"Node\",\"parent\":\"ID_ctln538jyv19c90ma73k8mi2d\",\"attributes\":{\"text\":\"Text shaping\",\"folded\":\"false\"}},{\"id\":\"ID_3sttygloaltxrfbjqlbwa23oe\",\"type\":\"Node\",\"parent\":\"ID_atstvbrrkv6i03q4lscue6ugo\",\"attributes\":{\"text\":\"Export\",\"folded\":\"false\"}},{\"id\":\"ID_3ie9277i72iwfgn07s97vba6d\",\"type\":\"Node\",\"parent\":\"ID_3sttygloaltxrfbjqlbwa23oe\",\"attributes\":{\"text\":\"SVG writer\",\"folded\":\"false\"}},{\"id\":\"ID_3vzd42ia4t4r6unkd5v7vzppa\",\"type\":\"Node\",\"parent\":\"ID_atstvbrrkv6i03q4lscue6ugo\",\"attributes\":{\"text\":\"Theming\",\"folded\":\"false\"}},{\"id\":\"ID_6pyv4g6e7ckggtzj0qrs6a0bi\",\"type\":\"Node\",\"parent\":\"ID_atstvbrrkv6i03q4lscue6ugo\",\"attributes\":{\"text\":\"Animation\",\"folded\":\"false\"}},{\"id\":\"ID_dkxoogv4iwpipks7c6kdpqssi\",\"type\":\"Node\",\"parent\":\"ID_6pyv4g6e7ckggtzj0qrs6a0bi\",\"attributes\":{\"text\":\"Easing curves\",\"folded\":\"false\"}},{\"id\":\"ID_9tcyummco59586fyebfzq2n8t\",\"type\":\"Node\",\"parent\":\"ID_atstvbrrkv6i03q4lscue6ugo\",\"attributes\":{\"text\":\"Profiling\",\"folded\":\"false\"}},{\"id\":\"ID_1z8lmh0t5m59d4qdgnded2jtd\",\"type\":\"Node\",\"parent\":\"ID_5eb2r180uk2p4ys1q0tkiwil6\",\"attributes\":{\"text\":\"Input handling\",\"folded\":\"false\"}},{\"id\":\"ID_51ljf5yl355i4knxrpnzmbiar\",\"type\":\"Node\",\"parent\":\"ID_5eb2r180uk2p4ys1q0tkiwil6\",\"attributes\":{\"text\":\"Persistence\",\"folded\":\"false\"}},{\"id\":\"ID_btdpge28u4joa6ni21k7cpe3c\",\"type\":\"Node\",\"parent\":\"ID_51ljf5yl355i4knxrpnzmbiar\",\"attributes\":{\"text\":\"Autosave\",\"folded\":\"false\"}},{\"id\":\"ID_74exhpxs1dv7gd5pf0hoouove\",\"type\":\"Node\",\"parent\":\"ID_btdpge28u4joa6ni21k7cpe3c\",\"attributes\":{\"text\":\"Crash recovery\",\"folded\":\"false\"}}]",
+          "actual": "[{\"id\":\"ID_5eb2r180uk2p4ys1q0tkiwil6\",\"type\":\"Node\",\"parent\":null,\"attributes\":{\"text\":\"Rendering engine\",\"link\":\"../src/core/Engine.cs\"}},{\"id\":\"ID_1guw8w5hp34usdnp25phle3s4\",\"type\":\"Node\",\"parent\":\"ID_5eb2r180uk2p4ys1q0tkiwil6\",\"attributes\":{\"text\":\"Scene graph\"}},{\"id\":\"ID_cqa3pgradk667j4k35pr7kgts\",\"type\":\"Node\",\"parent\":\"ID_1guw8w5hp34usdnp25phle3s4\",\"attributes\":{\"text\":\"Node lifecycle\"}},{\"id\":\"ID_a937863j5r3fjwlgwak0fgiqo\",\"type\":\"Node\",\"parent\":\"ID_1guw8w5hp34usdnp25phle3s4\",\"attributes\":{\"text\":\"Transforms\"}},{\"id\":\"ID_bdcsfkucxiu7a7ia1rpy4ixtq\",\"type\":\"Node\",\"parent\":\"ID_1guw8w5hp34usdnp25phle3s4\",\"attributes\":{\"text\":\"Bounding boxes\"}},{\"id\":\"ID_2ls7h8mwx8yobgdtjlzhbsgm0\",\"type\":\"Node\",\"parent\":\"ID_1guw8w5hp34usdnp25phle3s4\",\"attributes\":{\"text\":\"Hit testing\"}},{\"id\":\"ID_f08i7uiwmzgo6z1whb7ye3hrp\",\"type\":\"Node\",\"parent\":\"ID_1guw8w5hp34usdnp25phle3s4\",\"attributes\":{\"text\":\"Z-ordering\"}},{\"id\":\"ID_cfszit7hnta23frsv88kmqg1z\",\"type\":\"Node\",\"parent\":\"ID_5eb2r180uk2p4ys1q0tkiwil6\",\"attributes\":{\"text\":\"Layout\"}},{\"id\":\"ID_56kq0gezao11kk77h11qmd35j\",\"type\":\"Node\",\"parent\":\"ID_cfszit7hnta23frsv88kmqg1z\",\"attributes\":{\"text\":\"Measure pass\"}},{\"id\":\"ID_0ryf1obir7ntkbby84jz3kcbn\",\"type\":\"Node\",\"parent\":\"ID_cfszit7hnta23frsv88kmqg1z\",\"attributes\":{\"text\":\"Arrange pass\"}},{\"id\":\"ID_ar3l23j7ktrbok9ljafioyamz\",\"type\":\"Node\",\"parent\":\"ID_cfszit7hnta23frsv88kmqg1z\",\"attributes\":{\"text\":\"Incremental relayout on edit\"}},{\"id\":\"ID_43s3dbv7dz34umql6dwza7lwb\",\"type\":\"Node\",\"parent\":\"ID_cfszit7hnta23frsv88kmqg1z\",\"attributes\":{\"text\":\"Constraints\"}},{\"id\":\"ID_7o7qnujtgpeb9b1eqe9xokzgn\",\"type\":\"Node\",\"parent\":\"ID_43s3dbv7dz34umql6dwza7lwb\",\"attributes\":{\"text\":\"Alignment\"}},{\"id\":\"ID_ez1aq7z5vdbb6be63bx0l45pf\",\"type\":\"Node\",\"parent\":\"ID_43s3dbv7dz34umql6dwza7lwb\",\"attributes\":{\"text\":\"Spacing\"}},{\"id\":\"ID_dc4nmzrb52ldb33c5jl8fl8hy\",\"type\":\"Node\",\"parent\":\"ID_43s3dbv7dz34umql6dwza7lwb\",\"attributes\":{\"text\":\"Anchoring\"}},{\"id\":\"ID_70c25zb7brn5jb4yhf7q5kk1q\",\"type\":\"Node\",\"parent\":\"ID_43s3dbv7dz34umql6dwza7lwb\",\"attributes\":{\"text\":\"Aspect ratio\"}},{\"id\":\"ID_ac6qkn600eah6ncfjkp1fppvb\",\"type\":\"Node\",\"parent\":\"ID_43s3dbv7dz34umql6dwza7lwb\",\"attributes\":{\"text\":\"Minimum sizes\"}},{\"id\":\"ID_0jkyc0uyotnmbcen585kev647\",\"type\":\"Node\",\"parent\":\"ID_cfszit7hnta23frsv88kmqg1z\",\"attributes\":{\"text\":\"Overflow handling\"}},{\"id\":\"ID_atstvbrrkv6i03q4lscue6ugo\",\"type\":\"Node\",\"parent\":\"ID_5eb2r180uk2p4ys1q0tkiwil6\",\"attributes\":{\"text\":\"Rendering pipeline\"}},{\"id\":\"ID_ctln538jyv19c90ma73k8mi2d\",\"type\":\"Node\",\"parent\":\"ID_atstvbrrkv6i03q4lscue6ugo\",\"attributes\":{\"text\":\"Rasterization\"}},{\"id\":\"ID_ch4kzh4cv3c453c74uefqou4d\",\"type\":\"Node\",\"parent\":\"ID_ctln538jyv19c90ma73k8mi2d\",\"attributes\":{\"text\":\"Culling\"}},{\"id\":\"ID_ebx3qory5nercb6g9ljf4u2x3\",\"type\":\"Node\",\"parent\":\"ID_ch4kzh4cv3c453c74uefqou4d\",\"attributes\":{\"text\":\"Frustum tests\"}},{\"id\":\"ID_a47ytjhzn52khh2mdvsl73dgv\",\"type\":\"Node\",\"parent\":\"ID_ctln538jyv19c90ma73k8mi2d\",\"attributes\":{\"text\":\"Batching\"}},{\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"parent\":\"ID_ctln538jyv19c90ma73k8mi2d\",\"attributes\":{\"text\":\"Caching\"}},{\"id\":\"ID_89va8he7cvg922e381578w2ls\",\"type\":\"Node\",\"parent\":\"ID_ctln538jyv19c90ma73k8mi2d\",\"attributes\":{\"text\":\"Dirty regions\"}},{\"id\":\"ID_ekgw89i7db808gat8wz1yzz0h\",\"type\":\"Node\",\"parent\":\"ID_ctln538jyv19c90ma73k8mi2d\",\"attributes\":{\"text\":\"Antialiasing\"}},{\"id\":\"ID_9o38xbexna2fbd10cf7h1fhho\",\"type\":\"Node\",\"parent\":\"ID_ctln538jyv19c90ma73k8mi2d\",\"attributes\":{\"text\":\"Text shaping\"}},{\"id\":\"ID_3sttygloaltxrfbjqlbwa23oe\",\"type\":\"Node\",\"parent\":\"ID_atstvbrrkv6i03q4lscue6ugo\",\"attributes\":{\"text\":\"Export\"}},{\"id\":\"ID_3ie9277i72iwfgn07s97vba6d\",\"type\":\"Node\",\"parent\":\"ID_3sttygloaltxrfbjqlbwa23oe\",\"attributes\":{\"text\":\"SVG writer\"}},{\"id\":\"ID_3vzd42ia4t4r6unkd5v7vzppa\",\"type\":\"Node\",\"parent\":\"ID_atstvbrrkv6i03q4lscue6ugo\",\"attributes\":{\"text\":\"Theming\"}},{\"id\":\"ID_6pyv4g6e7ckggtzj0qrs6a0bi\",\"type\":\"Node\",\"parent\":\"ID_atstvbrrkv6i03q4lscue6ugo\",\"attributes\":{\"text\":\"Animation\"}},{\"id\":\"ID_dkxoogv4iwpipks7c6kdpqssi\",\"type\":\"Node\",\"parent\":\"ID_6pyv4g6e7ckggtzj0qrs6a0bi\",\"attributes\":{\"text\":\"Easing curves\"}},{\"id\":\"ID_9tcyummco59586fyebfzq2n8t\",\"type\":\"Node\",\"parent\":\"ID_atstvbrrkv6i03q4lscue6ugo\",\"attributes\":{\"text\":\"Profiling\"}},{\"id\":\"ID_1z8lmh0t5m59d4qdgnded2jtd\",\"type\":\"Node\",\"parent\":\"ID_5eb2r180uk2p4ys1q0tkiwil6\",\"attributes\":{\"text\":\"Input handling\"}},{\"id\":\"ID_51ljf5yl355i4knxrpnzmbiar\",\"type\":\"Node\",\"parent\":\"ID_5eb2r180uk2p4ys1q0tkiwil6\",\"attributes\":{\"text\":\"Persistence\"}},{\"id\":\"ID_btdpge28u4joa6ni21k7cpe3c\",\"type\":\"Node\",\"parent\":\"ID_51ljf5yl355i4knxrpnzmbiar\",\"attributes\":{\"text\":\"Autosave\"}},{\"id\":\"ID_74exhpxs1dv7gd5pf0hoouove\",\"type\":\"Node\",\"parent\":\"ID_btdpge28u4joa6ni21k7cpe3c\",\"attributes\":{\"text\":\"Crash recovery\"}}]",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 28,
+            "column": 3,
+            "endLine": 55,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 6,
+          "part": "refused",
+          "expected": "the gesture made",
+          "actual": "refused: The freeplane file has no richcontent[@TYPE='NOTE'] to write the notes in.",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 28,
+            "column": 3,
+            "endLine": 55,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 6,
+          "part": "bytes",
+          "expected": "line 13: \"<node TEXT=\\\"Soft bodies\\\" ID=\\\"ID_3xhnier0zm6riius1ipbnndy2\\\">\\n\"",
+          "actual": "line 13: \"<node TEXT=\\\"Soft bodies\\\" ID=\\\"ID_3xhnier0zm6riius1ipbnndy2\\\"/>\\n\"",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 28,
+            "column": 3,
+            "endLine": 55,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 6,
+          "part": "drawing",
+          "expected": "elements ID_3xhnier0zm6riius1ipbnndy2: {\"id\":\"ID_3xhnier0zm6riius1ipbnndy2\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-293.85,\"y\":-216.88,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"indicators\",\"text\":\"•\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-177.85,\"y\":-204.88}},{\"id\":\"text\",\"text\":\"Soft bodies\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-233.85,\"y\":-192.88}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "actual": "elements ID_3xhnier0zm6riius1ipbnndy2: {\"id\":\"ID_3xhnier0zm6riius1ipbnndy2\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-293.85,\"y\":-216.88,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Soft bodies\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-233.85,\"y\":-192.88}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 7,
+          "part": "bytes",
+          "expected": "line 13: \"<node TEXT=\\\"Soft bodies\\\" ID=\\\"ID_3xhnier0zm6riius1ipbnndy2\\\">\\n\"",
+          "actual": "line 13: \"<node TEXT=\\\"Soft bodies\\\" ID=\\\"ID_3xhnier0zm6riius1ipbnndy2\\\"/>\\n\"",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 28,
+            "column": 3,
+            "endLine": 55,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 7,
+          "part": "drawing",
+          "expected": "elements ID_3xhnier0zm6riius1ipbnndy2: {\"id\":\"ID_3xhnier0zm6riius1ipbnndy2\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-293.85,\"y\":-216.88,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"indicators\",\"text\":\"•\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-177.85,\"y\":-204.88}},{\"id\":\"text\",\"text\":\"Soft bodies\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-233.85,\"y\":-192.88}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "actual": "elements ID_3xhnier0zm6riius1ipbnndy2: {\"id\":\"ID_3xhnier0zm6riius1ipbnndy2\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-293.85,\"y\":-216.88,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Soft bodies\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-233.85,\"y\":-192.88}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 8,
+          "part": "refused",
+          "expected": "the gesture made",
+          "actual": "refused: The freeplane file has no richcontent[@TYPE='NOTE'] to write the notes in.",
+          "at": {
+            "file": "mindmap.atd",
+            "line": 299,
+            "column": 3,
+            "endLine": 303,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 8,
+          "part": "bytes",
+          "expected": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\">\\n\"",
+          "actual": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\"/>\\n\"",
+          "at": {
+            "file": "mindmap.atd",
+            "line": 299,
+            "column": 3,
+            "endLine": 303,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 8,
+          "part": "drawing",
+          "expected": "elements ID_3xhnier0zm6riius1ipbnndy2: {\"id\":\"ID_3xhnier0zm6riius1ipbnndy2\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-293.85,\"y\":-216.88,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"indicators\",\"text\":\"•\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-177.85,\"y\":-204.88}},{\"id\":\"text\",\"text\":\"Soft bodies\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-233.85,\"y\":-192.88}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "actual": "elements ID_3xhnier0zm6riius1ipbnndy2: {\"id\":\"ID_3xhnier0zm6riius1ipbnndy2\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-293.85,\"y\":-216.88,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Soft bodies\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-233.85,\"y\":-192.88}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 9,
+          "part": "bytes",
+          "expected": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\">\\n\"",
+          "actual": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\"/>\\n\"",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 28,
+            "column": 3,
+            "endLine": 55,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 9,
+          "part": "drawing",
+          "expected": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-64.8,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-40.8}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "actual": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-65.18,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-41.18}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 10,
+          "part": "bytes",
+          "expected": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\">\\n\"",
+          "actual": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\"/>\\n\"",
+          "at": {
+            "file": "mindmap.atd",
+            "line": 326,
+            "column": 3,
+            "endLine": 345,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 10,
+          "part": "drawing",
+          "expected": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-64.8,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-40.8}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "actual": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-65.18,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-41.18}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 11,
+          "part": "bytes",
+          "expected": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\">\\n\"",
+          "actual": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\"/>\\n\"",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 16,
+            "column": 1,
+            "endLine": 68,
+            "endColumn": 2
+          }
+        },
+        {
+          "step": 11,
+          "part": "drawing",
+          "expected": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-64.8,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-40.8}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "actual": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-65.18,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-41.18}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 12,
+          "part": "bytes",
+          "expected": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\">\\n\"",
+          "actual": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\"/>\\n\"",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 28,
+            "column": 3,
+            "endLine": 55,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 12,
+          "part": "drawing",
+          "expected": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-64.8,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-40.8}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "actual": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-65.18,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-41.18}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 13,
+          "part": "bytes",
+          "expected": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\">\\n\"",
+          "actual": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\"/>\\n\"",
+          "at": {
+            "file": "mindmap.atd",
+            "line": 326,
+            "column": 3,
+            "endLine": 345,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 13,
+          "part": "drawing",
+          "expected": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-64.8,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-40.8}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "actual": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-65.18,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-41.18}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 14,
+          "part": "bytes",
+          "expected": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\">\\n\"",
+          "actual": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\"/>\\n\"",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 16,
+            "column": 1,
+            "endLine": 68,
+            "endColumn": 2
+          }
+        },
+        {
+          "step": 14,
+          "part": "drawing",
+          "expected": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-64.8,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-40.8}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "actual": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-65.18,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-41.18}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 15,
+          "part": "bytes",
+          "expected": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\">\\n\"",
+          "actual": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\"/>\\n\"",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 28,
+            "column": 3,
+            "endLine": 55,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 15,
+          "part": "drawing",
+          "expected": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-64.8,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-40.8}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "actual": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-65.18,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-41.18}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 16,
+          "part": "bytes",
+          "expected": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\">\\n\"",
+          "actual": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\"/>\\n\"",
+          "at": {
+            "file": "mindmap.atd",
+            "line": 311,
+            "column": 3,
+            "endLine": 315,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 16,
+          "part": "drawing",
+          "expected": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-64.8,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-40.8}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "actual": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-65.18,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-41.18}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 18,
+          "part": "bytes",
+          "expected": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\">\\n\"",
+          "actual": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\"/>\\n\"",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 28,
+            "column": 3,
+            "endLine": 55,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 18,
+          "part": "drawing",
+          "expected": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-64.8,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-40.8}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "actual": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-65.18,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-41.18}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 19,
+          "part": "bytes",
+          "expected": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\">\\n\"",
+          "actual": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\"/>\\n\"",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 28,
+            "column": 3,
+            "endLine": 55,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 19,
+          "part": "drawing",
+          "expected": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-64.8,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-40.8}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "actual": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-65.18,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-41.18}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 20,
+          "part": "refused",
+          "expected": "the gesture made",
+          "actual": "refused: it ran without asking, so the answer 'design.mm' the reference host's prompt took was not given",
+          "at": {
+            "file": "mindmap.atd",
+            "line": 306,
+            "column": 3,
+            "endLine": 309,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 20,
+          "part": "bytes",
+          "expected": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\">\\n\"",
+          "actual": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\"/>\\n\"",
+          "at": {
+            "file": "mindmap.atd",
+            "line": 306,
+            "column": 3,
+            "endLine": 309,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 20,
+          "part": "drawing",
+          "expected": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-64.8,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-40.8}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "actual": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-65.18,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-41.18}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 21,
+          "part": "bytes",
+          "expected": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\">\\n\"",
+          "actual": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\"/>\\n\"",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 28,
+            "column": 3,
+            "endLine": 55,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 21,
+          "part": "drawing",
+          "expected": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-64.8,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-40.8}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "actual": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-65.18,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-41.18}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 22,
+          "part": "bytes",
+          "expected": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\">\\n\"",
+          "actual": "line 4: \"<node TEXT=\\\"Node lifecycle &amp; pooling\\\" ID=\\\"ID_cqa3pgradk667j4k35pr7kgts\\\"/>\\n\"",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 28,
+            "column": 3,
+            "endLine": 55,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 22,
+          "part": "drawing",
+          "expected": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-64.8,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-40.8}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "actual": "elements ID_08rl6vit3v7a8j71li73jn6sw: {\"id\":\"ID_08rl6vit3v7a8j71li73jn6sw\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":-531.25,\"y\":-65.18,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Caching\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":-471.25,\"y\":-41.18}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        }
+      ]
+    },
+    {
+      "name": "fold",
+      "passed": false,
+      "differences": [
+        {
+          "step": null,
+          "part": "reading",
+          "expected": "[{\"id\":\"ID_1\",\"type\":\"Node\",\"parent\":null,\"attributes\":{\"text\":\"Plan\",\"folded\":\"false\"}},{\"id\":\"ID_2\",\"type\":\"Node\",\"parent\":\"ID_1\",\"attributes\":{\"text\":\"Scope\",\"folded\":\"false\"}},{\"id\":\"ID_3\",\"type\":\"Node\",\"parent\":\"ID_2\",\"attributes\":{\"text\":\"Goals\",\"folded\":\"false\"}},{\"id\":\"ID_4\",\"type\":\"Node\",\"parent\":\"ID_2\",\"attributes\":{\"text\":\"Risks\",\"folded\":\"false\"}},{\"id\":\"ID_5\",\"type\":\"Node\",\"parent\":\"ID_1\",\"attributes\":{\"text\":\"Budget\",\"folded\":\"false\"}}]",
+          "actual": "[{\"id\":\"ID_1\",\"type\":\"Node\",\"parent\":null,\"attributes\":{\"text\":\"Plan\"}},{\"id\":\"ID_2\",\"type\":\"Node\",\"parent\":\"ID_1\",\"attributes\":{\"text\":\"Scope\"}},{\"id\":\"ID_3\",\"type\":\"Node\",\"parent\":\"ID_2\",\"attributes\":{\"text\":\"Goals\"}},{\"id\":\"ID_4\",\"type\":\"Node\",\"parent\":\"ID_2\",\"attributes\":{\"text\":\"Risks\"}},{\"id\":\"ID_5\",\"type\":\"Node\",\"parent\":\"ID_1\",\"attributes\":{\"text\":\"Budget\"}}]",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 28,
+            "column": 3,
+            "endLine": 55,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 1,
+          "part": "drawing",
+          "expected": "elements ID_2: {\"id\":\"ID_2\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":102.65,\"y\":0,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Scope\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":162.65,\"y\":24}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}},\"children\":[\"ID_3\",\"ID_4\"]}",
+          "actual": "elements ID_2: {\"id\":\"ID_2\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":102.65,\"y\":0,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"indicators\",\"text\":\"⊕\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":218.65,\"y\":12}},{\"id\":\"text\",\"text\":\"Scope\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":162.65,\"y\":24}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}},\"children\":[\"ID_3\",\"ID_4\"]}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 3,
+          "part": "refused",
+          "expected": "refused: Unknown action 'mindmap.toggle-fold'.",
+          "actual": "refused: 'mindmap.toggle-fold' does not apply to this selection.",
+          "at": {
+            "file": "mindmap.atd",
+            "line": 319,
+            "column": 3,
+            "endLine": 324,
+            "endColumn": 4
+          }
+        }
+      ]
+    },
+    {
+      "name": "not-a-map",
+      "passed": false,
+      "differences": [
+        {
+          "step": null,
+          "part": "reading",
+          "expected": "[]",
+          "actual": "[{\"id\":\"ID_1\",\"type\":\"Node\",\"parent\":null,\"attributes\":{\"text\":\"Plan\"}},{\"id\":\"ID_2\",\"type\":\"Node\",\"parent\":null,\"attributes\":{\"text\":\"Second\"}}]",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 28,
+            "column": 3,
+            "endLine": 55,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": null,
+          "part": "findings",
+          "expected": "[{\"rule\":\"mindmap.not-a-map\",\"severity\":\"error\",\"message\":\"'two-roots.mm' is not a readable mind map: A map has exactly one root node; this one has 2.\"}]",
+          "actual": "[]",
+          "at": {
+            "file": "mindmap.atd",
+            "line": 226,
+            "column": 5,
+            "endLine": 230,
+            "endColumn": 6
+          }
+        },
+        {
+          "step": null,
+          "part": "drawing",
+          "expected": "elements ID_1: nothing",
+          "actual": "elements ID_1: {\"id\":\"ID_1\",\"type\":\"Node\",\"shape\":\"path\",\"bounds\":{\"x\":0,\"y\":0,\"w\":120,\"h\":40},\"labels\":[{\"id\":\"text\",\"text\":\"Plan\",\"font\":\"12 400 system-ui, sans-serif\",\"position\":{\"x\":60,\"y\":24}}],\"style\":{\"fill\":\"#FFFFFF\",\"stroke\":\"#E2E8F0\",\"strokeWidth\":1.5,\"tokens\":{\"fill\":\"color.surface\",\"stroke\":\"color.border\"}}}",
+          "at": {
+            "file": "mindmap.notation.atd",
+            "line": 58,
+            "column": 3,
+            "endLine": 90,
+            "endColumn": 4
+          }
+        }
+      ]
+    },
+    {
+      "name": "refusals",
+      "passed": false,
+      "differences": [
+        {
+          "step": null,
+          "part": "reading",
+          "expected": "[{\"id\":\"ID_1\",\"type\":\"Node\",\"parent\":null,\"attributes\":{\"text\":\"Plan\",\"folded\":\"false\"}},{\"id\":\"ID_2\",\"type\":\"Node\",\"parent\":\"ID_1\",\"attributes\":{\"text\":\"Scope\",\"folded\":\"false\"}},{\"id\":\"ID_3\",\"type\":\"Node\",\"parent\":\"ID_2\",\"attributes\":{\"text\":\"Goals\",\"folded\":\"false\"}},{\"id\":\"ID_4\",\"type\":\"Node\",\"parent\":\"ID_2\",\"attributes\":{\"text\":\"Risks\",\"folded\":\"false\"}},{\"id\":\"ID_5\",\"type\":\"Node\",\"parent\":\"ID_1\",\"attributes\":{\"text\":\"Budget\",\"folded\":\"false\"}}]",
+          "actual": "[{\"id\":\"ID_1\",\"type\":\"Node\",\"parent\":null,\"attributes\":{\"text\":\"Plan\"}},{\"id\":\"ID_2\",\"type\":\"Node\",\"parent\":\"ID_1\",\"attributes\":{\"text\":\"Scope\"}},{\"id\":\"ID_3\",\"type\":\"Node\",\"parent\":\"ID_2\",\"attributes\":{\"text\":\"Goals\"}},{\"id\":\"ID_4\",\"type\":\"Node\",\"parent\":\"ID_2\",\"attributes\":{\"text\":\"Risks\"}},{\"id\":\"ID_5\",\"type\":\"Node\",\"parent\":\"ID_1\",\"attributes\":{\"text\":\"Budget\"}}]",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 28,
+            "column": 3,
+            "endLine": 55,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 1,
+          "part": "refused",
+          "expected": "refused: Unknown action 'mindmap.delete'.",
+          "actual": "refused: 'mindmap.delete' does not apply to this selection.",
+          "at": {
+            "file": "mindmap.atd",
+            "line": 261,
+            "column": 5,
+            "endLine": 265,
+            "endColumn": 6
+          }
+        },
+        {
+          "step": 2,
+          "part": "refused",
+          "expected": "refused: Unknown action 'mindmap.add-sibling'.",
+          "actual": "refused: 'mindmap.add-sibling' does not apply to this selection.",
+          "at": {
+            "file": "mindmap.atd",
+            "line": 290,
+            "column": 3,
+            "endLine": 297,
+            "endColumn": 4
+          }
+        },
+        {
+          "step": 3,
+          "part": "refused",
+          "expected": "refused: The root node cannot be moved.",
+          "actual": "refused: A Node cannot be moved into its own branch.",
+          "at": {
+            "file": "mindmap.atd",
+            "line": 269,
+            "column": 5,
+            "endLine": 274,
+            "endColumn": 6
+          }
+        },
+        {
+          "step": 4,
+          "part": "refused",
+          "expected": "refused: A node cannot be moved into its own branch.",
+          "actual": "refused: A Node cannot be moved into its own branch.",
+          "at": {
+            "file": "mindmap.atd",
+            "line": 269,
+            "column": 5,
+            "endLine": 274,
+            "endColumn": 6
+          }
+        },
+        {
+          "step": 5,
+          "part": "refused",
+          "expected": "refused: Unknown action 'mindmap.unlink'.",
+          "actual": "refused: 'mindmap.unlink' does not apply to this selection.",
+          "at": {
+            "file": "mindmap.atd",
+            "line": 311,
+            "column": 3,
+            "endLine": 315,
+            "endColumn": 4
+          }
+        }
+      ]
+    },
+    {
+      "name": "unnamed-root",
+      "passed": false,
+      "differences": [
+        {
+          "step": null,
+          "part": "reading",
+          "expected": "[{\"id\":\"ID_1\",\"type\":\"Node\",\"parent\":null,\"attributes\":{\"folded\":\"false\"}},{\"id\":\"ID_2\",\"type\":\"Node\",\"parent\":\"ID_1\",\"attributes\":{\"text\":\"Ideas\",\"folded\":\"false\"}}]",
+          "actual": "[{\"id\":\"ID_1\",\"type\":\"Node\",\"parent\":null,\"attributes\":{}},{\"id\":\"ID_2\",\"type\":\"Node\",\"parent\":\"ID_1\",\"attributes\":{\"text\":\"Ideas\"}}]",
+          "at": {
+            "file": "mindmap.freeplane.atd",
+            "line": 28,
+            "column": 3,
+            "endLine": 55,
+            "endColumn": 4
+          }
+        }
+      ]
+    }
+  ]
+}
