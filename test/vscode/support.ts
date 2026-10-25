@@ -36,7 +36,12 @@ export interface State {
   /** What a designer was last sent: a table view, as `src/core/tool/tableView.ts` has it. */
   table?: { name: string; readOnly: boolean; properties: { id: string; name: string }[]; rows: { id: string; title: string }[]; views: { id: string; name: string; active: boolean }[] };
   /** What a designer of the `hierarchy` kind was last sent: a hierarchy view, as `src/core/tool/hierarchyView.ts` has it. */
-  hierarchy?: { name: string; readOnly: boolean; notice?: string; roots: HierarchyNode[]; stray: HierarchyNode[] };
+  hierarchy?: {
+    name: string; readOnly: boolean; notice?: string; roots: HierarchyNode[]; stray: HierarchyNode[];
+    notes: { id: string; aboutId?: string; textRaw: string; resolved: boolean }[];
+    lists: { label: string; gestures: Partial<Record<'add' | 'remove' | 'set' | 'clear', { operation: string; params: Record<string, string> }>> }[];
+    applied?: { query: string; shown: number; total: number };
+  };
   /** What the tool type offers for the selection. */
   actions?: { id: string; label: string; enabled: boolean; disabledReason?: string }[];
   kind: 'diagram' | 'designer';

@@ -6,8 +6,8 @@
 // the definition each gesture runs.
 
 import type { ElementGesture, GestureOperation, HierarchyGestures as GestureMap, LabelGesture } from '../desl/hierarchy';
-import { aboutOf, completionsOf, filtered, hierarchyOf, labelValues, lowerAscii, memberName, membersOf, notesOf, sortKeysOf } from '../desl/hierarchy';
-import { segmentsOf, type Mentions, type TextPart } from '../desl/mentions';
+import { aboutOf, completionsOf, filtered, hierarchyOf, labelValues, levelWord, lowerAscii, memberName, membersOf, notesOf, sortKeysOf, sortWord } from '../desl/hierarchy';
+import { mentionTemplate, segmentsOf, type Mentions, type TextPart } from '../desl/mentions';
 import type { DesignerOperation, RunStep } from '../desl/operations';
 import type { HierarchyLabel, HierarchySurface } from '../desl/surface';
 import { attributesOf, defaultOf, isA, valueKind, type Metamodel } from '../disl/metamodel';
@@ -21,9 +21,15 @@ export type HierarchyGesture = ElementGesture;
 /** A gesture on a label of a level or an entry: a value added or removed, the one value set or cleared. */
 export type HierarchyLabelGesture = LabelGesture;
 
-/** The operation a gesture runs now, and the parameters it gives which part, by the part: `title`, `value`, `member`, `into`, `after`, or an attribute's name. */
+/**
+ * The operation a gesture runs now, and the parameters it gives which part, by the part: `value`,
+ * `member`, `into`, `after`; `name` and `colour` of a new member of a list, `name` and `query` of a
+ * stored filter, `kind`, `text` and `detail` of a note; or, for another gesture, the attribute's name.
+ */
 export interface HierarchyGestureState {
   readonly operation: string;
+  /** What the operation is called for what the gesture is made on, where the definition words it so. */
+  readonly label?: string;
   readonly enabled: boolean;
   /** Why it is not enabled. */
   readonly reason?: string;
@@ -129,10 +135,23 @@ export interface HierarchyNote {
   readonly gestures: HierarchyGestures;
 }
 
+/** What a mention picked for a text is written as: the literal text before and after the id, and the types of what it may name. */
+export interface HierarchyMentionTemplate {
+  readonly before: string;
+  readonly after: string;
+  readonly types: readonly string[];
+}
+
 /** What a page of boxes draws. */
 export interface HierarchyView {
   readonly name: string;
   readonly ids: 'shown' | 'hidden';
+  /** The type of the levels and the type of the entries, which a toolbox entry is named by. */
+  readonly roles: { readonly level: string; readonly entry: string };
+  /** What a mention picked in the description of a level or an entry is written as, by the type of the level or entry; absent where its description holds none (DESL 4.3). */
+  readonly mentions: Readonly<Record<string, HierarchyMentionTemplate>>;
+  /** The words of a filter that are no label's: the one that selects levels by their title and the one that sorts (DESL 7.7.3). */
+  readonly queryWords: { readonly level: string; readonly sort: string };
   /** True when nothing that edits may be offered. */
   readonly readOnly: boolean;
   /** Why the page is read-only or empty, when there is something to say. */
@@ -171,7 +190,10 @@ export type HierarchyRequest =
   | { readonly kind: 'operation'; readonly operation: string; readonly on?: readonly string[]; readonly args?: Readonly<Record<string, TableValue>> }
   /** A level or an entry whose id another holds before it, or that has none yet, given a new one. */
   | { readonly kind: 'renumber'; readonly id: string }
-  /** A toolbox entry dropped into a level, or at the top for none, after a sibling there or where the definition puts a new one. */
+  /**
+   * A toolbox entry dropped into a level, or at the top for none, after a sibling there, where the
+   * definition puts a new one when `after` is absent, or first among its kind there when it is empty.
+   */
   | { readonly kind: 'drop'; readonly entry: string; readonly parent?: string; readonly after?: string }
   /** A row of ADP Properties of a level or an entry edited. */
   | { readonly kind: 'setField'; readonly id: string; readonly field: string; readonly value: string };
@@ -213,7 +235,7 @@ export interface HierarchyState {
   readonly query?: string;
   readonly focus?: string;
   /** Whether an operation is offered for a selection, can run now, and why not. */
-  availability(operation: string, on: readonly string[]): { readonly offered: boolean; readonly available: boolean; readonly reason?: string };
+  availability(operation: string, on: readonly string[]): { readonly offered: boolean; readonly available: boolean; readonly reason?: string; readonly label?: string };
 }
 
 const NOT_CHANGED = 'No operation of this tool changes it.';
@@ -264,16 +286,28 @@ export function hierarchyReader(parts: HierarchyParts) {
     if (!now.offered) return undefined;
     const enabled = now.available && !state.readOnly;
     const reason = state.readOnly ? state.notice : now.reason;
-    return { operation: found.operation, enabled, ...(enabled || reason === undefined ? {} : { reason }), params: found.params };
+    return { operation: found.operation, ...(now.label === undefined ? {} : { label: now.label }), enabled, ...(enabled || reason === undefined ? {} : { reason }), params: found.params };
   };
+  /** The parameters of a gesture by the part each plays rather than by the attribute it sets: a page knows the parts, not the attributes. */
+  const byPart = (found: HierarchyGestureState | undefined, parts: Readonly<Record<string, string>>): HierarchyGestureState | undefined =>
+    found && { ...found, params: Object.fromEntries(Object.entries(found.params).map(([attribute, param]) => [parts[attribute] ?? attribute, param])) };
+  const noteParts: Readonly<Record<string, string>> = surface.notes === undefined ? {} : { [surface.notes.kind]: 'kind', [surface.notes.text]: 'text', [surface.notes.detail]: 'detail' };
   const gesturesOf = (state: HierarchyState, element: ModelElement): HierarchyGestures => {
     const found: Partial<Record<HierarchyGesture, HierarchyGestureState>> = {};
     for (const [gesture, operation] of Object.entries(gestures.on[element.type] ?? {}) as [HierarchyGesture, GestureOperation][]) {
       const now = stateOf(state, operation, [element.id]);
-      if (now) found[gesture] = now;
+      if (now) found[gesture] = gesture === 'addNote' || gesture === 'change' ? byPart(now, noteParts) : now;
     }
     return found;
   };
+
+  /** What a mention picked in a description is written as, by the type of the level or entry that holds it. */
+  const templates: Record<string, HierarchyMentionTemplate> = {};
+  for (const role of [surface.levels, surface.entries]) {
+    const facet = mentions.of(role.type, role.description);
+    const template = facet && mentionTemplate(facet.pattern);
+    if (facet && template) templates[role.type] = { ...template, types: facet.types };
+  }
 
   /** The member of a label's list a value names, its name compared ignoring case (DESL 7.7.2). */
   const memberOf = (model: Model, label: HierarchyLabel, value: string): ModelElement | undefined =>
@@ -332,7 +366,7 @@ export function hierarchyReader(parts: HierarchyParts) {
         // A label's gesture is offered on a level or an entry, so it is shown by what it is, not by a selection.
         labelGestures[gesture] = { operation: found.operation, enabled: !state.readOnly, ...(state.readOnly && state.notice !== undefined ? { reason: state.notice } : {}), params: found.params };
       }
-      const add = stateOf(state, gestures.adds[label.options.type], []);
+      const add = byPart(stateOf(state, gestures.adds[label.options.type], []), { [label.options.name]: 'name', ...(label.options.colour === undefined ? {} : { [label.options.colour]: 'colour' }) });
       return {
         label: label.attribute, name: metamodel.types[label.options.type]?.label ?? label.options.type, prefix: label.prefix, many: label.many, on: label.on,
         members: membersOf(model, label).map((member) => ({ id: member.id, name: memberName(member, label), ...coloured(colourKeyOf(member, label)), implied: state.implied.has(member.id), gestures: gesturesOf(state, member) })),
@@ -362,13 +396,14 @@ export function hierarchyReader(parts: HierarchyParts) {
     const widthAttribute = widthsPart === undefined ? undefined : attributesOf(metamodel, widthsPart.type)[widthsPart.width];
     const words = query.split(/\s+/);
     const addLevel = stateOf(state, gestures.adds[surface.levels.type], []);
-    const addFilter = filtersPart === undefined ? undefined : stateOf(state, gestures.adds[filtersPart.type], []);
+    const addFilter = filtersPart === undefined ? undefined : byPart(stateOf(state, gestures.adds[filtersPart.type], []), { [filtersPart.name]: 'name', [filtersPart.query]: 'query' });
     const addWidth = widthsPart === undefined ? undefined : stateOf(state, gestures.adds[widthsPart.type], []);
     const inTree = (id: string | undefined): id is string => id !== undefined && tree.byId.has(id);
     const noteKindsAt = notesPart === undefined ? [] : enumOf(notesPart.type, notesPart.kind);
     const range = widthAttribute === undefined ? undefined : { ...(typeof widthAttribute.min === 'number' ? { min: widthAttribute.min } : {}), ...(typeof widthAttribute.max === 'number' ? { max: widthAttribute.max } : {}) };
     return {
       name: state.name, ids: surface.ids, readOnly: state.readOnly, ...(state.notice === undefined ? {} : { notice: state.notice }),
+      roles: { level: surface.levels.type, entry: surface.entries.type }, mentions: templates, queryWords: { level: levelWord, sort: sortWord },
       roots: tree.roots.filter((level) => shown.shown.has(level.id)).map((level) => nodeOf(level, 1, undefined)),
       stray: tree.stray.filter((element) => shown.shown.has(element.id)).map((element) => nodeOf(element, 1, undefined)),
       lists, notes,

@@ -258,6 +258,18 @@ export class Tools implements vscode.Disposable {
     }
   }
 
+  /**
+   * The options a canvas or a page sent, and the view made with them. The canvas holds no folds, and
+   * not where the nodes were before the last change: those this editor holds stay. The filter a page
+   * of boxes applies and the level it narrows to are the page's own: they come with its options, as
+   * `query` and `focus`, and are never written.
+   */
+  setOptions(diagram: OpenTool, options: ViewOptions): void {
+    const { collapsed, placed } = diagram.options;
+    diagram.options = { ...options, ...(collapsed === undefined ? {} : { collapsed }), ...(placed === undefined ? {} : { placed }) };
+    this.refresh(diagram);
+  }
+
   /** A document was saved: the registration beside it, which is only its visualization, is saved with it. */
   async saved(document: vscode.TextDocument): Promise<void> {
     for (const diagram of this.open) {
@@ -569,15 +581,9 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
       case 'ready':
         this.tools.refresh(diagram);
         return;
-      case 'viewOptions': {
-        // The canvas holds no folds, and not where the nodes were before the last change: those this
-        // editor holds stay. The filter a page of boxes applies and the level it narrows to are the
-        // page's own: they come with its options, as `query` and `focus`, and the view is made with them.
-        const { collapsed, placed } = diagram.options;
-        diagram.options = { ...message.options, ...(collapsed === undefined ? {} : { collapsed }), ...(placed === undefined ? {} : { placed }) };
-        this.tools.refresh(diagram);
+      case 'viewOptions':
+        this.tools.setOptions(diagram, message.options);
         return;
-      }
       case 'selection':
         diagram.selection = message.ids;
         this.tools.refresh(diagram);

@@ -696,7 +696,7 @@ type Done = Exclude<Outcome, { readonly refused: string }>;
 
 const emptyTable = (notice: string): TableView => ({ name: '', properties: [], rows: [], total: 0, views: [], settings: [], operations: {}, readOnly: true, notice });
 const emptyHierarchy = (notice: string): HierarchyView => ({
-  name: '', ids: 'shown', readOnly: true, notice, roots: [], stray: [], lists: [], notes: [], noteKinds: [], filters: [], completions: [], sortKeys: [], widths: [], pageGestures: {}, findings: [], operations: {},
+  name: '', ids: 'shown', roles: { level: '', entry: '' }, mentions: {}, queryWords: { level: '', sort: '' }, readOnly: true, notice, roots: [], stray: [], lists: [], notes: [], noteKinds: [], filters: [], completions: [], sortKeys: [], widths: [], pageGestures: {}, findings: [], operations: {},
 });
 
 /** An element of a model the FBL library read, by where it stands in the reading: the same place in two readings of one body is the same entry. */
@@ -1069,7 +1069,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
       }
       case 'drop': {
         // A level dropped at the top is added by the operation that adds one there; one dropped into a level, and an entry, by the one that adds it inside that level,
-        // and moved after the sibling it was dropped after.
+        // and moved after the sibling it was dropped after, or with no sibling named, first among its kind there, as a move within its own parent puts it.
         const level = request.entry === levels.type;
         if (!level && request.entry !== entries.type) return refused(NOT_HERE);
         const parent = request.parent;
@@ -1083,7 +1083,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
           const after = request.after;
           steps.push((created) => ({
             operation: moving.operation, on: [created[0]],
-            args: { ...(parent === undefined || moving.params.into === undefined ? {} : { [moving.params.into]: parent }), ...(moving.params.after === undefined ? {} : { [moving.params.after]: after }) },
+            args: { ...(parent === undefined || moving.params.into === undefined ? {} : { [moving.params.into]: parent }), ...(moving.params.after === undefined || after === '' ? {} : { [moving.params.after]: after }) },
           }));
         }
         return done(run.runAll(open.model, steps));

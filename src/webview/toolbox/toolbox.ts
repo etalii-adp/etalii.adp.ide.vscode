@@ -6,6 +6,12 @@ import { icon } from '../diagram/icons';
 export const toolboxMime = 'application/x-adp-toolbox';
 
 /**
+ * The type of data that names the dragged entry, after this prefix in lower case: while a drag lasts
+ * a page can read only the types of what is dragged, and a page of boxes shows where the entry would go.
+ */
+export const toolboxEntryMime = 'application/x-adp-toolbox-entry.';
+
+/**
  * The ADP Toolbox: the entries of the active diagram's type with their icons and descriptions, in a
  * view of its own. An entry is dragged onto the canvas, or added at the centre of what the canvas
  * shows with a click, Enter or Space.
@@ -35,6 +41,7 @@ export class Toolbox {
       icon(entry.icon), html('span', {}, entry.label));
     button.addEventListener('dragstart', (event) => {
       event.dataTransfer?.setData(toolboxMime, entry.id);
+      event.dataTransfer?.setData(`${toolboxEntryMime}${entry.id.toLowerCase()}`, entry.id);
       event.dataTransfer?.setData('text/plain', entry.label);
       if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copy';
     });

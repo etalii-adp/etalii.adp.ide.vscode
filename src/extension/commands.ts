@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { EditRequest } from '../core/frame/toolType';
+import type { EditRequest, ViewOptions } from '../core/frame/toolType';
 import { viewTypeOf } from '../core/frame/toolType';
 import { keepAsText } from './opening';
 import { PropertiesView } from './propertiesView';
@@ -130,6 +130,11 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
       return active ? tools.perform(active, request as EditRequest | TableRequest | HierarchyRequest) : undefined;
     });
     register('etalii.adp.test.toolbox', () => entriesOf(tools.active));
+    // The options a canvas or a page sends, as it sends them: a filter typed, a level narrowed to.
+    register('etalii.adp.test.viewOptions', (options: unknown) => {
+      const active = tools.active;
+      if (active) tools.setOptions(active, options as ViewOptions);
+    });
     register('etalii.adp.test.layoutSteps', () => ({ undo: tools.layoutStepNext('undo'), redo: tools.layoutStepNext('redo') }));
     register('etalii.adp.test.select', (ids: unknown) => {
       const active = tools.active;
