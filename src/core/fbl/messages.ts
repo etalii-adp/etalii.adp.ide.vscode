@@ -240,6 +240,8 @@ export const messages = {
   readOnlyFile: 'This file is read-only.',
   registrationEdit: 'Placements and stored ids are edits of the registration, not of the body.',
   noSuchElement: (id: string) => `The model has no element or relation '${id}'.`,
+  // This host: FBL 6.4 refuses a transaction whose changes cannot be planned together, which standalone does not check.
+  changesOverlap: 'Two changes of this edit rewrite the same text, so they cannot be made together.',
   ruleReadOnly: (type: string, gesture: string) => `A ${type} cannot be ${gesture} in this file.`,
   attributeNotKept: (type: string, attribute: string) => `A ${type} keeps no '${attribute}' in this file.`,
   attributeNotChanged: (attribute: string, type: string) => `The ${attribute} of a ${type} cannot be changed in this file.`,

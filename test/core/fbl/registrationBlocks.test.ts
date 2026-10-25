@@ -77,6 +77,42 @@ describe('the declared blocks of a registration', () => {
     expect(textOf(registration.bytes)).toBe('example/tasks\r\ntags:\r\n  safety: red\r\n');
   });
 
+  it('a rename with a move writes the new key into the line it inserts, and an undo puts the bytes back', () => {
+    const input = 'example/tasks\r\ntags:\r\n  a: red\r\n  b: blue\r\n';
+    const registration = open(input);
+    const result = registration.change({ kind: 'setting', block: 'tags', key: 'a', rename: 'z', position: { index: 1 } });
+    expect(result).toEqual({ planned: { splices: [
+      { operation: 'remove-entry', start: 22, end: 32, text: '' },
+      { operation: 'insert-entry', start: 43, end: 43, text: '  z: red\r\n' },
+    ] } });
+    expect(textOf(registration.bytes)).toBe('example/tasks\r\ntags:\r\n  b: blue\r\n  z: red\r\n');
+    expect('done' in registration.undo()).toBe(true);
+    expect(textOf(registration.bytes)).toBe(input);
+  });
+
+  it('a rename with a move and a new value writes both into the line it inserts', () => {
+    const registration = open('example/tasks\r\ntags:\r\n  a: red\r\n  b: blue\r\n');
+    expect(registration.change({ kind: 'setting', block: 'tags', key: 'a', rename: 'z', value: 'green', position: { index: 1 } })).toHaveProperty('planned');
+    expect(textOf(registration.bytes)).toBe('example/tasks\r\ntags:\r\n  b: blue\r\n  z: green\r\n');
+  });
+
+  it.each([
+    ['the last entry moves up', 'b', { index: 0 }, 'example/tasks\r\ntags:\r\n  b: blue\r\n  a: red'],
+    ['an entry moves to the end', 'a', { index: 1 }, 'example/tasks\r\ntags:\r\n  b: blue\r\n  a: red'],
+  ] as const)('in a registration without a final line ending, %s and the file still has none (FBL 6.3)', (_, key, position, expected) => {
+    const input = 'example/tasks\r\ntags:\r\n  a: red\r\n  b: blue';
+    const registration = open(input);
+    expect(registration.change({ kind: 'setting', block: 'tags', key, position })).toHaveProperty('planned');
+    expect(textOf(registration.bytes)).toBe(expected);
+    expect('done' in registration.undo()).toBe(true);
+    expect(textOf(registration.bytes)).toBe(input);
+  });
+
+  it('a move to where the entry stands writes nothing', () => {
+    const registration = open('example/tasks\r\ntags:\r\n  a: red\r\n  b: blue');
+    expect(registration.change({ kind: 'setting', block: 'tags', key: 'b', position: { index: 1 } })).toEqual({ planned: { splices: [] } });
+  });
+
   it("removing the last entry removes the block's line with it", () => {
     const registration = open('example/tasks\r\ntags:\r\n  security: red\r\n');
     const result = registration.change({ kind: 'setting', block: 'tags', key: 'security', remove: true });

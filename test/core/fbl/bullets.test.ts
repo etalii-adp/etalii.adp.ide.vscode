@@ -90,6 +90,38 @@ describe('the bullets family', () => {
     expect(body.change({ kind: 'move', id: 'b', position: { after: 'a' } })).toEqual({ planned: { splices: [] } });
   });
 
+  describe('a move in a body whose last line has no line ending (FBL 6.3)', () => {
+    const moves = (input: string, change: Parameters<OpenBody['change']>[0], output: string): void => {
+      const body = open(input);
+      expect(body.change(change)).toHaveProperty('planned');
+      expect(textOf(body.bytes)).toBe(output);
+      expect(body.undo()).toHaveProperty('done');
+      expect(textOf(body.bytes)).toBe(input);
+    };
+
+    it('writes the line break before an item moved to the end, and none after it', () => {
+      moves('## Topics\n- [a] A\n- [b] B', { kind: 'move', id: 'a', position: { index: 1 } }, '## Topics\n- [b] B\n- [a] A');
+    });
+
+    it('gives the last item moved away a line ending, and takes the one of the line before it', () => {
+      moves('## Topics\n- [a] A\n- [b] B', { kind: 'move', id: 'b', position: { index: 0 } }, '## Topics\n- [b] B\n- [a] A');
+    });
+
+    it('keeps CRLF', () => {
+      moves('## Topics\r\n- [a] A\r\n- [b] B', { kind: 'move', id: 'a', position: { index: 1 } }, '## Topics\r\n- [b] B\r\n- [a] A');
+      moves('## Topics\r\n- [a] A\r\n- [b] B', { kind: 'move', id: 'b', position: { index: 0 } }, '## Topics\r\n- [b] B\r\n- [a] A');
+    });
+
+    it('moves the last item, with its continuation, across depths', () => {
+      // Into the item before it, then out of it again: it stays the last item, without a final newline.
+      moves('## Topics\n- [a] A\n- [b] B\n  note', { kind: 'move', id: 'b', parent: 'a', position: { index: 0 } }, '## Topics\n- [a] A\n  - [b] B\n    note');
+      moves('## Topics\n- [a] A\n  - [b] B\n    note', { kind: 'move', id: 'b', position: { index: 1 } }, '## Topics\n- [a] A\n- [b] B\n  note');
+      // Out of its parent to the front, and an item to the end, inside another.
+      moves('## Topics\n- [a] A\n  - [b] B', { kind: 'move', id: 'b', position: { index: 0 } }, '## Topics\n- [b] B\n- [a] A');
+      moves('## Topics\n- [a] A\n- [c] C\n- [b] B', { kind: 'move', id: 'a', parent: 'b', position: { index: 0 } }, '## Topics\n- [c] C\n- [b] B\n  - [a] A');
+    });
+  });
+
   it('adds an item at a position among its siblings, before the one at the index', () => {
     const body = open('## Topics\n- [a] A\n- [c] C\n');
     expect(body.change({ kind: 'add', type: 'Topic', id: 'b', attributes: { title: 'B' }, position: { before: 'c' } })).toHaveProperty('planned');
@@ -171,6 +203,30 @@ describe('a bullets binding with a header, unreadable types and many-valued word
     expect(textOf(body.bytes)).toBe('<!-- r -->\n<!-- last: E4 -->\n# List\n- E1 One #a #b\n- something else\n  - E2 Hidden\n- E3 Third\n- E4 Four\n');
     expect(body.undo()).toHaveProperty('done');
     expect(textOf(body.bytes)).toBe(input);
+  });
+});
+
+describe('a transaction whose changes touch the same text (FBL 6.4)', () => {
+  it('makes the sets of one element one set, the later value winning', () => {
+    const body = open('## Topics\n- [a] A\n');
+    const result = body.changeAll([
+      { kind: 'set', id: 'a', attributes: { title: 'X' } },
+      { kind: 'set', id: 'a', attributes: { title: 'Y' } },
+    ]);
+    expect(result).toEqual({ planned: { splices: [{ operation: 'replace-value', start: 16, end: 17, text: 'Y' }] } });
+    expect(textOf(body.bytes)).toBe('## Topics\n- [a] Y\n');
+  });
+
+  it('refuses a set and a move of one item, whose splices overlap, and writes nothing', () => {
+    const input = '## Topics\n- [a] A\n- [b] B\n';
+    const body = open(input);
+    const result = body.changeAll([
+      { kind: 'set', id: 'a', attributes: { title: 'X' } },
+      { kind: 'move', id: 'a', position: { index: 1 } },
+    ]);
+    expect(result).toEqual({ refused: 'Two changes of this edit rewrite the same text, so they cannot be made together.' });
+    expect(textOf(body.bytes)).toBe(input);
+    expect(body.undo()).toHaveProperty('refused');
   });
 });
 

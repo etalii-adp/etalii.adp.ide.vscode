@@ -296,7 +296,10 @@ export class BulletsFamily extends LinesFamily {
    * A move (FBL 0.7 5.5, 6.3): the item's line span is removed, and inserted where a new item would go
    * at `position` among `parent`'s children as they are without it, every line that is not blank
    * shifted by the difference between the column a new item's marker would have there and the
-   * column its marker had. A move to where the item stands already writes nothing.
+   * column its marker had. A move to where the item stands already writes nothing. In a body whose
+   * last line has no line ending the body keeps having none (FBL 6.3): an item moved from the end of
+   * it takes a line ending and leaves the one of the line before it removed, and an item moved to
+   * the end of it is written after a line break and without its own last ending.
    */
   override moveTo(plan: SplicePlan, element: ReadElement, parent: ReadElement | undefined, position: ChangePosition | undefined): void {
     const item = element.entry as Bullet;
@@ -307,12 +310,27 @@ export class BulletsFamily extends LinesFamily {
     if (all.indexOf(element) === index) return;
     const place = this.place(plan, element.rule, parent?.entry as Bullet | undefined, siblings, index);
     // The place is taken in the body before the edit: just after the item's old parent is where the item starts.
-    const offset = index > 0 && contains(siblings[index - 1].entry.lineSpan!, span) ? span.start : place.offset;
+    let offset = index > 0 && contains(siblings[index - 1].entry.lineSpan!, span) ? span.start : place.offset;
     const shift = columnsOf(place.indent) - item.markerColumn;
-    const moved = linesOf(this.text.textOf(span))
+    const lines = linesOf(this.text.textOf(span));
+    let moved = lines
       .map(({ line, ending }) => (line.replace(/[ \t]/g, '').length === 0 ? line : shifted(line, shift)) + ending)
       .join('');
-    plan.addAt('remove-entry', span, '');
+    let removed: Span = span;
+    const endless = this.text.length > 0 && this.text.lines[this.text.lines.length - 1].ending.length === 0;
+    // Inserted right after the bytes it is taken from, the item stands where it would stand inserted before them.
+    if (endless && offset === span.end) offset = span.start;
+    if (endless && span.end === this.text.length && offset !== span.start) {
+      // The item ends the body without a line ending: it takes one, and the line before it gives up its own.
+      const previous = this.text.lines[this.text.lineIndexAt(span.start) - 1];
+      moved += this.newlineAt(offset);
+      removed = { start: previous.contentEnd, end: span.end };
+    } else if (endless && offset === this.text.length) {
+      // The item goes to the end of the body: the line break first, and none after it.
+      const last = lines[lines.length - 1];
+      moved = this.newlineAt(offset) + moved.slice(0, moved.length - last.ending.length);
+    }
+    plan.addAt('remove-entry', removed, '');
     plan.add('insert-entry', offset, offset, moved);
   }
 }

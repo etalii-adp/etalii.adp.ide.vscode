@@ -55,23 +55,41 @@ export function planSetting(
   const text = document.text;
 
   if (existing) {
+    let renamed: string | undefined;
     if (setting.rename !== undefined) {
       checkKey(setting.rename);
       if (setting.rename !== existing.key && kept.some((entry) => entry.key === setting.rename)) refuse(messages.blockEntryExists(name, setting.rename));
-      if (setting.rename !== existing.key) splices.push({ operation: 'replace-value', start: existing.keySpan.start, end: existing.keySpan.end, text: setting.rename });
+      if (setting.rename !== existing.key) renamed = setting.rename;
     }
-    if (setting.position) {
+    const at = setting.position ? place(kept.filter((entry) => entry !== existing), setting.position, block!) : undefined;
+    // A position that leaves the entry where it is moves nothing: its key and value are written in place.
+    if (at !== undefined && at !== existing.line.start && at !== existing.line.end) {
       // A move is a remove-entry and an insert-entry of the entry's own bytes (FBL 0.7 8.4), its
-      // place found among the other entries.
-      const at = place(kept.filter((entry) => entry !== existing), setting.position, block!);
-      let line = text.text(existing.line.start, existing.line.end);
-      if (setting.value !== undefined && setting.value !== existing.value) {
-        line = decode(text.bytes, existing.line.start, existing.valueSpan.start) + setting.value + decode(text.bytes, existing.valueSpan.end, existing.line.end);
+      // place found among the other entries; a new key and a new value are written into the line it
+      // inserts, since the line it removes holds the old ones.
+      const value = setting.value ?? existing.value;
+      let line = decode(text.bytes, existing.line.start, existing.keySpan.start) + (renamed ?? decode(text.bytes, existing.keySpan.start, existing.keySpan.end))
+        + decode(text.bytes, existing.keySpan.end, existing.valueSpan.start) + (value === existing.value ? decode(text.bytes, existing.valueSpan.start, existing.valueSpan.end) : value)
+        + decode(text.bytes, existing.valueSpan.end, existing.line.end);
+      let removedFrom = existing.line.start;
+      if (endless(text, existing.line.end)) {
+        // The last line of a file without a final line ending moves away: the line before it gives
+        // up its ending, and the moved line takes one, so the file still ends without one (FBL 6.3).
+        const ending = text.newlineAt(existing.line.start - 1, '\n');
+        removedFrom -= ending.length;
+        line += ending;
+      } else if (endless(text, at)) {
+        // A line moved to the end of such a file writes its line break first and none after.
+        const ending = /\r?\n$/.exec(line)?.[0] ?? '';
+        line = ending + line.slice(0, line.length - ending.length);
       }
-      splices.push({ operation: 'remove-entry', start: existing.line.start, end: existing.line.end, text: '' });
+      splices.push({ operation: 'remove-entry', start: removedFrom, end: existing.line.end, text: '' });
       splices.push({ operation: 'insert-entry', start: at, end: at, text: line });
-    } else if (setting.value !== undefined && setting.value !== existing.value) {
-      splices.push({ operation: 'replace-value', start: existing.valueSpan.start, end: existing.valueSpan.end, text: setting.value });
+    } else {
+      if (renamed !== undefined) splices.push({ operation: 'replace-value', start: existing.keySpan.start, end: existing.keySpan.end, text: renamed });
+      if (setting.value !== undefined && setting.value !== existing.value) {
+        splices.push({ operation: 'replace-value', start: existing.valueSpan.start, end: existing.valueSpan.end, text: setting.value });
+      }
     }
     return ordered(splices);
   }

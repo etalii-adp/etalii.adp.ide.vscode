@@ -56,18 +56,44 @@ export function planEdit(reading: BodyReading, change: ModelChange): PlanResult 
  * before the edit, so every offset refers to it, and their splices are applied together, recorded
  * together and undone together, in body order, those at one offset in the order the transaction
  * made them. When any change cannot be planned, the whole transaction is refused with its reason.
+ * The sets of one element are one set, where the first of them stands, a later value of an attribute
+ * winning; changes whose splices still overlap cannot be made together, and the transaction is
+ * refused, writing nothing.
  */
 export function planEdits(reading: BodyReading, changes: readonly ModelChange[]): PlanResult {
   const splices: FblSplice[] = [];
   let snapshot = false;
-  for (const change of changes) {
+  for (const change of mergedSets(changes)) {
     const result = planEdit(reading, change);
     if ('refused' in result) return result;
     splices.push(...result.planned.splices);
     snapshot ||= result.planned.snapshot === true;
   }
-  const ordered = orderSplices(splices, messages.twoSplicesOverlap);
-  return { planned: snapshot ? { splices: ordered, snapshot } : { splices: ordered } };
+  try {
+    const ordered = orderSplices(splices, () => refuse(messages.changesOverlap));
+    return { planned: snapshot ? { splices: ordered, snapshot } : { splices: ordered } };
+  } catch (error) {
+    if (error instanceof RefusedException) return { refused: error.message };
+    throw error;
+  }
+}
+
+/** `changes` with every set of an element merged into the first set of it, a later value of an attribute winning. */
+function mergedSets(changes: readonly ModelChange[]): ModelChange[] {
+  const merged: ModelChange[] = [];
+  const sets = new Map<string, number>();
+  for (const change of changes) {
+    const at = change.kind === 'set' ? sets.get(change.id) : undefined;
+    if (change.kind !== 'set') merged.push(change);
+    else if (at === undefined) {
+      sets.set(change.id, merged.length);
+      merged.push(change);
+    } else {
+      const first = merged[at] as ModelChange & { kind: 'set' };
+      merged[at] = { ...first, attributes: { ...first.attributes, ...change.attributes } };
+    }
+  }
+  return merged;
 }
 
 /** The element a change names; a change that names none is the caller's mistake. */
