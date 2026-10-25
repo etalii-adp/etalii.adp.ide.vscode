@@ -208,7 +208,7 @@ export interface HierarchyState {
   readonly implied: ReadonlySet<string>;
   /** The ids that may be given a new one. */
   readonly renumbered: ReadonlySet<string>;
-  /** The folds this viewer keeps for the session, by id. */
+  /** The folds this viewer keeps for the session, by id: each counts only while the element's id is ephemeral, after which the registration decides (DESL 5.3.3). */
   readonly collapsed?: Readonly<Record<string, boolean>>;
   readonly query?: string;
   readonly focus?: string;
@@ -309,7 +309,7 @@ export function hierarchyReader(parts: HierarchyParts) {
         title: titleOf(element),
         description: segments(model, element, membersOfRole(element.type).description), descriptionText: textOf(element.attributes[membersOfRole(element.type).description]),
         labels: valued,
-        collapsed: state.collapsed?.[element.id] ?? kept,
+        collapsed: (element.ephemeral ? state.collapsed?.[element.id] : undefined) ?? kept,
         notes: { open: notes?.open ?? 0, noteKinds: notes?.noteKinds ?? [], ...(notes?.icon === undefined ? {} : { icon: notes.icon }), within: notes?.within ?? 0 },
         findings: [...(bySeverity.get(element.id) ?? new Map<Severity, number>())].map(([severity, count]) => ({ severity, count })),
         renumber: state.renumbered.has(element.id),

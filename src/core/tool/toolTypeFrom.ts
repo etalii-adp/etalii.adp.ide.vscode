@@ -31,6 +31,7 @@ import { findingCodes } from '../fbl/finding';
 import { OpenBody } from '../fbl/history/openBody';
 import { messages } from '../fbl/messages';
 import type { FblModel } from '../fbl/model';
+import type { ChangePosition, ModelChange } from '../fbl/planning/modelChange';
 import { PluginBody } from '../fbl/plugins/pluginBody';
 import { OpenRegistration } from '../fbl/registration/openRegistration';
 import { createRegistration } from '../fbl/registration/registrationCreation';
@@ -683,6 +684,8 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       const made = produceTemplate(bindings[0], undefined, name, () => crypto.randomUUID(), bindings[0].plugin && plugins.persistence(bindings[0].plugin.plugin));
       return made ? decode(made) : '';
     },
+    // A diagram's registration keeps nothing outside the history.
+    restoreRegistration: (snapshot) => snapshot,
   };
 }
 
@@ -812,6 +815,26 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     return open;
   }
 
+  /**
+   * The model with the folds the viewer keeps for the session (DESL 5.3.3, 5.5): the value of a
+   * state for an element whose id is still ephemeral, which the registration cannot hold. An element
+   * that has been numbered since is the registration's again, whatever the session held for it.
+   */
+  const withSession = (model: Model, options: ViewOptions): Model => {
+    const held = options.collapsed;
+    const attribute = hierarchySurface?.collapsed;
+    const state = attribute === undefined ? undefined : settings.value.states.find((candidate) => candidate.attribute === attribute);
+    if (held === undefined || state === undefined) return model;
+    let changed = false;
+    const elements = model.elements.map((element) => {
+      const value = element.ephemeral && state.of.includes(element.type) ? held[element.id] : undefined;
+      if (value === undefined || element.attributes[state.attribute] === value) return element;
+      changed = true;
+      return { ...element, attributes: { ...element.attributes, [state.attribute]: value } };
+    });
+    return changed ? { ...model, elements } : model;
+  };
+
   // ---- what is shown ----
 
   const baseName = (fileName: string): string => nameOf(fileName).replace(/\.[^.]*$/, '');
@@ -820,11 +843,12 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     const open = opened(source);
     if (hierarchySurface) {
       if (!hierarchy || !operations || open.unreadable) return emptyHierarchy(open.refusal ?? UNREADABLE);
+      const session = withSession(open.model, options);
       return hierarchy.view(open.model, {
         name: baseName(source.fileName), readOnly: open.refusal !== undefined, ...(open.refusal === undefined ? {} : { notice: open.refusal }),
         findings: open.found, implied: open.implied, renumbered: open.renumbered,
         ...(options.collapsed === undefined ? {} : { collapsed: options.collapsed }), ...(options.query === undefined ? {} : { query: options.query }), ...(options.focus === undefined ? {} : { focus: options.focus }),
-        availability: (operation, on) => operations.value.availability(open.model, operation, on),
+        availability: (operation, on) => operations.value.availability(session, operation, on),
       });
     }
     if (!table || open.unreadable) return emptyTable(open.refusal ?? UNREADABLE);
@@ -867,11 +891,12 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     });
   }
 
-  function actions(source: Source, selection: readonly string[]): Action[] {
+  function actions(source: Source, selection: readonly string[], options: ViewOptions = {}): Action[] {
     const open = opened(source);
     if (!operations || open.refusal !== undefined) return [];
+    const model = withSession(open.model, options);
     return operations.value.all.flatMap((operation): Action[] => {
-      const state = operations.value.availability(open.model, operation.id, selection);
+      const state = operations.value.availability(model, operation.id, selection);
       return state.offered ? [{ id: operation.id, label: state.label, enabled: state.available, ...(state.reason === undefined ? {} : { disabledReason: state.reason }) }] : [];
     });
   }
@@ -998,9 +1023,11 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
    * A request on a page of boxes. An edit that writes the body numbers first what was numbered in
    * memory (DESL 5.3.4): the ids are written, and the request is made again of the text that has
    * them, so that one gesture is one undo step. An edit of settings alone writes the registration.
+   * The operations run on the model with the folds the session keeps for what is still ephemeral.
    */
   function editHierarchy(source: Source, request: HierarchyRequest, options: ViewOptions, confirmed: boolean): EditOutcome {
-    const open = opened(source);
+    const read = opened(source);
+    const open: Open = { ...read, model: withSession(read.model, options) };
     if (!operations || !hierarchy || !hierarchySurface || !gestures || open.refusal !== undefined) return { kind: 'refused', sentence: open.refusal ?? UNREADABLE };
     const run = operations.value;
     const { levels, entries } = hierarchySurface;
@@ -1143,6 +1170,41 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     }
   }
 
+  /**
+   * The registration an undo or a redo gives back (FBL 0.7 7.1): the snapshot, with each block the
+   * binding declares `history: false` made what it is in the current text, by the library's own
+   * settings: what the current block lacks removed, and what it holds set, added after the entry
+   * before it where the block keeps its order. Where the snapshot is no file and the current text
+   * keeps something outside the history, the file stays, holding only that.
+   */
+  function restoreRegistration(snapshot: string | undefined, current: string | undefined): string | undefined {
+    if (snapshot === current) return snapshot;
+    const binding = bindings.find((candidate) => candidate.registration.blocks.some((block) => !block.inHistory));
+    if (!binding) return snapshot;
+    const { blocks } = binding.registration;
+    const now = current === undefined ? undefined : RegistrationDocument.read(encode(current), blocks.map((block) => block.name));
+    const outside = (name: string): readonly { readonly key: string; readonly value: string }[] => now?.block(name)?.entries.map(({ key, value }) => ({ key, value })) ?? [];
+    if (snapshot === undefined && blocks.every((block) => block.inHistory || outside(block.name).length === 0)) return undefined;
+    // Where there was no file, what the history keeps is nothing: the current text without the blocks inside the history.
+    const kept = OpenRegistration.open(encode(snapshot ?? current!), binding);
+    for (const block of blocks.filter((candidate) => snapshot === undefined || !candidate.inHistory)) {
+      const target = block.inHistory ? [] : outside(block.name);
+      const held = (): readonly { readonly key: string; readonly value: string }[] => kept.blockEntries(block.name) ?? [];
+      const steps: Extract<ModelChange, { kind: 'setting' }>[] = held().filter((entry) => !target.some((member) => member.key === entry.key)).map((entry) => ({ kind: 'setting', block: block.name, key: entry.key, remove: true }));
+      for (const step of steps) if ('refused' in kept.change(step)) return snapshot;
+      for (const [index, member] of target.entries()) {
+        const entries = held();
+        const place = entries.findIndex((entry) => entry.key === member.key);
+        const previous = index === 0 ? undefined : target[index - 1].key;
+        const inPlace = !block.kept || (previous === undefined ? place === 0 : place > 0 && entries[place - 1].key === previous);
+        if (place >= 0 && inPlace && entries[place].value === member.value) continue;
+        const position: ChangePosition | undefined = !block.kept || inPlace ? undefined : previous !== undefined ? { after: previous } : entries.length > 0 ? { index: 0 } : undefined;
+        if ('refused' in kept.change({ kind: 'setting', block: block.name, key: member.key, value: member.value, ...(position === undefined ? {} : { position }) })) return snapshot;
+      }
+    }
+    return decode(kept.bytes);
+  }
+
   return {
     origin,
     kind: 'designer',
@@ -1164,6 +1226,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
       const made = produceTemplate(binding, undefined, name, (rule) => newId(persistence, entryOf(persistence, findRule(binding, rule)?.type ?? rule).as), binding.plugin && plugins.persistence(binding.plugin.plugin));
       return made ? decode(made) : '';
     },
+    restoreRegistration,
   };
 }
 

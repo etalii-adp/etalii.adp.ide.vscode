@@ -61,8 +61,8 @@ describe('the page of boxes', () => {
     item('ITEM-0001').querySelector<HTMLButtonElement>('.adp-hierarchy-toggle')!.click();
     expect(sent).toEqual([{ v: 2, type: 'edit', seq: 1, request: { kind: 'operation', operation: fold.operation, on: ['ITEM-0001'] }, version: 1 }]);
     expect(item('ITEM-0001').getAttribute('aria-expanded')).toBe('true');
-    // The view that follows draws the fold.
-    show(viewOf({ collapsed: { 'ITEM-0001': true } }), 2);
+    // The view that follows, of the registration the fold wrote, draws it.
+    show(type.view({ ...source, registration: source.registration.replace(/^collapsed:(\r?\n)/m, 'collapsed:$1  ITEM-0001: yes$1') }, {}), 2);
     expect(item('ITEM-0001').getAttribute('aria-expanded')).toBe('false');
     expect(item('ITEM-0001').querySelector('[role="group"]')).toBeNull();
   });

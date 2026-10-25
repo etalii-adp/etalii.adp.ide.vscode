@@ -172,4 +172,41 @@ suite('The Hierarchical Requirement Designer in Visual Studio Code', () => {
     await until('the Markdown to be edited again', () => document.getText() === changed);
     await until('the registration to be written again', async () => (await registrationText(registration)) === renamed);
   });
+
+  test('a fold made after a step is kept when the step is undone and redone, and two quick Undos and Redos keep it too', async () => {
+    const { registration, document, original } = await open();
+    const before = await registrationText(registration);
+    /** The registration with REQ-0001 folded, in the ordinal order of the collapsed block. */
+    const eol = before.includes('\r\n') ? '\r\n' : '\n';
+    const folded = (text: string): string => text.replace(`  ITEM-0003: yes${eol}`, `  ITEM-0003: yes${eol}  REQ-0001: yes${eol}`);
+    assert.notStrictEqual(folded(before), before);
+
+    assert.deepStrictEqual(await edit({ kind: 'operation', operation: 'renameTag', on: ['tag/security'], args: { name: 'safety' } }), { result: 'applied' });
+    await until('the rename', async () => document.getText().includes('#safety') && (await registrationText(registration)).includes('  safety: red'));
+    const renamed = await registrationText(registration);
+    const renamedText = document.getText();
+    assert.deepStrictEqual(await edit({ kind: 'operation', operation: 'toggleCollapsed', on: ['REQ-0001'] }), { result: 'applied' });
+    await until('the fold to be written', async () => (await registrationText(registration)) === folded(renamed));
+
+    await vscode.commands.executeCommand('undo');
+    await until('the Markdown to be given back', () => document.getText() === original);
+    await until('the registration before the rename, with the fold', async () => (await registrationText(registration)) === folded(before));
+    assert.strictEqual((await nodeOf('REQ-0001'))?.collapsed, true);
+    await vscode.commands.executeCommand('redo');
+    await until('the Markdown to be edited again', () => document.getText() === renamedText);
+    await until('the registration after the rename, with the fold', async () => (await registrationText(registration)) === folded(renamed));
+
+    // A second step that writes both files, then two Undos and two Redos, each pair without waiting between them.
+    assert.deepStrictEqual(await edit({ kind: 'operation', operation: 'addTag', on: ['REQ-0002'], args: { name: 'brand-new' } }), { result: 'applied' });
+    await until('the tag', async () => document.getText().includes('#brand-new') && (await registrationText(registration)).includes('  brand-new: default'));
+    const tagged = await registrationText(registration);
+    const taggedText = document.getText();
+    assert.strictEqual(tagged, folded(renamed).replace(`  privacy: pink${eol}`, `  privacy: pink${eol}  brand-new: default${eol}`));
+    await Promise.all([vscode.commands.executeCommand('undo'), vscode.commands.executeCommand('undo')]);
+    await until('both steps to be undone', () => document.getText() === original);
+    await until('the first registration, with the fold', async () => (await registrationText(registration)) === folded(before));
+    await Promise.all([vscode.commands.executeCommand('redo'), vscode.commands.executeCommand('redo')]);
+    await until('both steps to be redone', () => document.getText() === taggedText);
+    await until('the last registration, with the fold', async () => (await registrationText(registration)) === tagged);
+  });
 });

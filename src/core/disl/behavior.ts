@@ -993,9 +993,12 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
      * DESL's `move` (DESL 8.2), which the interpreter knows as `relocate`, since DISL's own `move` places
      * an element on the canvas: an element, with everything it holds, into `parent` (`null`, or none
      * given, among the document's own elements) and its `slot`, directly after or before a sibling
-     * there, else last. A move into the element itself or into what it holds, into a parent whose
-     * `children` (or slot, or the document's `children`) does not allow its type, or next to what is
-     * not a sibling there rolls the transaction back. One into its own parent and slot is a reorder.
+     * there, else after the last sibling of its own type there, else where the binding inserts one (a
+     * place also holds members the body does not write, such as those of a list the registration
+     * keeps, and an element is written only next to one the body writes). A move into the element
+     * itself or into what it holds, into a parent whose `children` (or slot, or the document's
+     * `children`) does not allow its type, or next to what is not a sibling there rolls the
+     * transaction back. One into its own parent and slot is a reorder.
      */
     function relocate(move: Readonly<Record<string, unknown>>, self: string, one: (expression: unknown) => { readonly value: Value; readonly raw: unknown } | undefined): void {
       const named = (expression: unknown): string | undefined => {
@@ -1022,7 +1025,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       const before = after === undefined ? named(move.before) : undefined;
       const beside = after ?? before;
       if (beside !== undefined && !siblings.some((other) => other.id === beside)) { refuse('It can only be put next to what lies in the place it is moved to.'); return; }
-      const last = siblings[siblings.length - 1];
+      const last = siblings.filter((other) => other.type === element.type).at(-1);
       const position: Beside | undefined = after !== undefined ? { after } : before !== undefined ? { before } : last === undefined ? undefined : { after: last.id };
       const own = element.parent === parent && element.slot === slot;
       if (own) {

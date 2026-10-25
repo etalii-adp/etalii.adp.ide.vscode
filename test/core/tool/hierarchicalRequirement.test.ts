@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { decode, encode } from '../../../src/core/fbl/text/utf8';
-import type { Source, TextSplice } from '../../../src/core/frame/toolType';
+import type { Source, TextSplice, ViewOptions } from '../../../src/core/frame/toolType';
 import type { HierarchyNode, HierarchyRequest } from '../../../src/core/tool/hierarchyView';
 import { applied, definitionOf, hierarchyDesignerOf, refusal, spliced } from './support';
 
@@ -108,11 +108,18 @@ describe('the Hierarchical Requirement Designer', () => {
     expect(Object.keys(view.operations)).toContain('moveRequirement');
   });
 
-  it('shows what a filter a viewer applied leaves, ordered as it says, and folds of its own', () => {
-    const view = type.view(source, { query: '#security sort:number', collapsed: { 'ITEM-0004': true } });
+  it('shows what a filter a viewer applied leaves, ordered as it says', () => {
+    const view = type.view(source, { query: '#security sort:number' });
     expect(view.applied).toEqual({ query: '#security sort:number', shown: 3, total: 17 });
-    expect(view.roots.map((node) => [node.id, node.collapsed, node.entries.map((entry) => entry.id), node.levels.map((level) => level.id)])).toEqual([['ITEM-0004', true, ['REQ-0006', 'REQ-0007'], []]]);
+    expect(view.roots.map((node) => [node.id, node.collapsed, node.entries.map((entry) => entry.id), node.levels.map((level) => level.id)])).toEqual([['ITEM-0004', false, ['REQ-0006', 'REQ-0007'], []]]);
     expect(type.view(source, { query: 'category:te' }).completions).toEqual(['category:technical']);
+  });
+
+  it('shows a fold the session keeps only for an entry that is still without a number: the registration decides for any other', () => {
+    expect(nodeOf(source, 'REQ-0013')!.collapsed).toBe(false);
+    const view = type.view(source, { collapsed: { 'REQ-0013': true, 'ITEM-0004': true, 'ITEM-0003': false } });
+    const shown = all([...view.roots, ...view.stray]);
+    expect(shown.filter((node) => ['REQ-0013', 'ITEM-0004', 'ITEM-0003'].includes(node.id)).map((node) => [node.id, node.collapsed])).toEqual([['ITEM-0003', true], ['REQ-0013', true], ['ITEM-0004', false]]);
   });
 
   it('offers an item and a requirement in ADP Toolbox', () => {
@@ -157,6 +164,69 @@ describe('an edit of a requirement document', () => {
 
   it('folds a requirement without a number for the session only', () => {
     expect(type.edit(source, operation('toggleCollapsed', ['REQ-0013']), { collapsed: { 'ITEM-0001': true } }, false)).toEqual({ kind: 'applied', splices: [], viewOptions: { collapsed: { 'ITEM-0001': true, 'REQ-0013': true } } });
+  });
+
+  it('folds, unfolds and folds again a requirement without a number, for the session', () => {
+    const toggle = operation('toggleCollapsed', ['REQ-0013']);
+    const label = (options: ViewOptions): string | undefined => type.actions(source, ['REQ-0013'], options).find((action) => action.id === 'toggleCollapsed')?.label;
+    expect(label({})).toBe('Collapse');
+    const folded = applied(type.edit(source, toggle, {}, false));
+    expect(folded).toEqual({ kind: 'applied', splices: [], viewOptions: { collapsed: { 'REQ-0013': true } } });
+    expect(type.view(source, folded.viewOptions!).roots[0].levels[0].levels[0].entries[1]).toMatchObject({ id: 'REQ-0013', collapsed: true, gestures: { fold: { operation: 'toggleCollapsed', enabled: true } } });
+    expect(label(folded.viewOptions!)).toBe('Expand');
+    const unfolded = applied(type.edit(source, toggle, folded.viewOptions!, false));
+    expect(unfolded.viewOptions).toEqual({ collapsed: { 'REQ-0013': false } });
+    expect(nodeOf(source, 'REQ-0013')!.collapsed).toBe(false);
+    expect(label(unfolded.viewOptions!)).toBe('Collapse');
+    expect(applied(type.edit(source, toggle, unfolded.viewOptions!, false)).viewOptions).toEqual({ collapsed: { 'REQ-0013': true } });
+  });
+
+  it('leaves a requirement to the registration once a body write numbers it, whatever the session held', () => {
+    const session: ViewOptions = { collapsed: { 'REQ-0013': true } };
+    const titled = applied(type.edit(source, operation('setTitle', ['REQ-0001'], { title: 'Search works.' }), session, false));
+    const written: Source = { ...source, text: spliced(text, titled.splices) };
+    expect(written.text).toContain('+ REQ-0013 A guest');
+    const shown = (on: Source, options: ViewOptions) => all([...type.view(on, options).roots]).find((node) => node.id === 'REQ-0013')!;
+    expect(shown(written, session)).toMatchObject({ ephemeral: false, collapsed: false });
+    // The registration does not hold it, so a fold writes it there, outside the history.
+    const folded = applied(type.edit(written, operation('toggleCollapsed', ['REQ-0013']), session, false));
+    expect(folded).toMatchObject({ splices: [], history: false });
+    expect(folded.viewOptions).toBeUndefined();
+    expect(folded.registration).toBe(registration.replace(`  REQ-0002: yes${nl}`, `  REQ-0002: yes${nl}  REQ-0013: yes${nl}`));
+    // Held there, it is folded though the session says otherwise, and the next fold takes it out.
+    const kept: Source = { ...written, registration: folded.registration! };
+    expect(shown(kept, { collapsed: { 'REQ-0013': false } }).collapsed).toBe(true);
+    expect(applied(type.edit(kept, operation('toggleCollapsed', ['REQ-0013']), { collapsed: { 'REQ-0013': false } }, false)).registration).toBe(registration);
+  });
+
+  it('moves an item to the top level after the last item, past the members the registration keeps, with and without it', () => {
+    const [item, rejected, guest] = ['ITEM-0003 Guest checkout', '+ REQ-0005 A customer can order without an account. state:rejected', '+ REQ-0013 A guest is offered an account after the order. #customer category:functional'];
+    const nested = `    - ${item}${nl}      ${rejected}${nl}      ${guest}${nl}`;
+    const last = `  - REQ-0010 Personal data is removed on request within 30 days. #legal #privacy category:non-functional${nl}`;
+    expect(numberedText).toContain(nested);
+    const expected = numberedText.replace(nested, '').replace(last, `${last}- ${item}${nl}  ${rejected}${nl}  ${guest}${nl}`);
+    for (const kept of [numbered, { ...numbered, registration: undefined }]) {
+      const outcome = applied(type.edit(kept, operation('moveItem', ['ITEM-0003']), {}, false));
+      expect(outcome.registration).toBeUndefined();
+      expect(after(kept, operation('moveItem', ['ITEM-0003']))).toBe(expected);
+    }
+  });
+
+  it('carries what the registration keeps outside the history over an undo or a redo of a step', () => {
+    const renamed = registration.replace('  security: red', '  safety: red');
+    const foldedNow = renamed.replace(`  ITEM-0003: yes${nl}`, `  ITEM-0003: yes${nl}  REQ-0001: yes${nl}`);
+    // Undo of the rename: the registration before it, with the fold made after it.
+    expect(type.restoreRegistration(registration, foldedNow)).toBe(registration.replace(`  ITEM-0003: yes${nl}`, `  ITEM-0003: yes${nl}  REQ-0001: yes${nl}`));
+    // Redo: the registration after it, with an unfold made since.
+    expect(type.restoreRegistration(renamed, registration.replace(`  ITEM-0003: yes${nl}`, ''))).toBe(renamed.replace(`  ITEM-0003: yes${nl}`, ''));
+    // Every fold gone: the block goes with its last entry.
+    const unfolded = registration.replace(`collapsed:${nl}  ITEM-0003: yes${nl}  REQ-0002: yes${nl}`, '');
+    expect(type.restoreRegistration(renamed, unfolded)).toBe(renamed.replace(`collapsed:${nl}  ITEM-0003: yes${nl}  REQ-0002: yes${nl}`, ''));
+    expect(type.restoreRegistration(renamed, undefined)).toBe(renamed.replace(`collapsed:${nl}  ITEM-0003: yes${nl}  REQ-0002: yes${nl}`, ''));
+    // A step that created the file, undone: the file stays for the folds alone, or goes when there are none.
+    expect(type.restoreRegistration(undefined, registration)).toBe(`etalii/hierarchical-requirement${nl}body: web-shop.md${nl}collapsed:${nl}  ITEM-0003: yes${nl}  REQ-0002: yes${nl}`);
+    expect(type.restoreRegistration(undefined, unfolded)).toBeUndefined();
+    expect(type.restoreRegistration(renamed, renamed)).toBe(renamed);
   });
 
   it('writes a list whole when its block lacks a member, creating the registration', () => {
