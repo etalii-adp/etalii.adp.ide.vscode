@@ -19,12 +19,15 @@ export type Json = Readonly<Record<string, unknown>>;
 export const object = (value: unknown): Json => (typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Json) : {});
 
 export const knowledgeFolder = 'definitions/knowledge';
+export const hierarchyFolder = 'definitions/hierarchical-requirement';
 export const minimalFolder = 'fixtures/tools/desl';
 
 /** A specification file as parsed JSON, exactly as it is on disk. */
 export const specificationAt = (path: string): Json => JSON.parse(readFileSync(path, 'utf8')) as Json;
 export const knowledgeSpecification = (): Json => specificationAt(`${knowledgeFolder}/knowledge.des`);
 export const minimalSpecification = (): Json => specificationAt(`${minimalFolder}/minimal-table.des`);
+/** The Hierarchical Requirement Designer's specification: DESL 0.2, with a `hierarchy` surface. */
+export const hierarchySpecification = (): Json => specificationAt(`${hierarchyFolder}/hierarchical-requirement.des`);
 
 /** A binding of an FBL document on disk, by its name. */
 export function bindingAt(path: string, name: string): FblBinding {
