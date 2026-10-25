@@ -5,7 +5,7 @@
 // the gesture's constraints, the change, the hooks, the neighbour bounds, then the invariants.
 //
 // What is built: `messages`, `reasons`, `editGate`, hooks (`on`, `for`, `attribute`, `when`,
-// `phase`, `order`, `maxHookDepth`), operations (`for`, `enabled`, `unavailable`, `confirm`,
+// `phase`, `order`, `maxHookDepth`), operations (`for`, `params` held to `required` and their facets, `enabled`, `unavailable`, `confirm`,
 // `actions`), `deletion` (`relations`, `children`, `references: "unset"`, `confirm`), the actions
 // `set`, `unset`, `create`, `connect`, `delete`, `let`, `if`, `forEach`, `layout` (the `rows`
 // algorithm), `abort`, `call`, and those that only ask the host for something (`select`, `reveal`,
@@ -1312,6 +1312,48 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
 
   // ---- operations ----
 
+  /**
+   * Why a parameter's value cannot be taken, in this host's words, or nothing when it can: one that is required and not
+   * given, or one outside its facets (DISL 4.2, DESL 4.3), which `std.facets` prevents in a form (DISL 8.7). The facets are
+   * read from the parameter itself and from its `facets`. A parameter whose type is a type of the metamodel is the
+   * element of that id, which is checked where it is resolved.
+   */
+  const parameterRefusal = (name: string, param: Record<string, unknown>, value: unknown): string | undefined => {
+    const label = localized(param.label as Attribute['label'], locale) ?? labelOf(name);
+    if (value === undefined || value === null) return param.required === true ? `${label} must be given.` : undefined;
+    const type = typeof param.type === 'string' ? param.type : 'string';
+    if (Object.hasOwn(metamodel.types, type)) return undefined;
+    const facets = { ...(isObject(param.facets) ? param.facets : {}), ...param };
+    const bound = (key: string): number | string | undefined => (typeof facets[key] === 'number' || typeof facets[key] === 'string' ? facets[key] as number | string : undefined);
+    const primitive = valueKind(metamodel, type).kind === 'primitive' ? (valueKind(metamodel, type) as { primitive: string }).primitive : undefined;
+    for (const one of Array.isArray(value) ? value : [value]) {
+      const [min, max, above, below] = [bound('min'), bound('max'), bound('exclusiveMin'), bound('exclusiveMax')];
+      const numeric = primitive === 'int' || primitive === 'number';
+      const lower = min !== undefined ? `no less than ${min}` : above !== undefined ? `more than ${above}` : undefined;
+      const upper = max !== undefined ? `no more than ${max}` : below !== undefined ? `less than ${below}` : undefined;
+      const limits = min !== undefined && max !== undefined ? `from ${min} to ${max}` : [lower, upper].filter((part) => part !== undefined).join(' and ');
+      const range = `${label} is ${numeric ? (primitive === 'int' ? 'a whole number' : 'a number') : 'a value'}${limits === '' ? '' : ` ${limits}`}.`;
+      if (numeric && (typeof one !== 'number' || !Number.isFinite(one) || (primitive === 'int' && !Number.isInteger(one)))) return range;
+      // A bound compares with a value of its own kind: a number with a number, a date or a time written as text with text.
+      const under = (limit: number | string | undefined, strict: boolean): boolean => limit !== undefined && typeof limit === typeof one && (strict ? one <= limit : one < limit);
+      const over = (limit: number | string | undefined, strict: boolean): boolean => limit !== undefined && typeof limit === typeof one && (strict ? one >= limit : one > limit);
+      if ((typeof one === 'number' || typeof one === 'string') && (under(min, false) || over(max, false) || under(above, true) || over(below, true))) return range;
+      if (typeof one !== 'string') continue;
+      const [shortest, longest] = [facets.minLength, facets.maxLength].map((length) => (typeof length === 'number' ? length : undefined));
+      const length = [...one].length;
+      if ((shortest !== undefined && length < shortest) || (longest !== undefined && length > longest)) {
+        if (shortest === 1 && longest === undefined) return `${label} cannot be empty.`;
+        return `${label} is ${shortest !== undefined && longest !== undefined ? `${shortest} to ${longest}` : shortest !== undefined ? `at least ${shortest}` : `at most ${longest}`} characters long.`;
+      }
+      if (typeof facets.pattern === 'string') {
+        let pattern: RegExp | undefined;
+        try { pattern = new RegExp(facets.pattern); } catch { pattern = undefined; }
+        if (pattern && !pattern.test(one)) return `${label} does not have the form it must have.`;
+      }
+    }
+    return undefined;
+  };
+
   // The attribute the first action of an operation sets to its one parameter, as `p.<parameter>`.
   const asked = (operation: OperationDeclaration): { readonly asks?: string; readonly param?: string } => {
     const [param, ...more] = Object.keys(isObject(operation.params) ? operation.params : {});
@@ -1380,6 +1422,8 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     for (const [name, param] of Object.entries(isObject(declared[id].params) ? declared[id].params : {})) {
       const stated = isObject(param) ? param : {};
       const value = args && Object.hasOwn(args, name) ? args[name] : isCel(stated.default) ? undefined : (stated.default as Value | undefined);
+      const outside = parameterRefusal(name, stated, value);
+      if (outside !== undefined) return { refused: outside };
       if (value === undefined || value === null) delete p[name];
       else if (typeof stated.type !== 'string' || !Object.hasOwn(metamodel.types, stated.type)) p[name] = value;
       else if (typeof value !== 'string' || !find(model, value)) return { refused: 'That is no longer in this diagram.' };
