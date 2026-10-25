@@ -92,6 +92,34 @@ describe('the list of a box\'s notes', () => {
     expect(box('REQ-0001').querySelector('.hs-note-mark')!.getAttribute('title')).toBe('Remark: Which search engine?');
   });
 
+  it('keeps a change being typed, its focus and its caret, when the list is drawn again', () => {
+    show(h.page, viewOf());
+    click(box('REQ-0006').querySelector('.hs-note-mark')!);
+    click(list()!.querySelector<HTMLElement>('.hs-note-action[aria-label="Change"]')!);
+    const text = list()!.querySelector<HTMLTextAreaElement>('.hs-note-changing .hs-note-text-field')!;
+    expect(document.activeElement).toBe(text);
+    typeInto(text, 'Is 30 minutes right for the shop?');
+    text.setSelectionRange(3, 13);
+
+    // A new view, a resize and a selection each draw the list again.
+    show(h.page, viewOf(), 2);
+    window.dispatchEvent(new Event('resize'));
+    click(box('REQ-0007'));
+    const after = list()!.querySelector<HTMLTextAreaElement>('.hs-note-changing .hs-note-text-field')!;
+    expect(after).toBe(text);
+    expect(document.activeElement).toBe(text);
+    expect([text.value, text.selectionStart, text.selectionEnd]).toEqual(['Is 30 minutes right for the shop?', 3, 13]);
+
+    // The detail keeps them too.
+    const detail = list()!.querySelector<HTMLTextAreaElement>('.hs-note-changing .hs-note-detail-field')!;
+    detail.focus();
+    typeInto(detail, 'Ask support.');
+    detail.setSelectionRange(4, 4);
+    show(h.page, viewOf(), 3);
+    expect(document.activeElement).toBe(detail);
+    expect([detail.value, detail.selectionStart, detail.selectionEnd]).toEqual(['Ask support.', 4, 4]);
+  });
+
   it('keeps its keys, and closes on Escape or a press outside', () => {
     show(h.page, viewOf());
     click(box('REQ-0006').querySelector('.hs-note-mark')!);

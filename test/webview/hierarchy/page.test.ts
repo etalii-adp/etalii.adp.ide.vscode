@@ -353,6 +353,45 @@ describe('the bar of a change from outside', () => {
 });
 
 describe('deleting', () => {
+  it('answers a question still open no when another comes, and keeps the rest of the page inert and out of reach meanwhile', () => {
+    show(viewOf());
+    const ask = (seq: number): void => page.receive({ v: 2, type: 'confirm', seq, title: 'Delete', message: `Question ${seq}`, confirmLabel: 'OK', danger: true });
+    ask(1);
+    ask(2);
+    expect(sent.filter((message) => message.type === 'confirmed')).toEqual([{ v: 2, type: 'confirmed', seq: 1, confirmed: false }]);
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+    expect(document.querySelector('[role="dialog"]')!.textContent).toContain('Question 2');
+
+    // Everything beside the question is inert, and a click on it does nothing.
+    const backdrop = document.querySelector('.hs-dialog-backdrop')!;
+    const siblings = [...backdrop.parentElement!.children].filter((child) => child !== backdrop);
+    expect(siblings.length).toBeGreaterThan(0);
+    expect(siblings.every((child) => child.hasAttribute('inert'))).toBe(true);
+    expect(backdrop.hasAttribute('inert')).toBe(false);
+    const before = sent.length;
+    box('REQ-0001').click();
+    box('ITEM-0001').querySelector<HTMLElement>('.hs-toggle')!.click();
+    expect(sent.length).toBe(before);
+    expect(box('REQ-0001').classList.contains('hs-selected')).toBe(false);
+
+    // The focus stays among its buttons: Tab goes round them, and a focus given elsewhere comes back.
+    expect(document.activeElement).toBe(button('Cancel'));
+    key(document.activeElement!, { key: 'Tab' });
+    expect(document.activeElement).toBe(button('OK'));
+    key(document.activeElement!, { key: 'Tab' });
+    expect(document.activeElement).toBe(button('Cancel'));
+    key(document.activeElement!, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(button('OK'));
+    document.querySelector<HTMLElement>('.hs-page')!.focus();
+    expect(document.activeElement).toBe(button('Cancel'));
+
+    button('OK').click();
+    expect(sent.at(-1)).toEqual({ v: 2, type: 'confirmed', seq: 2, confirmed: true });
+    expect(siblings.some((child) => child.hasAttribute('inert'))).toBe(false);
+    box('REQ-0001').click();
+    expect(sent.at(-1)).toEqual({ v: 2, type: 'selection', ids: ['REQ-0001'] });
+  });
+
   it('asks for the removal with Delete, and asks the extension\'s question in the page, answering it', () => {
     show(viewOf());
     box('ITEM-0002').click();
@@ -450,6 +489,34 @@ describe('findings', () => {
     // REQ-0013 stands in ITEM-0003, which is collapsed: its fold opens it.
     expect(requests()).toEqual([{ kind: 'operation', operation: 'toggleCollapsed', on: ['ITEM-0003'] }]);
     expect(sent.at(-1)).toEqual({ v: 2, type: 'selection', ids: ['REQ-0013'] });
+  });
+
+  it('shows an entry under two collapsed levels by expanding both, and reveals it once the view that follows holds it', () => {
+    const registration = source.registration!.replace(/^( {2}ITEM-0003: yes)(\r?)$/m, '  ITEM-0002: yes$2\n$1$2');
+    const twice: Source = { ...source, registration };
+    show(viewOf({}, twice));
+    expect(node('ITEM-0002').getAttribute('aria-expanded')).toBe('false');
+    page.receive({ v: 2, type: 'reveal', id: 'REQ-0005' });
+    // A fold request for each collapsed level above it, sent at once: the extension makes each in its turn.
+    expect(requests()).toEqual([
+      { kind: 'operation', operation: 'toggleCollapsed', on: ['ITEM-0002'] },
+      { kind: 'operation', operation: 'toggleCollapsed', on: ['ITEM-0003'] },
+    ]);
+    expect(sent.at(-1)).toEqual({ v: 2, type: 'selection', ids: ['REQ-0005'] });
+    const scrolled: string[] = [];
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+      scrolled.push((this as HTMLElement).dataset.id ?? '');
+    };
+    try {
+      const unfolded = applied(applied(twice, requests()[0]), requests()[1]);
+      show(viewOf({}, unfolded), 1, 'edit');
+      expect(node('ITEM-0002').getAttribute('aria-expanded')).toBe('true');
+      expect(node('ITEM-0003').getAttribute('aria-expanded')).toBe('true');
+      expect(box('REQ-0005').classList.contains('hs-selected')).toBe(true);
+      expect(scrolled).toContain('REQ-0005');
+    } finally {
+      delete (Element.prototype as Partial<Element>).scrollIntoView;
+    }
   });
 
   it('stays listed when the filter hides its entry', () => {

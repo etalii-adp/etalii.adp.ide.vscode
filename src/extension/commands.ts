@@ -125,9 +125,10 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
         actions: active.type.actions(active.source, active.selection, active.options),
       };
     });
-    register('etalii.adp.test.edit', async (request: unknown) => {
+    // With a `seq`, a question the edit asks is asked in the page, as for a request the page made.
+    register('etalii.adp.test.edit', async (request: unknown, seq: unknown) => {
       const active = tools.active;
-      return active ? tools.perform(active, request as EditRequest | TableRequest | HierarchyRequest) : undefined;
+      return active ? tools.perform(active, request as EditRequest | TableRequest | HierarchyRequest, undefined, typeof seq === 'number' ? seq : undefined) : undefined;
     });
     register('etalii.adp.test.toolbox', () => entriesOf(tools.active));
     // The options a canvas or a page sends, as it sends them: a filter typed, a level narrowed to.
