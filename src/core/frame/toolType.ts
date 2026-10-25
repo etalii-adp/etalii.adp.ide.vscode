@@ -1,4 +1,5 @@
 import type { Scene } from '../scene/scene';
+import type { HierarchyRequest, HierarchyView } from '../tool/hierarchyView';
 import type { TableRequest, TableView } from '../tool/tableView';
 
 // The frame: what every tool type shares in this host, and the one contract a type implements
@@ -42,6 +43,10 @@ export interface ViewOptions {
    * that runs on every change starts from there, so what the change does not touch moves little.
    */
   readonly placed?: Readonly<Record<string, { readonly x: number; readonly y: number }>>;
+  /** The words of the filter a viewer applied to a page of boxes, as typed; nothing is written for them (DESL 7.7.3). */
+  readonly query?: string;
+  /** The level a viewer narrowed a page of boxes to, by id. */
+  readonly focus?: string;
 }
 
 export interface ToolboxEntry {
@@ -119,7 +124,11 @@ export interface TextSplice {
 /** What an edit request came to. */
 export type EditOutcome =
   /** The splices of the gesture, and the registration's new text when the edit changed it (null removes it). */
-  | { readonly kind: 'applied'; readonly splices: readonly TextSplice[]; readonly viewOptions?: ViewOptions; readonly registration?: string | null; readonly select?: string; readonly editLabel?: boolean; readonly multiline?: boolean }
+  | {
+    readonly kind: 'applied'; readonly splices: readonly TextSplice[]; readonly viewOptions?: ViewOptions; readonly registration?: string | null; readonly select?: string; readonly editLabel?: boolean; readonly multiline?: boolean;
+    /** False when the edit changes only what the registration keeps outside the history (FBL 0.7 7.1): it is written at once and is no undo step. */
+    readonly history?: false;
+  }
   /** Nothing changed, and this is the definition's sentence to show. */
   | { readonly kind: 'refused'; readonly sentence: string }
   /** Ask first; when confirmed, the same request is made again with `confirmed`. */
@@ -158,6 +167,8 @@ export interface ToolType<View, Request> {
   readonly origin: string;
   /** The tool's kind, as docs/terminology.md has it. */
   readonly kind: 'diagram' | 'designer';
+  /** The page that shows a document: a canvas for a diagram, a table or a page of boxes for a designer (DESL 7). */
+  readonly page: 'canvas' | 'table' | 'hierarchy';
   /** The one display name of the tool type. */
   readonly displayName: string;
   /** What the binding claims: one entry per binding of the definition. */
@@ -184,7 +195,7 @@ export interface ToolType<View, Request> {
 /** A diagram read from its definition. */
 export type DiagramToolType = ToolType<Scene, EditRequest>;
 /** A designer read from its definition. */
-export type DesignerToolType = ToolType<TableView, TableRequest>;
+export type DesignerToolType = ToolType<TableView | HierarchyView, TableRequest | HierarchyRequest>;
 
 /** The identifier a tool type registers under: `etalii.adp.<vendor>.<type>`. */
 export function viewTypeOf(type: Pick<ToolType<unknown, unknown>, 'origin'>): string {

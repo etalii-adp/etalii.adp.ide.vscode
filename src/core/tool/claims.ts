@@ -33,6 +33,11 @@ export function claimingBinding(bindings: readonly FblBinding[], fileName: strin
     ?? bindings.find((binding) => binding.claims.registrationOnly && extended(binding, fileName) && (!binding.claims.marker || markerMatches(binding.claims.marker, bytes)));
 }
 
-/** Whether a file of a claimed extension looks like the tool type's: its text holds what a binding's `claims.suggest` names. */
-export const suggests = (bindings: readonly FblBinding[], fileName: string, text: string): boolean =>
-  bindings.some((binding) => extended(binding, fileName) && suggested(binding, encode(text)));
+/**
+ * Whether a file of a claimed extension looks like the tool type's: its text holds what a binding's
+ * `claims.suggest` names, or it has the binding's marker, which says so more surely still.
+ */
+export function suggests(bindings: readonly FblBinding[], fileName: string, text: string): boolean {
+  const bytes = encode(text);
+  return bindings.some((binding) => extended(binding, fileName) && (suggested(binding, bytes) || (binding.claims.marker !== undefined && markerMatches(binding.claims.marker, bytes))));
+}

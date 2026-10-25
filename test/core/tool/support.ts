@@ -5,9 +5,11 @@ import { readFileSync, readdirSync } from 'node:fs';
 import type { FblBinding } from '../../../src/core/fbl/documents/types';
 import { applySplices } from '../../../src/core/fbl/splice';
 import { decode, encode } from '../../../src/core/fbl/text/utf8';
-import type { DesignerToolType, DiagramToolType, EditOutcome, Source, TextSplice, ViewOptions } from '../../../src/core/frame/toolType';
+import type { DiagramToolType, EditOutcome, Source, TextSplice, ToolType, ViewOptions } from '../../../src/core/frame/toolType';
 import type { Scene, SceneEnd } from '../../../src/core/scene/scene';
 import { readDefinitionFolder, type Definition } from '../../../src/core/tool/definitionFolder';
+import type { HierarchyRequest, HierarchyView } from '../../../src/core/tool/hierarchyView';
+import type { TableRequest, TableView } from '../../../src/core/tool/tableView';
 import { pluginRegistry, type PluginRegistry, type Plugins } from '../../../src/core/tool/pluginRegistry';
 import { toolTypeFrom } from '../../../src/core/tool/toolTypeFrom';
 
@@ -69,9 +71,17 @@ export const altered = (definition: Definition, alter: (specification: Json) => 
 export const diagramOf = (read: ReadFolder, plugins: PluginRegistry = pluginRegistry(noPlugins)): DiagramToolType =>
   toolTypeFrom(read.definition, read.bindings, plugins) as DiagramToolType;
 
-/** The designer a definition gives. */
-export const designerOf = (read: ReadFolder, plugins: PluginRegistry = pluginRegistry(noPlugins)): DesignerToolType =>
-  toolTypeFrom(read.definition, read.bindings, plugins) as unknown as DesignerToolType;
+/** A designer whose surface is a table, and one whose surface is a page of boxes. */
+export type TableDesigner = ToolType<TableView, TableRequest>;
+export type HierarchyDesigner = ToolType<HierarchyView, HierarchyRequest>;
+
+/** The designer a definition of a table gives. */
+export const designerOf = (read: ReadFolder, plugins: PluginRegistry = pluginRegistry(noPlugins)): TableDesigner =>
+  toolTypeFrom(read.definition, read.bindings, plugins) as unknown as TableDesigner;
+
+/** The designer a definition of a page of boxes gives. */
+export const hierarchyDesignerOf = (read: ReadFolder, plugins: PluginRegistry = pluginRegistry(noPlugins)): HierarchyDesigner =>
+  toolTypeFrom(read.definition, read.bindings, plugins) as unknown as HierarchyDesigner;
 
 /**
  * The view options a diagram read from its definition takes beside the viewport: the viewpoint to

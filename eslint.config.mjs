@@ -8,7 +8,7 @@ const editor = { group: ['vscode', '**/extension/**', '**/webview/**'], message:
 const node = { group: ['node:*', 'node:*/**'], message: 'In src/core only fbl/files/nodeFiles.ts and fbl/history/digest.ts import a node: module.' };
 const dom = ['error', 'document', 'window'];
 
-// A webview draws what it is sent. Of the core it sees the frame, the scene and the table view, and nothing that reads a definition.
+// A webview draws what it is sent. Of the core it sees the frame, the scene, the table view and the hierarchy view, and nothing that reads a definition.
 const webview = [
   { group: ['vscode', '**/extension/**'], message: 'src/webview imports neither vscode nor src/extension.' },
   {
@@ -21,8 +21,8 @@ const webview = [
     message: 'src/webview imports only src/core/frame and src/core/scene, so nothing that reads a definition.',
   },
   // geometry.ts is arithmetic on points and paths, and tidyTree.ts on the boxes of a tree: they read nothing, so the webview may call them.
-  { group: ['**/core/tool/*', '!**/core/tool/tableView'], message: 'Of src/core/tool a webview imports the types of tableView.ts only: what a table surface draws and asks.' },
-  { group: ['**/core/frame/**', '**/core/scene/**', '**/core/tool/tableView', '!**/core/scene/geometry', '!**/core/scene/tidyTree'], allowTypeImports: true, message: 'src/webview imports only types from src/core/frame and src/core/scene, and the functions of src/core/scene/geometry and tidyTree.' },
+  { group: ['**/core/tool/*', '!**/core/tool/tableView', '!**/core/tool/hierarchyView'], message: 'Of src/core/tool a webview imports the types of tableView.ts and hierarchyView.ts only: what a table and a page of boxes draw and ask.' },
+  { group: ['**/core/frame/**', '**/core/scene/**', '**/core/tool/tableView', '**/core/tool/hierarchyView', '!**/core/scene/geometry', '!**/core/scene/tidyTree'], allowTypeImports: true, message: 'src/webview imports only types from src/core/frame and src/core/scene, and the functions of src/core/scene/geometry and tidyTree.' },
 ];
 
 export default tseslint.config(
