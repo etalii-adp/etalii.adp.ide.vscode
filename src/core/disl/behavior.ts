@@ -223,7 +223,7 @@ export interface EndPlace {
   readonly at?: number;
 }
 
-export interface Question {
+export interface Prompt {
   readonly title: string;
   readonly message: string;
   readonly confirmLabel: string;
@@ -264,7 +264,7 @@ export interface Availability {
   /** The element it runs on; absent when it runs on the diagram or on the selection. */
   readonly target?: string;
   /** The question to ask before it runs. */
-  readonly confirm?: Question;
+  readonly confirm?: Prompt;
 }
 
 export interface OfferedEntry {
@@ -313,7 +313,7 @@ export interface Behavior {
    */
   menu(model: Model, target: string | Pending | undefined, situation?: Situation, sets?: readonly ContextSet[]): { readonly groups: readonly (readonly OfferedEntry[])[]; readonly standardEntries: boolean; readonly runSingle: boolean };
   /** What removing a selection takes with it, and the question to ask first when there is one. */
-  deletion(model: Model, selection: readonly string[], situation?: Situation): { readonly removes: readonly string[]; readonly confirm?: Question; readonly refused?: string };
+  deletion(model: Model, selection: readonly string[], situation?: Situation): { readonly removes: readonly string[]; readonly confirm?: Prompt; readonly refused?: string };
 
   /** A tool used at a point: the element it creates there, or the operation it runs, on the element the point is on when one is given. */
   create(model: Model, tool: string, at: Point, situation?: Situation, on?: string): Outcome;
@@ -707,7 +707,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     return factor === undefined ? value : awayFromZero(value * factor) / factor;
   };
 
-  const question = (confirm: Message | Confirmation | undefined, scope: Scope, deleting: boolean, title: string): Question | undefined => {
+  const promptOf = (confirm: Message | Confirmation | undefined, scope: Scope, deleting: boolean, title: string): Prompt | undefined => {
     if (confirm === undefined) return undefined;
     const asked: Confirmation = isObject(confirm) && !isCel(confirm) && 'message' in confirm ? (confirm as unknown as Confirmation) : { message: confirm as Message };
     const counted = asked.count === undefined ? undefined : expressions.evaluate(asked.count, scope);
@@ -1300,7 +1300,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     const reason = (free(operation.actions) ? undefined : gate(model, situation)) ?? applicable(operation.unavailable, scope);
     return {
       offered: true, available: reason === undefined && given(operation.enabled, scope), reason, label, target,
-      confirm: question(operation.confirm, scope, false, label),
+      confirm: promptOf(operation.confirm, scope, false, label),
     };
   };
 
@@ -1680,7 +1680,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     // One removal asks at most once: the first element of the selection whose confirmation asks (DISL 9.5).
     for (const id of selection) {
       const type = typeOf(model, id);
-      const confirm = question(policyOf(type).confirm, over.scope(id, { selection: all }), true, 'Delete');
+      const confirm = promptOf(policyOf(type).confirm, over.scope(id, { selection: all }), true, 'Delete');
       if (confirm) return { removes: outcome.changes.flatMap((entry) => (entry.kind === 'remove' ? [entry.id] : [])), confirm };
     }
     return { removes: outcome.changes.flatMap((entry) => (entry.kind === 'remove' ? [entry.id] : [])) };
