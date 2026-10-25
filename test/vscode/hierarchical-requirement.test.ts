@@ -13,7 +13,7 @@ import { closeAll, drawn, example, state, until, type HierarchyNode } from './su
 
 const viewType = 'etalii.adp.etalii.hierarchical-requirement';
 
-const edit = (request: unknown): Thenable<{ result: string; sentence?: string } | undefined> => vscode.commands.executeCommand('etalii.adp.test.edit', request);
+const edit = (request: unknown, seq?: number): Thenable<{ result: string; sentence?: string } | undefined> => vscode.commands.executeCommand('etalii.adp.test.edit', request, seq);
 const next = (): Thenable<{ undo: boolean; redo: boolean }> => vscode.commands.executeCommand('etalii.adp.test.layoutSteps');
 const folder = (): string => example('hierarchical-requirement-test').fsPath;
 const tabsOn = (uri: vscode.Uri): vscode.Tab[] => vscode.window.tabGroups.all.flatMap((group) => group.tabs)
@@ -126,6 +126,47 @@ suite('The Hierarchical Requirement Designer in Visual Studio Code', () => {
     assert.ok(fs.readFileSync(uri.fsPath).equals(bytes));
     assert.strictEqual((await vscode.workspace.openTextDocument(registration)).isDirty, false, 'the registration is saved at once');
     assert.deepStrictEqual(await next(), { undo: false, redo: false }, 'a fold is no step of the history');
+  });
+
+  test('two folds asked for at once, as a reveal asks for the levels above an entry, are both written', async () => {
+    const { registration, document, original } = await open();
+    const fold = (id: string): Thenable<unknown> => edit({ kind: 'operation', operation: 'toggleCollapsed', on: [id] });
+    // ITEM-0003 and REQ-0002 are collapsed: both expanded at once.
+    assert.deepStrictEqual(await Promise.all([fold('ITEM-0003'), fold('REQ-0002')]), [{ result: 'applied' }, { result: 'applied' }]);
+    await until('both to be expanded in the registration', async () => !/ITEM-0003: yes|REQ-0002: yes/.test(await registrationText(registration)));
+    assert.strictEqual((await nodeOf('ITEM-0003'))?.collapsed, false);
+    assert.strictEqual((await nodeOf('REQ-0002'))?.collapsed, false);
+    // And two collapsed at once.
+    assert.deepStrictEqual(await Promise.all([fold('REQ-0001'), fold('REQ-0003')]), [{ result: 'applied' }, { result: 'applied' }]);
+    await until('both to be collapsed in the registration', async () => {
+      const text = await registrationText(registration);
+      return /^ {2}REQ-0001: yes\r?$/m.test(text) && /^ {2}REQ-0003: yes\r?$/m.test(text);
+    });
+    assert.strictEqual(fs.readFileSync(registration.fsPath, 'utf8'), await registrationText(registration), 'the registration is saved');
+    assert.strictEqual(document.getText(), original);
+    assert.strictEqual((await nodeOf('REQ-0001'))?.collapsed, true);
+    assert.strictEqual((await nodeOf('REQ-0003'))?.collapsed, true);
+    assert.deepStrictEqual(await next(), { undo: false, redo: false });
+  });
+
+  test('a question the page asks is answered no when another comes and when the designer closes, and a change from outside meanwhile is told as such', async () => {
+    const { uri, document, original } = await open();
+    const remove = { kind: 'operation', operation: 'deleteEntry', on: ['ITEM-0002'] };
+    const first = edit(remove, 101);
+    // The question is open: a change made meanwhile was made outside the designer.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const change = new vscode.WorkspaceEdit();
+    change.insert(uri, document.lineAt(document.lineCount - 1).range.end, '\n');
+    assert.ok(await vscode.workspace.applyEdit(change));
+    await until('the page to follow the change from outside', async () => (await state())?.cause === 'outside');
+
+    // The second question answers the first no; closing the designer answers the second.
+    const second = edit(remove, 102);
+    assert.deepStrictEqual(await first, { result: 'cancelled' });
+    await closeAll();
+    assert.deepStrictEqual(await second, { result: 'cancelled' });
+    assert.strictEqual((await vscode.workspace.openTextDocument(uri)).getText().includes('ITEM-0002 Checkout'), true, 'nothing was deleted');
+    assert.notStrictEqual(original, undefined);
   });
 
   test('a change of a title edits the Markdown as one undo step, and Undo gives back its bytes', async () => {

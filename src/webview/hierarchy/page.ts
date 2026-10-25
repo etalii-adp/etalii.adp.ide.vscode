@@ -158,6 +158,11 @@ export class HierarchyPage {
     this.page.addEventListener('scroll', () => this.placePopups());
     // Pressing a button of the bar keeps the focus in the field: leaving it would keep the text, which the bar decides on.
     this.conflictBar.addEventListener('mousedown', (event) => event.preventDefault());
+    // While a question is open the focus stays in it.
+    document.addEventListener('focusin', (event) => {
+      if (this.question === undefined || (event.target instanceof Node && this.dialog.contains(event.target))) return;
+      this.dialog.querySelector<HTMLButtonElement>('[data-action="confirm-no"]')?.focus();
+    });
     if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this.resized()).observe(this.page);
     window.addEventListener('resize', () => this.resized());
     // A label with a colour of its own takes the one of the kind of theme, which can change while the page is open.
@@ -206,6 +211,8 @@ export class HierarchyPage {
         this.addAtSelection(message.entry);
         return;
       case 'confirm':
+        // One question at a time: one still open when another comes is answered no.
+        if (this.question !== undefined && this.question.seq !== message.seq) this.send({ v: 2, type: 'confirmed', seq: this.question.seq, confirmed: false });
         this.question = message;
         this.render();
         this.dialog.querySelector<HTMLButtonElement>('[data-action="confirm-no"]')?.focus();
@@ -639,9 +646,11 @@ export class HierarchyPage {
     });
   }
 
+  /** The question the extension asks, modal: while it is open the rest of the page is inert. */
   private drawDialog(): void {
     const question = this.question;
     this.dialog.hidden = question === undefined;
+    for (const child of this.root.children) if (child !== this.dialog) child.toggleAttribute('inert', question !== undefined);
     if (question === undefined) {
       reconcile(this.dialog, []);
       return;
@@ -659,6 +668,8 @@ export class HierarchyPage {
 
   private click(event: MouseEvent): void {
     const target = event.target as Element;
+    // While a question is open only its buttons answer.
+    if (this.question !== undefined && !this.dialog.contains(target)) return;
     const action = target.closest<HTMLElement>('[data-action]');
     if (action) {
       if (action instanceof HTMLButtonElement && action.disabled) return;
@@ -730,6 +741,7 @@ export class HierarchyPage {
   }
 
   private doubleClick(event: MouseEvent): void {
+    if (this.question !== undefined) return;
     // A reference shows what it names; it opens no field.
     if ((event.target as Element).closest('.hs-reference, .hs-label-open')) return;
     const edit = (event.target as Element).closest<HTMLElement>('[data-edit]');
@@ -742,6 +754,12 @@ export class HierarchyPage {
       if (event.key === 'Escape') {
         event.preventDefault();
         this.answer(false);
+      } else if (event.key === 'Tab') {
+        // The focus stays among the question's buttons.
+        event.preventDefault();
+        const buttons = [...this.dialog.querySelectorAll<HTMLButtonElement>('button')];
+        const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        buttons[at < 0 ? 0 : (at + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length]?.focus();
       }
       return;
     }
@@ -1248,7 +1266,7 @@ export class HierarchyPage {
 
   private pointerDown(event: MouseEvent): void {
     const grip = (event.target as Element).closest<HTMLElement>('[data-grip]');
-    if (grip === null || event.button !== 0 || this.readOnly) return;
+    if (grip === null || event.button !== 0 || this.readOnly || this.question !== undefined) return;
     event.preventDefault();
     const id = grip.dataset.grip ?? '';
     this.press = { id, x: event.clientX, y: event.clientY, dragging: false };

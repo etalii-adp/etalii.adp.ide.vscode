@@ -25,6 +25,12 @@ export const ADD_NOTE_ICON = 'mdi-comment-plus-outline';
 type Kinds = HierarchyView['noteKinds'];
 type Run = (gesture: HierarchyGestureState | undefined, on: string | undefined, args?: Readonly<Record<string, TableValue>>) => void;
 
+/** The fields a note is changed in. */
+interface ChangeFields {
+  readonly text: HTMLTextAreaElement;
+  readonly detail: HTMLTextAreaElement;
+}
+
 interface Draft {
   kind: string;
   text: string;
@@ -47,7 +53,8 @@ export const wordOf = (gesture: HierarchyGestureState | undefined, operations: H
 export class NoteList {
   readonly element = html('div', { class: 'hs-note-list', role: 'dialog' });
   private content: NoteListContent | undefined;
-  private changing: { readonly noteId: string; draft: Draft } | undefined;
+  /** The note being changed: what is typed, and its fields, kept from one drawing to the next. */
+  private changing: { readonly noteId: string; draft: Draft; fields?: ChangeFields } | undefined;
   private readonly adding: Draft = { kind: '', text: '', detail: '' };
   private readonly newText = html('textarea', { class: 'hs-field hs-note-text-field', rows: 3 });
   private readonly onPress = (event: Event): void => {
@@ -137,6 +144,12 @@ export class NoteList {
   private draw(): void {
     const content = this.content;
     if (content === undefined) return;
+    // A field kept from the drawing before keeps the focus, its caret and its text: taken before
+    // it is moved into the rows built below, which takes the focus from it.
+    const focused = document.activeElement;
+    const typing = focused instanceof HTMLTextAreaElement && this.element.contains(focused)
+      ? { field: focused, start: focused.selectionStart, end: focused.selectionEnd, direction: focused.selectionDirection }
+      : undefined;
     const number = this.number();
     const add = this.addGesture();
     this.element.setAttribute('aria-label', `${content.notes.length === 1 ? 'Note' : 'Notes'} of ${number}`);
@@ -155,10 +168,11 @@ export class NoteList {
         this.newText,
         html('div', { class: 'hs-note-buttons' }, this.button('Add', 'hs-dialog-confirm hs-note-add-button', () => this.add(), this.adding.text.trim() === ''))));
     }
-    const focused = document.activeElement;
-    const typing = focused === this.newText;
     this.element.replaceChildren(...parts);
-    if (typing) this.newText.focus();
+    if (typing?.field.isConnected && document.activeElement !== typing.field) {
+      typing.field.focus();
+      typing.field.setSelectionRange(typing.start, typing.end, typing.direction ?? undefined);
+    }
     // Rows are measured once they stand in the page: a note of several lines takes its controls beside it.
     for (const row of list.querySelectorAll<HTMLElement>('.hs-note')) {
       const body = row.querySelector<HTMLElement>('.hs-note-body');
@@ -209,25 +223,10 @@ export class NoteList {
   private changeView(note: HierarchyNote, draft: Draft): HTMLElement {
     const content = this.content!;
     const gesture = note.gestures.change;
-    const text = html('textarea', { class: 'hs-field hs-note-text-field', 'aria-label': `Text about ${note.about}`, rows: 3 });
-    text.value = draft.text;
-    const detail = html('textarea', { class: 'hs-field hs-field-multiline hs-note-detail-field', 'aria-label': `Detail about ${note.about}`, rows: 2 });
-    detail.value = draft.detail;
-    const save = this.button(wordOf(gesture, content.operations, 'Change'), 'hs-dialog-confirm', () => this.save(), draft.text.trim() === '');
-    text.addEventListener('input', () => {
-      text.value = text.value.replace(/\r?\n/g, ' ');
-      draft.text = text.value;
-      save.disabled = draft.text.trim() === '';
-    });
-    text.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        this.save();
-      }
-    });
-    detail.addEventListener('input', () => {
-      draft.detail = detail.value;
-    });
+    const { text, detail } = this.changeFields(draft);
+    text.setAttribute('aria-label', `Text about ${note.about}`);
+    detail.setAttribute('aria-label', `Detail about ${note.about}`);
+    const save = this.button(wordOf(gesture, content.operations, 'Change'), 'hs-dialog-confirm hs-note-save', () => this.save(), draft.text.trim() === '');
     return html('li', { class: 'hs-note hs-note-changing', 'data-note': note.id },
       this.kindChoice(content.kinds, draft.kind, `Kind of ${note.about}`, (kind) => {
         draft.kind = kind;
@@ -238,6 +237,33 @@ export class NoteList {
         this.changing = undefined;
         this.draw();
       }), save));
+  }
+
+  /** The fields of the note being changed, made once when its change starts: every drawing after puts the same ones back. */
+  private changeFields(draft: Draft): ChangeFields {
+    const changing = this.changing!;
+    if (changing.fields) return changing.fields;
+    const text = html('textarea', { class: 'hs-field hs-note-text-field', rows: 3 });
+    text.value = draft.text;
+    const detail = html('textarea', { class: 'hs-field hs-field-multiline hs-note-detail-field', rows: 2 });
+    detail.value = draft.detail;
+    text.addEventListener('input', () => {
+      text.value = text.value.replace(/\r?\n/g, ' ');
+      draft.text = text.value;
+      const save = text.closest('.hs-note-changing')?.querySelector<HTMLButtonElement>('.hs-note-save');
+      if (save) save.disabled = draft.text.trim() === '';
+    });
+    text.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        this.save();
+      }
+    });
+    detail.addEventListener('input', () => {
+      draft.detail = detail.value;
+    });
+    changing.fields = { text, detail };
+    return changing.fields;
   }
 
   private action(name: string, label: string, act: () => void): HTMLButtonElement {
