@@ -1,8 +1,8 @@
 {
-  "release": "atd-v0.1.0",
+  "release": "atd-v0.2.1",
   "repository": "etalii-adp/etalii.adp.ide.desktop",
   "files": {
-    "atd-lsp-wasm.zip": "cebcb221cf2f5cd77c70ff4fea4f2dca433ff05dd913ed648be0097399cc4a4d",
-    "atd-walk.zip": "e913759d02951dbebd37a4dcf1c6e15398f73f705dcd9584a2345e4466ea858b"
+    "atd-lsp-wasm.zip": "be0d5b0211f0f90cb938656f9fc179cdd4b3330b72b044843d9c9014ffa1b640",
+    "atd-walk.zip": "2d3b76d5466bd4e868dd08282fe41609fe8b54f6fbca7e9609c8d747caac3e15"
   }
 }

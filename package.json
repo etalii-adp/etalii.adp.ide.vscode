@@ -191,6 +191,21 @@
         "category": "ADP"
       },
       {
+        "command": "etalii.adp.newToolDescription",
+        "title": "New Tool Description",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.checkToolDescription",
+        "title": "Check Tool Description",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.validateToolDescription",
+        "title": "Validate Tool Description",
+        "category": "ADP"
+      },
+      {
         "command": "etalii.adp.new.etalii.agent-activity-diagram",
         "title": "New Agent activity diagram",
         "category": "ADP"
@@ -301,6 +316,14 @@
         {
           "command": "etalii.adp.redoLayout",
           "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.checkToolDescription",
+          "when": "editorLangId == atd"
+        },
+        {
+          "command": "etalii.adp.validateToolDescription",
+          "when": "editorLangId == atd"
         },
         {
           "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
