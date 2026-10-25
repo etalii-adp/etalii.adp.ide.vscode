@@ -81,12 +81,15 @@ export function keepsEmpty(binding: AttributeBinding, value: unknown): boolean {
 
 /**
  * The wire value for a model value through a `map` (FBL 5.2): the first key in document order
- * whose value matches, unless the value being replaced already maps to it.
+ * whose value matches, unless the value being replaced already maps to it. *(FBL 0.7)* With
+ * `foldsCase`, in a rule with `caseInsensitive`, the value being replaced maps to a key that it
+ * matches ignoring the case of ASCII letters, and is kept as written.
  */
-export function wire(binding: AttributeBinding, value: unknown, replaced: string | undefined): string | undefined {
+export function wire(binding: AttributeBinding, value: unknown, replaced: string | undefined, foldsCase = false): string | undefined {
   if (!binding.map) return undefined;
   const model = plain(value, binding);
-  if (replaced !== undefined && binding.map.some(([key, mapped]) => key === replaced && mapped === model)) return replaced;
+  const same = (key: string, written: string): boolean => (foldsCase ? lowerAscii(key) === lowerAscii(written) : key === written);
+  if (replaced !== undefined && binding.map.some(([key, mapped]) => same(key, replaced) && mapped === model)) return replaced;
   return binding.map.find(([, mapped]) => mapped === model)?.[0];
 }
 
@@ -144,42 +147,59 @@ const isPlaceholderName = (name: string): boolean => /^[A-Za-z0-9_:-]+$/.test(na
 
 /**
  * Renders an `emit` template (FBL 6.2): placeholders `{name}` replaced by `value`; a `[ … ]`
- * segment written only when every placeholder in it is non-empty. Any other `{` or `}` is literal.
+ * segment written only when every placeholder in it is non-empty; *(FBL 0.7)* `\[` and `\]` a
+ * literal bracket. Any other `{` or `}` is literal, and so is a `[` that no `]` closes.
  */
 export function render(template: string, value: (name: string) => string | undefined): string {
   let output = '';
+  let start = 0;
   let i = 0;
   while (i < template.length) {
-    if (template[i] === '[') {
-      const close = template.indexOf(']', i + 1);
-      if (close > 0) {
-        let complete = true;
-        const rendered = renderPart(template.slice(i + 1, close), (name) => {
-          const found = value(name);
-          if (found === undefined || found.length === 0) complete = false;
-          return found;
-        });
-        if (complete) output += rendered;
-        i = close + 1;
-        continue;
-      }
+    if (isEscape(template, i)) {
+      i += 2;
+      continue;
     }
-    const next = template.indexOf('[', i);
-    const end = next < 0 ? template.length : next;
-    output += renderPart(template.slice(i, end), value);
-    i = end;
-    if (next >= 0 && template.indexOf(']', next + 1) < 0) {
-      output += '[';
-      i++;
+    const close = template[i] === '[' ? unescaped(template, ']', i + 1) : -1;
+    if (close >= 0) {
+      output += renderPart(template.slice(start, i), value);
+      let complete = true;
+      const rendered = renderPart(template.slice(i + 1, close), (name) => {
+        const found = value(name);
+        if (found === undefined || found.length === 0) complete = false;
+        return found;
+      });
+      if (complete) output += rendered;
+      i = close + 1;
+      start = i;
+      continue;
     }
+    i++;
   }
-  return output;
+  return output + renderPart(template.slice(start), value);
+}
+
+/** Whether `template` holds `\[` or `\]` at `at`: a literal bracket (FBL 0.7 6.2). */
+const isEscape = (template: string, at: number): boolean =>
+  template[at] === '\\' && at + 1 < template.length && (template[at + 1] === '[' || template[at + 1] === ']');
+
+/** The index of the next `bracket` from `from` that is not escaped, or -1. */
+function unescaped(template: string, bracket: string, from: number): number {
+  for (let i = from; i < template.length; i++) {
+    if (isEscape(template, i)) i++;
+    else if (template[i] === bracket) return i;
+  }
+  return -1;
 }
 
 function renderPart(part: string, value: (name: string) => string | undefined): string {
   let output = '';
   let i = 0;
   while (i < part.length) {
+    if (isEscape(part, i)) {
+      output += part[i + 1];
+      i += 2;
+      continue;
+    }
     if (part[i] === '{') {
       const close = part.indexOf('}', i + 1);
       if (close > i + 1 && isPlaceholderName(part.slice(i + 1, close))) {
@@ -214,7 +234,11 @@ export function partsOf(template: string): EmitPart[] {
   };
   for (let i = 0; i < template.length; i++) {
     const c = template[i];
-    if (c === '[' && segment < 0 && template.indexOf(']', i + 1) > 0) {
+    if (isEscape(template, i)) {
+      literal += template[++i];
+      continue;
+    }
+    if (c === '[' && segment < 0 && unescaped(template, ']', i + 1) > 0) {
       flush();
       segment = segments++;
       continue;
@@ -238,3 +262,6 @@ export function partsOf(template: string): EmitPart[] {
   flush();
   return parts;
 }
+
+/** CEL's `lowerAscii`: the ASCII capitals lowered, every other character kept. */
+const lowerAscii = (text: string): string => text.replace(/[A-Z]/g, (letter) => letter.toLowerCase());

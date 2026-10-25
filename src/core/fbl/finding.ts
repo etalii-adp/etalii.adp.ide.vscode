@@ -32,6 +32,7 @@ export const findingCodes = {
   missingBody: 'fbl.missing-body',
   staleViewData: 'fbl.stale-view-data',
   unknownHeader: 'fbl.unknown-header',
+  unknownBlock: 'fbl.unknown-block',
   regexTimeout: 'fbl.regex-timeout',
   unparseable: 'std.unparseable',
   unreadableEntry: 'std.unreadableEntry',

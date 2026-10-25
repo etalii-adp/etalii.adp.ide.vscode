@@ -1,7 +1,9 @@
 import type { AttributeBinding, BlockRule, FblBinding, HeaderSettings, Rule, Slot } from '../documents/types';
 import { BoundedRegex } from '../expressions/regexMatcher';
 import type { Finding, FindingSeverity, SourceLocation } from '../finding';
+import { messages } from '../messages';
 import type { ResolvedOptions } from '../model';
+import type { ChangePosition } from '../planning/modelChange';
 import type { Span } from '../span';
 import type { BodyText } from '../text/bodyText';
 import type { TreeValue } from './treeFamily';
@@ -52,6 +54,16 @@ export interface Word {
   readonly quoted: boolean;
 }
 
+/**
+ * One item of a word slot of an attribute with `many` (FBL 0.7 4.6): its value, the span the value
+ * is written in (the word's group `value`, or the whole word), and the word it is in.
+ */
+export interface WordItem {
+  readonly value: string;
+  readonly valueSpan: Span;
+  readonly word: Word;
+}
+
 /** What reading one slot of one entry gave. */
 export interface SlotRead {
   readonly value: unknown;
@@ -63,10 +75,14 @@ export interface SlotRead {
   readonly node?: unknown;
   /** For a group read as words: every word of the group, so references inside it can be rewritten one by one. */
   readonly words?: readonly Word[];
+  /** For a word slot of an attribute with `many` (FBL 0.7 4.6): every word of the group it holds, in order; nothing for any other slot. */
+  readonly items?: readonly WordItem[];
   /** The quote the value is written in on the wire, when the span includes one. */
   readonly quote?: string;
   /** The value as written, before maps or conversion, for keeping a map's wire value. */
   readonly wire?: string;
+  /** *(FBL 0.7)* Whether `wire` matched its map's key ignoring the case of ASCII letters, as in a rule with `caseInsensitive` (FBL 5.2, map). */
+  readonly wireFoldsCase?: boolean;
   /** yaml, json: the value the slot holds, with its style and its written text (FBL 4.1.5). */
   readonly tree?: TreeValue;
 }
@@ -135,6 +151,8 @@ export interface InsertRequest {
   readonly parent?: ReadElement;
   readonly source?: ReadElement;
   readonly target?: ReadElement;
+  /** *(FBL 0.7)* Where among its siblings it goes, for a family that `placesByPosition`; the rule's `insert.place` without it. */
+  readonly position?: ChangePosition;
 }
 
 /** Thrown inside planning when a change cannot be made; the edit is refused with its message (FBL 6.4). */
@@ -250,6 +268,14 @@ export abstract class FamilyReader {
   /** Reads a slot that is the family's own: a key, an attribute, text, a group, a capture. */
   abstract read(candidate: Candidate, slot: Slot): SlotRead;
 
+  /**
+   * Reads a word slot of an attribute the tool type's specification gives `many` (FBL 0.7 4.6):
+   * every word of the group that matches, each an item. A family without words reads it as any other slot.
+   */
+  readMany(candidate: Candidate, slot: Slot): SlotRead {
+    return this.read(candidate, slot);
+  }
+
   /** Reads the slot named `name` of an enclosing entry, for a `parent` slot naming no attribute. */
   abstract readRaw(entry: Entry, name: string): SlotRead;
 
@@ -287,6 +313,35 @@ export abstract class FamilyReader {
     const offset = before ? before.entry.removalSpan.start : last.entry.removalSpan.end;
     plan.addAt('remove-entry', range, '');
     plan.add('insert-entry', offset, offset, this.text.textOf(range));
+  }
+
+  /**
+   * Whether a new or moved entry takes its place from its position among its siblings, and a move
+   * may change its parent (FBL 0.7 6.3, 6.4): true for a family whose nesting is its indentation,
+   * false where the binding's insert place alone decides and a position is a plugin's to honour.
+   */
+  get placesByPosition(): boolean {
+    return false;
+  }
+
+  /**
+   * Moves `element`'s entry, with everything it contains, under `parent` (the top level without one)
+   * to `position` among its children as they are without it (FBL 5.5, 11.2). Only a family that
+   * `placesByPosition` plans one.
+   */
+  moveTo(plan: SplicePlan, element: ReadElement, parent: ReadElement | undefined, position: ChangePosition | undefined): void {
+    void [plan, parent, position];
+    refuse(messages.cannotMoveToAnotherParent(element.rule.type));
+  }
+
+  /**
+   * Changes `element`'s type to that of `rule`, with `values`, the attributes the new type is given
+   * (FBL 6.4, DISL 9.5). Only a family that writes a retype in place plans one: *(FBL 0.7)* `bullets`
+   * re-emits the item's text from the new rule's `emit`.
+   */
+  retype(plan: SplicePlan, element: ReadElement, rule: Rule, values: ReadonlyMap<string, unknown>): void {
+    void [plan, element, rule, values];
+    refuse(messages.cannotRetype);
   }
 
   // ---- shared helpers ----
@@ -355,6 +410,19 @@ export abstract class FamilyReader {
     }
     return true;
   }
+}
+
+/**
+ * Where a position puts an element among `others`, its siblings without it (FBL 11.2): before the
+ * one at the index, after or before the one it names, or after the last without a position or past them.
+ */
+export function positionIndex(position: ChangePosition | undefined, others: readonly ReadElement[], type: string): number {
+  if (!position) return others.length;
+  if ('index' in position) return position.index < 0 || position.index > others.length ? others.length : position.index;
+  const id = 'after' in position ? position.after : position.before;
+  const at = others.findIndex((other) => other.id === id);
+  if (at < 0) refuse(messages.noSuchSibling(id, type));
+  return 'after' in position ? at + 1 : at;
 }
 
 /** Refuses the change being planned, with the sentence a user is shown (FBL 6.4). */

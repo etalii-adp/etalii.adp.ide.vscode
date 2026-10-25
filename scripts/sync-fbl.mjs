@@ -27,6 +27,15 @@ const pinned = [
     why: 'the insert constant of FBL 0.8, etalii.adp spec 033',
     files: (file) => /^specifications\/fbl\/(fixtures\/insert-constant-[^/]+\/|refused\/[^/]+\.fbl$)/.test(file),
   },
+  // bullets: FBL 0.7's bullets family and declared registration blocks, with the fixtures of the
+  // Hierarchical Requirement Designer that read and write through them. The definitions these
+  // fixtures name come from the same commit, into fixtures/fbl/definitions/.
+  {
+    name: 'bullets',
+    commit: '2f3c7aab69cd58a61d69d9365bec0b3f131c7230',
+    why: 'the bullets family and declared registration blocks of FBL 0.7, and the Hierarchical Requirement Designer',
+    files: (file) => /^specifications\/fbl\/(fixtures\/(bullets-[^/]+|behavior-tree-read|registration-blocks|hierarchical-requirement-[^/]+)\/|behavior-tree\.fbl$|registrations\/requirements\.adp$)/.test(file),
+  },
 ];
 if (!adp || !standalone) {
   console.error('Usage: node scripts/sync-fbl.mjs <path to etalii.adp> <path to etalii.adp.ide.standalone> [<etalii.adp ref>] [<standalone ref>]');
@@ -94,27 +103,48 @@ for (const source of pinned) {
 // ---- definitions: the files under definitions/ a fixture names, and the specification beside each binding ----
 
 const definitionsFolder = 'definitions/';
-const adpFiles = new Set(list(adpGit, adpCommit, definitionsFolder));
-const definitions = new Set();
-for (const fixture of conformance.filter((file) => file.endsWith('/fixture.json'))) {
-  const text = adpGit('show', `${adpCommit}:${fixture}`).toString('utf8');
-  for (const [, reference] of text.matchAll(/"((?:\.\.\/)+definitions\/[^"#]+)/g)) {
-    const segments = fixture.split('/').slice(0, -1);
-    for (const segment of reference.split('/')) {
-      if (segment === '..') segments.pop();
-      else segments.push(segment);
-    }
-    const file = segments.join('/');
-    if (!adpFiles.has(file)) continue;
-    definitions.add(file);
-    if (!file.endsWith('.fbl')) continue;
-    for (const specification of ['.dis', '.des']) {
-      if (adpFiles.has(file.slice(0, -4) + specification)) definitions.add(file.slice(0, -4) + specification);
+// The definitions the fixtures of one commit name, with the specification beside each binding.
+function definitionsNamed(commit, fixtures) {
+  const adpFiles = new Set(list(adpGit, commit, definitionsFolder));
+  const named = new Set();
+  for (const fixture of fixtures) {
+    const text = adpGit('show', `${commit}:${fixture}`).toString('utf8');
+    for (const [, reference] of text.matchAll(/"((?:\.\.\/)+definitions\/[^"#]+)/g)) {
+      const segments = fixture.split('/').slice(0, -1);
+      for (const segment of reference.split('/')) {
+        if (segment === '..') segments.pop();
+        else segments.push(segment);
+      }
+      const file = segments.join('/');
+      if (!adpFiles.has(file)) continue;
+      named.add(file);
+      if (!file.endsWith('.fbl')) continue;
+      for (const specification of ['.dis', '.des']) {
+        if (adpFiles.has(file.slice(0, -4) + specification)) named.add(file.slice(0, -4) + specification);
+      }
     }
   }
+  return named;
 }
+const definitions = definitionsNamed(adpCommit, conformance.filter((file) => file.endsWith('/fixture.json')));
 count('definitions fixtures name', definitions.size);
 const definitionsDigests = copy(adpGit, adpCommit, definitions, definitionsFolder, 'fixtures/fbl/definitions/');
+
+// The definitions a pinned source's fixtures name that the etalii.adp ref does not have, beside the rest.
+for (const source of pinnedSources) {
+  const fixtures = Object.keys(source.digests).filter((file) => file.endsWith('/fixture.json')).map((file) => fbl + file);
+  const named = [...definitionsNamed(source.commit, fixtures)].filter((file) => !(file.slice(definitionsFolder.length) in definitionsDigests));
+  if (named.length === 0) continue;
+  source.definitions = {};
+  for (const file of named.sort()) {
+    const bytes = adpGit('show', `${source.commit}:${file}`);
+    const relative = file.slice(definitionsFolder.length);
+    mkdirSync(dirname('fixtures/fbl/definitions/' + relative), { recursive: true });
+    writeFileSync('fixtures/fbl/definitions/' + relative, bytes);
+    source.definitions[relative] = createHash('sha256').update(bytes).digest('hex');
+  }
+  count(`pinned ${source.name} definitions`, named.length);
+}
 
 // ---- real files: what standalone's real-file tests read, under the paths they have there ----
 
@@ -145,7 +175,12 @@ const inSource = new Set(source);
 const named = new Set();
 for (const registration of registrations) {
   const header = /^body: (.+?)\s*$/m.exec(standaloneGit('show', `${standaloneCommit}:${registration}`).toString('utf8').split(/^(?:layout|identities):/m)[0]);
-  if (!header) continue;
+  if (!header) {
+    // Without the header the body is the file beside it with its base name (FBL 8.2), of whichever extension.
+    const base = registration.slice(0, -'.adp'.length);
+    for (const file of source) if (file.startsWith(`${base}.`) && file !== registration && !file.slice(base.length + 1).includes('/')) named.add(file);
+    continue;
+  }
   const segments = registration.split('/').slice(0, -1);
   for (const segment of header[1].split('/')) {
     if (segment === '..') segments.pop();
@@ -179,7 +214,10 @@ const sources = [
   { name: 'conformance', repository: 'https://github.com/etalii-adp/etalii.adp', commit: adpCommit, licence: 'Apache-2.0', from: fbl, to: 'fixtures/fbl/conformance/', files: conformanceDigests },
   { name: 'definitions', repository: 'https://github.com/etalii-adp/etalii.adp', commit: adpCommit, licence: 'Apache-2.0', from: definitionsFolder, to: 'fixtures/fbl/definitions/', files: definitionsDigests },
   { name: 'real-files', repository: 'https://github.com/etalii-adp/etalii.adp.ide.standalone', commit: standaloneCommit, licence: 'Apache-2.0', from: '', to: 'fixtures/fbl/real-files/', files: realDigests },
-  ...pinnedSources.map((source) => ({ name: source.name, repository: 'https://github.com/etalii-adp/etalii.adp', commit: source.commit, licence: 'Apache-2.0', from: fbl, to: 'fixtures/fbl/conformance/', files: source.digests })),
+  ...pinnedSources.flatMap((source) => [
+    { name: source.name, repository: 'https://github.com/etalii-adp/etalii.adp', commit: source.commit, licence: 'Apache-2.0', from: fbl, to: 'fixtures/fbl/conformance/', files: source.digests },
+    ...(source.definitions === undefined ? [] : [{ name: `${source.name}-definitions`, repository: 'https://github.com/etalii-adp/etalii.adp', commit: source.commit, licence: 'Apache-2.0', from: definitionsFolder, to: 'fixtures/fbl/definitions/', files: source.definitions }]),
+  ]),
 ];
 writeFileSync('fixtures/fbl/manifest.json', JSON.stringify({ sources }, null, 2) + '\n');
 writeFileSync('fixtures/fbl/PROVENANCE.md', `# Where the files under fixtures/fbl/ come from
@@ -191,7 +229,7 @@ They are copied unchanged, byte for byte, from two repositories, both licensed u
 | \`fixtures/fbl/conformance/\` | [etalii-adp/etalii.adp](https://github.com/etalii-adp/etalii.adp), \`specifications/fbl/\`: the example bindings (\`*.fbl\`), \`fixtures/\` and \`registrations/\` | \`${adpCommit}\` | Apache-2.0 |
 | \`fixtures/fbl/definitions/\` | [etalii-adp/etalii.adp](https://github.com/etalii-adp/etalii.adp), \`definitions/\`: the bindings and inputs a fixture names, and the specification beside each such binding | \`${adpCommit}\` | Apache-2.0 |
 | \`fixtures/fbl/real-files/\` | [etalii-adp/etalii.adp.ide.standalone](https://github.com/etalii-adp/etalii.adp.ide.standalone), the files under \`src/\` its FBL tests read, under the paths they have there | \`${standaloneCommit}\` | Apache-2.0 |
-${pinnedSources.map((source) => `| \`fixtures/fbl/conformance/\`: ${Object.keys(source.digests).map((file) => `\`${file.slice(0, file.lastIndexOf('/') + 1)}\``).filter((folder, index, all) => all.indexOf(folder) === index).join(', ')} | [etalii-adp/etalii.adp](https://github.com/etalii-adp/etalii.adp), \`specifications/fbl/\`, taken ahead of the rest for ${source.why} | \`${source.commit}\` | Apache-2.0 |\n`).join('')}
+${pinnedSources.map((source) => `| \`fixtures/fbl/conformance/\`: ${Object.keys(source.digests).map((file) => `\`${file.includes('/') ? file.slice(0, file.lastIndexOf('/') + 1) : file}\``).filter((folder, index, all) => all.indexOf(folder) === index).join(', ')} | [etalii-adp/etalii.adp](https://github.com/etalii-adp/etalii.adp), \`specifications/fbl/\`, taken ahead of the rest for ${source.why} | \`${source.commit}\` | Apache-2.0 |\n${source.definitions === undefined ? '' : `| \`fixtures/fbl/definitions/\`: ${Object.keys(source.definitions).map((file) => `\`${file}\``).join(', ')} | [etalii-adp/etalii.adp](https://github.com/etalii-adp/etalii.adp), \`definitions/\`: what those fixtures name | \`${source.commit}\` | Apache-2.0 |\n`}`).join('')}
 ## Third-party notices
 
 Some of the real files came to standalone from elsewhere. The notice standalone keeps beside them is copied with them:

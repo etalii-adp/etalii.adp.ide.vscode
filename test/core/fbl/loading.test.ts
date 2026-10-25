@@ -41,7 +41,7 @@ describe('loading an FBL document', () => {
     expect(errorAt(load(binding(), version), '/fbl')).toBe(true);
   });
 
-  it.each([['0.1'], ['0.2'], ['0.3'], ['0.4'], ['0.5'], ['0.6']])('a version up to 0.6 loads without a warning: %s', (version) => {
+  it.each([['0.1'], ['0.2'], ['0.3'], ['0.4'], ['0.5'], ['0.6'], ['0.7'], ['0.8']])('a version up to 0.8 loads without a warning: %s', (version) => {
     // "A host MUST read a document of an earlier minor version with its meaning" (FBL 2.7).
     const { document, problems } = loadDocument(documentOf(binding(), version));
     expect(problems).toEqual([]);
@@ -50,8 +50,8 @@ describe('loading an FBL document', () => {
 
   it('a newer minor version loads with a warning', () => {
     // Standalone's test loads 0.2, which its loader still takes for newer; FBL 2.7 names 0.1 to
-    // 0.6, so the first newer minor version is 0.7.
-    const { document, problems } = loadDocument(documentOf(binding(), '0.7'));
+    // 0.8, so the first newer minor version is 0.9.
+    const { document, problems } = loadDocument(documentOf(binding(), '0.9'));
     expect(document).toBeDefined();
     expect(problems.map((problem) => problem.severity)).toEqual(['warning']);
     expect(problems[0].pointer).toBe('/fbl');
@@ -156,7 +156,7 @@ describe('loading an FBL document', () => {
   const documents = readdirSync(conformance).filter((name) => name.endsWith('.fbl')).sort();
 
   it('the copied bindings are found', () => {
-    expect(documents).toHaveLength(9);
+    expect(documents).toHaveLength(10);
   });
 
   it.each(documents)('every copied binding loads: %s', (name) => {

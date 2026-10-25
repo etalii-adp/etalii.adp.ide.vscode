@@ -1,3 +1,4 @@
+import { scalarValue } from '../../documents/jsonReader';
 import { attributeOf, slotText, type AttributeBinding, type BlockRule, type FblBinding, type HeaderSettings, type Rule, type Slot } from '../../documents/types';
 import { RegexBudgetError, type BoundedRegex } from '../../expressions/regexMatcher';
 import { findingCodes } from '../../finding';
@@ -6,7 +7,7 @@ import type { ResolvedOptions } from '../../model';
 import { partsOf, plain, render, wire } from '../../planning/newText';
 import {
   absentSlot, Entry, FamilyReader, readOnlyAbsent, refuse,
-  type Candidate, type InsertRequest, type ReadElement, type Reading, type SlotChange, type SlotRead, type SplicePlan, type Word,
+  type Candidate, type InsertRequest, type ReadElement, type Reading, type SlotChange, type SlotRead, type SplicePlan, type Word, type WordItem,
 } from '../../rules/familyReader';
 import type { Span } from '../../span';
 import type { SpliceOperation } from '../../splice';
@@ -56,7 +57,10 @@ export interface Group {
 
 type Groups = ReadonlyMap<string, Group>;
 
-/** The `lines` and `blocks` families (FBL 4.6, 4.7). */
+/**
+ * The `lines` and `blocks` families (FBL 4.6, 4.7), and the base of the `bullets` family, whose
+ * item text is matched and written as a statement is.
+ */
 export class LinesFamily extends FamilyReader {
   private readonly allEntries: Entry[] = [];
   private readonly leafSpans: Span[] = [];
@@ -156,11 +160,11 @@ export class LinesFamily extends FamilyReader {
     }
   }
 
-  private timedOut(regex: BoundedRegex, statement: Statement): void {
+  protected timedOut(regex: BoundedRegex, statement: Statement): void {
     this.report(findingCodes.regexTimeout, 'warning', messages.regexTimeout(regex.expression), statement.own);
   }
 
-  private match(expression: string, caseInsensitive: boolean, statement: Statement): Groups | undefined {
+  protected match(expression: string, caseInsensitive: boolean, statement: Statement): Groups | undefined {
     let known = this.matchIndex.get(statement);
     if (!known) {
       known = new Map();
@@ -219,7 +223,7 @@ export class LinesFamily extends FamilyReader {
     return name !== undefined && within.includes(name);
   }
 
-  private groups(candidate: Candidate): Groups {
+  protected groups(candidate: Candidate): Groups {
     const expression = candidate.rule?.line ?? candidate.block!.line;
     const insensitive = candidate.rule?.caseInsensitive ?? candidate.block!.caseInsensitive;
     return this.match(expression, insensitive, candidate.entry as Statement) ?? new Map();
@@ -234,6 +238,12 @@ export class LinesFamily extends FamilyReader {
   }
 
   read(candidate: Candidate, slot: Slot): SlotRead {
+    const read = this.readGroup(candidate, slot);
+    // A rule with caseInsensitive matched its map's keys ignoring case, so its writes keep the case as written (FBL 0.7 5.2, map).
+    return candidate.rule?.caseInsensitive === true && read.wire !== undefined ? { ...read, wireFoldsCase: true } : read;
+  }
+
+  private readGroup(candidate: Candidate, slot: Slot): SlotRead {
     if (slot.group === undefined) return readOnlyAbsent(messages.statementHasNoSlot(this.familyName, slotText(slot)));
     const group = this.groups(candidate).get(slot.group);
     const absent: SlotRead = slot.flag ? { value: false, present: false, writable: true } : absentSlot;
@@ -261,6 +271,41 @@ export class LinesFamily extends FamilyReader {
       return { value: word.text, span: word.span, present: true, writable: true, node: word, quote: word.quoted ? '"' : undefined, wire: word.text };
     }
     return absent;
+  }
+
+  override readMany(candidate: Candidate, slot: Slot): SlotRead {
+    if (slot.word === undefined || slot.flag || slot.group === undefined) return this.read(candidate, slot);
+    const group = this.groups(candidate).get(slot.group);
+    const items = group ? this.items(candidate, slot.word, group) : [];
+    // A slot that holds no item is absent, so the first is written as an insertion is (FBL 0.7 4.6).
+    return { value: items.map((item) => item.value), span: group?.span, present: items.length > 0, writable: true, node: group, items };
+  }
+
+  /** The words of `group` that match `expression`, in order, each with its value (FBL 0.7 4.6). */
+  private items(candidate: Candidate, expression: string, group: Group): WordItem[] {
+    const regex = this.regex(expression, false);
+    const items: WordItem[] = [];
+    for (const word of this.words(group)) {
+      const raw = this.text.textOf(word.span);
+      let found;
+      try {
+        found = regex.match(raw);
+      } catch (error) {
+        if (!(error instanceof RegexBudgetError)) throw error;
+        this.timedOut(regex, candidate.entry as Statement);
+        continue;
+      }
+      if (!found) continue;
+      const value = found.groups.get('value');
+      if (!value) {
+        items.push({ value: word.text, valueSpan: word.span, word });
+        continue;
+      }
+      const text = raw.slice(value.start, value.end);
+      const offset = word.span.start + byteLength(raw.slice(0, value.start));
+      items.push({ value: text, valueSpan: { start: offset, end: offset + byteLength(text) }, word });
+    }
+    return items;
   }
 
   /**
@@ -308,7 +353,7 @@ export class LinesFamily extends FamilyReader {
   // ---- writing ----
 
   format(read: SlotRead, binding: AttributeBinding | undefined, value: unknown): string {
-    const written = (binding ? wire(binding, value, read.wire) : undefined) ?? plain(value, binding);
+    const written = (binding ? wire(binding, value, read.wire, read.wireFoldsCase) : undefined) ?? plain(value, binding);
     return read.quote !== undefined ? read.quote + written + read.quote : written;
   }
 
@@ -325,8 +370,18 @@ export class LinesFamily extends FamilyReader {
     const pending: { operation: SpliceOperation; span: Span; text: string }[] = [];
     const insertAt = (change: SlotChange): void => {
       const point = this.insertPoint(element, change);
-      if (point) pending.push({ operation: 'insert-key', span: { start: point.offset, end: point.offset }, text: point.text });
-      else reEmit = true;
+      if (point) {
+        pending.push({ operation: 'insert-key', span: { start: point.offset, end: point.offset }, text: point.text });
+        return;
+      }
+      // A word the emit does not place goes after the words of its group (FBL 0.7 6.3); one it places, with the line.
+      const word = change.binding.word;
+      if (word === undefined || change.binding.flag || change.binding.group === undefined || this.emitPlaces(element.rule, change.attribute)) {
+        reEmit = true;
+        return;
+      }
+      const offset = this.wordInsertPoint(element, change);
+      pending.push({ operation: 'insert-key', span: { start: offset, end: offset }, text: ` ${wordText(word, plain(change.value))}` });
     };
     for (const change of changes) {
       const read = change.read;
@@ -337,7 +392,15 @@ export class LinesFamily extends FamilyReader {
         else insertAt(change);
         continue;
       }
-      if (change.isEmpty && binding.empty === 'remove') {
+      if (read.items) {
+        // A word slot of an attribute with many writes the difference between its items and the new list (FBL 0.7 6.3).
+        const offset = read.items.length > 0 ? read.items[read.items.length - 1].word.span.end : this.wordInsertPoint(element, change);
+        this.writeItems(pending, offset, change, read.items);
+        continue;
+      }
+      // A removed word is a remove-key of the word and the whitespace before it (FBL 0.7 6.3), whatever
+      // `empty` says: a word slot has no empty value to write, since its word alone reads as none.
+      if (change.isEmpty && (binding.empty === 'remove' || binding.word !== undefined)) {
         if (read.present) pending.push({ operation: 'remove-key', span: this.removable(read), text: '' });
         continue;
       }
@@ -356,8 +419,15 @@ export class LinesFamily extends FamilyReader {
     if (emit === undefined) refuse(messages.noPlaceInLine(element.rule.type));
     const values = new Map(element.attributes);
     for (const change of changes) values.set(change.attribute, change.isEmpty ? null : change.value);
+    // A mapped value the edit leaves is written again as it was written, in its own case (FBL 0.7 5.2, map).
+    const kept = new Map<string, string>();
+    for (const [name, attribute] of element.rule.attributes) {
+      if (!attribute.map || attribute.word !== undefined || changes.some((change) => change.attribute === name)) continue;
+      const read = element.slots.get(name);
+      if (read?.present && read.span) kept.set(name, this.text.textOf(read.span));
+    }
     const text = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
-    const line = render(emit, (name) => this.placeholder(element.rule, name, values, text(element.idRead?.value) ?? element.id, text(element.sourceRead?.value), text(element.targetRead?.value)));
+    const line = render(emit, (name) => kept.get(name) ?? this.placeholder(element.rule, name, values, text(element.idRead?.value) ?? element.id, text(element.sourceRead?.value), text(element.targetRead?.value)));
     plan.addAt('re-emit-line', this.reEmitSpan(statement), line);
   }
 
@@ -369,25 +439,83 @@ export class LinesFamily extends FamilyReader {
     return { start: range.start, end };
   }
 
-  private placeholder(rule: Rule, name: string, values: ReadonlyMap<string, unknown>, id: string | undefined, source: string | undefined, target: string | undefined): string | undefined {
+  /**
+   * What the placeholder `name` of an emit writes: the id, an end, or the attribute's written form;
+   * *(FBL 0.7 6.2)* for an attribute not given, its binding's `default`, or nothing without one.
+   */
+  protected placeholder(rule: Rule, name: string, values: ReadonlyMap<string, unknown>, id: string | undefined, source: string | undefined, target: string | undefined): string | undefined {
     switch (name) {
       case 'id': return id;
       case 'source': return source;
       case 'target': return target;
     }
-    const value = values.get(name);
-    return value !== null && value !== undefined ? this.emitted(attributeOf(rule, name), value) : undefined;
+    const binding = attributeOf(rule, name);
+    const value = values.has(name) ? values.get(name) : binding?.default ? scalarValue(binding.default) : undefined;
+    return value !== null && value !== undefined ? this.emitted(binding, value) : undefined;
   }
 
-  private withSpaceBefore(range: Span): Span {
+  /** Whether the rule's emit places the attribute, so that a value of it is written with the line. */
+  private emitPlaces(rule: Rule, attribute: string): boolean {
+    const emit = rule.insert?.emit;
+    return emit !== undefined && partsOf(emit).some((part) => part.placeholder === attribute);
+  }
+
+  /**
+   * A set of a word slot of an attribute with `many` (FBL 0.7 6.3): the difference between the items
+   * held and the new list. The items of their longest common subsequence stay; between two of them,
+   * an item removed and one added are one `replace-value`, and the rest are `remove-key`s and
+   * `insert-key`s at `offset`, after the slot's last item, in the new list's order.
+   */
+  private writeItems(pending: { operation: SpliceOperation; span: Span; text: string }[], offset: number, change: SlotChange, items: readonly WordItem[]): void {
+    const wanted = (Array.isArray(change.value) ? change.value as unknown[] : []).map((value) => plain(value));
+    const held = items.map((item) => item.value);
+    const added: string[] = [];
+    let i = 0;
+    let j = 0;
+    for (const anchor of [...commonSubsequence(held, wanted), { held: held.length, wanted: wanted.length }]) {
+      const removed = anchor.held - i;
+      const inserted = anchor.wanted - j;
+      const paired = Math.min(removed, inserted);
+      for (let k = 0; k < paired; k++) pending.push({ operation: 'replace-value', span: items[i + k].valueSpan, text: wanted[j + k] });
+      for (let k = paired; k < removed; k++) pending.push({ operation: 'remove-key', span: this.withSpaceBefore(items[i + k].word.span), text: '' });
+      for (let k = paired; k < inserted; k++) added.push(wanted[j + k]);
+      i = anchor.held + 1;
+      j = anchor.wanted + 1;
+    }
+    for (const value of added) pending.push({ operation: 'insert-key', span: { start: offset, end: offset }, text: ` ${wordText(change.binding.word!, value)}` });
+  }
+
+  /**
+   * Where a word a set adds is written (FBL 0.7 6.3): right after the last word of the group held by
+   * the slot or by a word slot listed before it in the rule's attributes on the same group, else at
+   * the start of the group.
+   */
+  private wordInsertPoint(element: ReadElement, change: SlotChange): number {
+    const name = change.binding.group!;
+    const group = this.groups(element.candidate).get(name);
+    const start = group ? group.span.start : element.entry.own.end;
+    let end = -1;
+    for (const [attribute, binding] of element.rule.attributes) {
+      const read = binding.group === name && binding.word !== undefined ? element.slots.get(attribute) : undefined;
+      if (read?.items && read.items.length > 0) end = Math.max(end, read.items[read.items.length - 1].word.span.end);
+      else if (read?.present && isWord(read.node)) end = Math.max(end, read.node.span.end);
+      if (attribute === change.attribute) break;
+    }
+    return end >= 0 ? end : start;
+  }
+
+  protected withSpaceBefore(range: Span): Span {
     let start = range.start;
     while (start > 0 && isBlank(this.text.bytes[start - 1])) start--;
     return { start, end: range.end };
   }
 
-  /** A removed value takes its quotes and the whitespace before it with it (FBL 6.1 `remove-key`). */
+  /**
+   * A removed value takes its quotes and the whitespace before it with it (FBL 6.1 `remove-key`), and
+   * the whole word when it was read from part of one, as `category:(?<value>\S+)` reads it (FBL 0.7 6.3).
+   */
   private removable(read: SlotRead): Span {
-    let range = read.span!;
+    let range = isWord(read.node) ? read.node.span : read.span!;
     const bytes = this.text.bytes;
     if (range.start > 0 && range.end < this.text.length && bytes[range.start - 1] === QUOTE && bytes[range.end] === QUOTE) range = { start: range.start - 1, end: range.end + 1 };
     return this.withSpaceBefore(range);
@@ -446,6 +574,14 @@ export class LinesFamily extends FamilyReader {
     const settings = rule.insert;
     if (settings?.emit === undefined) refuse(messages.noEmit(rule.type));
     const line = render(settings.emit, (name) => this.placeholder(rule, name, request.values, request.id, request.source?.key, request.target?.key));
+    if (settings.place === 'after-header') {
+      // As a line of its own right after the statement the binding's header matched (FBL 0.7 6.2); without one there is no such place.
+      const header = this.statements.find((statement) => statement.isHeader);
+      if (!header) refuse(messages.cannotPlace(this.familyName, settings.place));
+      const offset = header.lineSpan!.end;
+      plan.add('insert-entry', offset, offset, this.newLine(offset, this.indentation(header.indent) + line));
+      return;
+    }
     let container: Statement | undefined;
     if (this.blocks) {
       if (request.parent) container = request.parent.entry as Statement;
@@ -538,8 +674,57 @@ function braces(content: string): { net: number; endsWithOpen: boolean } {
   return { net, endsWithOpen: !inString && last === '{' };
 }
 
+/** Whether a slot's node is a word of a group (FBL 4.6), not the group itself. */
+const isWord = (node: unknown): node is Word => typeof node === 'object' && node !== null && 'quoted' in node && 'span' in node;
+
+/** The pairs of places, in `held` and in `wanted`, of a longest common subsequence of the two. */
+function commonSubsequence(held: readonly string[], wanted: readonly string[]): { held: number; wanted: number }[] {
+  const width = wanted.length + 1;
+  const lengths = new Array<number>((held.length + 1) * width).fill(0);
+  for (let a = held.length - 1; a >= 0; a--) {
+    for (let b = wanted.length - 1; b >= 0; b--) {
+      lengths[a * width + b] = held[a] === wanted[b] ? lengths[(a + 1) * width + b + 1] + 1 : Math.max(lengths[(a + 1) * width + b], lengths[a * width + b + 1]);
+    }
+  }
+  const pairs: { held: number; wanted: number }[] = [];
+  let x = 0;
+  let y = 0;
+  while (x < held.length && y < wanted.length) {
+    if (held[x] === wanted[y]) pairs.push({ held: x++, wanted: y++ });
+    else if (lengths[(x + 1) * width + y] >= lengths[x * width + y + 1]) x++;
+    else y++;
+  }
+  return pairs;
+}
+
+/**
+ * The word a word slot writes for `value`: its `word` expression with the group `value` replaced by
+ * the value and the anchors and escapes taken off, as `^#(?<value>[^\s#]+)$` writes `#value`.
+ */
+function wordText(expression: string, value: string): string {
+  let pattern = expression.startsWith('^') ? expression.slice(1) : expression;
+  if (pattern.endsWith('$') && !pattern.endsWith('\\$')) pattern = pattern.slice(0, -1);
+  const open = pattern.indexOf('(?<value>');
+  if (open < 0) return value;
+  let depth = 0;
+  let close = open;
+  for (; close < pattern.length; close++) {
+    if (pattern[close] === '\\') {
+      close++;
+      continue;
+    }
+    if (pattern[close] === '(') depth++;
+    else if (pattern[close] === ')' && --depth === 0) break;
+  }
+  return unescapeRegex(pattern.slice(0, open)) + value + unescapeRegex(pattern.slice(Math.min(close + 1, pattern.length)));
+}
+
+/** A literal of a regular expression without its escapes. */
+const unescapeRegex = (literal: string): string =>
+  literal.replace(/\\(.)/g, (_escape, character: string) => (character === 't' ? '\t' : character === 'n' ? '\n' : character === 'r' ? '\r' : character));
+
 /** The byte offset of every UTF-16 index of a text that starts at `start`, and one past its end. */
-function byteOffsets(content: string, start: number): number[] {
+export function byteOffsets(content: string, start: number): number[] {
   const offsets = new Array<number>(content.length + 1);
   let offset = start;
   for (let i = 0; i < content.length; i++) {
@@ -562,5 +747,5 @@ function flagWord(slot: Slot): string {
   let word = slot.word ?? '';
   if (word.startsWith('^')) word = word.slice(1);
   if (word.endsWith('$')) word = word.slice(0, -1);
-  return word.replace(/\\(.)/g, (_escape, character: string) => (character === 't' ? '\t' : character === 'n' ? '\n' : character === 'r' ? '\r' : character));
+  return unescapeRegex(word);
 }

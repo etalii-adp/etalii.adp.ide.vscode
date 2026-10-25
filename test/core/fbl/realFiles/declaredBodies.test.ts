@@ -101,7 +101,8 @@ describe('the declared bindings on real files', () => {
   it.each(pairs)('a save without an edit writes the bytes that were read: $key on $file', ({ key, file }) => {
     const { body, bytes } = open(key, file);
     const result = body.change({ kind: 'save' });
-    if (body.isReadOnly) expect(result).toHaveProperty('refused');
+    // An unreadable body plans nothing for a save (FBL 0.7 6.6, 7.5); a read-only binding refuses it.
+    if (body.isReadOnly && !body.model.unreadable) expect(result).toHaveProperty('refused');
     else expect(result).toEqual({ planned: { splices: [] } });
     expect(body.bytes).toEqual(bytes);
   });

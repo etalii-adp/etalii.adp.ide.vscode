@@ -110,6 +110,18 @@ export interface FblOptions {
    */
   readonly attributeType?: (elementType: string, attribute: string) => string | undefined;
   /**
+   * Whether the tool type's specification gives an attribute of an element type `many`, by the two
+   * names. A word slot of such an attribute holds every word of its group that matches, as a list
+   * (FBL 0.7 4.6); without this, it holds the first. A binding does not carry it.
+   */
+  readonly many?: (elementType: string, attribute: string) => boolean;
+  /**
+   * The binding types the tool type's specification maps as unreadable (DESL 5.2): an entry a rule
+   * of such a type takes is an unreadable entry, reported and kept, and nothing nested in it is
+   * looked into (FBL 0.7 4.8, 7.4).
+   */
+  readonly unreadableTypes?: ReadonlySet<string>;
+  /**
    * The attributes whose type, in the tool type's specification, is a date or a date-time, each
    * as `rule.attribute`. FBL does not know an attribute's type and section 6.3 needs it: a new
    * value that reads as a timestamp is written plain when it is one, and quoted when it is a
@@ -139,6 +151,8 @@ export interface ResolvedOptions {
   readonly regexSteps: number;
   readonly deriveId?: (request: IdRequest) => string | undefined;
   readonly attributeType?: (elementType: string, attribute: string) => string | undefined;
+  readonly many?: (elementType: string, attribute: string) => boolean;
+  readonly unreadableTypes: ReadonlySet<string>;
   readonly timeAttributes: ReadonlySet<string>;
   readonly reportUnboundKeys: boolean;
   readonly registrationHeaders: ReadonlyMap<string, string>;
@@ -156,6 +170,8 @@ export function resolveOptions(options: FblOptions = {}): ResolvedOptions {
     regexSteps: options.regexSteps ?? defaultRegexSteps,
     deriveId: options.deriveId,
     attributeType: options.attributeType,
+    many: options.many,
+    unreadableTypes: options.unreadableTypes ?? new Set(),
     timeAttributes: options.timeAttributes ?? new Set(),
     reportUnboundKeys: options.reportUnboundKeys === true,
     registrationHeaders: options.registrationHeaders ?? new Map(),

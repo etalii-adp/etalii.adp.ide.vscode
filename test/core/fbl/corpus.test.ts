@@ -17,9 +17,11 @@ const manifest = JSON.parse(new TextDecoder().decode(bytesOf('fixtures/fbl/manif
 const slow = 60_000;
 
 describe('the copied FBL files', () => {
-  // The fourth is taken ahead of the rest of the corpus, for etalii.adp spec 033, into the conformance folder.
-  it('come from four sources, each with its commit and licence', () => {
-    expect(manifest.sources.map((source) => source.name)).toEqual(['conformance', 'definitions', 'real-files', 'insert-constant']);
+  // The last three are taken ahead of the rest of the corpus: for etalii.adp spec 033 into the
+  // conformance folder, and for FBL 0.7's bullets family and declared blocks into the conformance
+  // folder with the definitions their fixtures name.
+  it('come from six sources, each with its commit and licence', () => {
+    expect(manifest.sources.map((source) => source.name)).toEqual(['conformance', 'definitions', 'real-files', 'insert-constant', 'bullets', 'bullets-definitions']);
     for (const source of manifest.sources) {
       expect(source.commit).toMatch(/^[0-9a-f]{40}$/);
       expect(source.licence).toBe('Apache-2.0');
