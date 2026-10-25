@@ -73,11 +73,14 @@ export class BoundedRegex {
     return this.match(input) !== undefined;
   }
 
-  /** The leftmost match, or nothing; throws a `RegexBudgetError` when the search takes more steps than the budget. */
-  match(input: string): RegexMatch | undefined {
+  /**
+   * The leftmost match that starts at `from` or later, or nothing; throws a `RegexBudgetError` when
+   * the search takes more steps than the budget. `^` still means the start of the whole input.
+   */
+  match(input: string, from = 0): RegexMatch | undefined {
     const budget = { left: this.steps };
     const last = this.anchored ? 0 : input.length;
-    for (let start = 0; start <= last; start++) {
+    for (let start = from; start <= last; start++) {
       const found = this.run(input, start, budget);
       if (!found) continue;
       const groups = new Map<string, { start: number; end: number }>();
