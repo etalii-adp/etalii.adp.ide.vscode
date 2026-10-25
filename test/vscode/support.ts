@@ -40,6 +40,8 @@ export interface State {
   /** What the tool type offers for the selection. */
   actions?: { id: string; label: string; enabled: boolean; disabledReason?: string }[];
   kind: 'diagram' | 'designer';
+  /** What change of the document the last view sent followed: an edit of the editor's own, or one made outside it. */
+  cause?: 'edit' | 'outside';
   /** The view options the editor holds: what the canvas sent, and the folds of this viewer. */
   options: { collapsed?: Record<string, boolean> };
   fields: { id: string; label: string; value: string }[];

@@ -42,6 +42,19 @@ The diagram is read from its definition (etalii.adp spec 027). Where the definit
 | The Explorer does not offer "Open as Agent Behavior Modelling". "Open With" and the Command Palette offer it for every Markdown file. | The definition's binding does not say which Markdown file looks like a behavior model (etalii.adp issue 150), and nothing here names a tool type to say it instead. |
 | While a node is dragged, the lines to what moves are drawn again between their ends, and the siblings it has passed step aside. | As the standalone canvas shows it; the arithmetic is the tidy tree's own, which the scene carries to the canvas. |
 
+## Hierarchical Requirement Designer
+
+The designer is read from its definition; where the definition and the standalone host differ, the row is in [docs/disl-support.md](disl-support.md), "Hierarchical Requirement Designer". The page follows the standalone host after its pull requests 695 to 707, in its sizes and in Visual Studio Code's colours; what follows is this host's own.
+
+| Difference | Why |
+|---|---|
+| The page follows the text document live: every gesture is an edit of it, one undo step, and Visual Studio Code's modified state, save, revert and conflict handling are its own. Of the standalone host's handling of a second writer, only the bar "This file was changed outside the designer." is kept, shown while a title or description is open and the document changes underneath, by another editor, the disk, an undo or a redo. | The document is Visual Studio Code's; the designer is one editor of it. |
+| A delete, by Delete or by the selected box's control, asks first only when the definition's `confirm` asks, in its words, and its button says what the definition calls it. The standalone host's control on a box always asks, and says "Nothing else concerns it." when nothing does. | Whether anything concerns an entry is the definition's count, worked out by the core on the whole document; the page computes nothing of the tool type. Undo takes back a delete that was not asked about. |
+| The keys of the page are listed under the keyboard icon at the right of the trail, in the words of the operations they run. | The standalone host shows them beside the actions in its ribbon and menus, which Visual Studio Code does not have for a webview. |
+| As many levels fit as the page's width inside its padding holds, so the page never scrolls sideways when they fit. | The standalone host counts the padding too, which can make the deepest column overflow by it. |
+| A collapsed box shows its number, title, labels and the mark of its notes only: neither its focus control nor the mark of the levels it does not show. | What a collapsed level holds is not on the page, so there is nothing to focus on or reveal beside it. |
+| The mark of a box's notes is shown, and its list is not yet opened from it. | The notes list comes with the next part of the page. |
+
 ## Native dialogs, seen in a real window
 
 A test in a real Visual Studio Code cannot answer a native dialog, so each one the three new tool types raise is looked at once by a person (etalii.adp spec 027, FR-015). Peter Vrenken saw them on 2026-10-13 in Visual Studio Code 1.141.0 on Windows, with the Development build of the plug-in at `9849baf`. Each appeared and read as its definition states.
