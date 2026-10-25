@@ -71,3 +71,7 @@ export function modelOf(parts: Interpreted, binding: FblBinding, text: string, f
 
 export const cities = (): string => readFileSync('examples/knowledge/cities.yaml', 'utf8');
 export const knowledgeYaml = (): FblBinding => bindingAt(`${knowledgeFolder}/knowledge.fbl`, 'yaml');
+
+export const webShop = (): string => readFileSync('examples/hierarchical-requirement/web-shop.md', 'utf8');
+export const webShopRegistration = (): string => readFileSync('examples/hierarchical-requirement/web-shop.adp', 'utf8');
+export const hierarchyMarkdown = (): FblBinding => bindingAt(`${hierarchyFolder}/hierarchical-requirement.fbl`, 'markdown');
