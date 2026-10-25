@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { completionsOf, filtered, gesturesOf, hierarchyOf, labelValues, lowerAscii, notesOf, parseQuery, sortKeysOf, withImplicitMembers } from '../../../src/core/desl/hierarchy';
+import { completionsAt, completionsOf, filtered, gesturesOf, hierarchyOf, labelValues, lowerAscii, notesOf, parseQuery, queryText, sortKeysOf, unhiding, withImplicitMembers, wordAt } from '../../../src/core/desl/hierarchy';
 import { derivedIds } from '../../../src/core/desl/settings';
 import { loadDesigner } from '../../../src/core/desl/specification';
 import { interpretSurface } from '../../../src/core/desl/surface';
@@ -172,6 +172,30 @@ describe('a filter (DESL 7.7.3)', () => {
   });
 });
 
+describe('the words of a filter that hide a level or an entry', () => {
+  const unhidden = (query: string, id: string): string => queryText(unhiding(model, surface, query, id));
+
+  it('are the words of each label whose members an entry holds none of, the sort kept', () => {
+    // REQ-0003 is functional and carries no tag: `#mail` hides it, `category:functional` does not.
+    expect(unhidden('category:functional #mail sort:title', 'REQ-0003')).toBe('category:functional sort:title');
+    // Of one label's words, one the entry holds keeps them all.
+    expect(unhidden('#security #search @done', 'REQ-0001')).toBe('#security #search');
+    expect(filtered(model, surface, unhidden('category:functional #mail sort:title', 'REQ-0003')).shown.has('REQ-0003')).toBe(true);
+  });
+
+  it('are the item words when it stands outside every level they select, and every label\'s words for a level', () => {
+    expect(unhidden('item:storefront #security', 'REQ-0001')).toBe('item:storefront');
+    expect(unhidden('item:back* #security sort:number', 'ITEM-0001')).toBe('sort:number');
+    expect(unhidden('item:back* #security', 'ITEM-0005')).toBe('item:back*');
+    expect(filtered(model, surface, 'item:back*').shown.has('ITEM-0005')).toBe(true);
+  });
+
+  it('are none when the query does not hide it, or the id names no level or entry', () => {
+    expect(unhidden('#security  sort:title', 'REQ-0006')).toBe('#security sort:title');
+    expect(unhidden('#security', 'nothing')).toBe('#security');
+  });
+});
+
 describe('the completion of a filter word', () => {
   const words = (typed: string): string[] => completionsOf(typed, model, surface).map((completion) => completion.word);
 
@@ -185,6 +209,19 @@ describe('the completion of a filter word', () => {
     expect(words('#mail')).toEqual([]);
     expect(words('sort:')).toEqual(sortKeysOf(surface).map((key) => `sort:${key}`));
     expect(words('cat')).toEqual(['category:', 'category:functional', 'category:non-functional', 'category:technical']);
+  });
+
+  it('offers at every caret in a filter for what of its word stands before the caret, anywhere in the filter', () => {
+    expect(wordAt('#a @pr x', 6)).toEqual({ start: 3, end: 6, typed: '@pr' });
+    expect(wordAt('#a @pr x', 3)).toEqual({ start: 3, end: 6, typed: '' });
+    const at = (text: string): Record<string, string[]> => Object.fromEntries(Object.entries(completionsAt(text, model, surface)).map(([typed, found]) => [typed, found.map((completion) => completion.word)]));
+    const offered = at('@pr #se');
+    expect(Object.keys(offered)).toEqual(['', '@', '@p', '@pr', '#', '#s', '#se']);
+    expect(offered['@pr']).toEqual(['@proposed']);
+    expect(offered['#se']).toEqual(words('#se'));
+    expect(offered['']).toEqual(words(''));
+    // A part nothing completes, here a word typed in full, is left out.
+    expect(Object.keys(at('#mail'))).toEqual(['', '#', '#m', '#ma', '#mai']);
   });
 });
 

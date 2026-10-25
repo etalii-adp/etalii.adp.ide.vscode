@@ -123,7 +123,18 @@ describe('the Hierarchical Requirement Designer', () => {
     const view = type.view(source, { query: '#security sort:number' });
     expect(view.applied).toEqual({ query: '#security sort:number', shown: 3, total: 17 });
     expect(view.roots.map((node) => [node.id, node.collapsed, node.entries.map((entry) => entry.id), node.levels.map((level) => level.id)])).toEqual([['ITEM-0004', false, ['REQ-0006', 'REQ-0007'], []]]);
-    expect(type.view(source, { query: 'category:te' }).completions).toEqual(['category:technical']);
+    const completions = type.view(source, { query: '@pr category:te' }).completions;
+    expect(completions['category:te']).toEqual(['category:technical']);
+    expect(completions['@pr']).toEqual(['@proposed']);
+    expect(completions['']).toEqual(['#', 'category:', '@', 'item:', 'sort:']);
+    expect(type.view(source, {}).completions).toEqual({ '': ['#', 'category:', '@', 'item:', 'sort:'] });
+  });
+
+  it('gives the filter that reveals each level or entry a reference or a finding on the page names and the filter hides', () => {
+    // REQ-0004 refers to REQ-0003 and to ITEM-0005, which `#mail` hides; the finding is about REQ-0013, which carries no tag.
+    expect(type.view(source, { query: 'category:functional #mail' }).unhide).toEqual({ 'REQ-0013': 'category:functional', 'REQ-0003': 'category:functional', 'ITEM-0005': '' });
+    expect(type.view(source, {}).unhide).toEqual({});
+    expect(type.view(source, { query: '#mail' }).roots.length).toBeGreaterThan(0);
   });
 
   it('shows a fold the session keeps only for an entry that is still without a number: the registration decides for any other', () => {

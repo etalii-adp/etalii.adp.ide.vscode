@@ -6,7 +6,7 @@
 // the definition each gesture runs.
 
 import type { ElementGesture, GestureOperation, HierarchyGestures as GestureMap, LabelGesture } from '../desl/hierarchy';
-import { aboutOf, completionsOf, filtered, hierarchyOf, labelValues, levelWord, lowerAscii, memberName, membersOf, notesOf, sortKeysOf, sortWord } from '../desl/hierarchy';
+import { aboutOf, completionsAt, filtered, hierarchyOf, labelValues, levelWord, lowerAscii, memberName, membersOf, notesOf, queryText, sortKeysOf, sortWord, unhiding } from '../desl/hierarchy';
 import { mentionTemplate, segmentsOf, type Mentions, type TextPart } from '../desl/mentions';
 import type { DesignerOperation, RunStep } from '../desl/operations';
 import type { HierarchyLabel, HierarchySurface } from '../desl/surface';
@@ -167,8 +167,17 @@ export interface HierarchyView {
   readonly filters: readonly { readonly id: string; readonly name: string; readonly query: string; readonly gestures: HierarchyGestures }[];
   /** The filter a viewer applied, with how many levels and entries it leaves of how many. */
   readonly applied?: { readonly query: string; readonly shown: number; readonly total: number };
-  /** The words the filter field offers for the last word of the applied filter (DESL 7.7.3). */
-  readonly completions: readonly string[];
+  /**
+   * The words the filter field offers at a caret in the applied filter, by what of the word the
+   * caret is in stands before it (DESL 7.7.3); the empty part, at a space or in an empty filter,
+   * is offered the prefixes. A part nothing completes is absent.
+   */
+  readonly completions: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Of each level and entry a reference or a finding on the page names that the applied filter
+   * hides, by its id, the filter without the words that hide it, which a page applies to reveal it.
+   */
+  readonly unhide: Readonly<Record<string, string>>;
   readonly sortKeys: readonly string[];
   /** The widths the document keeps of the columns of levels, by depth. */
   readonly widths: readonly { readonly id: string; readonly level: string; readonly width: number; readonly gestures: HierarchyGestures }[];
@@ -394,24 +403,34 @@ export function hierarchyReader(parts: HierarchyParts) {
     const filtersPart = surface.filters;
     const widthsPart = surface.widths;
     const widthAttribute = widthsPart === undefined ? undefined : attributesOf(metamodel, widthsPart.type)[widthsPart.width];
-    const words = query.split(/\s+/);
     const addLevel = stateOf(state, gestures.adds[surface.levels.type], []);
     const addFilter = filtersPart === undefined ? undefined : byPart(stateOf(state, gestures.adds[filtersPart.type], []), { [filtersPart.name]: 'name', [filtersPart.query]: 'query' });
     const addWidth = widthsPart === undefined ? undefined : stateOf(state, gestures.adds[widthsPart.type], []);
     const inTree = (id: string | undefined): id is string => id !== undefined && tree.byId.has(id);
     const noteKindsAt = notesPart === undefined ? [] : enumOf(notesPart.type, notesPart.kind);
     const range = widthAttribute === undefined ? undefined : { ...(typeof widthAttribute.min === 'number' ? { min: widthAttribute.min } : {}), ...(typeof widthAttribute.max === 'number' ? { max: widthAttribute.max } : {}) };
+    const roots = tree.roots.filter((level) => shown.shown.has(level.id)).map((level) => nodeOf(level, 1, undefined));
+    const stray = tree.stray.filter((element) => shown.shown.has(element.id)).map((element) => nodeOf(element, 1, undefined));
+    // What a reference or a finding on the page names that the filter hides, and the filter that shows it.
+    const named = new Set(state.findings.flatMap((found) => (found.element === undefined ? [] : [found.element])));
+    const visit = (node: HierarchyNode): void => {
+      for (const part of node.description) if ('mention' in part && !part.mention.broken) named.add(part.mention.id);
+      for (const below of [...node.entries, ...node.levels]) visit(below);
+    };
+    if (shown.narrows) [...roots, ...stray].forEach(visit);
+    const unhide: Record<string, string> = {};
+    for (const id of shown.narrows ? named : []) if (tree.byId.has(id) && !shown.shown.has(id)) unhide[id] = queryText(unhiding(model, surface, query, id, tree, shown));
     return {
       name: state.name, ids: surface.ids, readOnly: state.readOnly, ...(state.notice === undefined ? {} : { notice: state.notice }),
       roles: { level: surface.levels.type, entry: surface.entries.type }, mentions: templates, queryWords: { level: levelWord, sort: sortWord },
-      roots: tree.roots.filter((level) => shown.shown.has(level.id)).map((level) => nodeOf(level, 1, undefined)),
-      stray: tree.stray.filter((element) => shown.shown.has(element.id)).map((element) => nodeOf(element, 1, undefined)),
+      roots, stray,
       lists, notes,
       noteKinds: noteKindsAt.map((value) => ({ key: value.key, label: value.label, ...iconOf(value.icon) })),
       filters: filtersPart === undefined ? [] : model.elements.filter((element) => element.type === filtersPart.type)
         .map((element) => ({ id: element.id, name: textOf(element.attributes[filtersPart.name]), query: textOf(element.attributes[filtersPart.query]), gestures: gesturesOf(state, element) })),
       ...(query.trim() === '' ? {} : { applied: { query, shown: shown.count, total: shown.total } }),
-      completions: completionsOf(words[words.length - 1] ?? '', model, surface).map((completion) => completion.word),
+      completions: Object.fromEntries(Object.entries(completionsAt(query, model, surface)).map(([typed, completions]) => [typed, completions.map((completion) => completion.word)])),
+      unhide,
       sortKeys: sortKeysOf(surface),
       widths: widthsPart === undefined ? [] : model.elements.filter((element) => element.type === widthsPart.type).map((element) => {
         const width = element.attributes[widthsPart.width];

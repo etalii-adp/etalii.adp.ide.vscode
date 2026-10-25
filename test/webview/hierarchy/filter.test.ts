@@ -5,9 +5,9 @@ import { box, button, click, harness, key, options, requests, show, typeInto, vi
 
 // The bar that narrows and sorts the page, as the standalone host draws it (its `FilterBar.tsx`,
 // `SortMenu.tsx` and `filterQuery.ts`): the filter is applied as it is typed and writes nothing,
-// going to the extension as a view option and coming back as the view it leaves; the word typed
-// last is completed from the words the view gives; and the stored filters are stored, renamed and
-// removed by the gestures the view names for them.
+// going to the extension as a view option and coming back as the view it leaves; the word the
+// caret is in, anywhere in the field, is completed from the words the view gives; and the stored
+// filters are stored, renamed and removed by the gestures the view names for them.
 
 let h: Harness;
 const field = (): HTMLInputElement => document.querySelector<HTMLInputElement>('.hs-filter-query')!;
@@ -77,16 +77,39 @@ describe('the filter', () => {
     expect(requests(h.sent)).toEqual([]);
   });
 
-  it('offers nothing while the view of the filter typed has not come, nor while the caret stands inside it', () => {
+  it('offers nothing while the view of the word typed has not come', () => {
     show(h.page, viewOf());
     field().focus();
     typeInto(field(), '#se');
     expect(offered()).toEqual([]);
     show(h.page, viewOf({ query: '#se' }), 2);
     expect(offered()).toHaveLength(2);
+  });
+
+  it('completes the word the caret stands in anywhere in the field, from what the view gives, and asks nothing when the caret moves', () => {
+    show(h.page, viewOf());
+    type('@pr #security');
+    const asked = h.sent.length;
+    // The caret after `@pr`, in the first word: what of it stands before the caret is completed.
+    field().setSelectionRange(3, 3);
+    field().dispatchEvent(new KeyboardEvent('keyup'));
+    expect(offered()).toEqual(['@proposed']);
     field().setSelectionRange(1, 1);
     field().dispatchEvent(new KeyboardEvent('keyup'));
-    expect(offered()).toEqual([]);
+    expect(offered()).toEqual(['@proposed', '@accepted', '@rejected', '@done']);
+    expect(h.sent.length).toBe(asked);
+    field().setSelectionRange(3, 3);
+    field().dispatchEvent(new KeyboardEvent('keyup'));
+    key(field(), { key: 'Enter' });
+    // The word the caret is in is replaced whole, and the rest of the filter stays.
+    expect(field().value).toBe('@proposed #security');
+    expect(field().selectionStart).toBe('@proposed '.length);
+    expect(options(h.sent).at(-1)).toEqual({ query: '@proposed #security' });
+    // At the start of a word, with nothing of it before the caret, the prefixes are offered.
+    show(h.page, viewOf({ query: '@proposed #security' }), 3);
+    field().setSelectionRange(10, 10);
+    field().dispatchEvent(new KeyboardEvent('keyup'));
+    expect(offered()).toEqual(['#', 'category:', '@', 'item:', 'sort:']);
   });
 
   it('sorts by the order picked, in the filter\'s own word, which the view names', () => {
