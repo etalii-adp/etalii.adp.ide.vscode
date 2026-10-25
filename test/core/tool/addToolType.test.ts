@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { encode } from '../../../src/core/fbl/text/utf8';
-import type { DesignerToolType, Source } from '../../../src/core/frame/toolType';
+import type { Source } from '../../../src/core/frame/toolType';
 import { pluginRegistry } from '../../../src/core/tool/pluginRegistry';
 import { toolTypesFrom } from '../../../src/core/tool/toolTypeFrom';
-import { allFolders, applied, noPlugins, spliced } from './support';
+import { allFolders, applied, noPlugins, spliced, type TableDesigner } from './support';
 
 // Adding a tool type needs no code (etalii.adp spec 027, task T105; FR-005, SC-005): DESL's own
 // smallest example, `minimal-table.des` with its binding, put into a folder of definitions that
@@ -21,7 +21,7 @@ const registry = pluginRegistry(noPlugins);
 
 describe('a tool type that is added by its definition alone', () => {
   const read = toolTypesFrom(folders(), registry);
-  const type = read.types.find((candidate) => candidate.origin === 'example/reading-list') as DesignerToolType | undefined;
+  const type = read.types.find((candidate) => candidate.origin === 'example/reading-list') as TableDesigner | undefined;
 
   it('is a tool type beside those of definitions/, and none of them is skipped for it', () => {
     expect(read.skipped.filter((skipped) => skipped.folder === 'minimal-table')).toEqual([]);

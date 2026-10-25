@@ -53,6 +53,7 @@ const exempt: readonly Exempt[] = [
   { name: 'conditions', use: 'disl', reason: 'a definition of the schema' },
   { name: 'container', use: 'disl', reason: 'a property of NodeNotation' },
   { name: 'count', use: 'disl', reason: 'a property of Budget' },
+  { name: '.ded', use: 'standard', reason: 'DED, the language the documents of a designer are written in, whose envelope every designer reads (DED 2, 4): its key `ded`, its version and its sentences. A definition claims `.ded` after it for a document in JSON' },
   { name: 'date', use: 'disl', reason: 'a value of Attribute.writtenPrecision' },
   { name: 'dateTime', use: 'desl', reason: 'a value of ValueType.editor' },
   { name: 'decade', use: 'disl', reason: 'a value of TimeUnit' },
