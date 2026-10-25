@@ -37,6 +37,8 @@ export class OpenTool {
   /** The text of the registration beside the document, when there is one. */
   registration: string | undefined;
   readonly registrationUri: vscode.Uri;
+  /** The writes of the registration, one after the other: each starts from what the one before left. */
+  registrationWrites: Promise<void> = Promise.resolve();
 
   constructor(readonly type: AnyToolType, readonly document: vscode.TextDocument, readonly panel: vscode.WebviewPanel) {
     this.registrationUri = registrationUriOf(document.uri);
@@ -66,11 +68,12 @@ async function readText(uri: vscode.Uri): Promise<string | undefined> {
   }
 }
 
-// A registration's new text, as an edit of its document. It is small and only a visualization, so
-// it is replaced whole.
+// A registration's new text, as an edit of its document as it is now. It is small and only a
+// visualization, so it is replaced whole.
 function replaceRegistration(edit: vscode.WorkspaceEdit, document: vscode.TextDocument, after: string): void {
-  if (document.getText() === after) return;
-  edit.replace(document.uri, new vscode.Range(new vscode.Position(0, 0), document.positionAt(document.getText().length)), after);
+  const now = document.getText();
+  if (now === after) return;
+  edit.replace(document.uri, new vscode.Range(new vscode.Position(0, 0), document.positionAt(now.length)), after);
 }
 
 // The name of what a request does, for the undo step: the label of the action it invokes.
@@ -272,11 +275,22 @@ export class Tools implements vscode.Disposable {
   }
 
   // An edit of the document that also changed the registration was undone or redone: the
-  // registration follows, saved when the document is no longer modified.
-  private async restoreRegistration(diagram: OpenTool, text: string | undefined): Promise<void> {
-    if (diagram.registration === text) return;
-    await this.writeRegistration(diagram, text, false);
-    this.refresh(diagram);
+  // registration follows, saved when the document is no longer modified. What it keeps outside the
+  // history is carried over (FBL 0.7 7.1), from its text when the write is made.
+  private restoreRegistration(diagram: OpenTool, text: string | undefined): Promise<void> {
+    return this.queued(diagram, async () => {
+      const restored = diagram.type.restoreRegistration(text, diagram.registration);
+      if (diagram.registration === restored) return;
+      await this.writing(diagram, restored, false);
+      this.refresh(diagram);
+    });
+  }
+
+  // A write of a diagram's registration, after every write of it asked for before.
+  private queued(diagram: OpenTool, write: () => Promise<void>): Promise<void> {
+    const done = diagram.registrationWrites.then(write);
+    diagram.registrationWrites = done.catch(() => undefined);
+    return done;
   }
 
   /** Whether Undo, or Redo, on the active diagram is a layout step now. */
@@ -292,7 +306,8 @@ export class Tools implements vscode.Disposable {
     const history = this.historyOf(diagram);
     if (direction === 'undo' ? !history.canUndo : !history.canRedo) return false;
     const step = (direction === 'undo' ? history.undo.pop() : history.redo.pop()) as LayoutStep;
-    await this.writeRegistration(diagram, direction === 'undo' ? step.before : step.after);
+    // What the registration keeps outside the history is carried over the step (FBL 0.7 7.1).
+    await this.queued(diagram, () => this.writing(diagram, diagram.type.restoreRegistration(direction === 'undo' ? step.before : step.after, diagram.registration)));
     (direction === 'undo' ? history.redo : history.undo).push(step);
     this.refresh(diagram);
     this.publishHistory();
@@ -303,7 +318,12 @@ export class Tools implements vscode.Disposable {
   // it is only its document's visualization and is never left modified by itself. Written with an
   // edit of the document (`now` false), it is saved when the document is, or at once when the
   // document is not modified.
-  private async writeRegistration(diagram: OpenTool, text: string | undefined, now = true): Promise<void> {
+  private writeRegistration(diagram: OpenTool, text: string | undefined, now = true): Promise<void> {
+    return this.queued(diagram, () => this.writing(diagram, text, now));
+  }
+
+  // The write itself, made in its turn: the edit is built from the registration's text when it is applied.
+  private async writing(diagram: OpenTool, text: string | undefined, now = true): Promise<void> {
     const edit = new vscode.WorkspaceEdit();
     if (text === undefined) {
       edit.deleteFile(diagram.registrationUri, { ignoreIfNotExists: true });

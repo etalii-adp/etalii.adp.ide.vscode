@@ -190,6 +190,13 @@ export interface ToolType<View, Request> {
   edit(source: Source, request: Request, options: ViewOptions, confirmed: boolean): EditOutcome;
   /** The text of a new document, from the binding's template. */
   newDocument(name: string): string;
+  /**
+   * The registration an undo or a redo gives back (FBL 0.7 7.1): `snapshot`, the text the step
+   * restores, with the entries of the blocks the binding keeps outside the history taken from
+   * `current`, the text it has now, since a write outside the history is no step and is carried
+   * over every step. Undefined is no file. A tool type without such blocks gives `snapshot` back.
+   */
+  restoreRegistration(snapshot: string | undefined, current: string | undefined): string | undefined;
 }
 
 /** A diagram read from its definition. */

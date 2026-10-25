@@ -505,11 +505,15 @@ describe('an element relocated into another parent (DESL 8.2 `move`, here `reloc
     expect(findings).toEqual([]);
   });
 
-  it('moves an element with what it holds into another parent, last there, as one move', () => {
+  it('moves an element with what it holds into another parent, as one move, after the last of its type there or where the binding puts it', () => {
     const outcome = run('a1', { parent: 'b' });
-    expect(changes(outcome)).toEqual([{ kind: 'move', id: 'a1', parent: 'b', position: { after: 'n2' } }]);
+    // b holds no folder: the move names no position, and the binding's insert places it.
+    expect(changes(outcome)).toEqual([{ kind: 'move', id: 'a1', parent: 'b' }]);
     expect(placeOf(outcome, 'a1')).toBe('b');
     expect(placeOf(outcome, 'n1')).toBe('a1');
+    // Where the new parent holds one of its type, it goes after the last of them.
+    expect(changes(run('n2', { parent: 'a1' }))).toEqual([{ kind: 'move', id: 'n2', parent: 'a1', position: { after: 'n1' } }]);
+    expect(changes(run('c', { parent: 'a' }))).toEqual([{ kind: 'move', id: 'c', parent: 'a', position: { after: 'a2' } }]);
   });
 
   it('moves it directly after or before a sibling in the new parent', () => {
