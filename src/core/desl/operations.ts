@@ -80,6 +80,11 @@ function assigning(actions: unknown): unknown[] {
     if (!isObject(action)) return [action];
     const nested = { ...action };
     for (const list of ['then', 'else', 'do']) if (Array.isArray(action[list])) nested[list] = assigning(action[list]);
+    // DESL's `move` (DESL 8.2) changes an element's parent and place; DISL's `move` places one on a canvas, by `x` and `y`. The interpreter knows DESL's as `relocate`.
+    if (isObject(action.move) && !('x' in action.move) && !('y' in action.move)) {
+      const { move, ...rest } = nested;
+      return [{ ...rest, relocate: move }];
+    }
     if (isObject(action.set)) {
       return Object.entries(action.set).map(([name, value]) => {
         const read = readOf(value);
