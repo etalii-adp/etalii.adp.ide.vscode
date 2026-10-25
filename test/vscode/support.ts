@@ -20,12 +20,23 @@ export async function until<T>(what: string, check: () => T | undefined | Promis
   }
 }
 
+/** A level or an entry of a hierarchy view. */
+export interface HierarchyNode {
+  id: string;
+  title: string;
+  collapsed: boolean;
+  entries: HierarchyNode[];
+  levels: HierarchyNode[];
+}
+
 export interface State {
   view?: { elements: { id: string; type: string; x: number; y: number; width: number; label: string }[]; relations: { id: string }[]; readOnly: boolean; notice?: string };
   /** What a tool type read from its definition was last sent: a scene, as `src/core/scene/scene.ts` has it. */
   scene?: { nodes: { id: string; fold?: 'folded' | 'unfolded'; labels: { text: string }[] }[]; edges: { id: string }[]; readOnly?: boolean; notice?: string };
   /** What a designer was last sent: a table view, as `src/core/tool/tableView.ts` has it. */
   table?: { name: string; readOnly: boolean; properties: { id: string; name: string }[]; rows: { id: string; title: string }[]; views: { id: string; name: string; active: boolean }[] };
+  /** What a designer of the `hierarchy` kind was last sent: a hierarchy view, as `src/core/tool/hierarchyView.ts` has it. */
+  hierarchy?: { name: string; readOnly: boolean; notice?: string; roots: HierarchyNode[]; stray: HierarchyNode[] };
   /** What the tool type offers for the selection. */
   actions?: { id: string; label: string; enabled: boolean; disabledReason?: string }[];
   kind: 'diagram' | 'designer';
@@ -46,7 +57,7 @@ export async function state(): Promise<State | undefined> {
 export async function drawn(sinceVersion = 0): Promise<State> {
   return until('the diagram to be drawn', async () => {
     const current = await state();
-    return (current?.view ?? current?.scene ?? current?.table) && current.version >= sinceVersion ? current : undefined;
+    return (current?.view ?? current?.scene ?? current?.table ?? current?.hierarchy) && current.version >= sinceVersion ? current : undefined;
   });
 }
 

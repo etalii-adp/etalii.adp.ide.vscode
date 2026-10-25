@@ -6,6 +6,8 @@ import { PropertiesView } from './propertiesView';
 import { entriesOf, ToolboxView } from './toolboxView';
 import type { OpenTool, Tools } from './toolEditor';
 import type { Scene } from '../core/scene/scene';
+import type { HierarchyRequest } from '../core/tool/hierarchyView';
+import type { TableRequest } from '../core/tool/tableView';
 import type { AnyToolType } from './toolTypes';
 
 /** The commands the plug-in adds, all in the category "ADP". */
@@ -118,14 +120,14 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
       if (!active) return undefined;
       const sent = active.lastView;
       return {
-        ...(sent === undefined ? {} : 'nodes' in sent ? { scene: sent, view: elementsOf(sent) } : { table: sent }),
+        ...(sent === undefined ? {} : 'nodes' in sent ? { scene: sent, view: elementsOf(sent) } : 'roots' in sent ? { hierarchy: sent } : { table: sent }),
         kind: active.type.kind, options: active.options, fields: active.fields(), selection: active.selection, version: active.document.version, origin: active.type.origin,
         actions: active.type.actions(active.source, active.selection, active.options),
       };
     });
     register('etalii.adp.test.edit', async (request: unknown) => {
       const active = tools.active;
-      return active ? tools.perform(active, request as EditRequest) : undefined;
+      return active ? tools.perform(active, request as EditRequest | TableRequest | HierarchyRequest) : undefined;
     });
     register('etalii.adp.test.toolbox', () => entriesOf(tools.active));
     register('etalii.adp.test.layoutSteps', () => ({ undo: tools.layoutStepNext('undo'), redo: tools.layoutStepNext('redo') }));
