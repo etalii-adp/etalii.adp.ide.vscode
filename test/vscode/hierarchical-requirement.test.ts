@@ -209,4 +209,40 @@ suite('The Hierarchical Requirement Designer in Visual Studio Code', () => {
     await until('both steps to be redone', () => document.getText() === taggedText);
     await until('the last registration, with the fold', async () => (await registrationText(registration)) === tagged);
   });
+
+  test('an add, then its title typed, is one undo step each: Undo takes back the title, then the entry', async () => {
+    const { document, original } = await open();
+    assert.deepStrictEqual(await edit({ kind: 'operation', operation: 'addRequirement', on: ['ITEM-0006'] }), { result: 'applied' });
+    await until('the entry', () => /^ {2}- REQ-0014 New requirement\r?$/m.test(document.getText()));
+    const added = document.getText();
+    await until('the page to follow', async () => (await nodeOf('REQ-0014'))?.title === 'New requirement');
+    assert.strictEqual((await state())?.cause, 'edit', 'the view follows the designer\'s own edit');
+
+    assert.deepStrictEqual(await edit({ kind: 'operation', operation: 'setTitle', on: ['REQ-0014'], args: { title: 'Orders are archived after a year.' } }), { result: 'applied' });
+    await until('the title', () => /^ {2}- REQ-0014 Orders are archived after a year\.\r?$/m.test(document.getText()));
+
+    await vscode.commands.executeCommand('undo');
+    await until('the title to be taken back', () => document.getText() === added);
+    await vscode.commands.executeCommand('undo');
+    await until('the entry to be taken back', () => document.getText() === original);
+  });
+
+  test('a move of an item into another re-indents it with what it holds, as one undo step', async () => {
+    const { document, original } = await open();
+    assert.deepStrictEqual(await edit({ kind: 'operation', operation: 'moveItem', on: ['ITEM-0005'], args: { item: 'ITEM-0002' } }), { result: 'applied' });
+    await until('the move', () => /^ {4}[-*+] ITEM-0005 Mail\r?\n {6}[-*+] REQ-0008 Mail goes through one provider/m.test(document.getText()));
+    assert.ok(!/^ {2}- ITEM-0005 Mail/m.test(document.getText()), 'it left its place under ITEM-0004');
+    await until('the page to follow', async () => (await nodeOf('ITEM-0002'))?.levels.some((level) => level.id === 'ITEM-0005') === true);
+
+    await vscode.commands.executeCommand('undo');
+    await until('the move to be taken back', () => document.getText() === original);
+  });
+
+  test('a change of the document made outside the designer is told to the page as such', async () => {
+    const { uri, document } = await open();
+    const change = new vscode.WorkspaceEdit();
+    change.insert(uri, document.lineAt(document.lineCount - 1).range.end, '\n');
+    assert.ok(await vscode.workspace.applyEdit(change));
+    await until('the page to follow the change from outside', async () => (await state())?.cause === 'outside');
+  });
 });

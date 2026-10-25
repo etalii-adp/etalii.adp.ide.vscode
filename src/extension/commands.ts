@@ -121,7 +121,7 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
       const sent = active.lastView;
       return {
         ...(sent === undefined ? {} : 'nodes' in sent ? { scene: sent, view: elementsOf(sent) } : 'roots' in sent ? { hierarchy: sent } : { table: sent }),
-        kind: active.type.kind, options: active.options, fields: active.fields(), selection: active.selection, version: active.document.version, origin: active.type.origin,
+        kind: active.type.kind, cause: active.lastCause, options: active.options, fields: active.fields(), selection: active.selection, version: active.document.version, origin: active.type.origin,
         actions: active.type.actions(active.source, active.selection, active.options),
       };
     });

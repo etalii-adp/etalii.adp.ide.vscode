@@ -5,16 +5,28 @@ import type { Action, Field, ToolboxEntry, ViewOptions } from './toolType';
 
 export const protocolVersion = 2;
 
+/** What change of the document a view follows: an edit of this editor's own, or one made anywhere else. */
+export type ViewCause = 'edit' | 'outside';
+
 export type ToCanvas =
   /**
    * What to show, and the version of the document it was computed from. The view is the tool type's
-   * own: a `Scene` or a `TableView`.
+   * own: a `Scene`, a `TableView` or a `HierarchyView`. `cause` says what change of the document it
+   * follows: `edit` an edit this editor made, `outside` any other (another editor or the text, the
+   * disk, an undo or a redo); absent when it follows none, as when it was opened or its options or
+   * selection changed.
    */
   | {
     readonly v: 2; readonly type: 'view'; readonly origin: string; readonly kind: 'diagram' | 'designer'; readonly view: unknown; readonly actions: readonly Action[]; readonly version: number;
+    readonly cause?: ViewCause;
   }
   /** The answer to an edit request. */
   | { readonly v: 2; readonly type: 'outcome'; readonly seq: number; readonly result: 'applied' | 'refused' | 'cancelled'; readonly sentence?: string }
+  /**
+   * An edit asks first, in the definition's words. Sent to a page that asks in its own place (a page
+   * of boxes), which answers with `confirmed`; the outcome of the edit follows under the same `seq`.
+   */
+  | { readonly v: 2; readonly type: 'confirm'; readonly seq: number; readonly title: string; readonly message: string; readonly confirmLabel: string; readonly danger: boolean }
   /** Select an element and bring it into view; with `editLabel`, open its text for editing in place. */
   | { readonly v: 2; readonly type: 'reveal'; readonly id: string; readonly editLabel?: boolean; readonly multiline?: boolean }
   /** A command invoked from the Command Palette or a shortcut, for the canvas to carry out on its selection. */
@@ -29,7 +41,9 @@ export type FromCanvas =
   /** Text is being edited in place, or no longer is, so shortcuts such as Delete are the text box's. */
   | { readonly v: 2; readonly type: 'editing'; readonly active: boolean }
   /** An edit, with the document version the gesture began on. The request is the tool type's own. */
-  | { readonly v: 2; readonly type: 'edit'; readonly seq: number; readonly request: unknown; readonly version: number };
+  | { readonly v: 2; readonly type: 'edit'; readonly seq: number; readonly request: unknown; readonly version: number }
+  /** The answer to `confirm`: the edit of that `seq` is made, or cancelled. */
+  | { readonly v: 2; readonly type: 'confirmed'; readonly seq: number; readonly confirmed: boolean };
 
 export type ToProperties =
   /** The rows for the active diagram's selection, or a sentence when there is nothing to show. */
