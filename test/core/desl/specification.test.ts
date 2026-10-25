@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { loadDesigner } from '../../../src/core/desl/specification';
+import { expressionsOf, loadDesigner } from '../../../src/core/desl/specification';
 import { interpretSurface } from '../../../src/core/desl/surface';
 import { interpretMetamodel } from '../../../src/core/disl/metamodel';
-import { cities, interpreted, knowledgeSpecification, knowledgeYaml, minimalSpecification, modelOf, object, type Json } from './support';
+import { cities, hierarchySpecification, interpreted, knowledgeSpecification, knowledgeYaml, minimalSpecification, modelOf, object, type Json } from './support';
 
 // DESL as this host reads it (etalii.adp spec 027, task T101): a `.des` file with its metamodel,
 // its persistence, its `table` surface and the CEL of DESL section 9, on the metamodel and the
@@ -45,9 +45,53 @@ describe('a DESL specification', () => {
     const major = loadDesigner({ ...knowledge, desl: '1.0' });
     expect(major.findings.map((found) => [found.code, found.severity])).toEqual([['desl.specification', 'error']]);
     expect(interpretSurface(major.value.surface, interpretMetamodel(major.value.interpreted).value).value).toBeUndefined();
-    const minor = loadDesigner({ ...knowledge, desl: '0.2' });
+    const minor = loadDesigner({ ...knowledge, desl: '0.3' });
     expect(minor.findings.map((found) => [found.code, found.severity])).toEqual([['desl.specification', 'warning']]);
     expect(minor.value.surface).toEqual(knowledge.surface);
+  });
+
+  it('of DESL 0.2 is read with nothing found: counted ids, mentions, settings and the children of the document', () => {
+    const hierarchy = hierarchySpecification();
+    expect(hierarchy.desl).toBe('0.2');
+    const loaded = loadDesigner(hierarchy);
+    expect(loaded.findings).toEqual([]);
+    const metamodel = interpretMetamodel(loaded.value.interpreted);
+    expect(metamodel.findings).toEqual([]);
+    expect(expressionsOf(loaded.value, metamodel.value).findings).toEqual([]);
+    expect(loaded.value.settings).toEqual(object(hierarchy.persistence).settings);
+    const counted = Object.entries(object(object(object(hierarchy.persistence).ids).types)).filter(([, rule]) => object(rule).strategy === 'counter').map(([type]) => type);
+    expect(counted.length).toBeGreaterThan(0);
+    for (const type of counted) expect(loaded.value.persistence.ids.types?.[type]).toMatchObject({ strategy: 'counter', prefix: expect.any(String), mark: expect.any(String) });
+  });
+
+  describe('a counted id rule (DESL 5.3.5, 10.1 step 4)', () => {
+    const base = { ...knowledgeSpecification() };
+    const withRule = (rule: Json, document: Json = { last: { type: 'string' } }, top: Json = {}): unknown => ({
+      ...base,
+      metamodel: { ...object(base.metamodel), document: { attributes: document } },
+      persistence: { ...object(base.persistence), ids: { ...object(object(base.persistence).ids), ...top, types: { Row: { strategy: 'counter', ...rule } } } },
+    });
+    const problems = (json: unknown): string[] => loadDesigner(json).findings.filter((found) => found.code === 'desl.persistence').map((found) => found.message);
+
+    it('is read with a prefix, digits and a mark that is a string of the document', () => {
+      expect(problems(withRule({ prefix: 'R-', digits: 3, mark: 'last', placeholder: 'NEW' }))).toEqual([]);
+    });
+
+    it.each([
+      ['no prefix', { mark: 'last' }, undefined, 'prefix'],
+      ['no digit', { prefix: 'R-', digits: 0, mark: 'last' }, undefined, 'digits'],
+      ['a mark the document does not have', { prefix: 'R-', mark: 'first' }, undefined, 'first'],
+      ['a mark that is no string', { prefix: 'R-', mark: 'last' }, { last: { type: 'int' } }, 'last'],
+      ['an empty placeholder', { prefix: 'R-', mark: 'last', placeholder: '' }, undefined, 'placeholder'],
+    ])('is a problem of the persistence with %s', (_what, rule, document, word) => {
+      const found = problems(withRule(rule, document));
+      expect(found).toHaveLength(1);
+      expect(found[0]).toContain(word);
+    });
+
+    it('is a problem as the rule of every type', () => {
+      expect(problems(withRule({ prefix: 'R-', mark: 'last' }, undefined, { strategy: 'counter' }))).toHaveLength(1);
+    });
   });
 
   it('is no specification when its top level is not an object', () => {
@@ -155,6 +199,20 @@ describe('the CEL of DESL section 9', () => {
     expect(value('self.freeze == null', 'v1')).toBe(true);
     expect(value('has(self.freeze)', 'v1')).toBe(false);
     expect(value('has(self.groupBy)', 'v1')).toBe(true);
+  });
+
+  it('has the strings extension of CEL (DESL 9.1)', () => {
+    expect(value("' a b c '.trim().replace(' ', '-')")).toBe('a-b-c');
+    expect(value("'a.b.c'.replace('.', '/', 1)")).toBe('a/b.c');
+    expect(value("'a.b.c'.replace('.', '', -1)")).toBe('abc');
+    expect(value("'Web Shop'.lowerAscii()")).toBe('web shop');
+    expect(value("'web'.upperAscii()")).toBe('WEB');
+    expect(value("'a,b'.split(',')")).toEqual(['a', 'b']);
+    expect(value("['a', 'b'].join('-')")).toBe('a-b');
+    expect(value("'abc'.indexOf('c')")).toBe(2);
+    expect(value("'abcdef'.substring(1, 3)")).toBe('bc');
+    expect(value("'abc'.reverse()")).toBe('cba');
+    expect(value("'abc'.charAt(1)")).toBe('b');
   });
 
   it('derives the ids the specification derives, parents before children (DESL 5.3.2)', () => {

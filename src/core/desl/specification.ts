@@ -11,7 +11,7 @@ import type { InterpretedPersistence } from '../disl/persistence';
 import { emptySpecification, isObject, type IdStrategy, type Specification, type TypeMapEntry } from '../disl/specification';
 
 /** The minor version of DESL this interpreter reads; its major version is 0. */
-export const deslMinor = 1;
+export const deslMinor = 2;
 
 /** The name the interpreter of `../disl/` has for the document as a whole. */
 const whole = 'diagram';
@@ -28,10 +28,12 @@ export interface DesignerSpecification {
   /** `surface` and `operations` as they are written: `./surface` and `./operations` read them. */
   readonly surface: unknown;
   readonly operations: Readonly<Record<string, unknown>>;
+  /** `persistence.settings` as it is written (DESL 5.5): `./settings` reads it. */
+  readonly settings: Readonly<Record<string, unknown>>;
 }
 
 const nothing: DesignerSpecification = {
-  interpreted: emptySpecification, bindings: [], surface: undefined, operations: {},
+  interpreted: emptySpecification, bindings: [], surface: undefined, operations: {}, settings: {},
   persistence: { format: 'fbl', ids: { strategy: 'uuid-v7', encoding: 'hex', stable: true, pattern: '', missing: 'assign', compare: 'exact' }, typeMap: {}, view: { store: [], viewer: [], initial: {}, bind: {} } },
 };
 
@@ -40,15 +42,41 @@ const nothing: DesignerSpecification = {
  * its other functions under the same names, with the one function only DESL has.
  */
 export const expressionsOf = (designer: DesignerSpecification, metamodel: Metamodel): Expressions => createExpressions(designer.interpreted, metamodel, {
-  library: (register) => register('uniqueName(string, list<dyn>): string', (name: string, names: unknown[]) => {
-    // `name` when no string of `names` equals it ignoring case, else with the smallest number from 2 that none has (DESL 9.4).
-    const taken = new Set(names.map((other) => String(other).toLowerCase()));
-    if (!taken.has(name.toLowerCase())) return name;
-    let count = 2;
-    while (taken.has(`${name} ${count}`.toLowerCase())) count++;
-    return `${name} ${count}`;
-  }),
+  library: (register) => {
+    register('uniqueName(string, list<dyn>): string', (name: string, names: unknown[]) => {
+      // `name` when no string of `names` equals it ignoring case, else with the smallest number from 2 that none has (DESL 9.4).
+      const taken = new Set(names.map((other) => String(other).toLowerCase()));
+      if (!taken.has(name.toLowerCase())) return name;
+      let count = 2;
+      while (taken.has(`${name} ${count}`.toLowerCase())) count++;
+      return `${name} ${count}`;
+    });
+    // CEL's strings extension, which DESL requires (DESL 9.1), where the CEL library does not have a function of it:
+    // the library has `lowerAscii`, `upperAscii`, `trim`, `split`, `join`, `indexOf` and `substring`, and refuses a
+    // second overload of one, so each is registered only while the library lacks it.
+    const lacking = (signature: string, handler: (...args: never[]) => unknown): void => {
+      try { register(signature, handler); } catch { /* the CEL library has it */ }
+    };
+    lacking('string.replace(string, string): string', (text: string, from: string, to: string) => replaced(text, from, to, -1n));
+    lacking('string.replace(string, string, int): string', (text: string, from: string, to: string, count: bigint) => replaced(text, from, to, count));
+    lacking('string.reverse(): string', (text: string) => [...text].reverse().join(''));
+    lacking('string.charAt(int): string', (text: string, index: bigint) => [...text][Number(index)] ?? '');
+  },
 });
+
+/** `text` with `from` replaced by `to`: every occurrence, or the first `count` of them; a negative count is every one (CEL's strings extension). */
+function replaced(text: string, from: string, to: string, count: bigint): string {
+  if (count < 0n) return text.split(from).join(to);
+  let result = text;
+  let at = 0;
+  for (let done = 0n; done < count; done++) {
+    const found = result.indexOf(from, at);
+    if (found < 0 || found > result.length) break;
+    result = result.slice(0, found) + to + result.slice(found + from.length);
+    at = found + to.length + (from === '' ? 1 : 0);
+  }
+  return result;
+}
 
 /** What a rule or an operation is for, in the interpreter's names. */
 export const scoped = (names: unknown): unknown => (names === written ? whole : Array.isArray(names) ? names.map((name: unknown) => (name === written ? whole : name)) : names);
@@ -64,6 +92,7 @@ export function loadDesigner(json: unknown): Loaded<DesignerSpecification> {
     findings.push(finding('desl.specification', 'error', message));
     return nothing;
   };
+  const persistenceProblem = (message: string): void => void findings.push(finding('desl.persistence', 'error', message));
   if (!isObject(json)) return { value: error('This is not a DESL specification: its top level is not an object.'), findings };
 
   const version = json['desl'];
@@ -96,10 +125,21 @@ export function loadDesigner(json: unknown): Loaded<DesignerSpecification> {
     if (isObject(entry) && typeof entry.as === 'string') typeMap[name] = { ...entry, as: entry.as === written ? whole : entry.as } as TypeMapEntry;
   }
   const ids = { strategy: 'uuid-v7', encoding: 'hex', stable: true, pattern: '^[\\s\\S]+$', missing: 'assign', compare: 'exact', ...(isObject(persistence.ids) ? persistence.ids : {}) } as InterpretedPersistence['ids'] & IdStrategy;
+  // Counted ids (DESL 5.3.5, 10.1 step 4): a rule of one type, with a prefix, at least one digit, and a mark that is a string attribute of the document.
+  const documentAttributes = isObject(metamodel?.[written]) && isObject(metamodel[written].attributes) ? metamodel[written].attributes : {};
+  if ((ids.strategy as string) === 'counter') persistenceProblem('The ids of every type are counted, and DESL counts the ids of one type at a time: `counter` is a rule of `ids.types`.');
+  for (const [type, rule] of Object.entries(isObject(ids.types) ? ids.types : {})) {
+    if (!isObject(rule) || rule.strategy !== 'counter') continue;
+    if (typeof rule.prefix !== 'string' || rule.prefix === '') persistenceProblem(`The ids of \`${type}\` are counted, and their rule gives no \`prefix\`.`);
+    if (rule.digits !== undefined && !(typeof rule.digits === 'number' && Number.isInteger(rule.digits) && rule.digits >= 1)) persistenceProblem(`The ids of \`${type}\` are counted with \`${String(rule.digits)}\` digits, where at least one is needed.`);
+    const mark = typeof rule.mark === 'string' && Object.hasOwn(documentAttributes, rule.mark) ? documentAttributes[rule.mark] : undefined;
+    if (!isObject(mark) || mark.type !== 'string' || mark.many === true) persistenceProblem(`The ids of \`${type}\` are counted, and their \`mark\` \`${String(rule.mark)}\` is no string attribute of the document.`);
+    if (rule.placeholder !== undefined && (typeof rule.placeholder !== 'string' || rule.placeholder === '')) persistenceProblem(`The ids of \`${type}\` are counted, and their \`placeholder\` is no text.`);
+  }
 
   return {
     value: {
-      interpreted, bindings, surface: json.surface, operations: isObject(json.operations) ? json.operations : {},
+      interpreted, bindings, surface: json.surface, operations: isObject(json.operations) ? json.operations : {}, settings: isObject(persistence.settings) ? persistence.settings : {},
       persistence: { format: 'fbl', ids, typeMap, view: { store: [], viewer: [], initial: {}, bind: {} } },
     },
     findings,
