@@ -473,3 +473,64 @@ describe('a behavior', () => {
     expect(refusal(behavior.change(model, 'gone', { title: 'x' }))).toBe('That is no longer in this diagram.');
   });
 });
+
+describe('an element relocated into another parent (DESL 8.2 `move`, here `relocate`)', () => {
+  const specification = {
+    disl: '0.3', language: { id: 'a.b', version: '1.0.0' },
+    metamodel: {
+      diagram: { children: { allowed: ['Folder'] } },
+      types: {
+        Folder: { attributes: { name: { type: 'string' } }, children: { allowed: ['Folder', 'Note'], ordered: true } },
+        Note: { attributes: { name: { type: 'string' } } },
+      },
+    },
+    behavior: {
+      operations: {
+        into: { for: ['Folder', 'Note'], params: { parent: { type: 'Folder' }, after: { type: 'Folder' }, before: { type: 'Folder' } }, actions: [
+          { relocate: { parent: 'has(p.parent) ? p.parent : null' }, when: '!has(p.after) && !has(p.before)' },
+          { relocate: { parent: 'has(p.parent) ? p.parent : null', after: 'p.after' }, when: 'has(p.after)' },
+          { relocate: { parent: 'has(p.parent) ? p.parent : null', before: 'p.before' }, when: 'has(p.before)' },
+        ] },
+      },
+    },
+  };
+  const { behavior, findings } = interpret(specification);
+  const node = (id: string, type: string, parent?: string): ModelElement => ({ id, type, attributes: { name: id }, host: {}, ephemeral: false, line: 1, ...(parent === undefined ? {} : { parent }) });
+  // a holds a1 (holding n1) and a2; b holds n2; c stands alone.
+  const model: Model = { diagram: {}, relations: [], elements: [node('a', 'Folder'), node('a1', 'Folder', 'a'), node('n1', 'Note', 'a1'), node('a2', 'Folder', 'a'), node('b', 'Folder'), node('n2', 'Note', 'b'), node('c', 'Folder')] };
+  const run = (id: string, args: Readonly<Record<string, string>>): Outcome => behavior.operate(model, 'into', [id], undefined, undefined, args);
+  const placeOf = (outcome: Outcome, id: string) => after(outcome).elements.find((element) => element.id === id)?.parent;
+
+  it('is read with nothing found', () => {
+    expect(findings).toEqual([]);
+  });
+
+  it('moves an element with what it holds into another parent, last there, as one move', () => {
+    const outcome = run('a1', { parent: 'b' });
+    expect(changes(outcome)).toEqual([{ kind: 'move', id: 'a1', parent: 'b', position: { after: 'n2' } }]);
+    expect(placeOf(outcome, 'a1')).toBe('b');
+    expect(placeOf(outcome, 'n1')).toBe('a1');
+  });
+
+  it('moves it directly after or before a sibling in the new parent', () => {
+    expect(changes(run('c', { parent: 'a', after: 'a1' }))).toEqual([{ kind: 'move', id: 'c', parent: 'a', position: { after: 'a1' } }]);
+    expect(changes(run('c', { parent: 'a', before: 'a1' }))).toEqual([{ kind: 'move', id: 'c', parent: 'a', position: { before: 'a1' } }]);
+  });
+
+  it('moves it among the document\'s own elements with no parent', () => {
+    expect(changes(run('a2', {}))).toEqual([{ kind: 'move', id: 'a2', position: { after: 'c' } }]);
+  });
+
+  it('is a reorder within its own parent, and nothing where it is already', () => {
+    expect(changes(run('a1', { parent: 'a', after: 'a2' }))).toEqual([{ kind: 'move', id: 'a1', parent: 'a', position: { after: 'a2' } }]);
+    expect(changes(run('a2', { parent: 'a' }))).toEqual([]);
+    expect(changes(run('a2', { parent: 'a', after: 'a1' }))).toEqual([]);
+  });
+
+  it('is refused into itself or what it holds, into a parent that does not allow it, and next to what is not a sibling there', () => {
+    expect(refusal(run('a', { parent: 'a' }))).toBe('It cannot be moved into itself or into what it holds.');
+    expect(refusal(run('a', { parent: 'a1' }))).toBe('It cannot be moved into itself or into what it holds.');
+    expect(refusal(run('n2', {}))).toBe('Note cannot be put there.');
+    expect(refusal(run('c', { parent: 'a', after: 'b' }))).toBe('It can only be put next to what lies in the place it is moved to.');
+  });
+});

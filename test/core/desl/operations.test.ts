@@ -307,3 +307,33 @@ describe('DESL\'s smallest example', () => {
     expect(done(small.operations.setCell(books, 'b1', 'f1', 'Dune Messiah')).changes).toEqual([{ kind: 'set', id: 'b1/f1', attributes: { text: 'Dune Messiah' } }]);
   });
 });
+
+describe('a move (DESL 8.2)', () => {
+  // DESL's smallest example, with an operation that moves a cell's value to another book.
+  const minimal = minimalSpecification();
+  const moving = interpreted({
+    ...minimal,
+    desl: '0.2',
+    operations: {
+      ...object(minimal.operations),
+      moveValue: { label: 'Move', for: ['Value'], params: { book: { type: 'Book', required: true } }, actions: [{ move: { parent: 'p.book', slot: "'values'" } }] },
+      moveBook: { label: 'Move', for: ['Book'], params: { book: { type: 'Book', required: true } }, actions: [{ move: { parent: 'p.book' } }] },
+    },
+  });
+  const element = (id: string, type: string, parent?: string): Model['elements'][number] => ({ id, type, attributes: {}, host: {}, ephemeral: false, line: 1, ...(parent === undefined ? {} : { parent, slot: 'values' }) });
+  const books: Model = { diagram: {}, relations: [], elements: [element('f', 'Field'), element('b1', 'Book'), element('v', 'Value', 'b1'), element('b2', 'Book')] };
+
+  it('is read as the interpreter\'s own action, with nothing found', () => {
+    expect(moving.findings).toEqual([]);
+  });
+
+  it('changes the parent and the slot of an element, which keeps its id', () => {
+    const outcome = done(moving.operations.run(books, 'moveValue', ['v'], { book: 'b2' }));
+    expect(outcome.changes).toEqual([{ kind: 'move', id: 'v', parent: 'b2', slot: 'values' }]);
+    expect(outcome.after.elements.find((candidate) => candidate.id === 'v')).toMatchObject({ parent: 'b2', slot: 'values' });
+  });
+
+  it('rolls the transaction back into a parent whose children do not allow it', () => {
+    expect(moving.operations.run(books, 'moveBook', ['b1'], { book: 'b2' }).refused).toBe('Book cannot be put there.');
+  });
+});

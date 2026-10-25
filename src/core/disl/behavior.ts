@@ -148,7 +148,7 @@ export type Change =
   | { readonly kind: 'add'; readonly id: string; readonly type: string; readonly attributes: Attributes; readonly source?: string; readonly target?: string; readonly parent?: string; readonly slot?: string; readonly position?: Beside | AtIndex }
   | { readonly kind: 'set'; readonly id: string; readonly attributes: Readonly<Record<string, Value | null>> }
   | { readonly kind: 'remove'; readonly id: string }
-  | { readonly kind: 'move'; readonly id: string; readonly parent?: string; readonly position?: Beside | AtIndex }
+  | { readonly kind: 'move'; readonly id: string; readonly parent?: string; readonly slot?: string; readonly position?: Beside | AtIndex }
   | { readonly kind: 'retype'; readonly id: string; readonly type: string; readonly attributes: Attributes };
 
 /** A place among the children of a parent, counted from zero. */
@@ -407,10 +407,12 @@ export function applyChanges(model: Model, changes: readonly Change[], keeps?: (
     } else if (change.kind === 'move') {
       const moved = elements.find((element) => element.id === change.id);
       if (!moved) continue;
-      const { parent: _old, ...rest } = moved;
+      const { parent: _old, slot: _slot, ...rest } = moved;
       void _old;
+      // The slot goes with the parent: a move within one parent keeps it, a move to another gives the one it names.
+      const slot = change.slot ?? (change.parent === moved.parent ? _slot : undefined);
       const others = elements.filter((element) => element.id !== change.id);
-      elements = beside(others, { ...rest, ...(change.parent === undefined ? {} : { parent: change.parent }) }, change.position);
+      elements = beside(others, { ...rest, ...(change.parent === undefined ? {} : { parent: change.parent }), ...(slot === undefined ? {} : { slot }) }, change.position);
     } else if (change.kind === 'retype') {
       elements = elements.map((element) => (element.id !== change.id ? element : {
         ...element, type: change.type,
@@ -598,7 +600,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       const members = (value: unknown): unknown[] => (isObject(value) ? Object.values(value).flatMap((member) => (isObject(member) && !isCel(member) ? Object.values(member) : [member])) : []);
       // The `place` of a `create` is the name of a placement, and no expression.
       const created = isObject(action.create) ? Object.fromEntries(Object.entries(action.create).filter(([name]) => name !== 'place')) : action.create;
-      unread(owner, [action.when, action.if, action.forEach, action.delete, action.target, ...members(action.set), ...members(action.let), ...members(created), ...members(action.connect), ...members(action.abort), ...members(action.reparent), ...members(action.retype)]);
+      unread(owner, [action.when, action.if, action.forEach, action.delete, action.target, ...members(action.set), ...members(action.let), ...members(created), ...members(action.connect), ...members(action.abort), ...members(action.reparent), ...members(action.relocate), ...members(action.retype)]);
       for (const nested of [action.then, action.else, action.do]) if (Array.isArray(nested)) inspect(owner, nested);
     }
   };
@@ -987,6 +989,52 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       if (!written) refuse(worded(refusals.unchanged as Message | undefined, scope, 'This would change nothing.'));
     };
 
+    /**
+     * DESL's `move` (DESL 8.2), which the interpreter knows as `relocate`, since DISL's own `move` places
+     * an element on the canvas: an element, with everything it holds, into `parent` (`null`, or none
+     * given, among the document's own elements) and its `slot`, directly after or before a sibling
+     * there, else last. A move into the element itself or into what it holds, into a parent whose
+     * `children` (or slot, or the document's `children`) does not allow its type, or next to what is
+     * not a sibling there rolls the transaction back. One into its own parent and slot is a reorder.
+     */
+    function relocate(move: Readonly<Record<string, unknown>>, self: string, one: (expression: unknown) => { readonly value: Value; readonly raw: unknown } | undefined): void {
+      const named = (expression: unknown): string | undefined => {
+        const id = expression === undefined ? undefined : one(expression)?.value;
+        return typeof id === 'string' && id !== '' ? id : undefined;
+      };
+      const moved = move.target === undefined ? self : named(move.target);
+      const element = moved === undefined ? undefined : find(working, moved);
+      const parent = named(move.parent);
+      if (!element || 'source' in element || (move.parent !== undefined && one(move.parent) === undefined) || (parent !== undefined && !find(working, parent))) { refuse(GONE); return; }
+      const slot = named(move.slot);
+      for (let above: string | undefined = parent; above !== undefined; above = find(working, above)?.parent) {
+        if (above === element.id) { refuse('It cannot be moved into itself or into what it holds.'); return; }
+      }
+      // What the new place allows: the parent's `children`, or its slot, or the document's own `children` (DESL 4.6).
+      const declared = parent === undefined ? (specification.metamodel.diagram as Readonly<Record<string, unknown>> | undefined)?.children : metamodel.types[find(working, parent)!.type]?.declared.children;
+      const children = isObject(declared) ? declared : undefined;
+      const slots = children && isObject(children.slots) ? children.slots : {};
+      const allowedHere = slot !== undefined ? (isObject(slots[slot]) ? slots[slot].allowed : []) : children?.allowed;
+      const allows = (parent === undefined && children === undefined) || (Array.isArray(allowedHere) && allowedHere.some((type) => typeof type === 'string' && isA(metamodel, element.type, type)));
+      if (!allows) { refuse(`${metamodel.types[element.type]?.label ?? element.type} cannot be put there.`); return; }
+      const siblings = working.elements.filter((other) => other.id !== element.id && other.parent === parent && other.slot === slot);
+      const after = named(move.after);
+      const before = after === undefined ? named(move.before) : undefined;
+      const beside = after ?? before;
+      if (beside !== undefined && !siblings.some((other) => other.id === beside)) { refuse('It can only be put next to what lies in the place it is moved to.'); return; }
+      const last = siblings[siblings.length - 1];
+      const position: Beside | undefined = after !== undefined ? { after } : before !== undefined ? { before } : last === undefined ? undefined : { after: last.id };
+      const own = element.parent === parent && element.slot === slot;
+      if (own) {
+        // A reorder: nothing changes when it is where it would go.
+        const now = working.elements.filter((other) => other.parent === parent && other.slot === slot);
+        const at = now.indexOf(element);
+        if (position === undefined || ('after' in position ? now[at - 1]?.id === position.after : now[at + 1]?.id === position.before)) return;
+      }
+      if (!own && !check({ kind: 'containment', self: element.id, elements: { child: element.id, parent }, values: { slot: slot ?? null } })) return;
+      apply({ kind: 'move', id: element.id, ...(parent === undefined ? {} : { parent }), ...(slot === undefined ? {} : { slot }), ...(position === undefined ? {} : { position }) });
+    }
+
     function act(actions: readonly unknown[], self: string, variables: Record<string, unknown>, source: Source): void {
       for (const action of actions) {
         if (refused !== undefined) return;
@@ -1086,6 +1134,8 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
           const parent = typeof under === 'string' && under !== '' ? under : undefined;
           if (!element || 'source' in element || (parent !== undefined && !find(working, parent))) { refuse(GONE); continue; }
           if (check({ kind: 'containment', self: element.id, elements: { child: element.id, parent }, values: { slot: null } })) apply({ kind: 'move', id: element.id, ...(parent === undefined ? {} : { parent }) });
+        } else if (isObject(action.relocate)) {
+          relocate(action.relocate, self, one);
         } else if (isObject(action.retype)) {
           const to = one(action.retype.to)?.value;
           const retyped = action.retype.target === undefined ? self : one(action.retype.target)?.value;
