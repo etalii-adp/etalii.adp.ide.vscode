@@ -5,7 +5,7 @@
 // the gesture's constraints, the change, the hooks, the neighbour bounds, then the invariants.
 //
 // What is built: `messages`, `reasons`, `editGate`, hooks (`on`, `for`, `attribute`, `when`,
-// `phase`, `order`, `maxHookDepth`), operations (`for`, `enabled`, `unavailable`, `confirm`,
+// `phase`, `order`, `maxHookDepth`), operations (`for`, `params` held to `required` and their facets, `enabled`, `unavailable`, `confirm`,
 // `actions`), `deletion` (`relations`, `children`, `references: "unset"`, `confirm`), the actions
 // `set`, `unset`, `create`, `connect`, `delete`, `let`, `if`, `forEach`, `layout` (the `rows`
 // algorithm), `abort`, `call`, and those that only ask the host for something (`select`, `reveal`,
@@ -148,7 +148,7 @@ export type Change =
   | { readonly kind: 'add'; readonly id: string; readonly type: string; readonly attributes: Attributes; readonly source?: string; readonly target?: string; readonly parent?: string; readonly slot?: string; readonly position?: Beside | AtIndex }
   | { readonly kind: 'set'; readonly id: string; readonly attributes: Readonly<Record<string, Value | null>> }
   | { readonly kind: 'remove'; readonly id: string }
-  | { readonly kind: 'move'; readonly id: string; readonly parent?: string; readonly position?: Beside | AtIndex }
+  | { readonly kind: 'move'; readonly id: string; readonly parent?: string; readonly slot?: string; readonly position?: Beside | AtIndex }
   | { readonly kind: 'retype'; readonly id: string; readonly type: string; readonly attributes: Attributes };
 
 /** A place among the children of a parent, counted from zero. */
@@ -223,7 +223,7 @@ export interface EndPlace {
   readonly at?: number;
 }
 
-export interface Question {
+export interface Prompt {
   readonly title: string;
   readonly message: string;
   readonly confirmLabel: string;
@@ -264,7 +264,7 @@ export interface Availability {
   /** The element it runs on; absent when it runs on the diagram or on the selection. */
   readonly target?: string;
   /** The question to ask before it runs. */
-  readonly confirm?: Question;
+  readonly confirm?: Prompt;
 }
 
 export interface OfferedEntry {
@@ -313,7 +313,7 @@ export interface Behavior {
    */
   menu(model: Model, target: string | Pending | undefined, situation?: Situation, sets?: readonly ContextSet[]): { readonly groups: readonly (readonly OfferedEntry[])[]; readonly standardEntries: boolean; readonly runSingle: boolean };
   /** What removing a selection takes with it, and the question to ask first when there is one. */
-  deletion(model: Model, selection: readonly string[], situation?: Situation): { readonly removes: readonly string[]; readonly confirm?: Question; readonly refused?: string };
+  deletion(model: Model, selection: readonly string[], situation?: Situation): { readonly removes: readonly string[]; readonly confirm?: Prompt; readonly refused?: string };
 
   /** A tool used at a point: the element it creates there, or the operation it runs, on the element the point is on when one is given. */
   create(model: Model, tool: string, at: Point, situation?: Situation, on?: string): Outcome;
@@ -407,10 +407,12 @@ export function applyChanges(model: Model, changes: readonly Change[], keeps?: (
     } else if (change.kind === 'move') {
       const moved = elements.find((element) => element.id === change.id);
       if (!moved) continue;
-      const { parent: _old, ...rest } = moved;
+      const { parent: _old, slot: _slot, ...rest } = moved;
       void _old;
+      // The slot goes with the parent: a move within one parent keeps it, a move to another gives the one it names.
+      const slot = change.slot ?? (change.parent === moved.parent ? _slot : undefined);
       const others = elements.filter((element) => element.id !== change.id);
-      elements = beside(others, { ...rest, ...(change.parent === undefined ? {} : { parent: change.parent }) }, change.position);
+      elements = beside(others, { ...rest, ...(change.parent === undefined ? {} : { parent: change.parent }), ...(slot === undefined ? {} : { slot }) }, change.position);
     } else if (change.kind === 'retype') {
       elements = elements.map((element) => (element.id !== change.id ? element : {
         ...element, type: change.type,
@@ -598,7 +600,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       const members = (value: unknown): unknown[] => (isObject(value) ? Object.values(value).flatMap((member) => (isObject(member) && !isCel(member) ? Object.values(member) : [member])) : []);
       // The `place` of a `create` is the name of a placement, and no expression.
       const created = isObject(action.create) ? Object.fromEntries(Object.entries(action.create).filter(([name]) => name !== 'place')) : action.create;
-      unread(owner, [action.when, action.if, action.forEach, action.delete, action.target, ...members(action.set), ...members(action.let), ...members(created), ...members(action.connect), ...members(action.abort), ...members(action.reparent), ...members(action.retype)]);
+      unread(owner, [action.when, action.if, action.forEach, action.delete, action.target, ...members(action.set), ...members(action.let), ...members(created), ...members(action.connect), ...members(action.abort), ...members(action.reparent), ...members(action.relocate), ...members(action.retype)]);
       for (const nested of [action.then, action.else, action.do]) if (Array.isArray(nested)) inspect(owner, nested);
     }
   };
@@ -707,7 +709,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     return factor === undefined ? value : awayFromZero(value * factor) / factor;
   };
 
-  const question = (confirm: Message | Confirmation | undefined, scope: Scope, deleting: boolean, title: string): Question | undefined => {
+  const promptOf = (confirm: Message | Confirmation | undefined, scope: Scope, deleting: boolean, title: string): Prompt | undefined => {
     if (confirm === undefined) return undefined;
     const asked: Confirmation = isObject(confirm) && !isCel(confirm) && 'message' in confirm ? (confirm as unknown as Confirmation) : { message: confirm as Message };
     const counted = asked.count === undefined ? undefined : expressions.evaluate(asked.count, scope);
@@ -987,6 +989,55 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       if (!written) refuse(worded(refusals.unchanged as Message | undefined, scope, 'This would change nothing.'));
     };
 
+    /**
+     * DESL's `move` (DESL 8.2), which the interpreter knows as `relocate`, since DISL's own `move` places
+     * an element on the canvas: an element, with everything it holds, into `parent` (`null`, or none
+     * given, among the document's own elements) and its `slot`, directly after or before a sibling
+     * there, else after the last sibling of its own type there, else where the binding inserts one (a
+     * place also holds members the body does not write, such as those of a list the registration
+     * keeps, and an element is written only next to one the body writes). A move into the element
+     * itself or into what it holds, into a parent whose `children` (or slot, or the document's
+     * `children`) does not allow its type, or next to what is not a sibling there rolls the
+     * transaction back. One into its own parent and slot is a reorder.
+     */
+    function relocate(move: Readonly<Record<string, unknown>>, self: string, one: (expression: unknown) => { readonly value: Value; readonly raw: unknown } | undefined): void {
+      const named = (expression: unknown): string | undefined => {
+        const id = expression === undefined ? undefined : one(expression)?.value;
+        return typeof id === 'string' && id !== '' ? id : undefined;
+      };
+      const moved = move.target === undefined ? self : named(move.target);
+      const element = moved === undefined ? undefined : find(working, moved);
+      const parent = named(move.parent);
+      if (!element || 'source' in element || (move.parent !== undefined && one(move.parent) === undefined) || (parent !== undefined && !find(working, parent))) { refuse(GONE); return; }
+      const slot = named(move.slot);
+      for (let above: string | undefined = parent; above !== undefined; above = find(working, above)?.parent) {
+        if (above === element.id) { refuse('It cannot be moved into itself or into what it holds.'); return; }
+      }
+      // What the new place allows: the parent's `children`, or its slot, or the document's own `children` (DESL 4.6).
+      const declared = parent === undefined ? (specification.metamodel.diagram as Readonly<Record<string, unknown>> | undefined)?.children : metamodel.types[find(working, parent)!.type]?.declared.children;
+      const children = isObject(declared) ? declared : undefined;
+      const slots = children && isObject(children.slots) ? children.slots : {};
+      const allowedHere = slot !== undefined ? (isObject(slots[slot]) ? slots[slot].allowed : []) : children?.allowed;
+      const allows = (parent === undefined && children === undefined) || (Array.isArray(allowedHere) && allowedHere.some((type) => typeof type === 'string' && isA(metamodel, element.type, type)));
+      if (!allows) { refuse(`${metamodel.types[element.type]?.label ?? element.type} cannot be put there.`); return; }
+      const siblings = working.elements.filter((other) => other.id !== element.id && other.parent === parent && other.slot === slot);
+      const after = named(move.after);
+      const before = after === undefined ? named(move.before) : undefined;
+      const beside = after ?? before;
+      if (beside !== undefined && !siblings.some((other) => other.id === beside)) { refuse('It can only be put next to what lies in the place it is moved to.'); return; }
+      const last = siblings.filter((other) => other.type === element.type).at(-1);
+      const position: Beside | undefined = after !== undefined ? { after } : before !== undefined ? { before } : last === undefined ? undefined : { after: last.id };
+      const own = element.parent === parent && element.slot === slot;
+      if (own) {
+        // A reorder: nothing changes when it is where it would go.
+        const now = working.elements.filter((other) => other.parent === parent && other.slot === slot);
+        const at = now.indexOf(element);
+        if (position === undefined || ('after' in position ? now[at - 1]?.id === position.after : now[at + 1]?.id === position.before)) return;
+      }
+      if (!own && !check({ kind: 'containment', self: element.id, elements: { child: element.id, parent }, values: { slot: slot ?? null } })) return;
+      apply({ kind: 'move', id: element.id, ...(parent === undefined ? {} : { parent }), ...(slot === undefined ? {} : { slot }), ...(position === undefined ? {} : { position }) });
+    }
+
     function act(actions: readonly unknown[], self: string, variables: Record<string, unknown>, source: Source): void {
       for (const action of actions) {
         if (refused !== undefined) return;
@@ -1086,6 +1137,8 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
           const parent = typeof under === 'string' && under !== '' ? under : undefined;
           if (!element || 'source' in element || (parent !== undefined && !find(working, parent))) { refuse(GONE); continue; }
           if (check({ kind: 'containment', self: element.id, elements: { child: element.id, parent }, values: { slot: null } })) apply({ kind: 'move', id: element.id, ...(parent === undefined ? {} : { parent }) });
+        } else if (isObject(action.relocate)) {
+          relocate(action.relocate, self, one);
         } else if (isObject(action.retype)) {
           const to = one(action.retype.to)?.value;
           const retyped = action.retype.target === undefined ? self : one(action.retype.target)?.value;
@@ -1259,6 +1312,48 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
 
   // ---- operations ----
 
+  /**
+   * Why a parameter's value cannot be taken, in this host's words, or nothing when it can: one that is required and not
+   * given, or one outside its facets (DISL 4.2, DESL 4.3), which `std.facets` prevents in a form (DISL 8.7). The facets are
+   * read from the parameter itself and from its `facets`. A parameter whose type is a type of the metamodel is the
+   * element of that id, which is checked where it is resolved.
+   */
+  const parameterRefusal = (name: string, param: Record<string, unknown>, value: unknown): string | undefined => {
+    const label = localized(param.label as Attribute['label'], locale) ?? labelOf(name);
+    if (value === undefined || value === null) return param.required === true ? `${label} must be given.` : undefined;
+    const type = typeof param.type === 'string' ? param.type : 'string';
+    if (Object.hasOwn(metamodel.types, type)) return undefined;
+    const facets = { ...(isObject(param.facets) ? param.facets : {}), ...param };
+    const bound = (key: string): number | string | undefined => (typeof facets[key] === 'number' || typeof facets[key] === 'string' ? facets[key] as number | string : undefined);
+    const primitive = valueKind(metamodel, type).kind === 'primitive' ? (valueKind(metamodel, type) as { primitive: string }).primitive : undefined;
+    for (const one of Array.isArray(value) ? value : [value]) {
+      const [min, max, above, below] = [bound('min'), bound('max'), bound('exclusiveMin'), bound('exclusiveMax')];
+      const numeric = primitive === 'int' || primitive === 'number';
+      const lower = min !== undefined ? `no less than ${min}` : above !== undefined ? `more than ${above}` : undefined;
+      const upper = max !== undefined ? `no more than ${max}` : below !== undefined ? `less than ${below}` : undefined;
+      const limits = min !== undefined && max !== undefined ? `from ${min} to ${max}` : [lower, upper].filter((part) => part !== undefined).join(' and ');
+      const range = `${label} is ${numeric ? (primitive === 'int' ? 'a whole number' : 'a number') : 'a value'}${limits === '' ? '' : ` ${limits}`}.`;
+      if (numeric && (typeof one !== 'number' || !Number.isFinite(one) || (primitive === 'int' && !Number.isInteger(one)))) return range;
+      // A bound compares with a value of its own kind: a number with a number, a date or a time written as text with text.
+      const under = (limit: number | string | undefined, strict: boolean): boolean => limit !== undefined && typeof limit === typeof one && (strict ? one <= limit : one < limit);
+      const over = (limit: number | string | undefined, strict: boolean): boolean => limit !== undefined && typeof limit === typeof one && (strict ? one >= limit : one > limit);
+      if ((typeof one === 'number' || typeof one === 'string') && (under(min, false) || over(max, false) || under(above, true) || over(below, true))) return range;
+      if (typeof one !== 'string') continue;
+      const [shortest, longest] = [facets.minLength, facets.maxLength].map((length) => (typeof length === 'number' ? length : undefined));
+      const length = [...one].length;
+      if ((shortest !== undefined && length < shortest) || (longest !== undefined && length > longest)) {
+        if (shortest === 1 && longest === undefined) return `${label} cannot be empty.`;
+        return `${label} is ${shortest !== undefined && longest !== undefined ? `${shortest} to ${longest}` : shortest !== undefined ? `at least ${shortest}` : `at most ${longest}`} characters long.`;
+      }
+      if (typeof facets.pattern === 'string') {
+        let pattern: RegExp | undefined;
+        try { pattern = new RegExp(facets.pattern); } catch { pattern = undefined; }
+        if (pattern && !pattern.test(one)) return `${label} does not have the form it must have.`;
+      }
+    }
+    return undefined;
+  };
+
   // The attribute the first action of an operation sets to its one parameter, as `p.<parameter>`.
   const asked = (operation: OperationDeclaration): { readonly asks?: string; readonly param?: string } => {
     const [param, ...more] = Object.keys(isObject(operation.params) ? operation.params : {});
@@ -1298,10 +1393,14 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     const label = worded(known.label, scope, labelOf(id));
     if (target === undefined && !whole && !known.for.includes('diagram')) return { offered: false, available: false, label };
     const reason = (free(operation.actions) ? undefined : gate(model, situation)) ?? applicable(operation.unavailable, scope);
-    return {
-      offered: true, available: reason === undefined && given(operation.enabled, scope), reason, label, target,
-      confirm: question(operation.confirm, scope, false, label),
-    };
+    const state = { offered: true, available: reason === undefined && given(operation.enabled, scope), reason, label, target };
+    // The question is worked out when it is asked for: its count can range over the whole model, which a
+    // page that asks what every element offers would otherwise pay for every element (etalii.adp spec 036, SC-005).
+    let prompt: { readonly value: Prompt | undefined } | undefined;
+    return Object.defineProperty(state, 'confirm', {
+      enumerable: true,
+      get: () => (prompt ??= { value: promptOf(operation.confirm, scope, false, label) }).value,
+    }) as Availability;
   };
 
   const done = (outcome: Outcome): outcome is Exclude<Outcome, { readonly refused: string }> => outcome.refused === undefined;
@@ -1323,6 +1422,8 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     for (const [name, param] of Object.entries(isObject(declared[id].params) ? declared[id].params : {})) {
       const stated = isObject(param) ? param : {};
       const value = args && Object.hasOwn(args, name) ? args[name] : isCel(stated.default) ? undefined : (stated.default as Value | undefined);
+      const outside = parameterRefusal(name, stated, value);
+      if (outside !== undefined) return { refused: outside };
       if (value === undefined || value === null) delete p[name];
       else if (typeof stated.type !== 'string' || !Object.hasOwn(metamodel.types, stated.type)) p[name] = value;
       else if (typeof value !== 'string' || !find(model, value)) return { refused: 'That is no longer in this diagram.' };
@@ -1680,7 +1781,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     // One removal asks at most once: the first element of the selection whose confirmation asks (DISL 9.5).
     for (const id of selection) {
       const type = typeOf(model, id);
-      const confirm = question(policyOf(type).confirm, over.scope(id, { selection: all }), true, 'Delete');
+      const confirm = promptOf(policyOf(type).confirm, over.scope(id, { selection: all }), true, 'Delete');
       if (confirm) return { removes: outcome.changes.flatMap((entry) => (entry.kind === 'remove' ? [entry.id] : [])), confirm };
     }
     return { removes: outcome.changes.flatMap((entry) => (entry.kind === 'remove' ? [entry.id] : [])) };

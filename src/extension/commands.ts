@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
-import type { EditRequest } from '../core/frame/toolType';
+import type { EditRequest, ViewOptions } from '../core/frame/toolType';
 import { viewTypeOf } from '../core/frame/toolType';
 import { keepAsText } from './opening';
 import { PropertiesView } from './propertiesView';
 import { entriesOf, ToolboxView } from './toolboxView';
 import type { OpenTool, Tools } from './toolEditor';
 import type { Scene } from '../core/scene/scene';
+import type { HierarchyRequest } from '../core/tool/hierarchyView';
+import type { TableRequest } from '../core/tool/tableView';
 import type { AnyToolType } from './toolTypes';
 
 /** The commands the plug-in adds, all in the category "ADP". */
@@ -22,9 +24,14 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
 
   // A command runs the action the diagram type offers for the selection; which one is found by
   // what the type says about it, so a command means the same in every diagram type.
-  const runAction = (command: string, pick: { shortcut?: string; label?: RegExp }, onDiagram = false): void => {
+  const runAction = (command: string, pick: { shortcut?: string; label?: RegExp }, onDiagram = false, onPage?: string): void => {
     register(command, async () => {
       const active = tools.active;
+      // On a page of boxes the page moves its selected box, as its own keys do, by the move a drag makes.
+      if (onPage !== undefined && active?.type.kind === 'designer' && active.type.page === 'hierarchy') {
+        active.post({ v: 2, type: 'command', command: onPage });
+        return;
+      }
       // These commands are the canvas's: a designer's operations are run from its table.
       if (!active || active.type.kind !== 'diagram' || active.readOnly || active.lastView?.readOnly) return;
       const selection = onDiagram ? [] : active.selection;
@@ -42,8 +49,8 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
   runAction('etalii.adp.rename', { shortcut: 'F2' });
   runAction('etalii.adp.remove', { shortcut: 'Delete' });
   runAction('etalii.adp.evenPhases', { label: /^Even phases$/ });
-  runAction('etalii.adp.moveEarlier', { shortcut: 'Alt+Up' });
-  runAction('etalii.adp.moveLater', { shortcut: 'Alt+Down' });
+  runAction('etalii.adp.moveEarlier', { shortcut: 'Alt+Up' }, false, 'moveEarlier');
+  runAction('etalii.adp.moveLater', { shortcut: 'Alt+Down' }, false, 'moveLater');
   runAction('etalii.adp.arrangeDiagram', { label: /^Arrange diagram$/ }, true);
 
   // Undo and Redo of a change that touched the registration alone, such as a row dragged or a
@@ -118,16 +125,22 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
       if (!active) return undefined;
       const sent = active.lastView;
       return {
-        ...(sent === undefined ? {} : 'nodes' in sent ? { scene: sent, view: elementsOf(sent) } : { table: sent }),
-        kind: active.type.kind, options: active.options, fields: active.fields(), selection: active.selection, version: active.document.version, origin: active.type.origin,
+        ...(sent === undefined ? {} : 'nodes' in sent ? { scene: sent, view: elementsOf(sent) } : 'roots' in sent ? { hierarchy: sent } : { table: sent }),
+        kind: active.type.kind, cause: active.lastCause, options: active.options, fields: active.fields(), selection: active.selection, version: active.document.version, origin: active.type.origin,
         actions: active.type.actions(active.source, active.selection, active.options),
       };
     });
-    register('etalii.adp.test.edit', async (request: unknown) => {
+    // With a `seq`, a question the edit asks is asked in the page, as for a request the page made.
+    register('etalii.adp.test.edit', async (request: unknown, seq: unknown) => {
       const active = tools.active;
-      return active ? tools.perform(active, request as EditRequest) : undefined;
+      return active ? tools.perform(active, request as EditRequest | TableRequest | HierarchyRequest, undefined, typeof seq === 'number' ? seq : undefined) : undefined;
     });
     register('etalii.adp.test.toolbox', () => entriesOf(tools.active));
+    // The options a canvas or a page sends, as it sends them: a filter typed, a level narrowed to.
+    register('etalii.adp.test.viewOptions', (options: unknown) => {
+      const active = tools.active;
+      if (active) tools.setOptions(active, options as ViewOptions);
+    });
     register('etalii.adp.test.layoutSteps', () => ({ undo: tools.layoutStepNext('undo'), redo: tools.layoutStepNext('redo') }));
     register('etalii.adp.test.select', (ids: unknown) => {
       const active = tools.active;

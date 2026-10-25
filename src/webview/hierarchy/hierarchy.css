@@ -1,0 +1,1325 @@
+/*
+ * The page of boxes of a designer (DESL 7.7.1), in the standalone host's sizes: 6px inside every
+ * box and between its text and its controls, 12px from its left edge to its labels, its description
+ * and a wrapped title's later lines, 12px below its description, levels 240px wide unless their column keeps a width. Every colour is
+ * the theme's own; in high contrast every edge is the contrast border and the selection is
+ * outlined, so nothing is told by a fill alone.
+ */
+:root {
+  --hs-line: var(--vscode-editorGroup-border, var(--vscode-widget-border, rgba(128, 128, 128, 0.35)));
+  --hs-raised: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  --hs-muted: var(--vscode-descriptionForeground);
+  --hs-accent: var(--vscode-focusBorder);
+  --hs-danger: var(--vscode-errorForeground);
+  --hs-warning: var(--vscode-editorWarning-foreground);
+}
+
+body.vscode-high-contrast,
+body.vscode-high-contrast-light {
+  --hs-line: var(--vscode-contrastBorder);
+  --hs-raised: var(--vscode-editor-background);
+  --hs-accent: var(--vscode-contrastActiveBorder, var(--vscode-focusBorder));
+}
+
+/* In high contrast the focus is drawn in the contrast's active border, dashed and two pixels wide, so it is told from the
+   selection and from every edge. */
+body.vscode-high-contrast .hs-surface :focus-visible,
+body.vscode-high-contrast-light .hs-surface :focus-visible,
+body.vscode-high-contrast .hs-overlay :focus-visible,
+body.vscode-high-contrast-light .hs-overlay :focus-visible {
+  outline: 2px dashed var(--vscode-contrastActiveBorder, var(--vscode-focusBorder));
+  outline-offset: -2px;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+.hs-surface {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  font-size: 13px;
+}
+
+.hs-surface [hidden] {
+  display: none !important;
+}
+
+.hs-surface button,
+.hs-surface textarea {
+  font: inherit;
+}
+
+.hs-surface :focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.adp-icon {
+  flex: none;
+}
+
+.adp-icon path {
+  fill: currentColor;
+}
+
+/* The trail: the document's name, then the levels down to the selection, each a link that narrows the page to it. */
+.hs-trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--hs-line);
+}
+
+.hs-trail-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--hs-muted);
+}
+
+.hs-trail-link,
+.hs-finding-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--vscode-textLink-foreground, var(--vscode-editor-foreground));
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.hs-trail-current {
+  color: var(--vscode-editor-foreground);
+  font-weight: 600;
+}
+
+.hs-help-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-inline-start: auto;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  color: var(--hs-muted);
+  cursor: pointer;
+}
+
+.hs-help-button:hover,
+.hs-help-button[aria-expanded="true"] {
+  background: var(--vscode-toolbar-hoverBackground, var(--hs-raised));
+  color: var(--vscode-editor-foreground);
+}
+
+.hs-help {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--hs-line);
+  background: var(--hs-raised);
+}
+
+.hs-help-keys {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 12px;
+  margin: 0;
+}
+
+.hs-help-keys dd {
+  margin: 0;
+}
+
+.hs-help-keys kbd {
+  font-family: inherit;
+  font-weight: 600;
+}
+
+.hs-read-only {
+  margin: 0;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--hs-line);
+  border-left: 3px solid var(--hs-warning);
+  color: var(--hs-muted);
+}
+
+/* The bar of a change from outside while a field is open, in the colours of a warning. */
+.hs-conflict {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--vscode-inputValidation-warningBorder, var(--hs-line));
+  background: var(--vscode-inputValidation-warningBackground, var(--hs-raised));
+}
+
+.hs-conflict button {
+  padding: 2px 10px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 2px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  cursor: pointer;
+}
+
+.hs-conflict button:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.hs-orphan-field {
+  padding: 6px 12px;
+}
+
+.hs-findings {
+  margin: 0;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--hs-line);
+  list-style: none;
+}
+
+.hs-finding {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.hs-finding-icon {
+  display: inline-flex;
+}
+
+.hs-finding-error .hs-finding-icon {
+  color: var(--vscode-editorError-foreground, var(--hs-danger));
+}
+
+.hs-finding-warning .hs-finding-icon {
+  color: var(--hs-warning);
+}
+
+.hs-finding-information .hs-finding-icon,
+.hs-finding-hint .hs-finding-icon,
+.hs-finding-line {
+  color: var(--hs-muted);
+}
+
+/* One page that scrolls from top to bottom; the boxes share their borders. */
+.hs-page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.hs-page:focus {
+  outline: none;
+}
+
+/* The page keeps the focus while the arrow keys move the selection: the selected box shows it, and the page while none is. */
+.hs-page:focus-visible:not([aria-activedescendant]) {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.hs-page:focus-visible .hs-box.hs-selected {
+  outline: 2px solid var(--vscode-focusBorder);
+}
+
+body.vscode-high-contrast .hs-page:focus-visible .hs-box.hs-selected,
+body.vscode-high-contrast-light .hs-page:focus-visible .hs-box.hs-selected {
+  outline: 2px dashed var(--vscode-contrastActiveBorder, var(--vscode-focusBorder));
+}
+
+.hs-level,
+.hs-entry {
+  display: flex;
+  margin: -1px 0 0 -1px;
+  border: 1px solid var(--hs-line);
+}
+
+.hs-page > .hs-level,
+.hs-page > .hs-entry {
+  margin-left: 0;
+}
+
+/* A level's own box is as high as what stands to its right: the row stretches it. */
+.hs-level-box {
+  position: relative;
+  display: flex;
+  box-sizing: border-box;
+}
+
+/* The right edge of a column of levels, dragged to change its width (DESL 7.7.1): 8px to take, a 2px line when it is
+   under the pointer, dragged or focused. */
+.hs-column-edge {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.hs-column-edge::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+}
+
+.hs-column-edge:hover::after,
+.hs-column-edge:active::after,
+.hs-column-edge:focus-visible::after {
+  background: var(--hs-accent);
+}
+
+.hs-surface .hs-column-edge:focus-visible {
+  outline: none;
+}
+
+body.vscode-high-contrast .hs-column-edge:focus-visible::after,
+body.vscode-high-contrast-light .hs-column-edge:focus-visible::after {
+  left: 2px;
+  width: 4px;
+  background: var(--vscode-contrastActiveBorder, var(--vscode-focusBorder));
+}
+
+.hs-level-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 280px;
+}
+
+.hs-entry {
+  flex: 1;
+}
+
+/* Its column of controls stands at its right, first in its markup and last in the row. */
+.hs-box {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: row-reverse;
+  align-items: stretch;
+  min-width: 0;
+  padding: 6px;
+  cursor: default;
+}
+
+.hs-level-box .hs-box {
+  background: var(--hs-raised);
+}
+
+.hs-box.hs-selected {
+  outline: 2px solid var(--hs-accent);
+  outline-offset: -2px;
+}
+
+/* The first line: the grip, the collapse control and the number stand on it as words do, so a title of several lines
+   wraps under them, its next lines 12px from the box's left as the labels and the description are. */
+.hs-box-header {
+  min-width: 0;
+  padding-inline-start: 6px;
+  line-height: 20px;
+  text-indent: -6px;
+  overflow-wrap: break-word;
+}
+
+.hs-box-header > .hs-grip,
+.hs-box-header > .hs-toggle,
+.hs-box-header > .hs-toggle-space,
+.hs-box-header > .hs-number {
+  margin-inline-end: 4px;
+  text-indent: 0;
+  vertical-align: top;
+}
+
+.hs-box-header-typing {
+  display: flex;
+  align-items: flex-start;
+  padding-inline-start: 0;
+  text-indent: 0;
+}
+
+.hs-box-side {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-inline-start: 6px;
+}
+
+.hs-box.hs-no-side > .hs-box-side {
+  margin-inline-start: 0;
+}
+
+.hs-box-icons {
+  display: flex;
+  flex-direction: column;
+}
+
+.hs-icons-row > .hs-box-side > .hs-box-icons {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  flex-direction: row-reverse;
+}
+
+.hs-delete-place {
+  display: flex;
+  width: 20px;
+  height: 20px;
+  margin-top: auto;
+}
+
+.hs-box-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hs-toggle,
+.hs-toggle-space,
+.hs-focus,
+.hs-hidden-levels,
+.hs-add-description,
+.hs-note-mark,
+.hs-note-add,
+.hs-tag-add,
+.hs-delete {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--hs-muted);
+  cursor: pointer;
+}
+
+.hs-toggle-space {
+  cursor: default;
+}
+
+.hs-toggle:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.hs-toggle:hover:not(:disabled),
+.hs-focus:hover,
+.hs-hidden-levels:hover,
+.hs-add-description:hover,
+.hs-note-add:hover,
+.hs-tag-add:hover {
+  color: var(--vscode-editor-foreground);
+}
+
+.hs-delete:hover {
+  color: var(--hs-danger);
+}
+
+.hs-number {
+  flex: none;
+  color: var(--hs-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hs-title {
+  flex: 1 1 auto;
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+/* The mark of a box's open notes, first of its controls, which opens their list. */
+.hs-note-mark {
+  width: auto;
+  min-width: 18px;
+  color: var(--hs-warning);
+}
+
+.hs-note-count {
+  margin-inline-start: 1px;
+  font-size: 10px;
+}
+
+/* Adding the first note, focus, adding a label and adding a description are offered on the box under the pointer or
+   selected, kept in their place while hidden, so showing them moves nothing a click aims at. */
+.hs-note-add,
+.hs-focus,
+.hs-tag-add,
+.hs-add-description {
+  visibility: hidden;
+}
+
+.hs-box:hover > .hs-box-side > .hs-box-icons > *,
+.hs-box.hs-selected > .hs-box-side > .hs-box-icons > *,
+.hs-box-icons > [aria-expanded="true"],
+.hs-box-icons > :focus-visible {
+  visibility: visible;
+}
+
+/* A label's values below the title, 12px from the box's left, each drawn alike in the theme's colour of its name. */
+.hs-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 0 0 6px;
+}
+
+.hs-label {
+  --hs-label-colour: var(--hs-muted);
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 18px;
+  padding: 0 7px;
+  border: 1px solid color-mix(in srgb, var(--hs-label-colour) 55%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--hs-label-colour) 18%, transparent);
+  color: var(--vscode-editor-foreground);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.hs-label[data-colour="gray"] { --hs-label-colour: var(--vscode-disabledForeground, var(--hs-muted)); }
+.hs-label[data-colour="brown"] { --hs-label-colour: color-mix(in srgb, var(--vscode-charts-orange) 55%, var(--vscode-editor-foreground)); }
+.hs-label[data-colour="orange"] { --hs-label-colour: var(--vscode-charts-orange); }
+.hs-label[data-colour="yellow"] { --hs-label-colour: var(--vscode-charts-yellow); }
+.hs-label[data-colour="green"] { --hs-label-colour: var(--vscode-charts-green); }
+.hs-label[data-colour="blue"] { --hs-label-colour: var(--vscode-charts-blue); }
+.hs-label[data-colour="purple"] { --hs-label-colour: var(--vscode-charts-purple); }
+.hs-label[data-colour="pink"] { --hs-label-colour: var(--vscode-terminal-ansiMagenta, var(--vscode-charts-purple)); }
+.hs-label[data-colour="red"] { --hs-label-colour: var(--vscode-charts-red); }
+
+.hs-label-implied {
+  border-style: dashed;
+}
+
+/* Each label in a look of its own, so that labels side by side tell apart: a label of several values a rounded tag
+   written with the sign a filter names its values by, one of one value a square badge, or a rounded status with a dot. */
+.hs-label[data-sign]::before {
+  content: attr(data-sign);
+  margin-inline-end: 1px;
+  opacity: 0.55;
+}
+
+.hs-look-badge {
+  border-radius: 3px;
+}
+
+.hs-look-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-inline-end: 5px;
+  border-radius: 50%;
+  background: var(--hs-label-colour);
+}
+
+/* A label's values the page changes open its list, as does the way to give a label of one value its first. */
+.hs-label-values {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.hs-label-values:hover {
+  background: var(--vscode-toolbar-hoverBackground, var(--hs-raised));
+}
+
+.hs-pick-empty {
+  align-items: center;
+  height: 18px;
+  padding: 0 4px;
+  color: var(--hs-muted);
+  font-size: 11px;
+}
+
+.hs-pick-empty-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.hs-pick-empty .adp-icon {
+  width: 12px;
+  height: 12px;
+}
+
+body.vscode-high-contrast .hs-label,
+body.vscode-high-contrast-light .hs-label {
+  border-color: var(--vscode-contrastBorder);
+}
+
+.hs-description {
+  margin: 4px 0 6px 6px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A mention in a description: a small box with what it names, inline in the text. */
+.hs-reference {
+  display: inline;
+  padding: 0 4px;
+  border: 1px solid var(--hs-line);
+  border-radius: 3px;
+  background: var(--hs-raised);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.hs-reference[role="button"] {
+  cursor: pointer;
+}
+
+.hs-reference[role="button"]:hover {
+  border-color: var(--hs-accent);
+}
+
+.hs-reference .hs-number {
+  margin-inline-end: 0;
+}
+
+/* One that names nothing keeps its text as written, marked by a dashed border in the colour of an error. */
+.hs-reference-broken {
+  border-style: dashed;
+  border-color: var(--hs-danger);
+  color: var(--hs-danger);
+}
+
+.hs-reference-broken .adp-icon {
+  width: 12px;
+  height: 12px;
+  margin-inline-end: 2px;
+  vertical-align: -1px;
+}
+
+/* A title or description typed in place: its text where the text stood, in its weight, as high as it wraps to. */
+.hs-field {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--vscode-input-border, var(--vscode-focusBorder));
+  border-radius: 2px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+}
+
+.hs-field-inplace {
+  display: block;
+  margin: -2px -5px;
+  padding: 1px 4px;
+  overflow: hidden;
+  line-height: 20px;
+  resize: none;
+}
+
+/* A title typed in place starts after the number, on the title's own line, and is one line high until its text wraps. */
+.hs-field-title {
+  flex: 1 1 0;
+  min-width: 0;
+  margin-inline-start: 0;
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+/* A description typed in place: where the description stood and as high, with its margins. */
+.hs-description-field {
+  position: relative;
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+}
+
+.hs-description-field > .hs-field-multiline {
+  flex: 1 0 auto;
+  width: auto;
+  margin: 2px 0 6px 6px;
+  padding: 0 4px;
+  white-space: pre-wrap;
+}
+
+/* The place a node is added, at the end of a level's content and of the page. */
+.hs-add {
+  display: flex;
+  gap: 8px;
+  padding: 2px 6px;
+}
+
+.hs-page > .hs-add {
+  padding: 4px 0;
+}
+
+.hs-add-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--hs-muted);
+  cursor: pointer;
+}
+
+.hs-add-button:hover {
+  background: var(--vscode-toolbar-hoverBackground, var(--hs-raised));
+  color: var(--vscode-editor-foreground);
+}
+
+/* What a node is dragged by, with everything in it: first on the first line, which the title wraps under. */
+.hs-grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 20px;
+  color: var(--hs-muted);
+  cursor: grab;
+  touch-action: none;
+}
+
+.hs-grip .adp-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* Where a dragged node would go: the level it goes into marked, and the place it would stand drawn there. */
+.hs-box.hs-drop-into {
+  outline: 2px dashed var(--hs-accent);
+  outline-offset: -2px;
+}
+
+.hs-dragging {
+  opacity: 0.45;
+}
+
+.hs-drop-slot {
+  margin: -1px 0 0 -1px;
+  padding: 6px 6px 6px 40px;
+  border: 2px dashed var(--hs-accent);
+  background: color-mix(in srgb, var(--hs-accent) 10%, var(--vscode-editor-background));
+  line-height: 20px;
+}
+
+.hs-page > .hs-drop-slot {
+  margin-left: 0;
+}
+
+.hs-drop-slot-level {
+  box-sizing: border-box;
+  width: 240px;
+}
+
+.hs-drop-slot-title {
+  font-weight: 600;
+}
+
+.adp-hierarchy-heading {
+  margin: 12px 0 4px;
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.adp-hierarchy-status {
+  margin: 0;
+  padding: 4px 12px;
+  min-height: 1.4em;
+  border-top: 1px solid var(--hs-line);
+}
+
+/* The question an edit asks first, over the page. */
+.hs-dialog-backdrop {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--vscode-editor-background) 60%, transparent);
+}
+
+.hs-dialog {
+  box-sizing: border-box;
+  width: 420px;
+  max-width: calc(100vw - 24px);
+  padding: 12px 16px;
+  border: 1px solid var(--vscode-widget-border, var(--hs-line));
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, transparent);
+}
+
+.hs-dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 1.1em;
+}
+
+.hs-dialog-message {
+  margin: 0 0 12px;
+  line-height: 20px;
+}
+
+.hs-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.hs-dialog-button {
+  padding: 3px 14px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 2px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  cursor: pointer;
+}
+
+.hs-dialog-confirm {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.hs-dialog-confirm.hs-danger {
+  background: var(--vscode-errorForeground);
+  color: var(--vscode-editor-background);
+}
+
+/* ---- What stands over every pane: a box's notes, a label's list and its editor, the lookup `#` opens. ---- */
+.hs-note-list,
+.hs-label-list,
+.hs-list-editor,
+.hs-reference-lookup {
+  position: fixed;
+  z-index: 30;
+  box-sizing: border-box;
+  max-width: calc(100vw - 8px);
+  max-height: calc(100vh - 8px);
+  overflow: auto;
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border, var(--hs-line)));
+  border-radius: 3px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, transparent);
+  color: var(--vscode-editorWidget-foreground, var(--vscode-editor-foreground));
+  font-size: 13px;
+  line-height: 20px;
+  cursor: default;
+}
+
+.hs-overlay button,
+.hs-overlay input,
+.hs-overlay select,
+.hs-overlay textarea {
+  font: inherit;
+}
+
+.hs-overlay :focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+/* The list of a box's notes, under its icons. */
+.hs-note-list {
+  width: 340px;
+  padding: 8px;
+}
+
+.hs-notes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A note, its controls at its right: beside it, one above the other, when it takes several lines; under it, side by side,
+   when it takes one. */
+.hs-note {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--hs-line);
+}
+
+.hs-note.hs-note-tall {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.hs-note-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.hs-note-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.hs-note-tall > .hs-note-actions {
+  flex-direction: column;
+}
+
+.hs-note-action,
+.hs-list-button,
+.hs-tag-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--hs-muted);
+  cursor: pointer;
+}
+
+.hs-note-action:hover,
+.hs-list-button:hover:not(:disabled),
+.hs-tag-remove:hover {
+  background: var(--vscode-toolbar-hoverBackground, var(--hs-raised));
+  color: var(--vscode-editor-foreground);
+}
+
+.hs-list-button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.hs-note-resolved .hs-note-head,
+.hs-note-resolved .hs-note-detail {
+  color: var(--hs-muted);
+}
+
+.hs-note-resolved .hs-note-text {
+  text-decoration: line-through;
+}
+
+.hs-note-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.hs-note-kind {
+  display: inline-flex;
+  height: 20px;
+  align-items: center;
+  color: var(--hs-warning);
+}
+
+.hs-note-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hs-note-detail {
+  margin: 0 0 0 22px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A new note, and a note being changed: its kind, then its text over the list's width, then its buttons at the right. */
+.hs-note-new,
+.hs-note-changing {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.hs-note-new {
+  padding-top: 8px;
+}
+
+.hs-note-text-field,
+.hs-note-detail-field {
+  padding: 2px 4px;
+  resize: none;
+  line-height: 20px;
+}
+
+.hs-note-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.hs-note-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* A note's kind, each with its icon to its left. */
+.hs-kind {
+  position: relative;
+  align-self: flex-start;
+}
+
+.hs-kind-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  min-width: 140px;
+  height: 26px;
+  padding: 0 6px;
+  cursor: pointer;
+}
+
+.hs-kind-button > .adp-icon:first-child,
+.hs-kind-option > .adp-icon {
+  color: var(--hs-warning);
+}
+
+.hs-kind-name {
+  flex: 1;
+  text-align: start;
+}
+
+.hs-kind-list {
+  position: absolute;
+  z-index: 1;
+  top: 100%;
+  left: 0;
+  min-width: 100%;
+  margin: 2px 0 0;
+  padding: 4px 0;
+  border: 1px solid var(--vscode-editorWidget-border, var(--hs-line));
+  border-radius: 3px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, transparent);
+  list-style: none;
+}
+
+.hs-kind-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.hs-kind-option.hs-kind-active {
+  background: var(--vscode-list-hoverBackground, var(--hs-raised));
+}
+
+.hs-kind-option[aria-selected="true"] {
+  font-weight: 600;
+}
+
+/* The searchable list a label's list and the lookup are, the Knowledge designer's. */
+.hs-search {
+  display: flex;
+  flex-direction: column;
+}
+
+.hs-search-field {
+  box-sizing: border-box;
+  margin: 6px;
+  padding: 2px 6px;
+  border: 1px solid var(--vscode-input-border, var(--hs-line));
+  border-radius: 2px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+}
+
+.hs-search-rows {
+  max-height: 240px;
+  overflow: auto;
+  margin: 0;
+  padding: 0 0 4px;
+  list-style: none;
+}
+
+.hs-search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+
+.hs-search-row-active {
+  background: var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground));
+  color: var(--vscode-list-activeSelectionForeground, inherit);
+}
+
+.hs-search-blank {
+  width: 16px;
+  flex: none;
+}
+
+.hs-search-empty {
+  padding: 1px 8px;
+  color: var(--hs-muted);
+}
+
+/* A label's list opened on a box, under its labels. */
+.hs-label-list {
+  width: 300px;
+}
+
+.hs-tag-chosen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 6px 0;
+}
+
+.hs-tag-chosen-value {
+  display: inline-flex;
+  align-items: center;
+}
+
+.hs-tag-remove {
+  width: 16px;
+  height: 16px;
+}
+
+.hs-tag-edit-list,
+.hs-pick-clear {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-top: 1px solid var(--hs-line);
+  background: none;
+  color: var(--hs-muted);
+  text-align: start;
+  cursor: pointer;
+}
+
+.hs-tag-edit-list:hover,
+.hs-pick-clear:hover {
+  background: var(--vscode-list-hoverBackground, var(--hs-raised));
+  color: var(--vscode-editor-foreground);
+}
+
+/* A label's list, edited: each member's look, name, colour, place and delete, and a new one added below. */
+.hs-list-editor {
+  width: 420px;
+  padding: 6px;
+}
+
+.hs-list-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hs-list-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.hs-list-look {
+  display: flex;
+  flex: 0 0 110px;
+  overflow: hidden;
+}
+
+.hs-list-name {
+  flex: 1;
+  min-width: 0;
+  padding: 1px 4px;
+}
+
+.hs-list-colour {
+  padding: 1px 2px;
+  border: 1px solid var(--vscode-dropdown-border, var(--hs-line));
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+}
+
+.hs-list-add-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--hs-line);
+}
+
+.hs-list-new {
+  flex: 1;
+  padding: 1px 4px;
+}
+
+/* The lookup `#` opens, under the field it was typed in. */
+.hs-reference-lookup {
+  width: 300px;
+}
+
+/* ---- The bar that narrows and sorts the page, above it with the findings. ---- */
+.hs-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--hs-line);
+  color: var(--hs-muted);
+}
+
+.hs-filter-query,
+.hs-filter-name,
+.hs-sort select,
+.hs-stored-filters {
+  box-sizing: border-box;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--vscode-input-border, var(--hs-line));
+  border-radius: 2px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+}
+
+.hs-sort select,
+.hs-stored-filters {
+  border-color: var(--vscode-dropdown-border, var(--hs-line));
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+}
+
+.hs-filter-field {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 160px;
+}
+
+.hs-filter-query {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The words the field offers to complete the one being typed, under it and above the page. */
+.hs-filter-completions {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 2px);
+  left: 0;
+  box-sizing: border-box;
+  min-width: 220px;
+  max-height: 280px;
+  overflow: auto;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  border: 1px solid var(--vscode-editorWidget-border, var(--hs-line));
+  border-radius: 3px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, transparent);
+}
+
+.hs-filter-completion {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 3px 10px;
+  color: var(--vscode-editor-foreground);
+  cursor: pointer;
+}
+
+.hs-filter-completion-active {
+  background: var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground));
+  color: var(--vscode-list-activeSelectionForeground, inherit);
+}
+
+.hs-filter-completion-word {
+  font-family: var(--vscode-editor-font-family, monospace);
+  white-space: nowrap;
+}
+
+.hs-filter-completion-hint {
+  color: var(--hs-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.hs-filter-name {
+  width: 160px;
+}
+
+.hs-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hs-filter-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.hs-filter-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  color: var(--hs-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.hs-filter-button:hover {
+  background: var(--vscode-toolbar-hoverBackground, var(--hs-raised));
+  color: var(--vscode-editor-foreground);
+}
+
+.hs-filter-count {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

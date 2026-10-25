@@ -1,6 +1,6 @@
 # Where the examples and fixtures come from
 
-The files under `examples/` and `fixtures/` are copied unchanged, byte for byte, from [etalii-adp/etalii.adp.ide.standalone](https://github.com/etalii-adp/etalii.adp.ide.standalone) and, for DESL's smallest example and DISL's example of inherited relation flags, from [etalii-adp/etalii.adp](https://github.com/etalii-adp/etalii.adp), both licensed under the Apache License 2.0, as this repository is. They are what both hosts must agree on: every example opens and round-trips here as it does there, and every fixture yields the same findings. This record covers the folders of its table; `fixtures/fbl/` has a record of its own.
+The files under `examples/` and `fixtures/` are copied unchanged, byte for byte, from [etalii-adp/etalii.adp.ide.standalone](https://github.com/etalii-adp/etalii.adp.ide.standalone) and, for DESL's smallest example and DISL's example of inherited relation flags, from [etalii-adp/etalii.adp](https://github.com/etalii-adp/etalii.adp), both licensed under the Apache License 2.0, as this repository is. The data of `examples/hierarchical-requirement/nist-sp-800-53/` is NIST's, a work of the United States government in the public domain and dedicated worldwide under CC0 1.0, as the `LICENSE.md` and `readme.md` copied beside it say. They are what both hosts must agree on: every example opens and round-trips here as it does there, and every fixture yields the same findings. This record covers the folders of its table; `fixtures/fbl/` has a record of its own.
 
 - Refresh them with `node scripts/sync-examples.mjs <path to a checkout of etalii.adp.ide.standalone> [<git ref>] [<path to a checkout of etalii.adp> [<git ref>]]`; do not edit them by hand.
 
@@ -16,12 +16,15 @@ The files under `examples/` and `fixtures/` are copied unchanged, byte for byte,
 | `examples/agent-activity-diagram/` | `etalii.adp.ide.standalone` | `src/diagrams/agent-activity-diagram/examples/` | `5756a07edf339f2d0f8d118bd8922848032b6058` |
 | `fixtures/tools/agent-activity-diagram/` | `etalii.adp.ide.standalone` | `src/diagrams/agent-activity-diagram/backend/EtAlii.Adp.Diagram.AgentActivityDiagram.Tests/Fixtures/` | `5756a07edf339f2d0f8d118bd8922848032b6058` |
 | `examples/knowledge/` | `etalii.adp.ide.standalone` | `src/designers/knowledge/examples/` | `5756a07edf339f2d0f8d118bd8922848032b6058` |
-| `fixtures/tools/desl/minimal-table.des` | `etalii.adp` | `specifications/desl/minimal-table.des` | `4aa0522b195d5d0ee3139f8dc54f741a5bbb858b` |
-| `fixtures/tools/desl/minimal-table.fbl` | `etalii.adp` | `specifications/desl/minimal-table.fbl` | `4aa0522b195d5d0ee3139f8dc54f741a5bbb858b` |
-| `fixtures/tools/desl/desl.schema.json` | `etalii.adp` | `specifications/desl/desl.schema.json` | `4aa0522b195d5d0ee3139f8dc54f741a5bbb858b` |
-| `fixtures/disl/flag-inheritance/service-calls.dis` | `etalii.adp` | `specifications/disl/service-calls.dis` | `4aa0522b195d5d0ee3139f8dc54f741a5bbb858b` |
-| `fixtures/disl/flag-inheritance/service-calls.did` | `etalii.adp` | `specifications/disl/service-calls.did` | `4aa0522b195d5d0ee3139f8dc54f741a5bbb858b` |
-| `fixtures/disl/flag-inheritance/service-calls.findings.json` | `etalii.adp` | `specifications/disl/service-calls.findings.json` | `4aa0522b195d5d0ee3139f8dc54f741a5bbb858b` |
-| `fixtures/disl/flag-inheritance/relation-flag-widened.dis` | `etalii.adp` | `specifications/disl/refused/relation-flag-widened.dis` | `4aa0522b195d5d0ee3139f8dc54f741a5bbb858b` |
-| `fixtures/disl/flag-inheritance/relation-flag-directed.dis` | `etalii.adp` | `specifications/disl/refused/relation-flag-directed.dis` | `4aa0522b195d5d0ee3139f8dc54f741a5bbb858b` |
-| `fixtures/disl/flag-inheritance/relation-flag-conflict.dis` | `etalii.adp` | `specifications/disl/refused/relation-flag-conflict.dis` | `4aa0522b195d5d0ee3139f8dc54f741a5bbb858b` |
+| `examples/hierarchical-requirement/web-shop.md` | `etalii.adp` | `definitions/designers/examples/web-shop.md` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
+| `examples/hierarchical-requirement/web-shop.adp` | `etalii.adp` | `definitions/designers/examples/web-shop.adp` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
+| `examples/hierarchical-requirement/nist-sp-800-53/` | `etalii.adp.ide.standalone` | `src/examples/designers/hierarchical-requirement/nist-sp-800-53/` | `80ad865b9ab14f48bc23cb77daeccab9b89df513` |
+| `fixtures/tools/desl/minimal-table.des` | `etalii.adp` | `specifications/desl/minimal-table.des` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
+| `fixtures/tools/desl/minimal-table.fbl` | `etalii.adp` | `specifications/desl/minimal-table.fbl` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
+| `fixtures/tools/desl/desl.schema.json` | `etalii.adp` | `specifications/desl/desl.schema.json` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
+| `fixtures/disl/flag-inheritance/service-calls.dis` | `etalii.adp` | `specifications/disl/service-calls.dis` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
+| `fixtures/disl/flag-inheritance/service-calls.did` | `etalii.adp` | `specifications/disl/service-calls.did` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
+| `fixtures/disl/flag-inheritance/service-calls.findings.json` | `etalii.adp` | `specifications/disl/service-calls.findings.json` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
+| `fixtures/disl/flag-inheritance/relation-flag-widened.dis` | `etalii.adp` | `specifications/disl/refused/relation-flag-widened.dis` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
+| `fixtures/disl/flag-inheritance/relation-flag-directed.dis` | `etalii.adp` | `specifications/disl/refused/relation-flag-directed.dis` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
+| `fixtures/disl/flag-inheritance/relation-flag-conflict.dis` | `etalii.adp` | `specifications/disl/refused/relation-flag-conflict.dis` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |

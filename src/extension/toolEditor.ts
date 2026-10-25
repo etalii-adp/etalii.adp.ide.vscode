@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
 import type { EditRequest, Field, Source, ViewOptions } from '../core/frame/toolType';
 import { viewTypeOf } from '../core/frame/toolType';
-import type { FromCanvas, ToCanvas } from '../core/frame/protocol';
+import type { FromCanvas, ToCanvas, ViewCause } from '../core/frame/protocol';
 import { linkKind } from '../core/disl/metamodel';
 import { placesOf, type Scene } from '../core/scene/scene';
 import { spliceRanges } from '../core/tool/spliceRanges';
+import type { HierarchyRequest, HierarchyView } from '../core/tool/hierarchyView';
 import type { TableRequest, TableView } from '../core/tool/tableView';
 import type { Findings } from './findings';
 import { handBack } from './opening';
@@ -30,12 +31,20 @@ export class OpenTool {
   options: ViewOptions = {};
   selection: readonly string[] = [];
   /** What the canvas was last sent: the tool type's own view, and the version of the document it was made of. */
-  lastView: Scene | TableView | undefined;
+  lastView: Scene | TableView | HierarchyView | undefined;
   lastVersion: number | undefined;
   readOnly = false;
   /** The text of the registration beside the document, when there is one. */
   registration: string | undefined;
   readonly registrationUri: vscode.Uri;
+  /** The writes of the registration, one after the other: each starts from what the one before left. */
+  registrationWrites: Promise<void> = Promise.resolve();
+  /** How many of this editor's own edits are being made: a change of its files meanwhile is its own. */
+  performing = 0;
+  /** What change of the document the view last sent followed, as the canvas was told. */
+  lastCause: ViewCause | undefined;
+  /** The questions the page asks in its own place, by the `seq` of the edit that asks, until it answers. */
+  readonly confirming = new Map<number, (confirmed: boolean) => void>();
 
   constructor(readonly type: AnyToolType, readonly document: vscode.TextDocument, readonly panel: vscode.WebviewPanel) {
     this.registrationUri = registrationUriOf(document.uri);
@@ -65,15 +74,16 @@ async function readText(uri: vscode.Uri): Promise<string | undefined> {
   }
 }
 
-// A registration's new text, as an edit of its document. It is small and only a visualization, so
-// it is replaced whole.
+// A registration's new text, as an edit of its document as it is now. It is small and only a
+// visualization, so it is replaced whole.
 function replaceRegistration(edit: vscode.WorkspaceEdit, document: vscode.TextDocument, after: string): void {
-  if (document.getText() === after) return;
-  edit.replace(document.uri, new vscode.Range(new vscode.Position(0, 0), document.positionAt(document.getText().length)), after);
+  const now = document.getText();
+  if (now === after) return;
+  edit.replace(document.uri, new vscode.Range(new vscode.Position(0, 0), document.positionAt(now.length)), after);
 }
 
 // The name of what a request does, for the undo step: the label of the action it invokes.
-function labelOf(tool: OpenTool, request: EditRequest | TableRequest): string | undefined {
+function labelOf(tool: OpenTool, request: EditRequest | TableRequest | HierarchyRequest): string | undefined {
   if (request.kind === 'operation') return tool.type.actions(tool.source, request.on ?? [], tool.options).find((action) => action.id === request.operation)?.label;
   if (request.kind !== 'action') return undefined;
   return tool.type.actions(tool.source, request.id === undefined ? [] : [request.id], tool.options).find((action) => action.id === request.action)?.label;
@@ -93,11 +103,20 @@ interface LayoutStep {
   readonly depth: number;
 }
 
-/** The layout steps of one document, beside how deep its own undo history is since it was opened. */
+/**
+ * The layout steps of one document, beside how deep its own undo history is since it was opened, and
+ * the registration's text before and after each edit of the document that also changed it.
+ */
 class LayoutHistory {
   depth = 0;
   readonly undo: LayoutStep[] = [];
   readonly redo: LayoutStep[] = [];
+  /**
+   * The registration's change made with an edit of the document, by the depth that edit brought the
+   * document's history to: when that edit is undone the registration is given back its text before,
+   * and when it is redone its text after, so one Undo takes back both files.
+   */
+  readonly withDocument = new Map<number, LayoutStep>();
 
   /** Whether the next thing to undo is a layout step rather than an edit of the document. */
   get canUndo(): boolean {
@@ -109,16 +128,31 @@ class LayoutHistory {
     return this.redo.length > 0 && this.redo[this.redo.length - 1].depth === this.depth;
   }
 
-  /** The document changed: by an undo, a redo, or a new edit, which ends what could be redone. */
-  documentChanged(reason: vscode.TextDocumentChangeReason | undefined): void {
+  /**
+   * The document changed: by an undo, a redo, or a new edit, which ends what could be redone. An undo
+   * or a redo of an edit that also changed the registration gives the text the registration goes
+   * back, or on, to: undefined when that is no file.
+   */
+  documentChanged(reason: vscode.TextDocumentChangeReason | undefined): { readonly registration: string | undefined } | undefined {
     if (reason === vscode.TextDocumentChangeReason.Undo) {
+      const step = this.withDocument.get(this.depth);
       this.depth -= 1;
-    } else if (reason === vscode.TextDocumentChangeReason.Redo) {
-      this.depth += 1;
-    } else {
-      this.depth += 1;
-      this.redo.length = 0;
+      return step && { registration: step.before };
     }
+    if (reason === vscode.TextDocumentChangeReason.Redo) {
+      this.depth += 1;
+      const step = this.withDocument.get(this.depth);
+      return step && { registration: step.after };
+    }
+    this.depth += 1;
+    this.redo.length = 0;
+    this.forgetFrom(this.depth);
+    return undefined;
+  }
+
+  /** What edits of the document from this depth on did to the registration can no longer be redone. */
+  forgetFrom(depth: number): void {
+    for (const at of [...this.withDocument.keys()]) if (at >= depth) this.withDocument.delete(at);
   }
 }
 
@@ -165,8 +199,11 @@ export class Tools implements vscode.Disposable {
     this.changed.fire();
   }
 
-  /** Recomputes and sends what a diagram draws; called after every change of its document or options. */
-  refresh(diagram: OpenTool): void {
+  /**
+   * Recomputes and sends what a diagram draws; called after every change of its document or options,
+   * with what made the change when it follows one.
+   */
+  refresh(diagram: OpenTool, cause?: ViewCause): void {
     const source = diagram.source;
     // The document changed since the canvas was last sent a scene: a layout that runs on every change starts
     // from where the nodes are on screen, so that what the change did not touch moves little (DISL 10.4).
@@ -176,24 +213,35 @@ export class Tools implements vscode.Disposable {
     const view = diagram.readOnly ? { ...computed, readOnly: true } : computed;
     diagram.lastView = view;
     diagram.lastVersion = diagram.document.version;
+    diagram.lastCause = cause;
     diagram.post({
       v: 2, type: 'view', origin: diagram.type.origin, kind: diagram.type.kind, view,
       actions: view.readOnly ? [] : diagram.type.actions(source, diagram.selection, diagram.options),
-      version: diagram.document.version,
+      version: diagram.document.version, ...(cause === undefined ? {} : { cause }),
     });
     this.findings.show(diagram.document, diagram.type);
     if (diagram === this.current) this.changed.fire();
   }
 
-  /** A text document changed: every diagram on it, or on the document it is the registration of, follows. */
-  refreshDocument(document: vscode.TextDocument): void {
+  /**
+   * A text document changed: every diagram on it, or on the document it is the registration of,
+   * follows. `changed` is false when only its modified state changed, which changes nothing it
+   * draws. A change made while the diagram makes an edit of its own is that edit's; any other was
+   * made outside it.
+   */
+  refreshDocument(document: vscode.TextDocument, changed = true): void {
+    if (!changed) return;
     const uri = document.uri.toString();
+    const causeOf = (diagram: OpenTool): ViewCause => (diagram.performing > 0 ? 'edit' : 'outside');
     for (const diagram of this.open) {
       if (diagram.document === document) {
-        this.refresh(diagram);
+        this.refresh(diagram, causeOf(diagram));
       } else if (diagram.registrationUri.toString() === uri) {
-        diagram.registration = document.getText();
-        this.refresh(diagram);
+        const text = document.getText();
+        // The registration as this editor wrote it, now in its document, is no change from outside.
+        const cause = text === diagram.registration ? undefined : causeOf(diagram);
+        diagram.registration = text;
+        this.refresh(diagram, cause);
       }
     }
   }
@@ -202,9 +250,24 @@ export class Tools implements vscode.Disposable {
   async refreshRegistration(uri: vscode.Uri): Promise<void> {
     for (const diagram of this.open) {
       if (diagram.registrationUri.toString() !== uri.toString()) continue;
-      diagram.registration = await readText(uri);
-      this.refresh(diagram);
+      const text = await readText(uri);
+      // The file this editor saved is no change from outside.
+      const cause = text === diagram.registration ? undefined : diagram.performing > 0 ? 'edit' : 'outside';
+      diagram.registration = text;
+      this.refresh(diagram, cause);
     }
+  }
+
+  /**
+   * The options a canvas or a page sent, and the view made with them. The canvas holds no folds, and
+   * not where the nodes were before the last change: those this editor holds stay. The filter a page
+   * of boxes applies and the level it narrows to are the page's own: they come with its options, as
+   * `query` and `focus`, and are never written.
+   */
+  setOptions(diagram: OpenTool, options: ViewOptions): void {
+    const { collapsed, placed } = diagram.options;
+    diagram.options = { ...options, ...(collapsed === undefined ? {} : { collapsed }), ...(placed === undefined ? {} : { placed }) };
+    this.refresh(diagram);
   }
 
   /** A document was saved: the registration beside it, which is only its visualization, is saved with it. */
@@ -240,8 +303,29 @@ export class Tools implements vscode.Disposable {
     if (event.contentChanges.length === 0) return;
     const history = this.histories.get(event.document.uri.toString());
     if (!history) return;
-    history.documentChanged(event.reason);
+    const back = history.documentChanged(event.reason);
     this.publishHistory();
+    const diagram = [...this.open].find((candidate) => candidate.document === event.document);
+    if (back && diagram) void this.restoreRegistration(diagram, back.registration);
+  }
+
+  // An edit of the document that also changed the registration was undone or redone: the
+  // registration follows, saved when the document is no longer modified. What it keeps outside the
+  // history is carried over (FBL 0.7 7.1), from its text when the write is made.
+  private restoreRegistration(diagram: OpenTool, text: string | undefined): Promise<void> {
+    return this.queued(diagram, async () => {
+      const restored = diagram.type.restoreRegistration(text, diagram.registration);
+      if (diagram.registration === restored) return;
+      await this.writing(diagram, restored, false);
+      this.refresh(diagram, 'outside');
+    });
+  }
+
+  // A write of a diagram's registration, after every write of it asked for before.
+  private queued<T>(diagram: OpenTool, write: () => Promise<T>): Promise<T> {
+    const done = diagram.registrationWrites.then(write);
+    diagram.registrationWrites = done.then(() => undefined, () => undefined);
+    return done;
   }
 
   /** Whether Undo, or Redo, on the active diagram is a layout step now. */
@@ -257,7 +341,8 @@ export class Tools implements vscode.Disposable {
     const history = this.historyOf(diagram);
     if (direction === 'undo' ? !history.canUndo : !history.canRedo) return false;
     const step = (direction === 'undo' ? history.undo.pop() : history.redo.pop()) as LayoutStep;
-    await this.writeRegistration(diagram, direction === 'undo' ? step.before : step.after);
+    // What the registration keeps outside the history is carried over the step (FBL 0.7 7.1).
+    await this.queued(diagram, () => this.writing(diagram, diagram.type.restoreRegistration(direction === 'undo' ? step.before : step.after, diagram.registration)));
     (direction === 'undo' ? history.redo : history.undo).push(step);
     this.refresh(diagram);
     this.publishHistory();
@@ -265,8 +350,15 @@ export class Tools implements vscode.Disposable {
   }
 
   // Writes a registration's text, creating or removing the file as the text asks, and saves it:
-  // it is only its document's visualization and is never left modified by itself.
-  private async writeRegistration(diagram: OpenTool, text: string | undefined): Promise<void> {
+  // it is only its document's visualization and is never left modified by itself. Written with an
+  // edit of the document (`now` false), it is saved when the document is, or at once when the
+  // document is not modified.
+  private writeRegistration(diagram: OpenTool, text: string | undefined, now = true): Promise<void> {
+    return this.queued(diagram, () => this.writing(diagram, text, now));
+  }
+
+  // The write itself, made in its turn: the edit is built from the registration's text when it is applied.
+  private async writing(diagram: OpenTool, text: string | undefined, now = true): Promise<void> {
     const edit = new vscode.WorkspaceEdit();
     if (text === undefined) {
       edit.deleteFile(diagram.registrationUri, { ignoreIfNotExists: true });
@@ -278,28 +370,98 @@ export class Tools implements vscode.Disposable {
     if (edit.size > 0) await vscode.workspace.applyEdit(edit);
     diagram.registration = text;
     const registration = vscode.workspace.textDocuments.find((candidate) => candidate.uri.toString() === diagram.registrationUri.toString());
-    if (registration?.isDirty) await registration.save();
+    if (registration?.isDirty && (now || !diagram.document.isDirty)) await registration.save();
   }
 
   /**
    * Carries out one edit request on a diagram's document, as one undoable edit: of the document, of
    * the registration beside it, or of both together. A request made on an older version of the
    * document is cancelled rather than applied to text it was not computed from. A request that
-   * changes only what this editor shows, such as a fold, writes nothing and is no undo step.
+   * changes only what this editor shows, such as a fold, writes nothing and is no undo step; one
+   * that changes only what the registration keeps outside the history is written at once and is no
+   * undo step either.
    */
-  async perform(diagram: OpenTool, request: EditRequest | TableRequest, version?: number): Promise<Performed> {
+  async perform(diagram: OpenTool, request: EditRequest | TableRequest | HierarchyRequest, version?: number, seq?: number): Promise<Performed> {
+    diagram.performing += 1;
+    try {
+      return await this.carryOut(diagram, request, version, seq);
+    } finally {
+      diagram.performing -= 1;
+    }
+  }
+
+  // The question an edit asks first: on a page that asks in its own place, there, under the edit's
+  // `seq`; otherwise in Visual Studio Code's own dialog. The page shows one question at a time, so
+  // one still open when another is asked is answered no. While a question is open this editor makes
+  // no edit: a change of its files meanwhile was made outside it.
+  private async ask(diagram: OpenTool, question: { readonly title: string; readonly message: string; readonly confirmLabel: string; readonly danger: boolean }, seq: number | undefined): Promise<boolean> {
+    diagram.performing -= 1;
+    try {
+      if (seq !== undefined && diagram.type.page === 'hierarchy') {
+        for (const [open, answer] of [...diagram.confirming]) {
+          diagram.confirming.delete(open);
+          answer(false);
+        }
+        const answered = new Promise<boolean>((resolve) => diagram.confirming.set(seq, resolve));
+        diagram.post({ v: 2, type: 'confirm', seq, title: question.title, message: question.message, confirmLabel: question.confirmLabel, danger: question.danger });
+        return await answered;
+      }
+      const answer = await vscode.window.showWarningMessage(question.message, { modal: true }, question.confirmLabel);
+      return answer === question.confirmLabel;
+    } finally {
+      diagram.performing += 1;
+    }
+  }
+
+  // A request that changes the registration alone, carried out in its turn among the registration's
+  // writes: the tool type makes it again from the registration as the write before it left it. Such a
+  // change leaves the document clean, so nothing would save the registration later: it is saved now.
+  private registrationOnly(diagram: OpenTool, request: EditRequest | TableRequest | HierarchyRequest, confirmed: boolean): Promise<Performed> {
+    return this.queued(diagram, async (): Promise<Performed> => {
+      const outcome = diagram.type.edit(diagram.source, request, diagram.options, confirmed);
+      if (outcome.kind === 'refused') return { result: 'refused', sentence: outcome.sentence };
+      // What the write before did changed what this request is: it is no longer made.
+      if (outcome.kind !== 'applied' || outcome.splices.length > 0) return { result: 'cancelled' };
+      if (outcome.viewOptions !== undefined) diagram.options = { ...diagram.options, ...outcome.viewOptions };
+      const before = diagram.registration;
+      const after = outcome.registration ?? undefined;
+      if (outcome.registration !== undefined && after !== before) {
+        await this.writing(diagram, after);
+        if (outcome.history !== false) {
+          // The step is this history's to take back, in its turn. What the registration keeps
+          // outside the history (FBL 0.7 7.1), such as a fold, is no step.
+          const history = this.historyOf(diagram);
+          history.undo.push({ before, after, depth: history.depth });
+          history.redo.length = 0;
+          this.publishHistory();
+        }
+        this.refresh(diagram, 'edit');
+      } else if (outcome.viewOptions !== undefined) {
+        this.refresh(diagram);
+      }
+      if (outcome.select !== undefined) {
+        diagram.post({ v: 2, type: 'reveal', id: outcome.select, ...(outcome.editLabel ? { editLabel: true, multiline: outcome.multiline === true } : {}) });
+      }
+      return { result: 'applied' };
+    });
+  }
+
+  private async carryOut(diagram: OpenTool, request: EditRequest | TableRequest | HierarchyRequest, version: number | undefined, seq: number | undefined): Promise<Performed> {
     if (version !== undefined && version !== diagram.document.version) return { result: 'cancelled' };
 
-    let outcome = diagram.type.edit(diagram.source, request, diagram.options, false);
+    let confirmed = false;
+    let outcome = diagram.type.edit(diagram.source, request, diagram.options, confirmed);
     // A file that cannot be written takes no edit, which the tool type does not know. What changes
     // only this viewer's state, such as a fold, is still its to do.
     if (diagram.readOnly && !(outcome.kind === 'applied' && outcome.viewOptions !== undefined && outcome.splices.length === 0 && outcome.registration === undefined)) {
       return { result: 'cancelled' };
     }
     if (outcome.kind === 'confirm') {
-      const answer = await vscode.window.showWarningMessage(outcome.message, { modal: true }, outcome.confirmLabel);
-      if (answer !== outcome.confirmLabel) return { result: 'cancelled' };
-      outcome = diagram.type.edit(diagram.source, request, diagram.options, true);
+      if (!(await this.ask(diagram, outcome, seq))) return { result: 'cancelled' };
+      // The document may have changed while the question was open: the answer was to that question.
+      if (version !== undefined && version !== diagram.document.version) return { result: 'cancelled' };
+      confirmed = true;
+      outcome = diagram.type.edit(diagram.source, request, diagram.options, confirmed);
     }
 
     switch (outcome.kind) {
@@ -347,12 +509,16 @@ export class Tools implements vscode.Disposable {
         return { result: 'applied' };
       }
       case 'applied': {
+        // A change of the registration alone is made again in its turn among the registration's
+        // writes, from its text as the write before left it: two such requests made at once, such as
+        // the folds a reveal opens, each keep what the other wrote.
+        if (outcome.splices.length === 0 && outcome.registration !== undefined) return this.registrationOnly(diagram, request, confirmed);
         // Every splice of the gesture goes into one edit, so one gesture is one undo step. The
         // ranges are all of the text as it is before the edit (etalii.adp spec 027, research R5).
         const edit = new vscode.WorkspaceEdit();
         const documentChanges = outcome.splices.length > 0;
-        // The request changed what this editor shows: the options it gives replace those held.
-        if (outcome.viewOptions !== undefined) diagram.options = outcome.viewOptions;
+        // The request changed what this editor shows: the options it gives are taken over.
+        if (outcome.viewOptions !== undefined) diagram.options = { ...diagram.options, ...outcome.viewOptions };
         const registrationBefore = diagram.registration;
         const label = labelOf(diagram, request);
         const metadata = label === undefined ? undefined : { label, needsConfirmation: false };
@@ -364,36 +530,23 @@ export class Tools implements vscode.Disposable {
         // The registration's new text, or undefined when the edit removes the file.
         const registrationAfter = outcome.registration ?? undefined;
         const registrationChanged = outcome.registration !== undefined && registrationAfter !== diagram.registration;
-        if (registrationChanged) {
-          if (registrationAfter === undefined) {
-            edit.deleteFile(diagram.registrationUri, { ignoreIfNotExists: true });
-          } else if (diagram.registration === undefined) {
-            // The registration is written when there is first something to keep in it.
-            edit.createFile(diagram.registrationUri, { contents: new TextEncoder().encode(registrationAfter), ignoreIfExists: false });
-          } else {
-            replaceRegistration(edit, await vscode.workspace.openTextDocument(diagram.registrationUri), registrationAfter);
-          }
-        }
+        const history = this.historyOf(diagram);
 
-        if (edit.size > 0 && !(await vscode.workspace.applyEdit(edit))) {
-          return { result: 'refused', sentence: 'Visual Studio Code did not accept the edit; the file was not changed.' };
-        }
-        if (registrationChanged) {
-          diagram.registration = registrationAfter;
-          if (!documentChanges) {
-            // The registration alone changed: the step is this history's to take back, in its turn.
-            const history = this.historyOf(diagram);
-            history.undo.push({ before: registrationBefore, after: registrationAfter, depth: history.depth });
-            history.redo.length = 0;
-            this.publishHistory();
+        if (documentChanges) {
+          // A new edit ends what could be redone, of the registration too.
+          history.forgetFrom(history.depth + 1);
+          if (!(await vscode.workspace.applyEdit(edit))) {
+            return { result: 'refused', sentence: 'Visual Studio Code did not accept the edit; the file was not changed.' };
           }
-          // A change of the registration alone leaves the document clean, so nothing would save
-          // the registration later: it is saved now. With the document changed too, it is saved
-          // when the document is.
-          const registration = vscode.workspace.textDocuments.find((candidate) => candidate.uri.toString() === diagram.registrationUri.toString());
-          if (registration?.isDirty && !diagram.document.isDirty) await registration.save();
-          this.refresh(diagram);
-        } else if (outcome.viewOptions !== undefined && !documentChanges) {
+          if (registrationChanged) {
+            // The registration is written after the document, and its change is that edit's: Undo
+            // of the edit gives the registration back its text before, and Redo its text after (see
+            // `documentChanged`), so one undo step takes back both files. It is saved with the document.
+            history.withDocument.set(history.depth, { before: registrationBefore, after: registrationAfter, depth: history.depth });
+            await this.writeRegistration(diagram, registrationAfter, false);
+            this.refresh(diagram, 'edit');
+          }
+        } else if (outcome.viewOptions !== undefined) {
           // Nothing was written, so no change of the document brings the view: it is sent now.
           this.refresh(diagram);
         }
@@ -441,8 +594,8 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
     diagram.readOnly = await isReadOnly(document);
     diagram.registration = await readText(diagram.registrationUri);
     panel.webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'dist')] };
-    // A diagram is drawn on the canvas, a designer on its table.
-    panel.webview.html = webviewHtml(panel.webview, this.context.extensionUri, this.type.kind === 'designer' ? 'table' : 'canvas', this.type.displayName);
+    // A diagram is drawn on the canvas, a designer on its table or its page of boxes.
+    panel.webview.html = webviewHtml(panel.webview, this.context.extensionUri, this.type.page, this.type.displayName);
     this.tools.add(diagram);
 
     const subscriptions: vscode.Disposable[] = [
@@ -454,6 +607,9 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
     ];
     panel.onDidDispose(() => {
       for (const subscription of subscriptions) subscription.dispose();
+      // A question the page can no longer answer is answered no.
+      for (const answer of diagram.confirming.values()) answer(false);
+      diagram.confirming.clear();
       this.tools.remove(diagram);
     });
   }
@@ -463,13 +619,9 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
       case 'ready':
         this.tools.refresh(diagram);
         return;
-      case 'viewOptions': {
-        // The canvas holds no folds, and not where the nodes were before the last change: those this editor holds stay.
-        const { collapsed, placed } = diagram.options;
-        diagram.options = { ...message.options, ...(collapsed === undefined ? {} : { collapsed }), ...(placed === undefined ? {} : { placed }) };
-        this.tools.refresh(diagram);
+      case 'viewOptions':
+        this.tools.setOptions(diagram, message.options);
         return;
-      }
       case 'selection':
         diagram.selection = message.ids;
         this.tools.refresh(diagram);
@@ -479,10 +631,14 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
         return;
       case 'edit': {
         // The request is the tool type's own; its `edit` refuses one it does not know.
-        const performed = await this.tools.perform(diagram, message.request as EditRequest | TableRequest, message.version);
+        const performed = await this.tools.perform(diagram, message.request as EditRequest | TableRequest | HierarchyRequest, message.version, message.seq);
         diagram.post({ v: 2, type: 'outcome', seq: message.seq, ...performed });
         return;
       }
+      case 'confirmed':
+        diagram.confirming.get(message.seq)?.(message.confirmed);
+        diagram.confirming.delete(message.seq);
+        return;
     }
   }
 }

@@ -115,7 +115,7 @@ function planStoreId(plan: Plan, reading: BodyReading, store: ModelChange & { ki
   refuseReadOnly(element.rule, 'changed');
   const from = element.rule.id?.from;
   if (!from) refuse(messages.noIdOfItsOwn(element.rule.type));
-  if (element.idRead?.present === true) refuse(messages.hasIdAlready(element.rule.type));
+  if (element.idRead?.present === true && store.replace !== true) refuse(messages.hasIdAlready(element.rule.type));
   if (store.newId.length === 0 || reading.find(store.newId)) refuse(messages.cannotBeTheId(store.newId, element.rule.type));
 
   // The slot an id is read from, written as an attribute's is: the family puts it where an absent value goes.

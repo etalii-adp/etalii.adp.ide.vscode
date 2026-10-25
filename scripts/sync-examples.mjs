@@ -5,13 +5,22 @@
 //   node scripts/sync-examples.mjs <path to etalii.adp.ide.standalone> [<git ref>, default origin/develop] [<path to etalii.adp> [<git ref>, default origin/develop]]
 //
 // Without a path to etalii.adp, what came from it is left as it is, with the commit it was read at.
+// With `--only <destination>`, once or more, only those copies are refreshed, and every other is
+// left as it is with the commit its row records.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-const [standalone, ref = 'origin/develop', adp, adpRef = 'origin/develop'] = process.argv.slice(2);
-if (!standalone) {
-  console.error('Usage: node scripts/sync-examples.mjs <path to etalii.adp.ide.standalone> [<git ref>] [<path to etalii.adp> [<git ref>]]');
+const only = [];
+const positional = [];
+for (const args = process.argv.slice(2); args.length > 0;) {
+  const arg = args.shift();
+  if (arg === '--only') only.push(args.shift());
+  else positional.push(arg);
+}
+const [standalone, ref = 'origin/develop', adp, adpRef = 'origin/develop'] = positional;
+if (!standalone || only.includes(undefined)) {
+  console.error('Usage: node scripts/sync-examples.mjs <path to etalii.adp.ide.standalone> [<git ref>] [<path to etalii.adp> [<git ref>]] [--only <destination>]...');
   process.exit(1);
 }
 const standaloneName = 'etalii.adp.ide.standalone';
@@ -34,6 +43,10 @@ const copies = [
   [standaloneName, `${activity}examples/`, 'examples/agent-activity-diagram/'],
   [standaloneName, `${activity}backend/EtAlii.Adp.Diagram.AgentActivityDiagram.Tests/Fixtures/`, 'fixtures/tools/agent-activity-diagram/'],
   [standaloneName, 'src/designers/knowledge/examples/', 'examples/knowledge/'],
+  // The Hierarchical Requirement Designer's example document and its registration, beside its definition in etalii.adp.
+  ...['web-shop.md', 'web-shop.adp'].map((name) => [adpName, `definitions/designers/examples/${name}`, `examples/hierarchical-requirement/${name}`]),
+  // Its large example, NIST SP 800-53's controls with their licence and readme, which the performance guard opens; the script that wrote it is left out.
+  [standaloneName, 'src/examples/designers/hierarchical-requirement/nist-sp-800-53/', 'examples/hierarchical-requirement/nist-sp-800-53/'],
   // DESL's smallest example and its binding: the tool type a test adds to a temporary definitions folder.
   [adpName, 'specifications/desl/minimal-table.des', 'fixtures/tools/desl/minimal-table.des'],
   [adpName, 'specifications/desl/minimal-table.fbl', 'fixtures/tools/desl/minimal-table.fbl'],
@@ -51,13 +64,21 @@ const clone = (path, gitRef) => {
 };
 const clones = { [standaloneName]: clone(standalone, ref) };
 if (adp) clones[adpName] = clone(adp, adpRef);
-// The commit a repository's copies were read at: now, or as the record has it when they are left alone.
+// Whether a copy is refreshed now, and the commit it was read at: now, or as its row records it when it is left alone.
+const refreshed = ([repository, , to]) => clones[repository] !== undefined && (only.length === 0 || only.includes(to));
 const recorded = existsSync(provenance) ? readFileSync(provenance, 'utf8') : '';
-const commitOf = (repository) => clones[repository]?.commit ?? new RegExp(`\| \`${repository.replaceAll('.', '\.')}\` \| [^|]+ \| \`([0-9a-f]{40})\` \|`).exec(recorded)?.[1];
+const commitOf = (copy) => {
+  const [repository, from, to] = copy;
+  if (refreshed(copy)) return clones[repository].commit;
+  const row = `| \`${to}\` | \`${repository}\` | \`${from}\` | \``;
+  const at = recorded.indexOf(row);
+  return at < 0 ? undefined : /^[0-9a-f]{40}/.exec(recorded.slice(at + row.length))?.[0];
+};
 
 let count = 0;
-for (const [repository, from, to] of copies) {
-  if (!clones[repository]) continue;
+for (const copy of copies) {
+  if (!refreshed(copy)) continue;
+  const [repository, from, to] = copy;
   const { git, commit } = clones[repository];
   if (to.endsWith('/')) rmSync(to, { recursive: true, force: true });
   const files = git('ls-tree', '-r', '-z', '--name-only', commit, '--', from).toString().split('\0').filter(Boolean);
@@ -76,12 +97,12 @@ for (const [repository, from, to] of copies) {
 
 writeFileSync(provenance, `# Where the examples and fixtures come from
 
-The files under \`examples/\` and \`fixtures/\` are copied unchanged, byte for byte, from [etalii-adp/etalii.adp.ide.standalone](https://github.com/etalii-adp/etalii.adp.ide.standalone) and, for DESL's smallest example and DISL's example of inherited relation flags, from [etalii-adp/etalii.adp](https://github.com/etalii-adp/etalii.adp), both licensed under the Apache License 2.0, as this repository is. They are what both hosts must agree on: every example opens and round-trips here as it does there, and every fixture yields the same findings. This record covers the folders of its table; \`fixtures/fbl/\` has a record of its own.
+The files under \`examples/\` and \`fixtures/\` are copied unchanged, byte for byte, from [etalii-adp/etalii.adp.ide.standalone](https://github.com/etalii-adp/etalii.adp.ide.standalone) and, for DESL's smallest example and DISL's example of inherited relation flags, from [etalii-adp/etalii.adp](https://github.com/etalii-adp/etalii.adp), both licensed under the Apache License 2.0, as this repository is. The data of \`examples/hierarchical-requirement/nist-sp-800-53/\` is NIST's, a work of the United States government in the public domain and dedicated worldwide under CC0 1.0, as the \`LICENSE.md\` and \`readme.md\` copied beside it say. They are what both hosts must agree on: every example opens and round-trips here as it does there, and every fixture yields the same findings. This record covers the folders of its table; \`fixtures/fbl/\` has a record of its own.
 
 - Refresh them with \`node scripts/sync-examples.mjs <path to a checkout of etalii.adp.ide.standalone> [<git ref>] [<path to a checkout of etalii.adp> [<git ref>]]\`; do not edit them by hand.
 
 | Here | Repository | Path | Commit |
 |---|---|---|---|
-${copies.filter(([repository]) => commitOf(repository)).map(([repository, from, to]) => `| \`${to}\` | \`${repository}\` | \`${from}\` | \`${commitOf(repository)}\` |`).join('\n')}
+${copies.filter((copy) => commitOf(copy)).map((copy) => `| \`${copy[2]}\` | \`${copy[0]}\` | \`${copy[1]}\` | \`${commitOf(copy)}\` |`).join('\n')}
 `);
 console.log(`Copied ${count} files from ${Object.entries(clones).map(([repository, { commit }]) => `${repository} at ${commit}`).join(' and ')}`);

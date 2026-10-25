@@ -4,7 +4,12 @@
 // interpreter; a request is one intent of the interpreted behavior, whose changes the library plans
 // as splices of the text. Every method is a function of its arguments.
 
-import { interpretOperations } from '../desl/operations';
+import { counterRules, markSets, numbered, renumbering, type Unnumbered } from '../desl/counters';
+import { dedEnvelope, dedFindings, dedRefusal } from '../desl/envelope';
+import { gesturesOf, withImplicitMembers } from '../desl/hierarchy';
+import { checkMentions, interpretMentions } from '../desl/mentions';
+import { interpretOperations, type RunStep } from '../desl/operations';
+import { derivedIds, interpretSettings, settingSteps, withSettings, type SettingSteps, type StoredBlocks } from '../desl/settings';
 import { expressionsOf, loadDesigner } from '../desl/specification';
 import { interpretSurface } from '../desl/surface';
 import { applyChanges, baseCoordinate, interpretBehavior, type Change, type EndPlace, type OfferedEntry, type Outcome, type Point, type Situation, type ViewChange } from '../disl/behavior';
@@ -17,7 +22,7 @@ import { defaultOf, derivedRelations, interpretMetamodel, isRelation, linkKind, 
 import { emptyModel, type Finding as Found, type Model, type Value } from '../disl/model';
 import { edgeNotation, interpretNotation, nodeNotation, styleOf, type Paint } from '../disl/notation';
 import { entryOf, foldsOf, interpretPersistence, momentAttributes, newId, readModel, viewEntryIds, type StoredView } from '../disl/persistence';
-import { isCel, isObject, loadSpecification, localized } from '../disl/specification';
+import { isCel, isObject, loadSpecification, localized, type LocalizedText } from '../disl/specification';
 import { groupsIn, interpretToolbox, type ToolGroup } from '../disl/toolbox';
 import { interpretViewpoints } from '../disl/viewpoints';
 import { findRule, type FblBinding } from '../fbl/documents/types';
@@ -26,11 +31,15 @@ import { findingCodes } from '../fbl/finding';
 import { OpenBody } from '../fbl/history/openBody';
 import { messages } from '../fbl/messages';
 import type { FblModel } from '../fbl/model';
+import type { ChangePosition, ModelChange } from '../fbl/planning/modelChange';
 import { PluginBody } from '../fbl/plugins/pluginBody';
+import { OpenRegistration } from '../fbl/registration/openRegistration';
+import { createRegistration } from '../fbl/registration/registrationCreation';
+import { RegistrationDocument } from '../fbl/registration/registrationDocument';
 import { produceTemplate } from '../fbl/routing/templateWriter';
 import type { Edit } from '../fbl/splice';
 import { decode, encode } from '../fbl/text/utf8';
-import type { Action, Control, DesignerToolType, DiagramToolType, EditOutcome, EditRequest, Field, Finding, Severity, Source, ToolboxEntry, ViewOptions } from '../frame/toolType';
+import type { Action, Control, DesignerToolType, DiagramToolType, EditOutcome, EditRequest, Field, Finding, Severity, Source, TextSplice, ToolboxEntry, ViewOptions } from '../frame/toolType';
 import { anchorOf, arrangedRows, createScene, type Scene, type SceneChrome, type SceneOptions, type SceneRuler, type SceneTool, type SceneToken } from '../scene/scene';
 import { widthOfText } from '../text/textMetric';
 import { claimingBinding, claimsOf, suggests } from './claims';
@@ -38,7 +47,8 @@ import { readDefinitionFolder, type Definition } from './definitionFolder';
 import { composedSplices, modelChangesOf, viewStepsOf, type Refused } from './modelChanges';
 import { missingPlugins, pluginReferences, type PluginRegistry } from './pluginRegistry';
 import { layoutOf, newRegistration, withLayout, type Corner } from './registrationLayout';
-import { tableReader, type TableProperty, type TableRequest, type TableView } from './tableView';
+import { hierarchyReader, type HierarchyRequest, type HierarchyView, type NodeFinding } from './hierarchyView';
+import { tableReader, type TableProperty, type TableRequest, type TableValue, type TableView } from './tableView';
 import { wireIdsOf } from './wireIds';
 
 // The host's own sentences, for what a definition has no words for.
@@ -573,8 +583,8 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
         const { id } = request;
         if (id !== undefined && !elementOf(model, id) && !open.derived.some((relation) => relation.id === id)) return refused(GONE);
         const selection = id === undefined ? [] : [id];
-        const asking = (question: { readonly title: string; readonly message: string; readonly confirmLabel: string; readonly danger: boolean }): EditOutcome =>
-          ({ kind: 'confirm', title: question.title, message: question.message, confirmLabel: question.confirmLabel, danger: question.danger });
+        const asking = (prompt: { readonly title: string; readonly message: string; readonly confirmLabel: string; readonly danger: boolean }): EditOutcome =>
+          ({ kind: 'confirm', title: prompt.title, message: prompt.message, confirmLabel: prompt.confirmLabel, danger: prompt.danger });
         const { name, args } = acting!;
         const operation = intents.operations.find((candidate) => candidate.id === name);
         if (operation) {
@@ -656,6 +666,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   return {
     origin,
     kind: 'diagram',
+    page: 'canvas',
     displayName: texts.worded(language.label, {}, definition.name),
     claims: claimsOf(bindings),
     claimed: (fileName, text) => claimingBinding(bindings, fileName, text) !== undefined,
@@ -673,20 +684,38 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       const made = produceTemplate(bindings[0], undefined, name, () => crypto.randomUUID(), bindings[0].plugin && plugins.persistence(bindings[0].plugin.plugin));
       return made ? decode(made) : '';
     },
+    // A diagram's registration keeps nothing outside the history.
+    restoreRegistration: (snapshot) => snapshot,
   };
 }
 
 // ---- a designer ----
 
+/** What a transaction came to, where it was not refused. */
+type Done = Exclude<Outcome, { readonly refused: string }>;
+
 const emptyTable = (notice: string): TableView => ({ name: '', properties: [], rows: [], total: 0, views: [], settings: [], operations: {}, readOnly: true, notice });
+const emptyHierarchy = (notice: string): HierarchyView => ({
+  name: '', ids: 'shown', roles: { level: '', entry: '' }, mentions: {}, queryWords: { level: '', sort: '' }, readOnly: true, notice, roots: [], stray: [], lists: [], notes: [], noteKinds: [], filters: [], completions: {}, unhide: {}, sortKeys: [], widths: [], pageGestures: {}, findings: [], operations: {},
+});
 
 /** An element of a model the FBL library read, by where it stands in the reading: the same place in two readings of one body is the same entry. */
 const placesOf = (before: FblModel, after: FblModel): Map<string, string> => new Map(before.elements.map((element, index) => [element.id, after.elements[index]?.id ?? element.id]));
 
+/** The splices of an applied outcome as an edit of the text they were made for, to compose with edits made before them. */
+const editOf = (splices: readonly TextSplice[]): Edit => ({ splices: splices.map((splice) => ({ operation: 'replace-value', start: splice.offset, end: splice.offset + splice.length, text: splice.text })) });
+
+// The host's own sentences for a page of boxes, the standalone module's where it has one.
+const ENTRY_GONE = 'That entry is no longer in this file.';
+const NOT_RENUMBERED = 'Only an entry whose id another holds before it, or that has none yet, is given a new one.';
+const IN_A_LEVEL = 'This is added inside a level: drop it onto one.';
+const FOREIGN_REGISTRATION = 'The registration beside this document is of another designer type, so nothing is kept in it.';
+
 /**
  * A designer's definition as a tool type (DESL 11, "Host"): its documents are read through the
- * binding their format family has, shown as the table its surface names, and changed by its
- * operations, each one transaction that the FBL library plans as splices of the text.
+ * binding their format family has, shown as the table or the page of boxes its surface names, and
+ * changed by its operations, each one transaction that the FBL library plans as splices of the text
+ * and, for what the registration keeps, of the registration.
  */
 function designerFrom(definition: Definition, bindings: readonly FblBinding[], plugins: PluginRegistry): DesignerToolType {
   // ---- the definition, interpreted once ----
@@ -698,16 +727,26 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
   const expressions = expressionsOf(designer, metamodel.value);
   const constraints = interpretConstraints(designer.interpreted, metamodel.value, expressions);
   const surface = interpretSurface(designer.surface, metamodel.value);
+  const tableSurface = surface.value?.kind === 'table' ? surface.value : undefined;
+  const hierarchySurface = surface.value?.kind === 'hierarchy' ? surface.value : undefined;
   const operations = surface.value && interpretOperations(designer, surface.value, metamodel.value, expressions, constraints.value);
+  const settings = interpretSettings(designer.settings, metamodel.value, persistence, bindings);
+  const mentions = interpretMentions(metamodel.value);
+  const derive = derivedIds(expressions, persistence);
+  const counters = counterRules(persistence);
   const language = designer.interpreted.language;
   const origin = typeof language.origin === 'string' ? language.origin : language.id;
-  const table = surface.value && operations && tableReader({ surface: surface.value, metamodel: metamodel.value, operations: operations.value.all, logic: plugins.views(origin) });
+  const locale = language.defaultLocale ?? 'en';
+  const logic = plugins.views(origin);
+  const table = tableSurface && operations && tableReader({ surface: tableSurface, metamodel: metamodel.value, operations: operations.value.all, logic });
+  const gestures = hierarchySurface && operations && gesturesOf(hierarchySurface, metamodel.value, operations.value.all, designer.operations);
+  const hierarchy = hierarchySurface && operations && gestures && hierarchyReader({ surface: hierarchySurface, metamodel: metamodel.value, operations: operations.value.all, gestures, mentions: mentions.value, logic, locale });
   const needed = missingPlugins(pluginReferences({}, bindings), plugins);
 
-  const ofDefinition: Finding[] = [...loaded.findings, ...metamodel.findings, ...expressions.findings, ...constraints.findings, ...surface.findings, ...(operations?.findings ?? [])].map(framed);
+  const ofDefinition: Finding[] = [...loaded.findings, ...metamodel.findings, ...expressions.findings, ...constraints.findings, ...surface.findings, ...(operations?.findings ?? []), ...settings.findings, ...mentions.findings].map(framed);
   const ofPlugins: Finding[] = needed.map((reference) => ({ rule: findingCodes.pluginMissing, severity: 'warning', message: messages.pluginMissing(reference.id), line: 0 }));
   // A document of a surface this host does not lay out opens read-only, with the reason (DESL 11).
-  const unshown = surface.value ? undefined : surface.findings[0]?.message ?? loaded.findings[0]?.message ?? UNREADABLE;
+  const unshown = table || hierarchy ? undefined : surface.findings[0]?.message ?? loaded.findings[0]?.message ?? UNREADABLE;
 
   // ---- a document ----
 
@@ -716,9 +755,21 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     readonly read: FblModel;
     readonly model: Model;
     readonly findings: readonly Finding[];
+    /** The findings with the element each is about, for a page that shows them at it. */
+    readonly found: readonly NodeFinding[];
     /** Why nothing may be edited: absent for a document that is editable. */
     readonly refusal?: string;
     readonly unreadable: boolean;
+    /** The elements of a counted type numbered in memory, in reading order, which the next edit that writes the body numbers (DESL 5.3.4). */
+    readonly unnumbered: readonly Unnumbered[];
+    /** The ids that may be given a new one: those numbered in memory, and a later holder of an id. */
+    readonly renumbered: ReadonlySet<string>;
+    /** The blocks the registration holds, as the settings read them (DESL 5.5). */
+    readonly stored: StoredBlocks;
+    /** The implicit members of the lists of a hierarchy's labels (DESL 7.7.2). */
+    readonly implied: ReadonlySet<string>;
+    /** True when the registration is of another designer type than the envelope names (DED 4). */
+    readonly foreign: boolean;
   }
 
   const bodyOf = (binding: FblBinding, source: Source): OpenBody | PluginBody => {
@@ -728,33 +779,89 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
 
   let last: { readonly source: Source; readonly open: Open } | undefined;
   function opened(source: Source): Open {
-    if (last && last.source.text === source.text && last.source.fileName === source.fileName) return last.open;
+    if (last && last.source.text === source.text && last.source.fileName === source.fileName && last.source.registration === source.registration) return last.open;
     const binding = claimingBinding(bindings, source.fileName, source.text) ?? bindings[0];
     const body = bodyOf(binding, source);
     const read = body.model;
-    const typed = readModel(read, binding, metamodel.value, persistence);
-    const model = read.unreadable ? emptyModel : typed.value;
-    const found = constraints.value.check(model, typed.findings, { file: nameOf(source.fileName) }).filter((finding) => finding.code !== findingCodes.pluginMissing).map(framed);
-    const gate = unshown ?? (needed.length > 0 ? messages.pluginMissing(needed[0].id) : body.isReadOnly && !read.unreadable ? binding.readOnly || messages.readOnlyFile : undefined);
-    const open: Open = { binding, read, model, findings: found, unreadable: read.unreadable, refusal: read.unreadable ? found[0]?.message ?? UNREADABLE : gate };
+    const file = nameOf(source.fileName);
+    // The reading in DESL's order (DESL 10.2): the counted ids numbered, the registration's settings, the implicit members of the lists.
+    const counted = numbered(readModel(read, binding, metamodel.value, persistence), counters);
+    const envelope = dedEnvelope(source.text);
+    const registrationOrigin = source.registration === undefined ? undefined : RegistrationDocument.read(encode(source.registration)).origin;
+    const ded = dedFindings(envelope, registrationOrigin);
+    const foreign = ded.length > 0;
+    let model = read.unreadable ? emptyModel : counted.model;
+    let stored: StoredBlocks = new Map();
+    let implied: ReadonlySet<string> = new Set();
+    if (!read.unreadable) {
+      const kept = withSettings(model, source.registration === undefined || foreign ? undefined : OpenRegistration.open(encode(source.registration), binding), settings.value, metamodel.value, derive);
+      ({ model, stored } = kept);
+      if (hierarchySurface) ({ model, implied } = withImplicitMembers(model, hierarchySurface, derive));
+    }
+    const raw = [
+      ...constraints.value.check(model, counted.findings, { file }).filter((finding) => finding.code !== findingCodes.pluginMissing),
+      ...(read.unreadable ? [] : checkMentions(model, mentions.value, metamodel.value, file)),
+      ...ded,
+    ];
+    const found: NodeFinding[] = raw.map((finding) => ({ ...framed(finding), ...(finding.element === undefined ? {} : { element: finding.element }) }));
+    const gate = unshown ?? (needed.length > 0 ? messages.pluginMissing(needed[0].id) : dedRefusal(envelope) ?? (body.isReadOnly && !read.unreadable ? binding.readOnly || messages.readOnlyFile : undefined));
+    const renumbered = new Set([...counted.unnumbered.map((element) => element.newId), ...raw.filter((finding) => finding.code === 'std.duplicateId' && finding.element !== undefined).map((finding) => finding.element!)]);
+    const open: Open = {
+      binding, read, model, findings: found.map(({ rule, severity, message, line }) => ({ rule, severity, message, line })), found,
+      unreadable: read.unreadable, refusal: read.unreadable ? found[0]?.message ?? UNREADABLE : gate,
+      unnumbered: counted.unnumbered, renumbered, stored, implied, foreign,
+    };
     last = { source, open };
     return open;
   }
 
+  /**
+   * The model with the folds the viewer keeps for the session (DESL 5.3.3, 5.5): the value of a
+   * state for an element whose id is still ephemeral, which the registration cannot hold. An element
+   * that has been numbered since is the registration's again, whatever the session held for it.
+   */
+  const withSession = (model: Model, options: ViewOptions): Model => {
+    const held = options.collapsed;
+    const attribute = hierarchySurface?.collapsed;
+    const state = attribute === undefined ? undefined : settings.value.states.find((candidate) => candidate.attribute === attribute);
+    if (held === undefined || state === undefined) return model;
+    let changed = false;
+    const elements = model.elements.map((element) => {
+      const value = element.ephemeral && state.of.includes(element.type) ? held[element.id] : undefined;
+      if (value === undefined || element.attributes[state.attribute] === value) return element;
+      changed = true;
+      return { ...element, attributes: { ...element.attributes, [state.attribute]: value } };
+    });
+    return changed ? { ...model, elements } : model;
+  };
+
   // ---- what is shown ----
 
-  const view = (source: Source): TableView => {
+  const baseName = (fileName: string): string => nameOf(fileName).replace(/\.[^.]*$/, '');
+
+  const view = (source: Source, options: ViewOptions = {}): TableView | HierarchyView => {
     const open = opened(source);
+    if (hierarchySurface) {
+      if (!hierarchy || !operations || open.unreadable) return emptyHierarchy(open.refusal ?? UNREADABLE);
+      const session = withSession(open.model, options);
+      return hierarchy.view(open.model, {
+        name: baseName(source.fileName), readOnly: open.refusal !== undefined, ...(open.refusal === undefined ? {} : { notice: open.refusal }),
+        findings: open.found, implied: open.implied, renumbered: open.renumbered,
+        ...(options.collapsed === undefined ? {} : { collapsed: options.collapsed }), ...(options.query === undefined ? {} : { query: options.query }), ...(options.focus === undefined ? {} : { focus: options.focus }),
+        availability: (operation, on) => operations.value.availability(session, operation, on),
+      });
+    }
     if (!table || open.unreadable) return emptyTable(open.refusal ?? UNREADABLE);
     return table.view(open.model, { readOnly: open.refusal !== undefined, ...(open.refusal === undefined ? {} : { notice: open.refusal }) });
   };
 
-  const isRow = (model: Model, id: string): boolean => model.elements.some((element) => element.id === id && element.type === surface.value?.rows.type);
+  const isRow = (model: Model, id: string): boolean => model.elements.some((element) => element.id === id && element.type === tableSurface?.rows.type);
   const editors: Readonly<Record<string, Control>> = { number: 'number', checkbox: 'choice', choice: 'choice', choices: 'tags', rows: 'tags' };
 
-  // The cells of one selected row are the rows of ADP Properties, a column each.
+  // The cells of one selected row are the rows of ADP Properties, a column each; of a level or an entry its id, title, description and labels.
   function fields(source: Source, selection: readonly string[]): Field[] {
     const open = opened(source);
+    if (hierarchy) return selection.length === 1 ? hierarchy.fields(open.model, selection[0], open.refusal) : [];
     if (!table || selection.length !== 1 || !isRow(open.model, selection[0])) return [];
     const row = table.rowsOf(open.model).find((candidate) => candidate.id === selection[0]);
     return table.propertiesOf(open.model).map((property): Field => {
@@ -770,29 +877,114 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     });
   }
 
-  function actions(source: Source, selection: readonly string[]): Action[] {
+  // A page of boxes offers its levels and its entries to drop, where an operation adds one.
+  function toolbox(source: Source): ToolboxEntry[] {
+    if (!hierarchySurface || !gestures || opened(source).refusal !== undefined) return [];
+    const { levels, entries } = hierarchySurface;
+    const addsLevel = gestures.adds[levels.type] !== undefined || gestures.on[levels.type]?.addLevel !== undefined;
+    const addsEntry = gestures.on[levels.type]?.addEntry !== undefined;
+    return [...(addsLevel ? [levels.type] : []), ...(addsEntry ? [entries.type] : [])].map((type) => {
+      const declared = metamodel.value.types[type].declared;
+      const doc = declared.doc;
+      const described = typeof doc === 'string' ? doc : isObject(doc) && 'summary' in doc ? localized(doc.summary, locale) : localized(doc as LocalizedText | undefined, locale);
+      return { id: type, label: metamodel.value.types[type].label, icon: typeof declared.icon === 'string' ? declared.icon : '', description: described ?? '' };
+    });
+  }
+
+  function actions(source: Source, selection: readonly string[], options: ViewOptions = {}): Action[] {
     const open = opened(source);
     if (!operations || open.refusal !== undefined) return [];
+    const model = withSession(open.model, options);
     return operations.value.all.flatMap((operation): Action[] => {
-      const state = operations.value.availability(open.model, operation.id, selection);
+      const state = operations.value.availability(model, operation.id, selection);
       return state.offered ? [{ id: operation.id, label: state.label, enabled: state.available, ...(state.reason === undefined ? {} : { disabledReason: state.reason }) }] : [];
     });
   }
 
   // ---- an edit ----
 
-  /** Changes of the model as the outcome of a request: planned by the library, one after the other, as splices of the text. */
-  function written(source: Source, open: Open, changes: readonly Change[], select?: string): EditOutcome {
+  /** The body's model changes planned by the library, one after the other, as edits of the text. */
+  function bodyEdits(source: Source, open: Open, changes: readonly Change[]): Edit[] | Refused {
     const steps = modelChangesOf(changes, { binding: open.binding, metamodel: metamodel.value, persistence, read: open.read }, open.model);
-    if ('refused' in steps) return { kind: 'refused', sentence: steps.refused };
+    if ('refused' in steps) return steps;
     const body = steps.length > 0 ? bodyOf(open.binding, source) : undefined;
     const edits: Edit[] = [];
     for (const step of steps) {
       const planned = body!.change(step);
-      if ('refused' in planned) return { kind: 'refused', sentence: planned.refused };
+      if ('refused' in planned) return planned;
       edits.push(planned.planned);
     }
+    return edits;
+  }
+
+  /** Changes of the model as the outcome of a request: planned by the library, one after the other, as splices of the text. */
+  function written(source: Source, open: Open, changes: readonly Change[], select?: string): EditOutcome {
+    const edits = bodyEdits(source, open, changes);
+    if ('refused' in edits) return { kind: 'refused', sentence: edits.refused };
     return { kind: 'applied', splices: edits.length === 0 ? [] : composedSplices(edits), ...(select === undefined ? {} : { select }) };
+  }
+
+  /**
+   * A transaction of a designer whose registration keeps settings (DESL 5.5): its changes parted into
+   * the body's, planned as splices of the text, and the registration's, applied to the registration,
+   * which is created with the first setting it keeps (FBL 0.7 8.4). A fold of an element whose id is
+   * ephemeral is kept in the view options for the session. An edit of only blocks outside the history
+   * says so (`history: false`).
+   */
+  function writtenWithSettings(source: Source, open: Open, outcome: Done, parted: SettingSteps, options: ViewOptions): EditOutcome {
+    const edits = bodyEdits(source, open, parted.body);
+    if ('refused' in edits) return { kind: 'refused', sentence: edits.refused };
+    let registration: string | undefined;
+    if (parted.registration.length > 0) {
+      if (open.foreign) return { kind: 'refused', sentence: FOREIGN_REGISTRATION };
+      let bytes: Uint8Array;
+      if (source.registration !== undefined) bytes = encode(source.registration);
+      else {
+        const created = createRegistration(open.binding, origin, `${baseName(source.fileName)}.adp`, nameOf(source.fileName), encode(source.text), undefined);
+        if ('refused' in created) return { kind: 'refused', sentence: created.refused };
+        ({ bytes } = created);
+      }
+      const kept = OpenRegistration.open(bytes, open.binding);
+      for (const step of parted.registration) {
+        const planned = kept.change(step);
+        if ('refused' in planned) return { kind: 'refused', sentence: planned.refused };
+      }
+      const text = decode(kept.bytes);
+      if (text !== source.registration) registration = text;
+    }
+    const folded = parted.session.filter((change) => change.attribute === hierarchySurface?.collapsed);
+    const made = outcome.created.find((id) => outcome.after.elements.some((element) => element.id === id && hierarchy?.roleOf(element.type) !== undefined));
+    return {
+      kind: 'applied', splices: edits.length === 0 ? [] : composedSplices(edits),
+      ...(registration === undefined ? {} : { registration }),
+      ...(made === undefined ? {} : { select: made, editLabel: true }),
+      ...(folded.length === 0 ? {} : { viewOptions: { ...options, collapsed: { ...options.collapsed, ...Object.fromEntries(folded.map((change) => [change.id, change.value === true])) } } }),
+      ...(parted.outsideHistory ? { history: false as const } : {}),
+    };
+  }
+
+  /**
+   * The edits that number every element a counted rule numbered in memory (DESL 5.3.4, 5.3.5): its
+   * id written over the placeholder, or where it has none, the last first so that an earlier one is
+   * still read under the id it was given, and each mark set to the last number given, in the text
+   * they leave.
+   */
+  function numbering(source: Source, open: Open, renamed: readonly { readonly id: string; readonly newId: string }[] = open.unnumbered): { readonly edits: readonly Edit[]; readonly text: string } | Refused {
+    const body = bodyOf(open.binding, source);
+    const edits: Edit[] = [];
+    for (const element of [...renamed].reverse()) {
+      const planned = body.change({ kind: 'storeId', id: element.id, newId: element.newId, replace: true });
+      if ('refused' in planned) return planned;
+      edits.push(planned.planned);
+    }
+    const marks = modelChangesOf(markSets(counters, open.model, renamed.map((element) => element.newId)), { binding: open.binding, metamodel: metamodel.value, persistence, read: body.model }, open.model);
+    if ('refused' in marks) return marks;
+    for (const step of marks) {
+      const planned = body.change(step);
+      if ('refused' in planned) return planned;
+      edits.push(planned.planned);
+    }
+    return { edits, text: decode(body.bytes) };
   }
 
   /** What a field of ADP Properties was given, as the values its column takes: a value of a cell, or the ones a cell is to hold. */
@@ -815,7 +1007,103 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     }
   }
 
-  function edit(source: Source, request: TableRequest, options: ViewOptions, confirmed: boolean): EditOutcome {
+  /** A request on an operation of the definition: offered and available, asked first where it asks, and run as one transaction. */
+  function operated(open: Open, request: { readonly operation: string; readonly on?: readonly string[]; readonly args?: Readonly<Record<string, TableValue>> }, confirmed: boolean, done: (outcome: Outcome) => EditOutcome): EditOutcome {
+    const run = operations!.value;
+    const selection = request.on ?? [];
+    const state = run.availability(open.model, request.operation, selection);
+    if (!state.offered) return { kind: 'refused', sentence: NOT_HERE };
+    if (!state.available) return { kind: 'refused', sentence: state.reason ?? `${state.label} cannot be done now.` };
+    if (state.confirm && !confirmed) return { kind: 'confirm', title: state.confirm.title, message: state.confirm.message, confirmLabel: state.confirm.confirmLabel, danger: state.confirm.danger };
+    const args = Object.fromEntries(Object.entries(request.args ?? {}).filter((entry): entry is [string, string | number | boolean] => entry[1] !== null));
+    return done(run.run(open.model, request.operation, selection, args));
+  }
+
+  /**
+   * A request on a page of boxes. An edit that writes the body numbers first what was numbered in
+   * memory (DESL 5.3.4): the ids are written, and the request is made again of the text that has
+   * them, so that one gesture is one undo step. An edit of settings alone writes the registration.
+   * The operations run on the model with the folds the session keeps for what is still ephemeral.
+   */
+  function editHierarchy(source: Source, request: HierarchyRequest, options: ViewOptions, confirmed: boolean): EditOutcome {
+    const read = opened(source);
+    const open: Open = { ...read, model: withSession(read.model, options) };
+    if (!operations || !hierarchy || !hierarchySurface || !gestures || open.refusal !== undefined) return { kind: 'refused', sentence: open.refusal ?? UNREADABLE };
+    const run = operations.value;
+    const { levels, entries } = hierarchySurface;
+    const refused = (sentence: string): EditOutcome => ({ kind: 'refused', sentence });
+
+    /** The request made again of the text with what was numbered in memory written. */
+    const numberedFirst = (): EditOutcome => {
+      const numbered = numbering(source, open);
+      if ('refused' in numbered) return refused(numbered.refused);
+      const rest = editHierarchy({ ...source, text: numbered.text }, request, options, confirmed);
+      if (rest.kind !== 'applied') return rest;
+      return { ...rest, splices: composedSplices([...numbered.edits, ...(rest.splices.length === 0 ? [] : [editOf(rest.splices)])]) };
+    };
+    const done = (outcome: Outcome): EditOutcome => {
+      if (outcome.refused !== undefined) return refused(outcome.refused);
+      const parted = settingSteps(outcome.changes, open.model, outcome.after, settings.value, open.stored, metamodel.value, open.binding.registration.blocks);
+      if (parted.body.length > 0 && open.unnumbered.length > 0) return numberedFirst();
+      return writtenWithSettings(source, open, outcome, parted, options);
+    };
+
+    switch (request.kind) {
+      case 'operation':
+        return operated(open, request, confirmed, done);
+      case 'renumber': {
+        if (!open.model.elements.some((element) => element.id === request.id)) return refused(ENTRY_GONE);
+        if (!open.renumbered.has(request.id)) return refused(NOT_RENUMBERED);
+        if (open.unnumbered.length > 0) {
+          // What was numbered in memory is numbered by the first edit that writes the body; this one writes nothing else.
+          if (open.unnumbered.some((element) => element.newId === request.id)) {
+            const numbered = numbering(source, open);
+            return 'refused' in numbered ? refused(numbered.refused) : { kind: 'applied', splices: composedSplices([...numbered.edits]), select: request.id };
+          }
+          return numberedFirst();
+        }
+        const given = renumbering(open.model, [request.id], counters).renamed;
+        if (given.length === 0) return refused(NOT_RENUMBERED);
+        const numbered = numbering(source, open, given);
+        return 'refused' in numbered ? refused(numbered.refused) : { kind: 'applied', splices: composedSplices([...numbered.edits]), select: given[0].newId };
+      }
+      case 'drop': {
+        // A level dropped at the top is added by the operation that adds one there; one dropped into a level, and an entry, by the one that adds it inside that level,
+        // and moved after the sibling it was dropped after, or with no sibling named, first among its kind there, as a move within its own parent puts it.
+        const level = request.entry === levels.type;
+        if (!level && request.entry !== entries.type) return refused(NOT_HERE);
+        const parent = request.parent;
+        if (parent !== undefined && !open.model.elements.some((element) => element.id === parent && element.type === levels.type)) return refused(ENTRY_GONE);
+        const adding = parent === undefined ? (level ? gestures.adds[levels.type] : undefined) : gestures.on[levels.type]?.[level ? 'addLevel' : 'addEntry'];
+        if (!adding) return refused(parent === undefined ? IN_A_LEVEL : NOT_HERE);
+        const steps: (RunStep | ((created: readonly string[]) => RunStep))[] = [{ operation: adding.operation, on: parent === undefined ? [] : [parent] }];
+        if (request.after !== undefined) {
+          const moving = gestures.on[request.entry]?.move;
+          if (!moving) return refused(NOT_HERE);
+          const after = request.after;
+          steps.push((created) => ({
+            operation: moving.operation, on: [created[0]],
+            args: { ...(parent === undefined || moving.params.into === undefined ? {} : { [moving.params.into]: parent }), ...(moving.params.after === undefined || after === '' ? {} : { [moving.params.after]: after }) },
+          }));
+        }
+        return done(run.runAll(open.model, steps));
+      }
+      case 'setField': {
+        const steps = hierarchy.fieldSteps(open.model, request.id, request.field, request.value);
+        if ('refused' in steps) return refused(steps.refused);
+        return steps.length === 0 ? { kind: 'applied', splices: [] } : done(run.runAll(open.model, steps));
+      }
+      default:
+        return refused(NOT_HERE);
+    }
+  }
+
+  function edit(source: Source, request: TableRequest | HierarchyRequest, options: ViewOptions, confirmed: boolean): EditOutcome {
+    if (hierarchySurface) return editHierarchy(source, request as HierarchyRequest, options, confirmed);
+    return editTable(source, request as TableRequest, options, confirmed);
+  }
+
+  function editTable(source: Source, request: TableRequest, options: ViewOptions, confirmed: boolean): EditOutcome {
     const open = opened(source);
     if (!operations || !table || open.refusal !== undefined) return { kind: 'refused', sentence: open.refusal ?? UNREADABLE };
     const run = operations.value;
@@ -838,29 +1126,21 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
         : request.kind === 'show' ? { ...request, view: now(request.view) }
           : request.kind === 'setField' ? { ...request, id: now(request.id), field: now(request.field) }
             : { ...request, row: now(request.row), property: now(request.property), ...(typeof request.value === 'string' ? { value: now(request.value) } : {}) } as TableRequest;
-      const outcome = edit({ ...source, text: decode(body.bytes) }, asked, options, confirmed);
+      const outcome = editTable({ ...source, text: decode(body.bytes) }, asked, options, confirmed);
       if (outcome.kind !== 'applied' || outcome.splices.length === 0) return outcome;
-      const rest: Edit = { splices: outcome.splices.map((splice) => ({ operation: 'replace-value', start: splice.offset, end: splice.offset + splice.length, text: splice.text })) };
-      return { ...outcome, splices: composedSplices([...edits, rest]) };
+      return { ...outcome, splices: composedSplices([...edits, editOf(outcome.splices)]) };
     }
 
     const done = (outcome: Outcome): EditOutcome => {
       if (outcome.refused !== undefined) return { kind: 'refused', sentence: outcome.refused };
       // What a request made is shown: the first row or column of it.
-      const made = outcome.created.find((id) => outcome.after.elements.some((element) => element.id === id && (element.type === surface.value!.rows.type || element.type === surface.value!.columns.type)));
+      const made = outcome.created.find((id) => outcome.after.elements.some((element) => element.id === id && (element.type === tableSurface!.rows.type || element.type === tableSurface!.columns.type)));
       return written(source, open, outcome.changes, made);
     };
 
     switch (request.kind) {
-      case 'operation': {
-        const selection = request.on ?? [];
-        const state = run.availability(open.model, request.operation, selection);
-        if (!state.offered) return { kind: 'refused', sentence: NOT_HERE };
-        if (!state.available) return { kind: 'refused', sentence: state.reason ?? `${state.label} cannot be done now.` };
-        if (state.confirm && !confirmed) return { kind: 'confirm', title: state.confirm.title, message: state.confirm.message, confirmLabel: state.confirm.confirmLabel, danger: state.confirm.danger };
-        const args = Object.fromEntries(Object.entries(request.args ?? {}).filter((entry): entry is [string, string | number | boolean] => entry[1] !== null));
-        return done(run.run(open.model, request.operation, selection, args));
-      }
+      case 'operation':
+        return operated(open, request, confirmed, done);
       case 'cell':
         return done(run.setCell(open.model, request.row, request.property, request.value));
       case 'item':
@@ -890,16 +1170,52 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     }
   }
 
+  /**
+   * The registration an undo or a redo gives back (FBL 0.7 7.1): the snapshot, with each block the
+   * binding declares `history: false` made what it is in the current text, by the library's own
+   * settings: what the current block lacks removed, and what it holds set, added after the entry
+   * before it where the block keeps its order. Where the snapshot is no file and the current text
+   * keeps something outside the history, the file stays, holding only that.
+   */
+  function restoreRegistration(snapshot: string | undefined, current: string | undefined): string | undefined {
+    if (snapshot === current) return snapshot;
+    const binding = bindings.find((candidate) => candidate.registration.blocks.some((block) => !block.inHistory));
+    if (!binding) return snapshot;
+    const { blocks } = binding.registration;
+    const now = current === undefined ? undefined : RegistrationDocument.read(encode(current), blocks.map((block) => block.name));
+    const outside = (name: string): readonly { readonly key: string; readonly value: string }[] => now?.block(name)?.entries.map(({ key, value }) => ({ key, value })) ?? [];
+    if (snapshot === undefined && blocks.every((block) => block.inHistory || outside(block.name).length === 0)) return undefined;
+    // Where there was no file, what the history keeps is nothing: the current text without the blocks inside the history.
+    const kept = OpenRegistration.open(encode(snapshot ?? current!), binding);
+    for (const block of blocks.filter((candidate) => snapshot === undefined || !candidate.inHistory)) {
+      const target = block.inHistory ? [] : outside(block.name);
+      const held = (): readonly { readonly key: string; readonly value: string }[] => kept.blockEntries(block.name) ?? [];
+      const steps: Extract<ModelChange, { kind: 'setting' }>[] = held().filter((entry) => !target.some((member) => member.key === entry.key)).map((entry) => ({ kind: 'setting', block: block.name, key: entry.key, remove: true }));
+      for (const step of steps) if ('refused' in kept.change(step)) return snapshot;
+      for (const [index, member] of target.entries()) {
+        const entries = held();
+        const place = entries.findIndex((entry) => entry.key === member.key);
+        const previous = index === 0 ? undefined : target[index - 1].key;
+        const inPlace = !block.kept || (previous === undefined ? place === 0 : place > 0 && entries[place - 1].key === previous);
+        if (place >= 0 && inPlace && entries[place].value === member.value) continue;
+        const position: ChangePosition | undefined = !block.kept || inPlace ? undefined : previous !== undefined ? { after: previous } : entries.length > 0 ? { index: 0 } : undefined;
+        if ('refused' in kept.change({ kind: 'setting', block: block.name, key: member.key, value: member.value, ...(position === undefined ? {} : { position }) })) return snapshot;
+      }
+    }
+    return decode(kept.bytes);
+  }
+
   return {
     origin,
     kind: 'designer',
-    displayName: localized(language.label, language.defaultLocale ?? 'en') ?? definition.name,
+    page: hierarchySurface ? 'hierarchy' : 'table',
+    displayName: localized(language.label, locale) ?? definition.name,
     claims: claimsOf(bindings),
     claimed: (fileName, text) => claimingBinding(bindings, fileName, text) !== undefined,
     suggests: (fileName, text) => suggests(bindings, fileName, text),
     findings: (source) => [...opened(source).findings, ...ofDefinition, ...ofPlugins],
     view,
-    toolbox: () => [],
+    toolbox,
     fields,
     actions,
     edit,
@@ -910,6 +1226,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
       const made = produceTemplate(binding, undefined, name, (rule) => newId(persistence, entryOf(persistence, findRule(binding, rule)?.type ?? rule).as), binding.plugin && plugins.persistence(binding.plugin.plugin));
       return made ? decode(made) : '';
     },
+    restoreRegistration,
   };
 }
 

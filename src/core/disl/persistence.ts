@@ -454,6 +454,7 @@ const sameSlot = (a: Slot, b: Slot): boolean => a.key === b.key && a.attribute =
 // of the attribute that reads the slot the rule's id is read from.
 function idAsStored(entry: FblElement, binding: FblBinding): string | undefined {
   if (entry.idIsStored) return entry.id;
+  if (entry.writtenId !== undefined) return entry.writtenId;
   const rule = findRule(binding, entry.rule);
   const slot = rule?.id?.from;
   const name = slot && rule.attributes.find(([, attribute]) => sameSlot(attribute, slot))?.[0];

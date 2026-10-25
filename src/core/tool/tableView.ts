@@ -4,7 +4,7 @@
 // beyond the ids, the names and the values the document and the definition give.
 
 import type { DesignerOperation, Parameter } from '../desl/operations';
-import type { Editor, Surface, ValueType } from '../desl/surface';
+import type { Editor, TableSurface, ValueType } from '../desl/surface';
 import { attributesOf, defaultOf, valueKind, type Metamodel } from '../disl/metamodel';
 import type { Model, ModelElement, Value } from '../disl/model';
 import { isCel, localized } from '../disl/specification';
@@ -198,11 +198,31 @@ export interface ShownView {
 
 /** What a table view is made of. */
 export interface TableParts {
-  readonly surface: Surface;
+  readonly surface: TableSurface;
   readonly metamodel: Metamodel;
   readonly operations: readonly DesignerOperation[];
   readonly logic?: ViewLogic;
   readonly locale?: string;
+}
+
+/**
+ * Every operation of a definition as a gesture asks its arguments, by its id: each parameter as the
+ * control that asks it, with the values an enumeration or a type of the document gives a choice,
+ * each element of a type named by `labelOf`.
+ */
+export function operationsOf(model: Model, metamodel: Metamodel, operations: readonly DesignerOperation[], locale: string, labelOf: (model: Model, element: ModelElement) => string): Record<string, TableOperation> {
+  const paramOf = (param: Parameter): TableParam => {
+    const kind = valueKind(metamodel, param.type);
+    const value = param.default === undefined || typeof param.default === 'object' ? {} : { value: param.default };
+    const common = { name: param.name, label: param.label, required: param.required };
+    if (kind.kind === 'enum') return { ...common, control: 'choice', ...value, options: kind.enum.values.map((candidate) => ({ value: candidate.key, label: candidate.label })) };
+    if (kind.kind === 'reference') return { ...common, control: 'choice', options: model.elements.filter((element) => element.type === kind.type).map((element) => ({ value: element.id, label: labelOf(model, element) })) };
+    const controls: Readonly<Record<string, TableParam['control']>> = { bool: 'checkbox', int: 'number', number: 'number', date: 'date', datetime: 'dateTime', time: 'time', text: 'multiline' };
+    return { ...common, control: (kind.kind === 'primitive' ? controls[kind.primitive] : undefined) ?? 'text', ...value };
+  };
+  return Object.fromEntries(operations.map((operation) => [operation.id, {
+    id: operation.id, label: localized(isCel(operation.label) ? undefined : operation.label, locale) ?? operation.id, params: operation.params.map(paramOf),
+  }]));
 }
 
 const UNKNOWN_TYPE = 'This column is of a type this tool does not have, so its values are shown and not edited.';
@@ -308,17 +328,6 @@ export function tableReader(parts: TableParts) {
     });
   }
 
-  /** The control that asks a parameter, with the values an enumeration or a type of the document gives a choice. */
-  function paramOf(model: Model, param: Parameter): TableParam {
-    const kind = valueKind(metamodel, param.type);
-    const value = param.default === undefined || typeof param.default === 'object' ? {} : { value: param.default };
-    const common = { name: param.name, label: param.label, required: param.required };
-    if (kind.kind === 'enum') return { ...common, control: 'choice', ...value, options: kind.enum.values.map((candidate) => ({ value: candidate.key, label: candidate.label })) };
-    if (kind.kind === 'reference') return { ...common, control: 'choice', options: model.elements.filter((element) => element.type === kind.type).map((element) => ({ value: element.id, label: labelOf(model, element) })) };
-    const controls: Readonly<Record<string, TableParam['control']>> = { bool: 'checkbox', int: 'number', number: 'number', date: 'date', datetime: 'dateTime', time: 'time', text: 'multiline' };
-    return { ...common, control: (kind.kind === 'primitive' ? controls[kind.primitive] : undefined) ?? 'text', ...value };
-  }
-
   /** The table view of a model: the view the document is left in, else the first (DESL 7.4), applied to its columns and rows. */
   function view(model: Model, state: Pick<TableView, 'readOnly' | 'notice'>): TableView {
     const tabs = model.elements.filter((element) => element.type === views.type);
@@ -352,9 +361,7 @@ export function tableReader(parts: TableParts) {
       ...(shown.groups === undefined ? {} : { groups: shown.groups }),
       views: tabs.map((tab) => ({ id: tab.id, name: textOf(tab.attributes[views.name]), active: tab.id === active })),
       settings,
-      operations: Object.fromEntries(parts.operations.map((operation) => [operation.id, {
-        id: operation.id, label: localized(isCel(operation.label) ? undefined : operation.label, locale) ?? operation.id, params: operation.params.map((param) => paramOf(model, param)),
-      }])),
+      operations: operationsOf(model, metamodel, parts.operations, locale, labelOf),
       ...state,
     };
   }

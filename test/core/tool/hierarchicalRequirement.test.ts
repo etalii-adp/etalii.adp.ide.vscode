@@ -1,0 +1,423 @@
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+import { decode, encode } from '../../../src/core/fbl/text/utf8';
+import type { Source, TextSplice, ViewOptions } from '../../../src/core/frame/toolType';
+import type { HierarchyNode, HierarchyRequest } from '../../../src/core/tool/hierarchyView';
+import { applied, definitionOf, hierarchyDesignerOf, refusal, spliced } from './support';
+
+// The Hierarchical Requirement Designer as a tool type made from its definition: its web-shop
+// example and that example's registration opened as the frame opens them, shown as a page of boxes,
+// and changed by every kind of request the page, ADP Toolbox and ADP Properties make. An edit is
+// the FBL library's splices of the body and, for what the registration keeps, the registration's
+// new text, both in one outcome; one that writes the body numbers first what the file holds
+// without a number.
+
+const type = hierarchyDesignerOf(definitionOf('hierarchical-requirement'));
+const text = readFileSync('examples/hierarchical-requirement/web-shop.md', 'utf8');
+const registration = readFileSync('examples/hierarchical-requirement/web-shop.adp', 'utf8');
+const nl = text.includes('\r\n') ? '\r\n' : '\n';
+const source: Source = { fileName: 'C:/work/web-shop.md', text, registration };
+/** The example with its placeholder numbered, as the first edit that writes it leaves it. */
+const numberedText = text.replace('<!-- last: ITEM-0007 REQ-0012 -->', '<!-- last: ITEM-0007 REQ-0013 -->').replace('+ REQ-NEW A guest', '+ REQ-0013 A guest');
+const numbered: Source = { ...source, text: numberedText };
+
+const operation = (name: string, on: readonly string[] = [], args: Readonly<Record<string, string | number | boolean>> = {}): HierarchyRequest => ({ kind: 'operation', operation: name, on, args });
+
+/** The splices that undo an applied outcome: of the text after it, each putting back the bytes its splice took out. */
+function inverseOf(before: string, splices: readonly TextSplice[]): TextSplice[] {
+  const bytes = encode(before);
+  let shift = 0;
+  return splices.map((splice) => {
+    const written = encode(splice.text).length;
+    const back = { offset: splice.offset + shift, length: written, text: decode(bytes.subarray(splice.offset, splice.offset + splice.length)) };
+    shift += written - splice.length;
+    return back;
+  });
+}
+
+/** The body after a request that is applied, which also undoes exactly. A question it would ask is answered yes. */
+function after(on: Source, request: HierarchyRequest): string {
+  const outcome = applied(type.edit(on, request, {}, true));
+  const changed = spliced(on.text, outcome.splices);
+  expect(spliced(changed, inverseOf(on.text, outcome.splices)), 'undo gives the bytes before').toBe(on.text);
+  return changed;
+}
+
+const all = (nodes: readonly HierarchyNode[]): HierarchyNode[] => nodes.flatMap((node) => [node, ...all(node.entries), ...all(node.levels)]);
+const nodeOf = (on: Source, id: string): HierarchyNode | undefined => {
+  const view = type.view(on, {});
+  return all([...view.roots, ...view.stray]).find((node) => node.id === id);
+};
+
+describe('the Hierarchical Requirement Designer', () => {
+  it('is a designer shown as a page of boxes', () => {
+    expect(type.kind).toBe('designer');
+    expect(type.page).toBe('hierarchy');
+    expect(type.claimed(source.fileName, text)).toBe(true);
+    expect(type.claimed('C:/work/notes.md', '# Notes\n')).toBe(false);
+    expect(type.suggests(source.fileName, text)).toBe(true);
+  });
+
+  it('reads its example with one finding: the placeholder, which the next edit numbers', () => {
+    expect(type.findings(source)).toEqual([{ rule: 'std.missingId', severity: 'warning', message: 'REQ-0013 is numbered when the document is next changed: the file holds REQ-NEW.', line: 43 }]);
+  });
+
+  it('shows the items as levels and the requirements as entries, in the file\'s order', () => {
+    const view = type.view(source, {});
+    expect(view).toMatchObject({ name: 'web-shop', ids: 'shown', readOnly: false, stray: [] });
+    expect(view.roots.map((node) => node.id)).toEqual(['ITEM-0001', 'ITEM-0004', 'ITEM-0006']);
+    const storefront = view.roots[0];
+    expect(storefront.entries.map((node) => node.id)).toEqual(['REQ-0001', 'REQ-0002']);
+    expect(storefront.levels.map((node) => node.id)).toEqual(['ITEM-0002']);
+    expect(storefront.levels[0].levels[0]).toMatchObject({ id: 'ITEM-0003', depth: 3, parent: 'ITEM-0002', collapsed: true });
+    expect(storefront.levels[0].levels[0].entries.map((node) => [node.id, node.ephemeral, node.renumber])).toEqual([['REQ-0005', false, false], ['REQ-0013', true, true]]);
+    expect(storefront).toMatchObject({ role: 'level', type: 'Item', depth: 1, shownId: 'ITEM-0001', title: 'Storefront', notes: { open: 0, within: 1 } });
+    expect(storefront.labels).toEqual([{ label: 'tags', name: 'customer', member: 'tag/customer', colourKey: 'blue', implied: false }]);
+    expect(storefront.entries[1]).toMatchObject({ collapsed: true, descriptionText: 'Measured at the 95th percentile, on a 4G connection.' });
+    expect(storefront.entries[0].labels.map((label) => [label.label, label.name, label.colourKey])).toEqual([['tags', 'search', 'default'], ['category', 'functional', 'blue'], ['state', 'accepted', 'green']]);
+  });
+
+  it('shows a mention as what it names, and one that names nothing as broken', () => {
+    const checkout = nodeOf(source, 'REQ-0004')!;
+    expect(checkout.description).toEqual([
+      { text: 'Sent when ' },
+      { text: '[REQ-0003]', mention: { id: 'REQ-0003', type: 'Requirement', title: 'A customer pays by card, iDEAL or PayPal.', broken: false } },
+      { text: ' succeeds, through the service of ' },
+      { text: '[ITEM-0005]', mention: { id: 'ITEM-0005', type: 'Item', title: 'Mail', broken: false } },
+      { text: '.' },
+    ]);
+    const broken = { ...numbered, text: numberedText.replace('See [REQ-0007] for', 'See [REQ-0099] for') };
+    expect(nodeOf(broken, 'REQ-0006')!.description.find((part) => 'mention' in part)).toEqual({ text: '[REQ-0099]', mention: { id: 'REQ-0099', broken: true } });
+    expect(nodeOf(broken, 'REQ-0006')!.findings).toEqual([{ severity: 'warning', count: 1 }]);
+    expect(type.findings(broken).map((found) => found.rule)).toEqual(['std.mentions']);
+  });
+
+  it('shows the lists of the labels, the assessments, the stored filters and what the page itself offers', () => {
+    const view = type.view(source, {});
+    expect(view.lists.map((list) => [list.label, list.prefix, list.many, list.members.length])).toEqual([['tags', '#', true, 9], ['category', 'category:', false, 3], ['state', '@', false, 4]]);
+    expect(view.lists[0].gestures).toMatchObject({ add: { operation: 'addTag' }, remove: { operation: 'removeTag' } });
+    expect(view.lists[1]).toMatchObject({ add: { operation: 'addCategory' }, gestures: { set: { operation: 'setCategory', params: { member: 'category' } }, clear: { operation: 'clearCategory' } } });
+    expect(view.lists[0].colours.map((colour) => colour.key)).toContain('purple');
+    expect(view.notes.map((note) => [note.id, note.kind, note.aboutId, note.resolved])).toEqual([
+      ['assessment/0', 'question', 'REQ-0006', false], ['assessment/1', 'warning', 'ITEM-0002', true], ['assessment/2', 'remark', 'REQ-0003', false], ['assessment/3', 'idea', 'ITEM-0006', false],
+    ]);
+    expect(view.noteKinds.map((kind) => kind.key)).toEqual(['question', 'remark', 'warning', 'idea']);
+    expect(view.filters.map((filter) => [filter.id, filter.query])).toEqual([['filter/Open security', '#security @proposed sort:state'], ['filter/Backend', 'item:back* sort:number']]);
+    expect(view.widthRange).toEqual({ min: 120, max: 2000 });
+    expect(view.pageGestures).toMatchObject({ addLevel: { operation: 'addTopItem' }, addFilter: { operation: 'storeFilter' }, addWidth: { operation: 'addColumnWidth' } });
+    expect(Object.keys(view.operations)).toContain('moveRequirement');
+  });
+
+  it('names its parts for the page: the types of the levels and entries, what a picked mention writes, the words of a filter, and the parameters of each gesture by the part they play', () => {
+    const view = type.view(source, {});
+    expect(view.roles).toEqual({ level: 'Item', entry: 'Requirement' });
+    expect(view.mentions).toEqual({ Item: { before: '[', after: ']', types: ['Item', 'Requirement'] }, Requirement: { before: '[', after: ']', types: ['Item', 'Requirement'] } });
+    expect(view.queryWords).toEqual({ level: 'item:', sort: 'sort:' });
+    expect(view.roots[0].gestures.addNote).toMatchObject({ operation: 'addAssessment', params: { kind: 'kind', text: 'text' } });
+    expect(view.notes[0].gestures.change).toMatchObject({ operation: 'changeAssessment', params: { kind: 'kind', text: 'text', detail: 'detail' } });
+    expect(view.lists[2].add).toMatchObject({ operation: 'addState', params: { name: 'name', colour: 'colour' } });
+    expect(view.pageGestures.addFilter).toMatchObject({ operation: 'storeFilter', params: { name: 'name', query: 'query' } });
+  });
+
+  it('shows what a filter a viewer applied leaves, ordered as it says', () => {
+    const view = type.view(source, { query: '#security sort:number' });
+    expect(view.applied).toEqual({ query: '#security sort:number', shown: 3, total: 17 });
+    expect(view.roots.map((node) => [node.id, node.collapsed, node.entries.map((entry) => entry.id), node.levels.map((level) => level.id)])).toEqual([['ITEM-0004', false, ['REQ-0006', 'REQ-0007'], []]]);
+    const completions = type.view(source, { query: '@pr category:te' }).completions;
+    expect(completions['category:te']).toEqual(['category:technical']);
+    expect(completions['@pr']).toEqual(['@proposed']);
+    expect(completions['']).toEqual(['#', 'category:', '@', 'item:', 'sort:']);
+    expect(type.view(source, {}).completions).toEqual({ '': ['#', 'category:', '@', 'item:', 'sort:'] });
+  });
+
+  it('gives the filter that reveals each level or entry a reference or a finding on the page names and the filter hides', () => {
+    // REQ-0004 refers to REQ-0003 and to ITEM-0005, which `#mail` hides; the finding is about REQ-0013, which carries no tag.
+    expect(type.view(source, { query: 'category:functional #mail' }).unhide).toEqual({ 'REQ-0013': 'category:functional', 'REQ-0003': 'category:functional', 'ITEM-0005': '' });
+    expect(type.view(source, {}).unhide).toEqual({});
+    expect(type.view(source, { query: '#mail' }).roots.length).toBeGreaterThan(0);
+  });
+
+  it('shows a fold the session keeps only for an entry that is still without a number: the registration decides for any other', () => {
+    expect(nodeOf(source, 'REQ-0013')!.collapsed).toBe(false);
+    const view = type.view(source, { collapsed: { 'REQ-0013': true, 'ITEM-0004': true, 'ITEM-0003': false } });
+    const shown = all([...view.roots, ...view.stray]);
+    expect(shown.filter((node) => ['REQ-0013', 'ITEM-0004', 'ITEM-0003'].includes(node.id)).map((node) => [node.id, node.collapsed])).toEqual([['ITEM-0003', true], ['REQ-0013', true], ['ITEM-0004', false]]);
+  });
+
+  it('offers an item and a requirement in ADP Toolbox', () => {
+    expect(type.toolbox(source).map((entry) => [entry.id, entry.label, entry.icon])).toEqual([['Item', 'Item', 'mdi-folder-outline'], ['Requirement', 'Requirement', 'mdi-checkbox-blank-outline']]);
+  });
+});
+
+describe('an edit of a requirement document', () => {
+  it('numbers what the file holds without a number with the first edit that writes it', () => {
+    const written = after(source, operation('setTitle', ['REQ-0001'], { title: 'A customer finds a product.' }));
+    expect(written).toBe(numberedText.replace('REQ-0001 A customer finds a product by its name or its description.', 'REQ-0001 A customer finds a product.'));
+  });
+
+  it('adds a requirement after the item\'s last one, with the mark, in one edit, and selects it for typing', () => {
+    const outcome = applied(type.edit(numbered, operation('addRequirement', ['ITEM-0001']), {}, false));
+    expect(outcome).toMatchObject({ select: 'REQ-0014', editLabel: true });
+    expect(outcome.registration).toBeUndefined();
+    const anchor = `    Measured at the 95th percentile, on a 4G connection.${nl}`;
+    expect(spliced(numberedText, outcome.splices)).toBe(numberedText.replace('REQ-0013 -->', 'REQ-0014 -->').replace(anchor, `${anchor}  * REQ-0014 New requirement${nl}`));
+  });
+
+  it('numbers a placeholder and gives a new requirement the number after it in the same edit', () => {
+    const outcome = applied(type.edit(source, operation('addRequirementBelow', ['REQ-0009']), {}, false));
+    expect(outcome.select).toBe('REQ-0014');
+    expect(spliced(text, outcome.splices)).toBe(numberedText.replace('REQ-0013 -->', 'REQ-0014 -->')
+      .replace(`as tax law requires. #legal category:non-functional state:accepted${nl}`, `as tax law requires. #legal category:non-functional state:accepted${nl}  - REQ-0014 New requirement${nl}`));
+  });
+
+  it('moves a requirement into another item at the indentation there', () => {
+    const line = '* REQ-0001 A customer finds a product by its name or its description. #search category:functional state:accepted';
+    const written = after(numbered, operation('moveRequirement', ['REQ-0001'], { item: 'ITEM-0005' }));
+    expect(written).toBe(numberedText.replace(`  ${line}${nl}`, '').replace(`state:proposed${nl}- ITEM-0006`, `state:proposed${nl}    ${line}${nl}- ITEM-0006`));
+  });
+
+  it('folds a requirement in the registration alone, outside the history', () => {
+    const outcome = applied(type.edit(source, operation('toggleCollapsed', ['REQ-0001']), {}, false));
+    expect(outcome).toMatchObject({ splices: [], history: false });
+    expect(outcome.registration).toBe(registration.replace(`  ITEM-0003: yes${nl}`, `  ITEM-0003: yes${nl}  REQ-0001: yes${nl}`));
+    const back = applied(type.edit(source, operation('toggleCollapsed', ['REQ-0002']), {}, false));
+    expect(back.registration).toBe(registration.replace(`  REQ-0002: yes${nl}`, ''));
+  });
+
+  it('folds a requirement without a number for the session only', () => {
+    expect(type.edit(source, operation('toggleCollapsed', ['REQ-0013']), { collapsed: { 'ITEM-0001': true } }, false)).toEqual({ kind: 'applied', splices: [], viewOptions: { collapsed: { 'ITEM-0001': true, 'REQ-0013': true } } });
+  });
+
+  it('folds, unfolds and folds again a requirement without a number, for the session', () => {
+    const toggle = operation('toggleCollapsed', ['REQ-0013']);
+    const label = (options: ViewOptions): string | undefined => type.actions(source, ['REQ-0013'], options).find((action) => action.id === 'toggleCollapsed')?.label;
+    expect(label({})).toBe('Collapse');
+    const folded = applied(type.edit(source, toggle, {}, false));
+    expect(folded).toEqual({ kind: 'applied', splices: [], viewOptions: { collapsed: { 'REQ-0013': true } } });
+    expect(type.view(source, folded.viewOptions!).roots[0].levels[0].levels[0].entries[1]).toMatchObject({ id: 'REQ-0013', collapsed: true, gestures: { fold: { operation: 'toggleCollapsed', enabled: true } } });
+    expect(label(folded.viewOptions!)).toBe('Expand');
+    const unfolded = applied(type.edit(source, toggle, folded.viewOptions!, false));
+    expect(unfolded.viewOptions).toEqual({ collapsed: { 'REQ-0013': false } });
+    expect(nodeOf(source, 'REQ-0013')!.collapsed).toBe(false);
+    expect(label(unfolded.viewOptions!)).toBe('Collapse');
+    expect(applied(type.edit(source, toggle, unfolded.viewOptions!, false)).viewOptions).toEqual({ collapsed: { 'REQ-0013': true } });
+  });
+
+  it('leaves a requirement to the registration once a body write numbers it, whatever the session held', () => {
+    const session: ViewOptions = { collapsed: { 'REQ-0013': true } };
+    const titled = applied(type.edit(source, operation('setTitle', ['REQ-0001'], { title: 'Search works.' }), session, false));
+    const written: Source = { ...source, text: spliced(text, titled.splices) };
+    expect(written.text).toContain('+ REQ-0013 A guest');
+    const shown = (on: Source, options: ViewOptions) => all([...type.view(on, options).roots]).find((node) => node.id === 'REQ-0013')!;
+    expect(shown(written, session)).toMatchObject({ ephemeral: false, collapsed: false });
+    // The registration does not hold it, so a fold writes it there, outside the history.
+    const folded = applied(type.edit(written, operation('toggleCollapsed', ['REQ-0013']), session, false));
+    expect(folded).toMatchObject({ splices: [], history: false });
+    expect(folded.viewOptions).toBeUndefined();
+    expect(folded.registration).toBe(registration.replace(`  REQ-0002: yes${nl}`, `  REQ-0002: yes${nl}  REQ-0013: yes${nl}`));
+    // Held there, it is folded though the session says otherwise, and the next fold takes it out.
+    const kept: Source = { ...written, registration: folded.registration! };
+    expect(shown(kept, { collapsed: { 'REQ-0013': false } }).collapsed).toBe(true);
+    expect(applied(type.edit(kept, operation('toggleCollapsed', ['REQ-0013']), { collapsed: { 'REQ-0013': false } }, false)).registration).toBe(registration);
+  });
+
+  it('moves an item to the top level after the last item, past the members the registration keeps, with and without it', () => {
+    const [item, rejected, guest] = ['ITEM-0003 Guest checkout', '+ REQ-0005 A customer can order without an account. state:rejected', '+ REQ-0013 A guest is offered an account after the order. #customer category:functional'];
+    const nested = `    - ${item}${nl}      ${rejected}${nl}      ${guest}${nl}`;
+    const last = `  - REQ-0010 Personal data is removed on request within 30 days. #legal #privacy category:non-functional${nl}`;
+    expect(numberedText).toContain(nested);
+    const expected = numberedText.replace(nested, '').replace(last, `${last}- ${item}${nl}  ${rejected}${nl}  ${guest}${nl}`);
+    for (const kept of [numbered, { ...numbered, registration: undefined }]) {
+      const outcome = applied(type.edit(kept, operation('moveItem', ['ITEM-0003']), {}, false));
+      expect(outcome.registration).toBeUndefined();
+      expect(after(kept, operation('moveItem', ['ITEM-0003']))).toBe(expected);
+    }
+  });
+
+  it('carries what the registration keeps outside the history over an undo or a redo of a step', () => {
+    const renamed = registration.replace('  security: red', '  safety: red');
+    const foldedNow = renamed.replace(`  ITEM-0003: yes${nl}`, `  ITEM-0003: yes${nl}  REQ-0001: yes${nl}`);
+    // Undo of the rename: the registration before it, with the fold made after it.
+    expect(type.restoreRegistration(registration, foldedNow)).toBe(registration.replace(`  ITEM-0003: yes${nl}`, `  ITEM-0003: yes${nl}  REQ-0001: yes${nl}`));
+    // Redo: the registration after it, with an unfold made since.
+    expect(type.restoreRegistration(renamed, registration.replace(`  ITEM-0003: yes${nl}`, ''))).toBe(renamed.replace(`  ITEM-0003: yes${nl}`, ''));
+    // Every fold gone: the block goes with its last entry.
+    const unfolded = registration.replace(`collapsed:${nl}  ITEM-0003: yes${nl}  REQ-0002: yes${nl}`, '');
+    expect(type.restoreRegistration(renamed, unfolded)).toBe(renamed.replace(`collapsed:${nl}  ITEM-0003: yes${nl}  REQ-0002: yes${nl}`, ''));
+    expect(type.restoreRegistration(renamed, undefined)).toBe(renamed.replace(`collapsed:${nl}  ITEM-0003: yes${nl}  REQ-0002: yes${nl}`, ''));
+    // A step that created the file, undone: the file stays for the folds alone, or goes when there are none.
+    expect(type.restoreRegistration(undefined, registration)).toBe(`etalii/hierarchical-requirement${nl}body: web-shop.md${nl}collapsed:${nl}  ITEM-0003: yes${nl}  REQ-0002: yes${nl}`);
+    expect(type.restoreRegistration(undefined, unfolded)).toBeUndefined();
+    expect(type.restoreRegistration(renamed, renamed)).toBe(renamed);
+  });
+
+  it('writes a list whole when its block lacks a member, creating the registration', () => {
+    const outcome = applied(type.edit({ ...numbered, registration: undefined }, operation('recolourTag', ['tag/search'], { colour: 'red' }), {}, false));
+    expect(outcome.splices).toEqual([]);
+    expect(outcome.history).toBeUndefined();
+    const tags = ['customer', 'search', 'performance', 'payment', 'mail', 'core', 'security', 'legal', 'privacy'];
+    expect(outcome.registration).toBe(`etalii/hierarchical-requirement${nl}tags:${nl}${tags.map((tag) => `  ${tag}: ${tag === 'search' ? 'red' : 'default'}${nl}`).join('')}`);
+  });
+
+  it('renames a tag in the body and in the registration, in one outcome', () => {
+    const outcome = applied(type.edit(numbered, operation('renameTag', ['tag/security'], { name: 'safety' }), {}, false));
+    expect(spliced(numberedText, outcome.splices)).toBe(numberedText.replaceAll('#security', '#safety'));
+    expect(outcome.registration).toBe(registration.replace('  security: red', '  safety: red'));
+    expect(outcome.history).toBeUndefined();
+  });
+
+  it('resolves an assessment by one character', () => {
+    const outcome = applied(type.edit(numbered, operation('resolveAssessment', ['assessment/0']), {}, false));
+    expect(outcome.splices).toEqual([{ offset: encode(numberedText.slice(0, numberedText.lastIndexOf('- [ ] Question') + 3)).length, length: 1, text: 'x' }]);
+  });
+
+  it('asks before deleting an item that holds anything', () => {
+    expect(type.edit(numbered, operation('deleteEntry', ['ITEM-0003']), {}, false)).toMatchObject({ kind: 'confirm' });
+    expect(after(numbered, operation('deleteEntry', ['ITEM-0003']))).not.toContain('ITEM-0003 Guest checkout');
+  });
+});
+
+describe('a gesture of the frame', () => {
+  it('drops an item at the top level, after the last one', () => {
+    const outcome = applied(type.edit(numbered, { kind: 'drop', entry: 'Item' }, {}, false));
+    expect(outcome).toMatchObject({ select: 'ITEM-0008', editLabel: true });
+    const written = spliced(numberedText, outcome.splices);
+    expect(written).toContain('<!-- last: ITEM-0008 REQ-0013 -->');
+    expect(written).toContain(`- ITEM-0008 New item${nl}${nl}## Assessments`);
+  });
+
+  it('drops a requirement into an item after a sibling there, as one edit', () => {
+    const written = after(numbered, { kind: 'drop', entry: 'Requirement', parent: 'ITEM-0004', after: 'REQ-0006' });
+    expect(written).toContain(`Activity is any request the customer makes. See [REQ-0007] for signing in.${nl}  - REQ-0014 New requirement${nl}  - REQ-0007`);
+    expect(written).toContain('<!-- last: ITEM-0007 REQ-0014 -->');
+  });
+
+  it('drops a requirement into an item first among its requirements when the sibling it goes after is empty', () => {
+    const written = after(numbered, { kind: 'drop', entry: 'Requirement', parent: 'ITEM-0004', after: '' });
+    expect(written).toContain(`Everything behind the public interface.${nl}  - REQ-0014 New requirement${nl}  - REQ-0006`);
+  });
+
+  it('refuses a requirement dropped outside an item, and what it does not offer', () => {
+    expect(refusal(type.edit(numbered, { kind: 'drop', entry: 'Requirement' }, {}, false))).toBe('This is added inside a level: drop it onto one.');
+    expect(refusal(type.edit(numbered, { kind: 'drop', entry: 'Assessment', parent: 'ITEM-0001' }, {}, false))).toBe('This is not possible here.');
+    expect(refusal(type.edit(numbered, { kind: 'drop', entry: 'Item', parent: 'ITEM-0099' }, {}, false))).toBe('That entry is no longer in this file.');
+  });
+
+  it('shows a requirement in ADP Properties, each row an operation changes edited', () => {
+    expect(type.fields(numbered, ['REQ-0001'])).toEqual([
+      { id: 'id', label: 'Id', group: '', control: 'text', value: 'REQ-0001', readOnly: 'An id is given by the document, and is not changed here.' },
+      { id: 'title', label: 'Title', group: '', control: 'text', value: 'A customer finds a product by its name or its description.' },
+      { id: 'description', label: 'Description', group: '', control: 'multiline', value: '' },
+      { id: 'tags', label: 'Tags', group: '', control: 'tags', value: 'search', options: ['customer', 'search', 'performance', 'payment', 'mail', 'core', 'security', 'legal', 'privacy'] },
+      { id: 'category', label: 'Category', group: '', control: 'choice', value: 'functional', options: ['', 'functional', 'non-functional', 'technical'] },
+      { id: 'state', label: 'State', group: '', control: 'choice', value: 'accepted', options: ['', 'proposed', 'accepted', 'rejected', 'done'] },
+    ]);
+    expect(type.fields(numbered, ['ITEM-0001']).map((field) => field.id)).toEqual(['id', 'title', 'description', 'tags']);
+    expect(type.fields(numbered, ['tag/mail'])).toEqual([]);
+  });
+
+  it('sets a row of ADP Properties through the operation that changes it', () => {
+    const line = 'REQ-0001 A customer finds a product by its name or its description. #search category:functional state:accepted';
+    expect(after(numbered, { kind: 'setField', id: 'REQ-0001', field: 'state', value: 'Done' })).toBe(numberedText.replace(line, line.replace('state:accepted', 'state:done')));
+    expect(after(numbered, { kind: 'setField', id: 'REQ-0001', field: 'category', value: '' })).toBe(numberedText.replace(line, line.replace(' category:functional', '')));
+    expect(after(numbered, { kind: 'setField', id: 'REQ-0001', field: 'title', value: 'Search works.' })).toBe(numberedText.replace(line, line.replace('A customer finds a product by its name or its description.', 'Search works.')));
+    // Several values: what is gone removed and what is new added, as one step; a new tag goes to the list too.
+    const outcome = applied(type.edit(numbered, { kind: 'setField', id: 'REQ-0001', field: 'tags', value: 'mail, brand-new' }, {}, false));
+    expect(spliced(numberedText, outcome.splices)).toBe(numberedText.replace(line, line.replace('#search', '#mail #brand-new')));
+    expect(outcome.registration).toBe(registration.replace(`  privacy: pink${nl}`, `  privacy: pink${nl}  brand-new: default${nl}`));
+    expect(refusal(type.edit(numbered, { kind: 'setField', id: 'REQ-0001', field: 'state', value: 'parked' }, {}, false))).toBe("'parked' is not one of proposed, accepted, rejected, done.");
+    expect(refusal(type.edit(numbered, { kind: 'setField', id: 'REQ-0001', field: 'id', value: 'REQ-0100' }, {}, false))).toBe('An id is given by the document, and is not changed here.');
+    expect(type.edit(numbered, { kind: 'setField', id: 'REQ-0001', field: 'tags', value: 'SEARCH' }, {}, false)).toEqual({ kind: 'applied', splices: [] });
+  });
+
+  it('renumbers a later holder of a number, with the mark, and numbers a placeholder', () => {
+    const doubled = { ...numbered, text: numberedText.replace('REQ-0007 Customers', 'REQ-0006 Customers') };
+    const later = type.view(doubled, {}).roots[1].entries[1];
+    expect(later).toMatchObject({ id: 'requirement@49', renumber: true, ephemeral: true });
+    const outcome = applied(type.edit(doubled, { kind: 'renumber', id: later.id }, {}, false));
+    expect(outcome.select).toBe('REQ-0014');
+    expect(spliced(doubled.text, outcome.splices)).toBe(doubled.text.replace('REQ-0013 -->', 'REQ-0014 -->').replace('REQ-0006 Customers', 'REQ-0014 Customers'));
+    expect(spliced(text, applied(type.edit(source, { kind: 'renumber', id: 'REQ-0013' }, {}, false)).splices)).toBe(numberedText);
+    expect(refusal(type.edit(numbered, { kind: 'renumber', id: 'REQ-0001' }, {}, false))).toBe('Only an entry whose id another holds before it, or that has none yet, is given a new one.');
+  });
+});
+
+describe('a requirement document this host does not change', () => {
+  it('is one of a later DED, opened read-only with standalone\'s reason', () => {
+    const later = { ...numbered, text: numberedText.replace('<!-- ded: 0.2 ', '<!-- ded: 0.3 ') };
+    const reason = 'This document is written in DED 0.3, and this application reads DED 0.2 and earlier. It is left exactly as it is and cannot be changed here.';
+    const view = type.view(later, {});
+    expect(view).toMatchObject({ readOnly: true, notice: reason });
+    expect(view.roots).toHaveLength(3);
+    expect(view.roots[0].gestures.rename).toMatchObject({ enabled: false, reason });
+    expect(refusal(type.edit(later, operation('setTitle', ['REQ-0001'], { title: 'x' }), {}, false))).toBe(reason);
+    expect(type.toolbox(later)).toEqual([]);
+    expect(type.fields(later, ['REQ-0001']).every((field) => field.readOnly === reason || field.id === 'id')).toBe(true);
+  });
+
+  it('has a registration of another designer type, which is reported, not read and not written', () => {
+    const foreign = { ...numbered, registration: registration.replace('etalii/hierarchical-requirement', 'etalii/knowledge') };
+    expect(type.findings(foreign)).toEqual([{
+      rule: 'ded.designer', severity: 'warning', line: 0,
+      message: 'The registration beside this document is of `etalii/knowledge`, and its envelope names `etalii/hierarchical-requirement`: the envelope decides, and nothing is read from or kept in the registration.',
+    }]);
+    expect(nodeOf(foreign, 'ITEM-0003')!.collapsed).toBe(false);
+    expect(refusal(type.edit(foreign, operation('toggleCollapsed', ['REQ-0001']), {}, false))).toBe('The registration beside this document is of another designer type, so nothing is kept in it.');
+  });
+});
+
+describe('the widths of the columns', () => {
+  /** The document after a width's gesture: the registration alone is written, as one step of the history. */
+  function widened(on: Source, request: HierarchyRequest): Source {
+    const outcome = applied(type.edit(on, request, {}, false));
+    expect(outcome.splices).toEqual([]);
+    expect(outcome.history).toBeUndefined();
+    expect(typeof outcome.registration).toBe('string');
+    return { ...on, registration: outcome.registration! };
+  }
+  const columnOf = (on: Source, level: string): string => type.view(on, {}).widths.find((column) => column.level === level)!.id;
+
+  it('writes the registration\'s widths block as the standalone host does after the same drags, and a reset removes its line', () => {
+    // standalone ColumnOperationsTests: set column 1 to 360, change it to 420, set column 2 to 300, then reset column 1.
+    let on = widened(numbered, operation('addColumnWidth', [], { level: '1', width: 360 }));
+    on = widened(on, operation('setColumnWidth', [columnOf(on, '1')], { width: 420 }));
+    on = widened(on, operation('addColumnWidth', [], { level: '2', width: 300 }));
+    expect(on.registration).toBe(`${registration}widths:${nl}  1: 420${nl}  2: 300${nl}`);
+    expect(on.registration!.endsWith(`filters:${nl}  Open security: #security @proposed sort:state${nl}  Backend: item:back* sort:number${nl}widths:${nl}  1: 420${nl}  2: 300${nl}`)).toBe(true);
+    expect(type.view(on, {}).widths.map((column) => [column.level, column.width])).toEqual([['1', 420], ['2', 300]]);
+    on = widened(on, operation('resetColumnWidth', [columnOf(on, '1')]));
+    expect(on.registration).toBe(`${registration}widths:${nl}  2: 300${nl}`);
+    expect(on.text).toBe(numberedText);
+  });
+
+  it('offers the gestures of a width: the page adds one, a kept one is changed and reset, with the range of 120 to 2000 pixels the page holds them to', () => {
+    const on = widened(numbered, operation('addColumnWidth', [], { level: '1', width: 360 }));
+    const view = type.view(on, {});
+    expect(view.widthRange).toEqual({ min: 120, max: 2000 });
+    expect(view.pageGestures.addWidth).toMatchObject({ operation: 'addColumnWidth', enabled: true, params: { level: 'level', width: 'width' } });
+    expect(view.widths[0].gestures).toMatchObject({ resize: { operation: 'setColumnWidth', params: { width: 'width' } }, remove: { operation: 'resetColumnWidth' } });
+  });
+
+  it('refuses a width outside the parameter\'s range of 120 to 2000, and a level not in the parameter\'s pattern, writing nothing', () => {
+    // The core holds an operation's parameters to their facets (DESL 4.3), whatever the page asks: the sentence is this host's, naming the parameter and its range.
+    const kept = widened(numbered, operation('addColumnWidth', [], { level: '1', width: 360 }));
+    const column = columnOf(kept, '1');
+    for (const width of [119, 2001]) {
+      const outcome = type.edit(kept, operation('setColumnWidth', [column], { width }), {}, false);
+      expect(outcome.kind).toBe('refused');
+      expect(refusal(outcome)).toBe('Width is a whole number from 120 to 2000.');
+      expect(refusal(type.edit(numbered, operation('addColumnWidth', [], { level: '2', width }), {}, false))).toBe('Width is a whole number from 120 to 2000.');
+    }
+    expect(refusal(type.edit(kept, operation('setColumnWidth', [column], { width: 'wide' }), {}, false))).toBe('Width is a whole number from 120 to 2000.');
+    expect(refusal(type.edit(numbered, operation('addColumnWidth', [], { level: '0', width: 300 }), {}, false))).toBe('Level does not have the form it must have.');
+    expect(refusal(type.edit(numbered, operation('addColumnWidth', [], { level: 'top', width: 300 }), {}, false))).toBe('Level does not have the form it must have.');
+    // The bounds themselves are widths.
+    expect(type.view(widened(kept, operation('setColumnWidth', [column], { width: 120 })), {}).widths[0].width).toBe(120);
+    expect(type.view(widened(kept, operation('setColumnWidth', [column], { width: 2000 })), {}).widths[0].width).toBe(2000);
+  });
+
+  it('serves a width that is no number or lies outside the range as written, for the page to give that column its own width', () => {
+    const odd = { ...numbered, registration: `${registration}widths:${nl}  1: 400${nl}  2: wide${nl}  3: 50${nl}  0: 300${nl}  4: 2000${nl}` };
+    expect(type.view(odd, {}).widths.map((column) => [column.level, column.width])).toEqual([['1', 400], ['2', 0], ['3', 50], ['0', 300], ['4', 2000]]);
+  });
+});

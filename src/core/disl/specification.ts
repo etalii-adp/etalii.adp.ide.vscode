@@ -126,6 +126,8 @@ export interface Attribute {
   readonly facets?: Section;
   readonly group?: string;
   readonly order?: number;
+  /** *(DESL 0.2, 4.3)* A string or text whose value names elements by id where a match of `pattern` has its group `id`. */
+  readonly mentions?: { readonly pattern: string; readonly types: readonly string[] };
   /** The facets of DISL 4.2, which may be written on the attribute itself. */
   readonly [name: string]: unknown;
 }
@@ -226,7 +228,7 @@ export interface TypeMapEntry {
 }
 
 export interface IdRule {
-  readonly strategy?: 'uuid-v4' | 'uuid-v7' | 'ulid' | 'nanoid' | 'sequential' | 'natural' | 'cel' | 'derived';
+  readonly strategy?: 'uuid-v4' | 'uuid-v7' | 'ulid' | 'nanoid' | 'sequential' | 'natural' | 'cel' | 'derived' | 'counter';
   readonly encoding?: 'hex' | 'base64url' | 'base36';
   readonly prefix?: string | Readonly<Record<string, string>>;
   readonly expression?: Expression;
@@ -235,6 +237,12 @@ export interface IdRule {
   readonly suffix?: string;
   readonly ephemeral?: boolean | Expression;
   readonly reason?: Reason;
+  /** *(DESL 0.2, 5.3.5)* With `counter`: the least number of digits a new number is written with. */
+  readonly digits?: number;
+  /** *(DESL 0.2, 5.3.5)* With `counter`: the string attribute of the document that holds the last id given. */
+  readonly mark?: string;
+  /** *(DESL 0.2, 5.3.5)* With `counter`: what a writer puts after the prefix of an element that has no number yet. */
+  readonly placeholder?: string;
   readonly doc?: Doc;
 }
 
