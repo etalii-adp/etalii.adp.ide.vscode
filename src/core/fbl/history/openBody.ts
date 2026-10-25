@@ -1,11 +1,11 @@
 import type { FblBinding } from '../documents/types';
 import { messages } from '../messages';
 import type { FblModel, FblOptions } from '../model';
-import { planEdit } from '../planning/editPlanner';
+import { planEdit, planEdits } from '../planning/editPlanner';
 import type { ModelChange } from '../planning/modelChange';
 import type { PlanResult } from '../planning/plan';
 import { readBody, type BodyReading } from '../rules/bodyReading';
-import { SplicedFile } from './splicedFile';
+import { driftEdit, SplicedFile } from './splicedFile';
 
 /**
  * One open body (FBL 9.1): its bytes, its reading through one binding, and the one history of its
@@ -52,9 +52,27 @@ export class OpenBody extends SplicedFile {
     return planEdit(this.latest, change);
   }
 
-  /** Plans and applies `change`: the planned edit, or the refusal with nothing written. */
-  change(change: ModelChange): PlanResult {
+  /**
+   * Plans and applies `change`: the planned edit, or the refusal with nothing written. `current`,
+   * when given, is the file as it is now on disk or in another editor's buffer: when it is not the
+   * bytes the change is planned against, the change is refused with `driftEdit`, nothing is written,
+   * and the body is read again from `current` with its history cleared (FBL 0.7 7.2, 7.3).
+   */
+  change(change: ModelChange, current?: Uint8Array): PlanResult {
+    if (this.drifted(current)) return { refused: driftEdit };
     const result = this.plan(change);
+    if ('planned' in result) this.apply(result.planned);
+    return result;
+  }
+
+  /**
+   * Plans and applies the changes of one transaction as one edit (FBL 6.4): all planned against the
+   * current bytes, applied together and undone together as one step, or the first refusal with
+   * nothing written. `current` is checked for drift as `change` checks it.
+   */
+  changeAll(changes: readonly ModelChange[], current?: Uint8Array): PlanResult {
+    if (this.drifted(current)) return { refused: driftEdit };
+    const result = planEdits(this.latest, changes);
     if ('planned' in result) this.apply(result.planned);
     return result;
   }

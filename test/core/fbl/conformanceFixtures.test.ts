@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readBody } from '../../../src/core/fbl/rules/bodyReading';
-import { expectRead, Fixture, fixtureNames, runStep, Subject } from './support/fixtures';
+import { Fixture, fixtureNames, runStep, Subject } from './support/fixtures';
 
 // Every round-trip fixture copied from etalii.adp, run through the library as FBL 15.3 says a host
 // passes one: reading the input gives what `read` lists, and every step produces exactly its
@@ -23,16 +23,18 @@ describe('the round-trip fixtures of FBL', () => {
     const subject = Subject.open(fixture);
 
     // The reading.
-    if (fixture.read) expectRead(subject.model!, fixture.read, name);
+    if (fixture.read) subject.expectRead(fixture, fixture.read, name);
 
     // Every step.
     fixture.steps.forEach((step, index) => runStep(fixture, subject, step, `${name} step ${index + 1}`));
   });
 
-  // The byte-coverage invariant of FBL 4.1. A registration is not read through a binding, so it is not a case here.
+  // The byte-coverage invariant of FBL 4.1. A registration is not read through a binding, so it is not
+  // a case here, and nor is an input the fixture reads as unreadable (FBL 7.5), as standalone has it.
   it.each(fixtures.filter((name) => !new Fixture(name).isRegistration))('every byte of the input belongs to the reading: %s', (name) => {
     const fixture = new Fixture(name);
     const reading = readBody(fixture.input, fixture.binding, fixture.options);
+    if (fixture.read?.unreadable === true) return;
     expect(reading.unreadable).toBeUndefined();
     expect(reading.family.unaccounted()).toEqual([]);
   });

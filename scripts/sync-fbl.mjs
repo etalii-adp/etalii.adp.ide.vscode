@@ -175,7 +175,12 @@ const inSource = new Set(source);
 const named = new Set();
 for (const registration of registrations) {
   const header = /^body: (.+?)\s*$/m.exec(standaloneGit('show', `${standaloneCommit}:${registration}`).toString('utf8').split(/^(?:layout|identities):/m)[0]);
-  if (!header) continue;
+  if (!header) {
+    // Without the header the body is the file beside it with its base name (FBL 8.2), of whichever extension.
+    const base = registration.slice(0, -'.adp'.length);
+    for (const file of source) if (file.startsWith(`${base}.`) && file !== registration && !file.slice(base.length + 1).includes('/')) named.add(file);
+    continue;
+  }
   const segments = registration.split('/').slice(0, -1);
   for (const segment of header[1].split('/')) {
     if (segment === '..') segments.pop();

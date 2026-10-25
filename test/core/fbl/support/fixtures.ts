@@ -1,16 +1,18 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { expect } from 'vitest';
 import { resolveReference } from '../../../../src/core/fbl/documents/documentLoader';
 import { findRule, type FblBinding } from '../../../../src/core/fbl/documents/types';
 import { nodeFiles } from '../../../../src/core/fbl/files/nodeFiles';
 import { OpenBody } from '../../../../src/core/fbl/history/openBody';
 import type { UndoResult } from '../../../../src/core/fbl/history/splicedFile';
-import type { FblModel, FblOptions } from '../../../../src/core/fbl/model';
+import { FblModel, type FblElement, type FblOptions } from '../../../../src/core/fbl/model';
 import type { ChangePosition, ModelChange } from '../../../../src/core/fbl/planning/modelChange';
 import type { PlanResult } from '../../../../src/core/fbl/planning/plan';
 import { OpenRegistration } from '../../../../src/core/fbl/registration/openRegistration';
 import type { FblSplice } from '../../../../src/core/fbl/splice';
+import { behaviorTreeView } from './behaviorTree';
+import { expectRequirementRead, HierarchicalRequirementDocument, requirementOptions } from './hierarchicalRequirement';
 import { definitions, knowledgeIds, knowledgeTypes } from './knowledge';
 import { attributeTypes, naturalIds, timeAttributes, unsetsReferences } from './naturalIds';
 import { conformance, filesBelow, textOf, utf8 } from './repository';
@@ -18,9 +20,15 @@ import { conformance, filesBelow, textOf, utf8 } from './repository';
 // The round-trip fixtures copied from etalii.adp (FBL 15.3), and how a host runs one: what
 // conformanceFixtures.test.ts and knowledgeFixtures.test.ts share.
 
-/** One step of a fixture: an edit, an undo or a redo, with the splices and the document it must give. */
+/** One model change of a fixture's edit (FBL 15.3). */
+export type FixtureEdit = Record<string, Record<string, unknown> | boolean>;
+
+/**
+ * One step of a fixture: an edit, an undo or a redo, with the splices and the document it must give.
+ * An edit that is a list is one transaction (FBL 6.4): its changes are one edit.
+ */
 export interface Step {
-  readonly edit?: Record<string, Record<string, unknown> | boolean>;
+  readonly edit?: FixtureEdit | readonly FixtureEdit[];
   readonly undo?: boolean;
   readonly redo?: boolean;
   readonly refused?: string;
@@ -32,7 +40,7 @@ export interface Step {
 /** What reading a fixture's input yields. */
 export interface Read {
   readonly unreadable?: boolean;
-  readonly elements?: readonly { readonly id: string; readonly type: string; readonly attributes?: Readonly<Record<string, unknown>> }[];
+  readonly elements?: readonly { readonly id: string; readonly type: string; readonly parent?: string | null; readonly attributes?: Readonly<Record<string, unknown>> }[];
   readonly findings?: readonly { readonly rule: string; readonly line?: number }[];
 }
 
@@ -96,6 +104,16 @@ export class Fixture {
     return basename(this.bindingPath) === 'knowledge.fbl';
   }
 
+  /** Whether the binding under test is the Hierarchical Requirement Designer's, whose body is run through a DESL stand-in. */
+  get isHierarchicalRequirement(): boolean {
+    return basename(this.bindingPath) === 'hierarchical-requirement.fbl';
+  }
+
+  /** Whether the binding under test is FBL's declared reading of Agent Behavior Modelling's Markdown. */
+  get isBehaviorTree(): boolean {
+    return basename(this.bindingPath) === 'behavior-tree.fbl';
+  }
+
   get binding(): FblBinding {
     return resolveReference(`#${this.bindingName}`, this.bindingPath, nodeFiles);
   }
@@ -116,6 +134,7 @@ export class Fixture {
    */
   get options(): FblOptions {
     const binding = this.binding.name;
+    if (this.isHierarchicalRequirement) return requirementOptions(this.inputName);
     return this.isKnowledge
       ? { fileName: this.inputName, deriveId: knowledgeIds, attributeType: knowledgeTypes.of }
       : { fileName: this.inputName, deriveId: naturalIds(binding), timeAttributes: timeAttributes(binding), attributeType: attributeTypes(binding) };
@@ -124,24 +143,79 @@ export class Fixture {
   file(name: string): Uint8Array {
     return new Uint8Array(readFileSync(join(this.folder, ...name.split('/'))));
   }
+
+  /**
+   * The body of a registration input, when it is beside it (FBL 8.2): the file its `body` header
+   * names, else the sibling with the registration's base name and one of the binding's extensions.
+   */
+  bodyOf(registration: OpenRegistration): { readonly name: string; readonly bytes: Uint8Array } | undefined {
+    const folder = dirname(this.inputPath);
+    const base = this.inputName.slice(0, this.inputName.lastIndexOf('.'));
+    const named = registration.document.body;
+    const candidates = named !== undefined ? [named] : this.binding.claims.extensions.map((extension) => `${base}${extension}`);
+    const name = candidates.find((candidate) => existsSync(join(folder, ...candidate.split('/'))));
+    return name === undefined ? undefined : { name, bytes: new Uint8Array(readFileSync(join(folder, ...name.split('/')))) };
+  }
 }
 
-/** A fixture's subject: a body read through its binding, or a registration. */
+/** A fixture's subject: a body read through its binding, or a registration (an `.adp` input). */
 export class Subject {
+  /** A registration's reading: the elements of its body and the findings of both (FBL 8.1, 8.5). */
+  private read?: FblModel;
+
+  /** A requirement document, its body or its registration, read and changed as the Hierarchical Requirement Designer does. */
+  private requirement?: HierarchicalRequirementDocument;
+
   private constructor(private readonly binding: FblBinding | undefined, private readonly body?: OpenBody, private readonly registration?: OpenRegistration) {}
 
   static open(fixture: Fixture): Subject {
-    if (fixture.isRegistration) return new Subject(undefined, undefined, OpenRegistration.open(fixture.input));
     const binding = fixture.binding;
+    if (fixture.isHierarchicalRequirement) {
+      const subject = new Subject(binding);
+      subject.requirement = HierarchicalRequirementDocument.open(fixture.input, fixture.inputName, binding, (registration) => fixture.bodyOf(registration));
+      return subject;
+    }
+    if (fixture.isRegistration) return Subject.registration(fixture, binding);
     return new Subject(binding, OpenBody.open(fixture.input, binding, fixture.options));
   }
 
+  /**
+   * A registration opened through its binding (FBL 0.7 8.1). When its body is beside it, the body is
+   * read too, as the document the registration opens: its elements are the reading's, and the ids
+   * the registration's stale entries are told by (FBL 8.5); the findings are the body's and the
+   * registration's. A tool type whose settings FBL does not know, the members of its lists, is
+   * opened as its own document instead (`HierarchicalRequirementDocument`).
+   */
+  private static registration(fixture: Fixture, binding: FblBinding): Subject {
+    const registration = OpenRegistration.open(fixture.input, binding);
+    const subject = new Subject(binding, undefined, registration);
+    const body = fixture.bodyOf(registration);
+    if (!body) return subject;
+    const model = OpenBody.open(body.bytes, binding, { ...fixture.options, fileName: body.name }).model;
+    registration.knownIds = new Set(model.elements.map((element) => element.id));
+    subject.read = new FblModel(model.elements, [...model.findings, ...registration.findings(fixture.inputName)], model.unreadable, model.views, model.resources);
+    return subject;
+  }
+
   get bytes(): Uint8Array {
-    return (this.body ?? this.registration!).bytes;
+    return (this.requirement ?? this.body ?? this.registration!).bytes;
+  }
+
+  /** Holds the subject's reading to what the fixture's `read` lists (FBL 15.3), as the tool type holds its elements. */
+  expectRead(fixture: Fixture, read: Read, name: string): void {
+    if (this.requirement) expectRequirementRead(this.requirement, read, name, fixture.inputName);
+    else expectRead(this.model!, read, name, fixture.isBehaviorTree ? behaviorTreeView : undefined);
+  }
+
+  /** Plans and applies a fixture's edit: one change, or a list of them as one transaction (FBL 6.4). */
+  edit(edit: FixtureEdit | readonly FixtureEdit[]): PlanResult {
+    if (this.requirement) return this.requirement.change(edit);
+    if (!Array.isArray(edit)) return this.change(changeOf(edit as FixtureEdit));
+    return this.body!.changeAll(edit.map(changeOf));
   }
 
   get model(): FblModel | undefined {
-    return this.body?.model;
+    return this.body?.model ?? this.read;
   }
 
   change(change: ModelChange): PlanResult {
@@ -187,11 +261,11 @@ export class Subject {
   }
 
   undo(label: string): readonly FblSplice[] {
-    return done((this.body ?? this.registration!).undo(), label);
+    return done((this.requirement ?? this.body ?? this.registration!).undo(), label);
   }
 
   redo(label: string): readonly FblSplice[] {
-    return done((this.body ?? this.registration!).redo(), label);
+    return done((this.requirement ?? this.body ?? this.registration!).redo(), label);
   }
 }
 
@@ -226,7 +300,7 @@ const textOrNothing = (value: unknown): string | undefined => (typeof value === 
  * A step's edit as the model change it names (FBL 15.3). A `position` is passed on as it is
  * written: it is section 11.2's, an index counted once a moved element is taken out.
  */
-export function changeOf(edit: NonNullable<Step['edit']>): ModelChange {
+export function changeOf(edit: FixtureEdit): ModelChange {
   if ('save' in edit) return { kind: 'save' };
   const part = (name: string): Record<string, unknown> | undefined => edit[name] as Record<string, unknown> | undefined;
   const set = part('set');
@@ -249,6 +323,18 @@ export function changeOf(edit: NonNullable<Step['edit']>): ModelChange {
   }
   const remove = part('remove');
   if (remove) return { kind: 'remove', id: remove.element as string };
+  const setting = part('setting');
+  if (setting) {
+    return {
+      kind: 'setting',
+      block: setting.block as string,
+      key: setting.key as string,
+      value: textOrNothing(setting.value),
+      position: setting.position as ChangePosition | undefined,
+      rename: textOrNothing(setting.rename),
+      remove: setting.remove === true,
+    };
+  }
   const place = part('place');
   if (place) return { kind: 'place', id: place.element as string, x: place.x as number, y: place.y as number };
   throw new Error(`Unknown fixture edit: ${JSON.stringify(edit)}.`);
@@ -268,14 +354,20 @@ function isValue(actual: unknown, expected: unknown): boolean {
   return actual === expected;
 }
 
-/** Holds a reading to what a fixture's `read` lists (FBL 15.3). */
-export function expectRead(model: FblModel, read: Read, name: string): void {
+/**
+ * Holds a reading to what a fixture's `read` lists (FBL 15.3). `view` is the tool type's view of an
+ * element's attributes, where its specification types or defaults what the binding reads as text.
+ */
+export function expectRead(model: FblModel, read: Read, name: string, view?: (element: FblElement) => Readonly<Record<string, unknown>>): void {
   if (read.unreadable !== undefined) expect(model.unreadable, `${name}: unreadable`).toBe(read.unreadable);
   const found = model.elements.map((element) => `${element.id} (${element.type})`);
   for (const element of read.elements ?? []) {
     expect(found, `${name}: the elements read`).toContain(`${element.id} (${element.type})`);
     // Each attribute named has that value and that JSON type; attributes not named are not compared.
-    const attributes = model.find(element.id)!.attributes;
+    const held = model.find(element.id)!;
+    // FBL 0.7 15.3: `parent` is the id of the element it is contained in, or null at the top level.
+    if (element.parent !== undefined) expect(held.parentId, `${name}: the parent of '${element.id}'`).toBe(element.parent ?? undefined);
+    const attributes = view ? view(held) : held.attributes;
     for (const [attribute, value] of Object.entries(element.attributes ?? {})) {
       expect(isValue(attributes[attribute], value), `${name}: ${element.id}.${attribute} is read as ${String(attributes[attribute])}, not ${JSON.stringify(value)}`).toBe(true);
     }
@@ -302,7 +394,7 @@ export function runStep(fixture: Fixture, subject: Subject, step: Step, label: s
   } else if (step.redo) {
     actual = subject.redo(label);
   } else {
-    const result = subject.change(changeOf(step.edit!));
+    const result = subject.edit(step.edit!);
     if (step.refused !== undefined) {
       if (!('refused' in result)) throw new Error(`${label}: planned, where the fixture refuses with '${step.refused}'.`);
       // The text of `refused` is informative: FBL leaves a refusal's wording to the host except

@@ -1,8 +1,9 @@
+import type { RegistrationBlockDeclaration } from '../documents/types';
 import { findingCodes, type Finding } from '../finding';
 import { messages } from '../messages';
 import type { Span } from '../span';
 import { BodyText } from '../text/bodyText';
-import { byteLength, isWhiteSpace, trim, trimEnd, trimEndOf, trimStart } from '../text/utf8';
+import { byteLength, isWhiteSpace, trim, trimEnd, trimStart } from '../text/utf8';
 
 export interface RegistrationHeader {
   readonly key: string;
@@ -36,6 +37,9 @@ export interface Position {
 /** The headers FBL itself defines (FBL 8.1); a binding declares others. */
 export const fblHeaders: readonly string[] = ['body', 'view', 'resource'];
 
+/** A line that opens a block (FBL 8.1): a Name and a colon, with nothing but whitespace after it. */
+const blockLine = /^([A-Za-z_][A-Za-z0-9_.-]*):[ \t]*$/;
+
 const numberForm = /^[-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?$/;
 
 /** A layout entry's `x y`, nothing when the value is not two numbers. */
@@ -47,8 +51,10 @@ export function positionOf(entry: RegistrationEntry): Position | undefined {
 
 /**
  * A registration (`.adp`) in the line form of FBL 8.1: the origin on line 1, headers, the
- * `layout:` and `identities:` blocks, and whatever follows them kept as unbound content. Every part
- * keeps its span, so the registration is written by splices like any body (FBL 8.4).
+ * `layout:` and `identities:` blocks and the blocks the binding declares, and whatever follows them
+ * kept as unbound content. A block the binding does not declare is read past and kept as it is
+ * (FBL 0.7 8.1). Every part keeps its span, so the registration is written by splices like any body
+ * (FBL 8.4).
  */
 export class RegistrationDocument {
   /** The origin of the tool type (FBL 8.1, line 1). */
@@ -59,6 +65,12 @@ export class RegistrationDocument {
   layout?: RegistrationBlock;
 
   identities?: RegistrationBlock;
+
+  /** Every block read, in the order the registration holds them, those the binding does not declare included. */
+  blockList: readonly RegistrationBlock[] = [];
+
+  /** The blocks neither FBL nor the binding declares (FBL 0.7 8.1): kept as they are written. */
+  undeclared: readonly RegistrationBlock[] = [];
 
   /** Where a new block goes: the end of the header region's last line. */
   afterHeaders = 0;
@@ -75,6 +87,11 @@ export class RegistrationDocument {
       if (!map.has(header.key)) map.set(header.key, header.value);
     }
     return map;
+  }
+
+  /** The block `name`, when the registration has it and it is FBL's or declared. */
+  block(name: string): RegistrationBlock | undefined {
+    return this.blockList.find((block) => block.name === name && !this.undeclared.includes(block));
   }
 
   header(key: string): string | undefined {
@@ -122,15 +139,29 @@ export class RegistrationDocument {
     return findings;
   }
 
+  /** The blocks neither FBL nor the binding declares, reported once each as `fbl.unknown-block` at the block's name and colon (FBL 0.7 8.1). */
+  unknownBlocks(fileName: string): Finding[] {
+    return this.undeclared.map((block) => this.finding(
+      findingCodes.unknownBlock, messages.unknownBlock(block.name), { start: block.nameLine.start, end: block.nameLine.start + byteLength(block.name) + 1 }, fileName));
+  }
+
   /**
-   * Layout entries for ids the model does not have (FBL 8.5): reported as `fbl.stale-view-data`,
-   * applied to nothing, and removed at the registration's next write.
+   * Layout entries for ids the model does not have (FBL 8.5), and the entries of the declared
+   * blocks keyed by ids (FBL 0.7 8.5): reported as `fbl.stale-view-data`, applied to nothing, and
+   * removed at the registration's next write.
    */
-  staleEntries(ids: ReadonlySet<string>, fileName: string): Finding[] {
+  staleEntries(ids: ReadonlySet<string>, fileName: string, declarations: readonly RegistrationBlockDeclaration[] = []): Finding[] {
     const findings: Finding[] = [];
     for (const entry of this.layout?.entries ?? []) {
       if (ids.has(entry.key)) continue;
       findings.push(this.finding(findingCodes.staleViewData, messages.staleLayoutEntry(entry.key), entry.keySpan, fileName));
+    }
+    for (const declaration of declarations) {
+      const block = declaration.keyedByIds ? this.block(declaration.name) : undefined;
+      for (const entry of block?.entries ?? []) {
+        if (ids.has(entry.key)) continue;
+        findings.push(this.finding(findingCodes.staleViewData, messages.staleBlockEntry(declaration.name, entry.key), entry.keySpan, fileName));
+      }
     }
     return findings;
   }
@@ -140,8 +171,12 @@ export class RegistrationDocument {
     return { code, severity: 'info', message, location: { file: fileName, line, column, length: this.text.codePoints(range.start, range.end) } };
   }
 
-  /** Reads a registration. The line form has no syntax error: anything not understood is unbound content. */
-  static read(bytes: Uint8Array): RegistrationDocument {
+  /**
+   * Reads a registration whose binding declares the blocks `declared` (FBL 0.7 8.1); without them,
+   * every block but `layout:` and `identities:` is undeclared. The line form has no syntax error:
+   * anything not understood is unbound content.
+   */
+  static read(bytes: Uint8Array, declared: readonly string[] = []): RegistrationDocument {
     const text = new BodyText(bytes);
     const document = new RegistrationDocument(text);
     const lines = text.lines;
@@ -154,34 +189,36 @@ export class RegistrationDocument {
       const line = lines[index];
       const content = contentOf(index);
       if (trim(content).length === 0) continue;
-      if (blockName(content) !== undefined) break;
+      if (blockLine.test(content)) break;
       const separator = content.indexOf(': ');
       if (separator <= 0 || isWhiteSpace(content[0])) break;
       headers.push({ key: content.slice(0, separator), value: trim(content.slice(separator + 2)), line: { start: line.start, end: line.end } });
       document.afterHeaders = line.end;
     }
     document.headerList = headers;
+    const blocks: RegistrationBlock[] = [];
+    const undeclared: RegistrationBlock[] = [];
     while (index < lines.length) {
       const content = contentOf(index);
       if (trim(content).length === 0) {
         index++;
         continue;
       }
-      const name = blockName(content);
-      if (name === undefined || (name === 'layout' && document.layout) || (name === 'identities' && document.identities)) break;
+      const name = blockLine.exec(content)?.[1];
+      // A second block of one name ends the blocks: it and what follows are unbound content.
+      if (name === undefined || blocks.some((block) => block.name === name)) break;
       const read = readBlock(text, name, index);
       index = read.next;
+      blocks.push(read.block);
       if (name === 'layout') document.layout = read.block;
-      else document.identities = read.block;
+      else if (name === 'identities') document.identities = read.block;
+      else if (!declared.includes(name)) undeclared.push(read.block);
     }
+    document.blockList = blocks;
+    document.undeclared = undeclared;
     document.unbound = { start: index < lines.length ? lines[index].start : text.length, end: text.length };
     return document;
   }
-}
-
-function blockName(content: string): 'layout' | 'identities' | undefined {
-  const name = trimEndOf(content, ' \t');
-  return name === 'layout:' ? 'layout' : name === 'identities:' ? 'identities' : undefined;
 }
 
 function readBlock(text: BodyText, name: string, at: number): { block: RegistrationBlock; next: number } {

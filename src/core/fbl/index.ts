@@ -1,5 +1,5 @@
 // The plug-in's FBL implementation: a host of FBL 0.6 for the yaml, json, xml, lines and blocks
-// families (etalii.adp specs 009 and 027; docs/fbl.md). It takes an FBL document and a body as bytes, reads
+// families, and of FBL 0.7's bullets family (etalii.adp specs 009 and 027; docs/fbl.md). It takes an FBL document and a body as bytes, reads
 // the body into elements, relations and findings, plans every change as FBL's splices, keeps a
 // history with exact undo and drift refusal, and reads and writes the .adp registration. Offsets
 // are UTF-8 byte offsets, a byte-order mark included. Nothing here names a tool type or a binding,
@@ -27,13 +27,16 @@ export type { TextLine } from './text/bodyText';
 
 // ---- bodies (FBL 4 to 7) ----
 export { OpenBody } from './history/openBody';
-export { driftRedo, driftUndo } from './history/splicedFile';
+export { driftEdit, driftRedo, driftUndo } from './history/splicedFile';
 export type { UndoResult } from './history/splicedFile';
 
 // ---- registrations (FBL 8) ----
 export { RegistrationDocument } from './registration/registrationDocument';
 export type { Position, RegistrationBlock, RegistrationEntry, RegistrationHeader } from './registration/registrationDocument';
 export { OpenRegistration } from './registration/openRegistration';
+export type { BlockMember } from './registration/declaredBlockWriter';
+export { createRegistration } from './registration/registrationCreation';
+export type { RegistrationCreationResult } from './registration/registrationCreation';
 
 // ---- files ----
 export type { FblFiles } from './files/fblFiles';

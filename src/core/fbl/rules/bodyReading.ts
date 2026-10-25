@@ -1,6 +1,7 @@
 import { scalarText, scalarValue } from '../documents/jsonReader';
 import { allRules, type AttributeBinding, type Family, type FblBinding, type ReferenceBinding, type Slot } from '../documents/types';
 import { CelError, CelException, compileCel, type CelContext, type CelProgram } from '../expressions/cel';
+import { BulletsFamily } from '../families/bullets/bulletsFamily';
 import { JsonFamily } from '../families/json/jsonFamily';
 import { LinesFamily } from '../families/lines/linesFamily';
 import { XmlElement, XmlFamily } from '../families/xml/xmlFamily';
@@ -28,6 +29,7 @@ export function createFamily(text: BodyText, binding: FblBinding, options: Resol
   switch (family) {
     case 'lines': return new LinesFamily(text, binding, options, false);
     case 'blocks': return new LinesFamily(text, binding, options, true);
+    case 'bullets': return new BulletsFamily(text, binding, options);
     case 'yaml': return new YamlFamily(text, binding, options);
     case 'json': return new JsonFamily(text, binding, options);
     case 'xml': return new XmlFamily(text, binding, options);
@@ -237,6 +239,12 @@ export class BodyReading implements Reading {
             if (problem !== undefined) error ??= problem;
             if (value !== true) continue;
           }
+          if (this.options.unreadableTypes.has(rule.type)) {
+            // The specification maps the rule's type as unreadable (FBL 0.7 4.8, DESL 5.2): the entry
+            // is the rule's, an unreadable entry, and what it holds is not looked into.
+            error = messages.unreadableType;
+            break;
+          }
           const element = new ReadElement(rule, candidate, this.text.position(entry.own.start).line);
           const unconverted: Unconverted[] = [];
           const mistyped = this.readSlots(element, unconverted);
@@ -379,7 +387,8 @@ export class BodyReading implements Reading {
     const rule = element.rule;
     let mistyped: string | undefined;
     for (const [name, binding] of rule.attributes) {
-      const read = this.readSlot(element.candidate, binding, element);
+      const many = binding.word !== undefined && !binding.flag && this.options.many?.(rule.type, name) === true;
+      const read = this.readSlot(element.candidate, binding, element, many);
       element.slots.set(name, read);
       const type = this.options.attributeType?.(rule.type, name);
       const scalar = read.present && !binding.flag ? this.readScalar(binding, read, type) : undefined;
@@ -388,7 +397,9 @@ export class BodyReading implements Reading {
       let failed = scalar?.unconverted === true;
       let value: unknown = present && scalar ? scalar.value : present ? read.value : null;
       if (present && binding.map && typeof value === 'string') {
-        const mapped = binding.map.find(([wire]) => wire === value);
+        // In a rule with caseInsensitive, a wire value matches a key ignoring the case of ASCII letters (FBL 0.7 5.2).
+        const wire = rule.caseInsensitive ? lowerAscii(value) : value;
+        const mapped = binding.map.find(([key]) => (rule.caseInsensitive ? lowerAscii(key) : key) === wire);
         if (mapped) value = mapped[1];
       }
       if (binding.flag) value = read.present;
@@ -433,8 +444,9 @@ export class BodyReading implements Reading {
     return converted ? { value: converted.value, checked: true } : { unconverted: true };
   }
 
-  readSlot(candidate: Candidate, slot: Slot, element: ReadElement): SlotRead {
-    const read = this.readSlotUnchecked(candidate, slot, element);
+  /** Reads a slot of an element; `many` reads a word slot of an attribute with `many` as its items (FBL 0.7 4.6). */
+  readSlot(candidate: Candidate, slot: Slot, element: ReadElement, many = false): SlotRead {
+    const read = many ? this.family.readMany(candidate, slot) : this.readSlotUnchecked(candidate, slot, element);
     const reason = (slot as Partial<AttributeBinding>).readOnly ?? element.rule.readOnly ?? this.binding.readOnly;
     return reason !== undefined && read.writable ? { ...read, writable: false, reason } : read;
   }
@@ -635,6 +647,9 @@ export class BodyReading implements Reading {
     );
   }
 }
+
+/** CEL's `lowerAscii`: the ASCII capitals lowered, every other character kept. */
+const lowerAscii = (text: string): string => text.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
 
 const placeId = (element: ReadElement): string => `${element.rule.name}@${element.line}`;
 

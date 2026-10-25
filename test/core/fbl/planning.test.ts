@@ -44,6 +44,30 @@ describe('placing a new entry', () => {
     expect(result).toEqual({ refused: `A ${family} body cannot place a new entry 'before'.` });
     expect(textOf(body.bytes)).toBe(text);
   });
+
+  // insert.place: after-header (FBL 0.7 6.2) in the lines family: a line of its own right after the
+  // statement the header matched, and nowhere when no statement did.
+  const withHeader = (text: string): OpenBody => {
+    const json = String.raw`{ "fbl": "0.7", "bindings": { "t": { "claims": { "extensions": [".t"] }, "body": { "kind": "file", "family": "lines" }, "reader": "declared",
+      "header": { "line": "^%% plan$" },
+      "elements": [ { "name": "mark", "type": "Mark", "line": "^%% last (?<last>\\S+)$", "attributes": { "last": { "group": "last" } }, "insert": { "place": "after-header", "emit": "%% last {last}" } },
+        { "name": "item", "type": "Item", "line": "^item (?<id>\\S+)$", "id": { "from": { "group": "id" } } } ] } } }`;
+    const { document, problems } = loadDocument(utf8(json));
+    expect(problems).toEqual([]);
+    return OpenBody.open(utf8(text), document!.bindings.get('t')!);
+  };
+
+  it('a new line placed after the header follows the statement the header matched', () => {
+    const body = withHeader('%% plan\r\nitem a\r\n');
+    expect(body.change({ kind: 'add', type: 'Mark', attributes: { last: 'a' } })).toEqual({ planned: { splices: [{ operation: 'insert-entry', start: 9, end: 9, text: '%% last a\r\n' }] } });
+    expect(textOf(body.bytes)).toBe('%% plan\r\n%% last a\r\nitem a\r\n');
+  });
+
+  it('a new line placed after the header is refused when no statement matched it', () => {
+    const body = withHeader('item a\n');
+    expect(body.change({ kind: 'add', type: 'Mark', attributes: { last: 'a' } })).toEqual({ refused: "A lines body cannot place a new entry 'after-header'." });
+    expect(textOf(body.bytes)).toBe('item a\n');
+  });
 });
 
 describe('the changes only a persistence plugin can write', () => {

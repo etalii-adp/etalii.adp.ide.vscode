@@ -1,8 +1,9 @@
 import { allRules, attributeOf, isComputed, type AttributeBinding, type Rule, type Slot } from '../documents/types';
 import { messages } from '../messages';
 import { writtenText, type BodyReading } from '../rules/bodyReading';
-import { absentSlot, RefusedException, refuse, type ReadElement, type SlotChange, type SlotRead } from '../rules/familyReader';
+import { absentSlot, positionIndex, RefusedException, refuse, type ReadElement, type SlotChange, type SlotRead } from '../rules/familyReader';
 import type { Span } from '../span';
+import { orderSplices, type FblSplice } from '../splice';
 import type { ChangePosition, ModelChange } from './modelChange';
 import { isEmpty, plain } from './newText';
 import { Plan, type PlanResult } from './plan';
@@ -13,7 +14,8 @@ import { Plan, type PlanResult } from './plan';
  * nothing; an open body applies what it plans.
  */
 export function planEdit(reading: BodyReading, change: ModelChange): PlanResult {
-  if (reading.unreadable) return { refused: messages.neverWritten };
+  // A save writes the bytes that were read, which an unreadable body keeps (FBL 6.6, 7.5): nothing to splice.
+  if (reading.unreadable) return change.kind === 'save' ? { planned: { splices: [] } } : { refused: messages.neverWritten };
   const readOnly = reading.binding.readOnly;
   if (readOnly !== undefined) return { refused: readOnly.length > 0 ? readOnly : messages.readOnlyFile };
   const plan = new Plan(reading);
@@ -37,7 +39,8 @@ export function planEdit(reading: BodyReading, change: ModelChange): PlanResult 
         planStoreId(plan, reading, change);
         break;
       case 'retype':
-        return { refused: messages.cannotRetype };
+        planRetype(plan, reading, change);
+        break;
       default:
         throw new Error(messages.registrationEdit);
     }
@@ -46,6 +49,25 @@ export function planEdit(reading: BodyReading, change: ModelChange): PlanResult 
     if (error instanceof RefusedException) return { refused: error.message };
     throw error;
   }
+}
+
+/**
+ * Plans the model changes of one transaction as one edit (FBL 6.4): each is planned against the body
+ * before the edit, so every offset refers to it, and their splices are applied together, recorded
+ * together and undone together, in body order, those at one offset in the order the transaction
+ * made them. When any change cannot be planned, the whole transaction is refused with its reason.
+ */
+export function planEdits(reading: BodyReading, changes: readonly ModelChange[]): PlanResult {
+  const splices: FblSplice[] = [];
+  let snapshot = false;
+  for (const change of changes) {
+    const result = planEdit(reading, change);
+    if ('refused' in result) return result;
+    splices.push(...result.planned.splices);
+    snapshot ||= result.planned.snapshot === true;
+  }
+  const ordered = orderSplices(splices, messages.twoSplicesOverlap);
+  return { planned: snapshot ? { splices: ordered, snapshot } : { splices: ordered } };
 }
 
 /** The element a change names; a change that names none is the caller's mistake. */
@@ -71,9 +93,12 @@ function planStoreId(plan: Plan, reading: BodyReading, store: ModelChange & { ki
   if (store.newId.length === 0 || reading.find(store.newId)) refuse(messages.cannotBeTheId(store.newId, element.rule.type));
 
   // The slot an id is read from, written as an attribute's is: the family puts it where an absent value goes.
-  const binding: AttributeBinding = { key: from.key, attribute: from.attribute, child: from.child, group: from.group, text: false, flag: false, absent: new Map(), keepTimePrecision: false, htmlParagraphs: false };
-  reading.family.write(plan, element, [{ attribute: 'id', binding, rule: element.rule, read: element.idRead ?? absentSlot, value: store.newId, isEmpty: false }]);
+  reading.family.write(plan, element, [{ attribute: 'id', binding: idBinding(from), rule: element.rule, read: element.idRead ?? absentSlot, value: store.newId, isEmpty: false }]);
 }
+
+/** The slot an id is read from (FBL 5.3), as the binding of an attribute that writes it. */
+const idBinding = (from: Slot): AttributeBinding =>
+  ({ key: from.key, attribute: from.attribute, child: from.child, group: from.group, text: false, flag: false, absent: new Map(), keepTimePrecision: false, htmlParagraphs: false });
 
 function planSet(plan: Plan, reading: BodyReading, set: ModelChange & { kind: 'set' }): void {
   const element = elementOf(reading, set.id);
@@ -92,8 +117,15 @@ function planSet(plan: Plan, reading: BodyReading, set: ModelChange & { kind: 's
       rule = element.rule;
     } else {
       ({ rule, binding } = bindingFor(reading, element, attribute));
-      const known = rule === element.rule ? element.slots.get(attribute) : undefined;
-      read = !binding ? absentSlot : known ?? reading.readSlot({ ...element.candidate, rule }, binding, element);
+      const from = element.rule.id?.from;
+      if (!binding && attribute === 'id' && from) {
+        // An id read from the entry (FBL 5.3) is rewritten where it was read.
+        binding = idBinding(from);
+        read = element.idRead ?? absentSlot;
+      } else {
+        const known = rule === element.rule ? element.slots.get(attribute) : undefined;
+        read = !binding ? absentSlot : known ?? reading.readSlot({ ...element.candidate, rule }, binding, element);
+      }
     }
     if (!binding) refuse(messages.attributeNotKept(element.rule.type, attribute));
     if (isComputed(binding) || binding.parent !== undefined || !read.writable) {
@@ -183,8 +215,9 @@ function rewrite(plan: Plan, reading: BodyReading, read: SlotRead | undefined, o
 // ---- add ----
 
 function planAdd(plan: Plan, reading: BodyReading, add: ModelChange & { kind: 'add' }): void {
-  // A declared binding appends where its insert rule says; a position among siblings is a plugin's to honour.
-  if (add.position !== undefined) refuse(messages.cannotAddAtPosition(add.type));
+  // A declared binding appends where its insert rule says; a position among siblings is a plugin's to
+  // honour, or a family's whose nesting is its indentation (FBL 0.7 6.3, 6.4).
+  if (add.position !== undefined && !reading.family.placesByPosition) refuse(messages.cannotAddAtPosition(add.type));
   const rules = allRules(reading.binding).filter((candidate) => candidate.type === add.type && (add.slot === undefined || candidate.parent?.slot === add.slot));
   if (rules.length === 0) refuse(messages.noPlaceForType(add.type));
   // Several rules may write one type (a cell's items are options or rows; a filter's conditions
@@ -222,7 +255,7 @@ function planAdd(plan: Plan, reading: BodyReading, add: ModelChange & { kind: 'a
   if (rule.id?.from && add.id !== undefined && reading.elements.some((element) => element.rule.id?.from !== undefined && element.id === add.id)) {
     refuse(messages.idTaken(add.id));
   }
-  reading.family.insert(plan, { rule, id: add.id, values, parent, source, target });
+  reading.family.insert(plan, { rule, id: add.id, values, parent, source, target, position: add.position });
   if (rule.snapshotUndo) plan.snapshot = true;
 }
 
@@ -246,6 +279,10 @@ function planMove(plan: Plan, reading: BodyReading, move: ModelChange & { kind: 
   refuseReadOnly(element.rule, 'moved');
   if (!element.rule.insert || !element.rule.remove) refuse(messages.cannotBeMoved(element.rule.type));
   const parent = move.parent !== undefined ? elementOf(reading, move.parent) : undefined;
+  if (reading.family.placesByPosition) {
+    planMoveTo(plan, reading, move, element, parent);
+    return;
+  }
   if (parent !== element.parent) refuse(messages.cannotMoveToAnotherParent(element.rule.type));
   const siblings = reading.elements.filter((other) => areSiblings(other, element));
   // The position is among the siblings once the element is taken out (FBL 11.2).
@@ -257,13 +294,21 @@ function planMove(plan: Plan, reading: BodyReading, move: ModelChange & { kind: 
 }
 
 /** Where a position puts an element among its siblings without it: before the one at the index, after the last without a position or past them. */
-function indexOf(position: ChangePosition | undefined, others: readonly ReadElement[], element: ReadElement): number {
-  if (!position) return others.length;
-  if ('index' in position) return position.index < 0 || position.index > others.length ? others.length : position.index;
-  const id = 'after' in position ? position.after : position.before;
-  const at = others.findIndex((other) => other.id === id);
-  if (at < 0) refuse(messages.noSuchSibling(id, element.rule.type));
-  return 'after' in position ? at + 1 : at;
+const indexOf = (position: ChangePosition | undefined, others: readonly ReadElement[], element: ReadElement): number =>
+  positionIndex(position, others, element.rule.type);
+
+/**
+ * A move in a family that places by position (FBL 0.7 5.5, 6.3), to a place under the same parent or
+ * under another: not into the element itself or anything it contains, and not into a parent its
+ * rule cannot be nested in. The family places it among the new parent's children as they are without it.
+ */
+function planMoveTo(plan: Plan, reading: BodyReading, move: ModelChange & { kind: 'move' }, element: ReadElement, parent: ReadElement | undefined): void {
+  for (let enclosing = parent; enclosing; enclosing = enclosing.parent) {
+    if (enclosing === element) refuse(messages.cannotMoveIntoItself(element.rule.type));
+  }
+  if (parent && element.rule.parent && !element.rule.parent.rules.includes(parent.rule.name)) refuse(messages.cannotBePlacedInside(element.rule.type, parent.rule.type));
+  reading.family.moveTo(plan, element, parent, move.position);
+  if (element.rule.snapshotUndo) plan.snapshot = true;
 }
 
 /**
@@ -274,6 +319,36 @@ const areSiblings = (other: ReadElement, element: ReadElement): boolean =>
   other.parent === element.parent
   && other.rule.parent?.slot === element.rule.parent?.slot
   && (element.parent !== undefined || other.rule.type === element.rule.type);
+
+// ---- retype ----
+
+/**
+ * A retype (FBL 6.4) by the first rule of the new type, in the binding's order, that can add an
+ * element where this one stands: in its parent's rules when it has a parent. The family writes it
+ * in place: *(FBL 0.7)* in `bullets`, when that rule has an `emit`, one `re-emit-line` of the item's
+ * text with the retype's values, its continuation and nested items left where they are. Every other
+ * family refuses it, as a retype through a declared binding is a `remove` and an `add` with a warning
+ * that this host does not plan.
+ */
+function planRetype(plan: Plan, reading: BodyReading, retype: ModelChange & { kind: 'retype' }): void {
+  const element = elementOf(reading, retype.id);
+  if (element.isRelation) refuse(messages.cannotRetype);
+  refuseReadOnly(element.rule, 'changed');
+  const parent = element.parent;
+  const rules = allRules(reading.binding).filter((candidate) => candidate.type === retype.type && !candidate.isRelation && candidate.insert);
+  if (rules.length === 0) refuse(messages.noPlaceForType(retype.type));
+  const rule = rules.find((candidate) => parent === undefined || candidate.parent?.rules.includes(parent.rule.name) === true);
+  if (!rule) refuse(messages.cannotBePlacedInside(retype.type, parent!.rule.type));
+  refuseReadOnly(rule, 'added');
+  const values = new Map(Object.entries(retype.attributes));
+  if (rule.insert!.when !== undefined && !reading.insertAllowed(rule.insert!.when, values)) refuse(messages.thisCannotBeAdded(retype.type));
+  for (const [name, value] of values) {
+    const binding = attributeOf(rule, name);
+    if (binding && !binding.flag && binding.empty === 'refuse' && isEmpty(value)) refuse(messages.attributeNotEmpty(name, rule.type));
+  }
+  reading.family.retype(plan, element, rule, values);
+  if (rule.snapshotUndo || element.rule.snapshotUndo) plan.snapshot = true;
+}
 
 // ---- remove ----
 

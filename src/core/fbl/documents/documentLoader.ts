@@ -8,7 +8,7 @@ import { JsonSyntaxError, memberOf, pointerToken, readJson, scalarText, type Jso
 import {
   allRules, defaultText,
   type AttributeBinding, type BlockRule, type BodySettings, type Claims, type CreateChild, type CreateContainer, type Family, type FblBinding, type FblDocument,
-  type IdBinding, type InsertSettings, type Marker, type ParentBinding, type PluginReader, type ReadingClaim, type ReferenceBinding, type RegistrationSettings,
+  type IdBinding, type InsertSettings, type Marker, type ParentBinding, type PluginReader, type ReadingClaim, type ReferenceBinding, type RegistrationBlockDeclaration, type RegistrationSettings,
   type RemoveSettings, type Rule, type Slot, type TextDefaults,
 } from './types';
 
@@ -28,7 +28,7 @@ export interface Loaded {
 export const supportedMajor = 0;
 
 /** The newest minor version this library reads with its meaning (FBL 2.7): a newer one loads with a warning. */
-export const supportedMinor = 6;
+export const supportedMinor = 8;
 
 const error = (pointer: string, message: string): LoadProblem => ({ pointer, severity: 'error', message });
 
@@ -168,7 +168,7 @@ function readOnlyOf(json: JsonNode): string | undefined {
 }
 
 export function parseFamily(name: string | undefined): Family | undefined {
-  return name === 'yaml' || name === 'json' || name === 'xml' || name === 'lines' || name === 'blocks' ? name : undefined;
+  return name === 'yaml' || name === 'json' || name === 'xml' || name === 'lines' || name === 'blocks' || name === 'bullets' ? name : undefined;
 }
 
 /** Maps a binding's JSON onto the typed values, reporting what it cannot map. */
@@ -205,9 +205,10 @@ function readBinding(name: string, json: JsonNode, pointer: string, problems: Lo
     blocks: array(json, 'blocks').map((block): BlockRule => ({
       name: str(block, 'name') ?? '', line: str(block, 'line') ?? '', within: optionalStrings(block, 'within'), caseInsensitive: bool(block, 'caseInsensitive'), view: str(block, 'view'),
     })),
+    sections: array(json, 'sections').map((section) => ({ name: str(section, 'name') ?? '', heading: str(section, 'heading') ?? '', caseInsensitive: bool(section, 'caseInsensitive') })),
     elements: array(json, 'elements').map((rule) => readRule(rule, false)),
     relations: array(json, 'relations').map((rule) => readRule(rule, true)),
-    registration: readRegistration(json),
+    registration: readRegistration(json, pointer, problems),
     template: template
       ? { text: str(template, 'text') ?? '', byOrigin: new Map(members(memberOf(template, 'byOrigin')).map((member) => [member.name, stringOf(member.value) ?? ''])) }
       : undefined,
@@ -343,6 +344,7 @@ function readSlot(json: JsonNode): Slot {
     value: str(json, 'value'),
     word: str(json, 'word'),
     flag: bool(json, 'flag'),
+    continuation: bool(json, 'continuation') || undefined,
   };
 }
 
@@ -384,7 +386,7 @@ function readAttribute(json: JsonNode): AttributeBinding {
   };
 }
 
-function readRegistration(json: JsonNode): RegistrationSettings {
+function readRegistration(json: JsonNode, pointer: string, problems: LoadProblem[]): RegistrationSettings {
   const registration = memberOf(json, 'registration');
   return {
     headers: members(memberOf(registration, 'headers')).map((member) => member.name),
@@ -392,7 +394,31 @@ function readRegistration(json: JsonNode): RegistrationSettings {
     resourceCapture: str(memberOf(registration, 'resource'), 'capture'),
     legacyLayout: str(registration, 'legacyLayout'),
     legacyIdentities: str(registration, 'legacyIdentities'),
+    blocks: readRegistrationBlocks(memberOf(registration, 'blocks'), `${pointer}/registration/blocks`, problems),
   };
+}
+
+/** A registration's declared blocks (FBL 0.7 §8.1): each a Name, with its order, its keys and whether it is in the history. */
+function readRegistrationBlocks(json: JsonNode | undefined, pointer: string, problems: LoadProblem[]): RegistrationBlockDeclaration[] {
+  const blocks: RegistrationBlockDeclaration[] = [];
+  for (const member of members(json)) {
+    const at = `${pointer}/${pointerToken(member.name)}`;
+    if (member.value.kind !== 'object') {
+      problems.push(error(at, messages.declaredBlockObject));
+      continue;
+    }
+    // layout: and identities: are FBL's own blocks (FBL 8.3, 8.6), so a binding cannot declare them.
+    if (!isName(member.name) || member.name === 'layout' || member.name === 'identities') {
+      problems.push(error(at, messages.declaredBlockName(member.name)));
+      continue;
+    }
+    const order = str(member.value, 'order') ?? 'ordinal';
+    if (order !== 'ordinal' && order !== 'kept') problems.push(error(`${at}/order`, messages.declaredBlockOrder));
+    const keys = str(member.value, 'keys') ?? 'names';
+    if (keys !== 'names' && keys !== 'ids') problems.push(error(`${at}/keys`, messages.declaredBlockKeys));
+    blocks.push({ name: member.name, kept: order === 'kept', keyedByIds: keys === 'ids', inHistory: memberOf(member.value, 'history')?.kind !== 'false' });
+  }
+  return blocks;
 }
 
 // ---- the checks of FBL 14.1, steps 4 to 6, that need no DISL specification ----
@@ -400,8 +426,17 @@ function readRegistration(json: JsonNode): RegistrationSettings {
 function checkBinding(binding: FblBinding, pointer: string, problems: LoadProblem[]): void {
   const rules = allRules(binding);
   const names = new Set<string>();
-  const ruleNames = new Set([...rules.map((rule) => rule.name), ...binding.blocks.map((block) => block.name)]);
+  const ruleNames = new Set([...rules.map((rule) => rule.name), ...binding.blocks.map((block) => block.name), ...binding.sections.map((section) => section.name)]);
   const fileRules = new Set(binding.body.files.flatMap((file) => file.name ?? []));
+
+  // The sections of a bullets body (FBL 0.7 4.8): a name each, used once, and a heading expression of FBL's subset.
+  const sections = new Set<string>();
+  binding.sections.forEach((section, index) => {
+    const at = `${pointer}/sections/${index}`;
+    if (sections.has(section.name)) problems.push(error(`${at}/name`, messages.sectionNameTwice(section.name)));
+    sections.add(section.name);
+    checkExpression(section.heading, `${at}/heading`, problems);
+  });
 
   binding.blocks.forEach((block, index) => {
     const at = `${pointer}/blocks/${index}`;
@@ -459,7 +494,7 @@ function checkBinding(binding: FblBinding, pointer: string, problems: LoadProble
 }
 
 const countSlots = (slot: Slot): number =>
-  [slot.key !== undefined, slot.attribute !== undefined, slot.text, slot.group !== undefined, slot.parent !== undefined, slot.capture !== undefined, slot.value !== undefined].filter(Boolean).length;
+  [slot.key !== undefined, slot.attribute !== undefined, slot.text, slot.group !== undefined, slot.parent !== undefined, slot.capture !== undefined, slot.value !== undefined, slot.continuation === true].filter(Boolean).length;
 
 function checkSlot(slot: Slot, context: CelContext, pointer: string, problems: LoadProblem[]): void {
   if (slot.value !== undefined) compile(slot.value, context, `${pointer}/value`, problems);

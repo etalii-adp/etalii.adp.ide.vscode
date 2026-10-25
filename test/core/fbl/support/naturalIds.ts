@@ -1,9 +1,13 @@
+import { behaviorTreeIds } from './behaviorTree';
+
 /** What an id derivation is asked: the library's `IdRequest`, as far as these derivations use it. */
 interface Request {
   readonly rule: string;
   readonly attributes: Readonly<Record<string, unknown>>;
   readonly source?: string;
   readonly target?: string;
+  readonly parentId?: string;
+  readonly positionInSlot?: number;
 }
 
 /**
@@ -13,6 +17,8 @@ interface Request {
  * links and loops by their ends and identifier as its fixtures address them.
  */
 export function naturalIds(binding: string): (request: Request) => string | undefined {
+  // Agent Behavior Modelling (behavior-tree.fbl#abm, FBL 0.7): a node's id is its place in the tree.
+  if (binding === 'abm') return (request) => behaviorTreeIds({ parentId: request.parentId, positionInSlot: request.positionInSlot ?? 0 });
   return (request) => {
     switch (`${binding}/${request.rule}`) {
       case 'cld/link': return `link:${request.source ?? ''}|${request.target ?? ''}`;

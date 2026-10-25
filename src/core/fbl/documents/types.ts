@@ -7,7 +7,7 @@ export interface FblDocument {
   readonly bindings: ReadonlyMap<string, FblBinding>;
 }
 
-export type Family = 'yaml' | 'json' | 'xml' | 'lines' | 'blocks';
+export type Family = 'yaml' | 'json' | 'xml' | 'lines' | 'blocks' | 'bullets';
 
 /** One binding (FBL 3): how one format maps to a language's model. */
 export interface FblBinding {
@@ -24,6 +24,8 @@ export interface FblBinding {
   readonly comment?: string;
   readonly reportUnmatched: boolean;
   readonly blocks: readonly BlockRule[];
+  /** *(FBL 0.7)* The sections of a `bullets` body (FBL 4.8), each found by its first matching heading. */
+  readonly sections: readonly SectionRule[];
   readonly elements: readonly Rule[];
   readonly relations: readonly Rule[];
   readonly registration: RegistrationSettings;
@@ -98,6 +100,13 @@ export interface HeaderSettings {
   readonly required: boolean;
 }
 
+/** A section of a `bullets` body (FBL 0.7 4.8): its name, and the expression its heading's text matches. */
+export interface SectionRule {
+  readonly name: string;
+  readonly heading: string;
+  readonly caseInsensitive: boolean;
+}
+
 export interface BlockRule {
   readonly name: string;
   readonly line: string;
@@ -156,6 +165,8 @@ export interface Slot {
   readonly value?: string;
   readonly word?: string;
   readonly flag: boolean;
+  /** *(FBL 0.7)* bullets: the item's continuation, its lines before its first nested item (FBL 4.8). */
+  readonly continuation?: boolean;
 }
 
 /** An attribute binding (FBL 5.2): a slot with the options that decide reading and writing. */
@@ -251,6 +262,21 @@ export interface RegistrationSettings {
   readonly resourceCapture?: string;
   readonly legacyLayout?: string;
   readonly legacyIdentities?: string;
+  /** The blocks the binding declares (FBL 0.7 §8.1), in the order it declares them, which is the order they are written in (§8.4). */
+  readonly blocks: readonly RegistrationBlockDeclaration[];
+}
+
+/**
+ * A block of the registration that a binding declares (FBL 0.7 §8.1, `registration.blocks`): its
+ * name, whether its entries stand where the edit put them (`kept`) or in the ordinal order of their
+ * keys, whether its keys are element ids, which are pruned when stale (FBL 8.5), and whether its
+ * writes are steps of the history (FBL 7.1).
+ */
+export interface RegistrationBlockDeclaration {
+  readonly name: string;
+  readonly kept: boolean;
+  readonly keyedByIds: boolean;
+  readonly inHistory: boolean;
 }
 
 export interface TemplateSettings {
@@ -298,6 +324,7 @@ export function slotText(slot: Slot): string {
   if (slot.group !== undefined) return `group ${slot.group}`;
   if (slot.parent !== undefined) return `parent ${slot.parent}`;
   if (slot.capture !== undefined) return `capture ${slot.capture}`;
+  if (slot.continuation === true) return 'continuation';
   return slot.value !== undefined ? 'value' : 'slot';
 }
 
@@ -320,8 +347,9 @@ export const bindingOf = (binding: Pick<FblBinding, 'name'> & Partial<FblBinding
   text: defaultText,
   reportUnmatched: false,
   blocks: [],
+  sections: [],
   elements: [],
   relations: [],
-  registration: { headers: [], createOnFirstPlacement: false },
+  registration: { headers: [], createOnFirstPlacement: false, blocks: [] },
   ...binding,
 });

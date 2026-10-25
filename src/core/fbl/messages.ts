@@ -104,6 +104,11 @@ export const messages = {
   sharedClaim: 'A shared claim has a marker or is registrationOnly.',
   oneBare: 'At most one reading is bare.',
   noRule: (name: string) => `No rule is named '${name}'.`,
+  sectionNameTwice: (name: string) => `The section name '${name}' is used twice.`,
+  declaredBlockObject: 'A declared block is an object.',
+  declaredBlockName: (name: string) => `'${name}' cannot name a declared block: it is a Name, and neither layout nor identities (FBL 8.1).`,
+  declaredBlockOrder: 'A block\'s order is "ordinal" or "kept".',
+  declaredBlockKeys: 'A block\'s keys are "names" or "ids".',
   // This host: the checks of FBL 5.2 and 5.7 that standalone's loader does not make.
   scalarReadingFamily: (name: string) => `'${name}' says what a slot reads from a yaml or json scalar; this family reads text and nothing else (FBL §5.2).`,
   scalarReadingSlot: (name: string) => `'${name}' is not given on a value or a capture slot (FBL §5.2).`,
@@ -123,6 +128,8 @@ export const messages = {
   headerMismatch: (mark: string) => `The body does not carry the binding's header mark (${mark}); it is read anyway.`,
   entryUnreadable: (reason: string) => `This entry cannot be read: ${reason}`,
   mistyped: (attribute: string, type: string) => `'${attribute}' is not a ${type}.`,
+  /** The reason of an entry whose rule's type the tool type's specification maps as unreadable (FBL 0.7 4.8, DESL 5.2). */
+  unreadableType: 'it is in no form this file\'s entries are written in.',
   // This host: FBL 7.4's fbl.unconverted-value, which standalone does not report.
   unconvertedValue: (attribute: string, text: string, type: string) => `'${text}' is not a ${type}, so '${attribute}' is read as the value its binding falls back to; the file keeps what is written.`,
   unboundKey: (kind: string, name: string) => `The ${kind} '${name}' is not one this file's binding reads; it is kept as it is.`,
@@ -225,6 +232,8 @@ export const messages = {
   noEmit: (type: string) => `The binding gives no form to write a new ${type} in.`,
   noBlock: (type: string) => `The file has no block to add the ${type} to.`,
   cannotPlace: (family: string, place: string) => `A ${family} body cannot place a new entry '${place}'.`,
+  statementHasNoContinuation: 'A statement has no continuation.',
+  noSection: (type: string) => `The file has no section to add the ${type} to.`,
 
   // ---- planning (FBL 6) ----
   neverWritten: 'The file could not be read, so it is never written.',
@@ -252,6 +261,7 @@ export const messages = {
   cannotAddAtPosition: (type: string) => `This file's binding cannot add a ${type} at a position; only a persistence plugin can.`,
   cannotBeMoved: (type: string) => `A ${type} cannot be moved in this file.`,
   cannotMoveToAnotherParent: (type: string) => `This file's binding cannot move a ${type} to another parent; only a persistence plugin can.`,
+  cannotMoveIntoItself: (type: string) => `A ${type} cannot be moved into itself.`,
   // This host: a position that names a sibling the element does not have (FBL 11.2).
   noSuchSibling: (id: string, type: string) => `'${id}' is not among the siblings of this ${type}.`,
 
@@ -261,6 +271,8 @@ export const messages = {
   driftRedo: 'The file has changed since this edit was undone, so it cannot be redone.',
   nothingToUndo: 'There is nothing to undo.',
   nothingToRedo: 'There is nothing to redo.',
+  /** FBL 0.7 7.2's sentence for an edit refused because the file changed after it was read, before the edit was applied. */
+  driftEdit: 'The file has changed since this edit was made, so it was not written.',
   unreadableNeverWritten: 'An unreadable body is never written (FBL §7.5).',
   readOnlyNeverWritten: 'A read-only body is never written (FBL §3.4).',
 
@@ -268,7 +280,25 @@ export const messages = {
   unknownHeader: (key: string) => `The header '${key}' is neither FBL's nor the binding's; it is kept as it is.`,
   staleLayoutEntry: (key: string) => `The layout keeps a position for '${key}', which the file no longer has; it is removed at the next save of the registration.`,
   ephemeralPosition: (id: string) => `The position of '${id}' is kept for this session only, because its id changes whenever the file is edited.`,
-  registrationChange: 'A registration is changed only by placing elements and storing ids.',
+  registrationChange: 'A registration is changed only by placing elements, storing ids and writing settings.',
+  unknownBlock: (name: string) => `The block '${name}' is neither FBL's nor the binding's; it is kept as it is.`,
+  staleBlockEntry: (block: string, key: string) => `The block '${block}' keeps an entry for '${key}', which the file no longer has; it is removed at the next save of the registration.`,
+  undeclaredBlock: (block: string) => `The binding declares no block '${block}'.`,
+  blockNotMoved: (block: string) => `The entries of '${block}' stand in the order of their keys, so none is moved.`,
+  noBlockEntry: (block: string, key: string) => `The block '${block}' has no entry '${key}'.`,
+  blockEntryExists: (block: string, key: string) => `The block '${block}' has an entry '${key}' already.`,
+  noBlockEntryToRename: (block: string, key: string) => `The block '${block}' has no entry '${key}' to rename.`,
+  newBlockEntryValue: (block: string) => `A new entry of '${block}' needs a value.`,
+  positionNoEntry: (key: string) => `The position names '${key}', which is no entry of the block.`,
+  settingValueEmpty: 'A setting\'s value cannot be empty.',
+  settingValueColon: 'A setting\'s value cannot hold \': \'.',
+  settingValueLine: 'A setting\'s value is one line.',
+  settingKeyEmpty: 'A setting\'s key cannot be empty.',
+  settingKeyLine: 'A setting\'s key is one line.',
+  // This host: FBL 0.7 8.5 keeps no ephemeral id as a key of a block keyed by ids, which standalone does not check.
+  ephemeralBlockKey: (block: string, key: string) => `The block '${block}' keeps no entry for '${key}', because its id changes whenever the file is edited.`,
+  registrationNotCreated: (body: string) => `'${body}' has no registration, and its tool type keeps its view data only in one, so the change cannot be kept.`,
+  registrationNameTaken: (registration: string, body: string) => `'${registration}' exists and is no registration of '${body}', so none is created beside it.`,
   bodyAbsolute: 'The registration\'s body is an absolute path, which is never followed.',
   bodyOutside: 'The registration\'s body is outside the workspace, so it is not opened without the user\'s consent.',
   bodyThroughLink: 'The registration\'s body is reached through a link, which is not followed without the user\'s consent.',
