@@ -34,6 +34,8 @@ const copies = [
   [standaloneName, `${activity}examples/`, 'examples/agent-activity-diagram/'],
   [standaloneName, `${activity}backend/EtAlii.Adp.Diagram.AgentActivityDiagram.Tests/Fixtures/`, 'fixtures/tools/agent-activity-diagram/'],
   [standaloneName, 'src/designers/knowledge/examples/', 'examples/knowledge/'],
+  // The Hierarchical Requirement Designer's example document and its registration, beside its definition in etalii.adp.
+  ...['web-shop.md', 'web-shop.adp'].map((name) => [adpName, `definitions/designers/examples/${name}`, `examples/hierarchical-requirement/${name}`]),
   // DESL's smallest example and its binding: the tool type a test adds to a temporary definitions folder.
   [adpName, 'specifications/desl/minimal-table.des', 'fixtures/tools/desl/minimal-table.des'],
   [adpName, 'specifications/desl/minimal-table.fbl', 'fixtures/tools/desl/minimal-table.fbl'],

@@ -306,6 +306,14 @@ The mind map is read from its definition alone, with the three plugins it names.
 | Cut, copy and paste | `behavior.clipboard` is read and nothing is offered | Nothing is offered either | None |
 | Drag feedback | The states `dragging` and `dropTarget` are not drawn | The dragged node is dimmed and the candidate parent ringed | None: see "What this host decides" |
 
+### Hierarchical Requirement Designer
+
+The Hierarchical Requirement Designer is read from its definition alone: it names no plugin. Its surface is of the kind `hierarchy` (DESL 0.2, 7.7), which this host does not lay out yet, so a document of it opens empty and read-only, with `desl.unsupported-kind` as its reason (DESL 11). What the interpreter already reads of DESL 0.2 for it is in "What is read of each section"; the rows below are added as the surface is built.
+
+| What | The definition, followed here | The standalone module | Issue |
+| --- | --- | --- | --- |
+| A document | Opens read-only, with the reason that the `hierarchy` kind is not laid out here | Opens in the designer | None: the surface is being built |
+
 ## Differences raised and not settled here
 
 The plug-in changes neither a specification nor a binding. Where they and the hosts differ, or where a language cannot state something, an issue in `etalii.adp` says so, and the plug-in follows the definition until the issue is settled.

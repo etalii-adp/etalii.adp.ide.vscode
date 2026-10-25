@@ -96,6 +96,16 @@
         "priority": "default"
       },
       {
+        "viewType": "etalii.adp.etalii.hierarchical-requirement",
+        "displayName": "Hierarchical Requirement Designer",
+        "selector": [
+          {
+            "filenamePattern": "*.md"
+          }
+        ],
+        "priority": "option"
+      },
+      {
         "viewType": "etalii.adp.etalii.knowledge",
         "displayName": "Knowledge",
         "selector": [
@@ -211,6 +221,16 @@
         "category": "ADP"
       },
       {
+        "command": "etalii.adp.new.etalii.hierarchical-requirement",
+        "title": "New Hierarchical Requirement Designer",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.openAs.etalii.hierarchical-requirement",
+        "title": "Open as Hierarchical Requirement Designer",
+        "category": "ADP"
+      },
+      {
         "command": "etalii.adp.new.etalii.knowledge",
         "title": "New Knowledge",
         "category": "ADP"
@@ -239,6 +259,11 @@
           "group": "navigation"
         },
         {
+          "command": "etalii.adp.openAs.etalii.hierarchical-requirement",
+          "when": "resourceExtname =~ /^\\.(md)$/ && !activeCustomEditorId && resourcePath in etalii.adp.suggested",
+          "group": "navigation"
+        },
+        {
           "command": "etalii.adp.openAs.etalii.knowledge",
           "when": "resourceExtname =~ /^\\.(yaml|yml|json|ded|xml)$/ && !activeCustomEditorId && resourcePath in etalii.adp.suggested",
           "group": "navigation"
@@ -253,6 +278,9 @@
         },
         {
           "command": "etalii.adp.new.gartner.hypecycle-graph"
+        },
+        {
+          "command": "etalii.adp.new.etalii.hierarchical-requirement"
         },
         {
           "command": "etalii.adp.new.etalii.knowledge"
@@ -307,6 +335,10 @@
           "when": "resourceExtname =~ /^\\.(md)$/"
         },
         {
+          "command": "etalii.adp.openAs.etalii.hierarchical-requirement",
+          "when": "resourceExtname =~ /^\\.(md)$/"
+        },
+        {
           "command": "etalii.adp.openAs.etalii.knowledge",
           "when": "resourceExtname =~ /^\\.(yaml|yml|json|ded|xml)$/"
         }
@@ -314,6 +346,11 @@
       "explorer/context": [
         {
           "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
+          "when": "resourceExtname =~ /^\\.(md)$/ && resourcePath in etalii.adp.suggested",
+          "group": "navigation@90"
+        },
+        {
+          "command": "etalii.adp.openAs.etalii.hierarchical-requirement",
           "when": "resourceExtname =~ /^\\.(md)$/ && resourcePath in etalii.adp.suggested",
           "group": "navigation@90"
         },

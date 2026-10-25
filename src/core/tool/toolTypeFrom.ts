@@ -573,8 +573,8 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
         const { id } = request;
         if (id !== undefined && !elementOf(model, id) && !open.derived.some((relation) => relation.id === id)) return refused(GONE);
         const selection = id === undefined ? [] : [id];
-        const asking = (question: { readonly title: string; readonly message: string; readonly confirmLabel: string; readonly danger: boolean }): EditOutcome =>
-          ({ kind: 'confirm', title: question.title, message: question.message, confirmLabel: question.confirmLabel, danger: question.danger });
+        const asking = (prompt: { readonly title: string; readonly message: string; readonly confirmLabel: string; readonly danger: boolean }): EditOutcome =>
+          ({ kind: 'confirm', title: prompt.title, message: prompt.message, confirmLabel: prompt.confirmLabel, danger: prompt.danger });
         const { name, args } = acting!;
         const operation = intents.operations.find((candidate) => candidate.id === name);
         if (operation) {
