@@ -1,8 +1,9 @@
 // What a hierarchy surface (DESL 7.7) asks of the model beside its layout, worked out without a
 // view: the implicit members of the lists its labels name (7.7.2), what a filter's words leave of
-// the page and in which order (7.7.3), the words a filter field offers to complete, the open notes of
-// each level and entry (7.7.1), and which of a specification's operations a gesture of the surface
-// runs, read from the operations' actions, since DESL leaves the gestures to prose (8.1).
+// the page and in which order (7.7.3), the words that hide a level or an entry, the words a filter
+// field offers to complete at a caret, the open notes of each level and entry (7.7.1), and which
+// of a specification's operations a gesture of the surface runs, read from the operations'
+// actions, since DESL leaves the gestures to prose (8.1).
 
 import { isA, valueKind, type Metamodel } from '../disl/metamodel';
 import type { Model, ModelElement } from '../disl/model';
@@ -156,6 +157,12 @@ function patternOf(pattern: string): RegExp {
   return new RegExp(`^${source}$`, 'i');
 }
 
+/** The title of a level or an entry, as the surface names its attribute. */
+function titleIn(element: ModelElement, surface: HierarchySurface): string {
+  const title = element.attributes[element.type === surface.levels.type ? surface.levels.title : surface.entries.title];
+  return typeof title === 'string' ? title : '';
+}
+
 /** What a query leaves of the page. */
 export interface Filtered {
   /** Whether the query narrows at all: false when it only sorts or is empty. */
@@ -189,10 +196,7 @@ export function filtered(model: Model, surface: HierarchySurface, query: string 
   const patterns = words.filter((word) => word.kind === 'level').map((word) => patternOf(word.value));
   const narrows = byLabel.size > 0 || patterns.length > 0;
   const nodes = [...tree.byId.values()];
-  const titleOf = (element: ModelElement): string => {
-    const title = element.attributes[element.type === surface.levels.type ? surface.levels.title : surface.entries.title];
-    return typeof title === 'string' ? title : '';
-  };
+  const titleOf = (element: ModelElement): string => titleIn(element, surface);
   const shown = new Set<string>();
   if (narrows) {
     const selected = (element: ModelElement): boolean => element.type === surface.levels.type && patterns.some((pattern) => pattern.test(titleOf(element)));
@@ -227,6 +231,55 @@ export function filtered(model: Model, surface: HierarchySurface, query: string 
     // Array.prototype.sort is stable, so equal entries keep the document's order.
     entriesOf: (level) => tree.entriesOf(level).filter((element) => shown.has(element.id)).sort(compare),
   };
+}
+
+/** A query's text again, its words in their order, one space between each. */
+export const queryText = (words: readonly QueryWord[]): string => words.map((word) => word.text).join(' ');
+
+/**
+ * The query without the words that hide the level or entry `id`, as far as they hide it (DESL
+ * 7.7.3), so that it can be revealed: the `item:` words when it stands outside every level they
+ * select, and of each label the words when it holds none of the members they name, or, for a
+ * level, every label's words, which hide it by leaving no entry in it. The sort and the words
+ * that select nothing are kept; a query that does not hide it, or an id that names no level or
+ * entry, is kept whole.
+ */
+export function unhiding(model: Model, surface: HierarchySurface, query: string | readonly QueryWord[], id: string, tree: HierarchyTree = hierarchyOf(model, surface), left: Filtered = filtered(model, surface, query, tree)): QueryWord[] {
+  const words = typeof query === 'string' ? parseQuery(query, surface) : [...query];
+  const element = tree.byId.get(id);
+  if (element === undefined || left.shown.has(id)) return words;
+  const isLevel = (candidate: ModelElement): boolean => candidate.type === surface.levels.type;
+  const patterns = words.filter((word) => word.kind === 'level').map((word) => patternOf(word.value));
+  const outside = patterns.length > 0 && ![element, ...tree.ancestorsOf(id)].some((level) => isLevel(level) && patterns.some((pattern) => pattern.test(titleIn(level, surface))));
+  return words.filter((word) => {
+    if (word.kind === 'level') return !outside;
+    if (word.kind !== 'label') return true;
+    if (isLevel(element)) return false;
+    const names = new Set(words.filter((other) => other.kind === 'label' && other.label === word.label).map((other) => lowerAscii(other.value)));
+    return labelValues(element, word.label).some((value) => names.has(lowerAscii(value)));
+  });
+}
+
+/** The word a caret stands in or at the end of: where it starts and ends, and what of it stands before the caret. */
+export function wordAt(text: string, caret: number): { readonly start: number; readonly end: number; readonly typed: string } {
+  const start = text.slice(0, caret).search(/\S*$/);
+  const rest = text.slice(caret).search(/\s|$/);
+  return { start, end: caret + rest, typed: text.slice(start, caret) };
+}
+
+/**
+ * What a filter field offers at every caret in `text`, by what of the word the caret is in stands
+ * before it (DESL 7.7.3): a field looks up the part of its word before its caret, wherever the
+ * caret stands, without asking again. A part nothing completes is left out.
+ */
+export function completionsAt(text: string, model: Model, surface: HierarchySurface): Record<string, Completion[]> {
+  const found: Record<string, Completion[]> = {};
+  for (let caret = 0; caret <= text.length; caret++) {
+    const { typed } = wordAt(text, caret);
+    if (Object.hasOwn(found, typed)) continue;
+    found[typed] = completionsOf(typed, model, surface);
+  }
+  return Object.fromEntries(Object.entries(found).filter(([, completions]) => completions.length > 0));
 }
 
 /** A word a filter field offers for the one being typed, with what it is. */

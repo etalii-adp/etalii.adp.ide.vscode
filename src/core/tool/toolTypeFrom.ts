@@ -696,7 +696,7 @@ type Done = Exclude<Outcome, { readonly refused: string }>;
 
 const emptyTable = (notice: string): TableView => ({ name: '', properties: [], rows: [], total: 0, views: [], settings: [], operations: {}, readOnly: true, notice });
 const emptyHierarchy = (notice: string): HierarchyView => ({
-  name: '', ids: 'shown', roles: { level: '', entry: '' }, mentions: {}, queryWords: { level: '', sort: '' }, readOnly: true, notice, roots: [], stray: [], lists: [], notes: [], noteKinds: [], filters: [], completions: [], sortKeys: [], widths: [], pageGestures: {}, findings: [], operations: {},
+  name: '', ids: 'shown', roles: { level: '', entry: '' }, mentions: {}, queryWords: { level: '', sort: '' }, readOnly: true, notice, roots: [], stray: [], lists: [], notes: [], noteKinds: [], filters: [], completions: {}, unhide: {}, sortKeys: [], widths: [], pageGestures: {}, findings: [], operations: {},
 });
 
 /** An element of a model the FBL library read, by where it stands in the reading: the same place in two readings of one body is the same entry. */

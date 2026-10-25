@@ -5,7 +5,8 @@ import { box, click, dblclick, harness, key, options, requests, show, source, ty
 // them (its `ReferenceLookup.tsx`, `ReferenceBox.tsx` and `reveal.ts`): `#` opens a lookup of what a
 // mention there may name, by number or title, and a pick writes the mention as the view says one is
 // written; a reference shows what it names when selected, by the focus that keeps it in sight and
-// the folds that hide it, and writes nothing else.
+// the folds that hide it, and the words of the filter that hide it taken out as the view gives
+// them (its `filterQuery.ts`, `unhiding`), as a finding shows what it is about; and writes nothing else.
 
 let h: Harness;
 const lookup = (): HTMLElement | null => document.querySelector('.hs-reference-lookup');
@@ -114,5 +115,44 @@ describe('a reference in a description', () => {
     key(reference, { key: 'Enter' });
     expect(h.sent.at(-1)).toEqual({ v: 2, type: 'selection', ids: ['REQ-0003'] });
     expect(requests(h.sent)).toEqual([]);
+  });
+
+  it('shows a target the filter hides by taking out the words that hide it, which the view gives, and reveals it once the view of that filter comes', () => {
+    show(h.page, viewOf({ query: 'category:functional #mail' }));
+    expect(box('REQ-0003')).toBeNull();
+    click(box('REQ-0004').querySelector('.hs-reference[data-id="REQ-0003"]')!);
+    const field = document.querySelector<HTMLInputElement>('.hs-filter-query')!;
+    expect(field.value).toBe('category:functional');
+    expect(options(h.sent).at(-1)).toEqual({ query: 'category:functional' });
+    expect(h.sent.some((message) => message.type === 'selection')).toBe(false);
+    // A view made before the filter came is not the one that holds it: the reveal waits.
+    show(h.page, viewOf({ query: 'category:functional #mail' }), 2);
+    expect(h.sent.some((message) => message.type === 'selection')).toBe(false);
+    show(h.page, viewOf({ query: 'category:functional' }), 3);
+    expect(box('REQ-0003')).not.toBeNull();
+    expect(h.sent.at(-1)).toEqual({ v: 2, type: 'selection', ids: ['REQ-0003'] });
+    expect(requests(h.sent)).toEqual([]);
+  });
+
+  it('shows a level the filter hides by taking out the words of every label', () => {
+    show(h.page, viewOf({ query: 'category:functional #mail sort:title' }));
+    click(box('REQ-0004').querySelector('.hs-reference[data-id="ITEM-0005"]')!);
+    expect(options(h.sent).at(-1)).toEqual({ query: 'sort:title' });
+    show(h.page, viewOf({ query: 'sort:title' }), 2);
+    expect(h.sent.at(-1)).toEqual({ v: 2, type: 'selection', ids: ['ITEM-0005'] });
+  });
+});
+
+describe('a finding', () => {
+  it('shows the entry it is about that the filter hides, by taking out the words that hide it', () => {
+    show(h.page, viewOf({ query: 'category:functional #mail' }));
+    const finding = document.querySelector<HTMLElement>('.hs-finding-link[data-id="REQ-0013"]')!;
+    expect(box('REQ-0013')).toBeNull();
+    click(finding);
+    expect(options(h.sent).at(-1)).toEqual({ query: 'category:functional' });
+    show(h.page, viewOf({ query: 'category:functional' }), 2);
+    // It stands in Guest checkout, which is collapsed: the fold is opened, as for any reveal.
+    expect(requests(h.sent)).toEqual([{ kind: 'operation', operation: 'toggleCollapsed', on: ['ITEM-0003'] }]);
+    expect(h.sent.at(-1)).toEqual({ v: 2, type: 'selection', ids: ['REQ-0013'] });
   });
 });

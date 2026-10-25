@@ -8,7 +8,7 @@ import { icon } from '../diagram/icons';
 // of DESL 7.7.3, applied as it is typed, the order of the entries, and the filters the document
 // stores, each applied by picking it. Applying a filter or an order writes nothing: the filter goes
 // to the extension as a view option, and the view that follows is what it leaves, with how much of
-// the page it leaves and the words that complete the one typed last. Storing the filter applied,
+// the page it leaves and the words that complete the one the caret is in. Storing the filter applied,
 // renaming the stored filter it is and removing it are the gestures the view names for them. The
 // words of a filter are the view's: the labels' prefixes, the word of a level's title and the word
 // of an order; nothing here names one.
@@ -98,6 +98,12 @@ export class FilterBar {
   /** The filter applied. */
   get query(): string {
     return this.text;
+  }
+
+  /** Applies a filter as if it were typed: the page to reveal what it hid sets one without the words that hid it. */
+  set(query: string): void {
+    this.active = 0;
+    this.change(query);
   }
 
   /** Takes the filter a view was made with, when the page has none of its own yet. */
@@ -203,15 +209,16 @@ export class FilterBar {
   // ---- completion ----
 
   /**
-   * The words offered for the one typed: those the view gives for the last word of the filter it was
-   * made with, while the caret stands at the end of that filter in the field.
+   * The words offered for the one the caret is in, anywhere in the field: those the view gives for
+   * what of that word stands before the caret. The view gives them for every caret in the filter it
+   * was made with, so a caret moved asks nothing; a word typed that the view has not seen yet is
+   * offered nothing until the view of it comes.
    */
   private offered(): readonly string[] {
     const view = this.view;
     if (view === undefined || this.dismissed || document.activeElement !== this.field) return [];
-    const caret = this.field.selectionStart ?? this.text.length;
-    if (caret !== this.text.length || (view.applied?.query ?? '') !== this.text) return [];
-    return view.completions.slice(0, MOST_OFFERED);
+    const { typed } = wordAt(this.text, this.field.selectionStart ?? this.text.length);
+    return Object.hasOwn(view.completions, typed) ? view.completions[typed].slice(0, MOST_OFFERED) : [];
   }
 
   /** What a word offered is: the name of the list its prefix names, a level's title, or an order. */

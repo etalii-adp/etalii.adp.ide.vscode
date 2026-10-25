@@ -187,6 +187,8 @@ export class HierarchyPage {
         const pending = this.pendingReveal;
         this.pendingReveal = undefined;
         if (pending && this.index.byId.has(pending.id)) this.receive(pending);
+        // A view made before the filter the page applied came is not yet the one that may hold it.
+        else if (pending && (view.applied?.query ?? '') !== this.appliedQuery()) this.pendingReveal = pending;
         return;
       }
       case 'outcome':
@@ -696,7 +698,7 @@ export class HierarchyPage {
         return;
       case 'finding':
       case 'reference':
-        this.reveal(id);
+        this.revealHidden(id);
         return;
       case 'notes':
         this.toggleNotes(id);
@@ -813,10 +815,30 @@ export class HierarchyPage {
     this.sendOptions();
   }
 
-  private sendOptions(): void {
+  /** The filter the page sends: none for one of nothing but spaces. */
+  private appliedQuery(): string {
     const query = this.filterBar.query;
+    return query.trim() === '' ? '' : query;
+  }
+
+  private sendOptions(): void {
+    const query = this.appliedQuery();
     const id = this.focus.id;
-    this.send({ v: 2, type: 'viewOptions', options: { ...(query.trim() === '' ? {} : { query }), ...(id === '' ? {} : { focus: id }) } });
+    this.send({ v: 2, type: 'viewOptions', options: { ...(query === '' ? {} : { query }), ...(id === '' ? {} : { focus: id }) } });
+  }
+
+  /**
+   * Shows a node a reference or a finding names: one the filter hides is shown by applying the filter
+   * without the words that hide it, which the view gives, and revealed once the view that holds it comes.
+   */
+  private revealHidden(id: string): void {
+    const unhidden = this.index.byId.has(id) ? undefined : this.view?.unhide[id];
+    if (unhidden === undefined) {
+      this.reveal(id);
+      return;
+    }
+    this.pendingReveal = { v: 2, type: 'reveal', id };
+    this.filterBar.set(unhidden);
   }
 
   /**
