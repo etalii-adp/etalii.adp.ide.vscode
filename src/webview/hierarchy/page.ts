@@ -166,6 +166,12 @@ export class HierarchyPage {
   private readonly widthShown = new Map<number, number>();
   /** The column each width gesture on its way is for, by its request's number, to put it back when it is refused. */
   private readonly widthAsked = new Map<number, number>();
+  /**
+   * The width gesture on its way for a column, by depth: one at a time, so that each is decided
+   * against the widths the document keeps once the one before is answered. What it shows, and the
+   * latest width wanted meanwhile (or the page's own again), asked for when it is answered.
+   */
+  private readonly widthAsking = new Map<number, { readonly seq: number; readonly shown: number; wish?: number | 'reset' }>();
   /** The edge of a column being dragged: its depth, and where the pointer and the width stood when it was pressed. */
   private edgeDrag: { readonly level: number; readonly x: number; readonly width: number } | undefined;
 
@@ -202,8 +208,9 @@ export class HierarchyPage {
         this.version = message.version;
         this.index = indexOf(view);
         this.kept = keptWidthsOf(view);
-        // What a drag showed is the document's now, or was refused; the column being dragged keeps following the pointer.
-        for (const level of [...this.widthShown.keys()]) if (level !== this.edgeDrag?.level) this.widthShown.delete(level);
+        // What a drag showed is the document's now, or was refused; the column being dragged keeps following the pointer, and one
+        // whose width is on its way keeps the width it shows until it is answered.
+        for (const level of [...this.widthShown.keys()]) if (level !== this.edgeDrag?.level && !this.widthAsking.has(level)) this.widthShown.delete(level);
         // The level a viewer narrowed to is the page's own once it is drawn; a page opened again starts from the one the editor kept.
         if (!this.focusRead) {
           this.focus = { id: view.focus ?? '', inside: false };
@@ -226,9 +233,9 @@ export class HierarchyPage {
       case 'outcome': {
         if (message.seq === this.seq || message.seq === 0) this.status.textContent = message.result === 'refused' ? message.sentence ?? '' : '';
         const column = this.widthAsked.get(message.seq);
+        if (column === undefined) return;
         this.widthAsked.delete(message.seq);
-        // A refused width leaves the document as it was: the column goes back to the width it keeps.
-        if (column !== undefined && message.result === 'refused' && this.widthShown.delete(column)) this.render();
+        this.widthAnswered(column, message.result === 'applied');
         return;
       }
       case 'command':
@@ -817,7 +824,7 @@ export class HierarchyPage {
     if (this.question !== undefined) return;
     const edge = (event.target as Element).closest<HTMLElement>('.hs-column-edge');
     if (edge) {
-      this.resetWidth(Number(edge.dataset.column));
+      this.wantWidth(Number(edge.dataset.column), 'reset');
       return;
     }
     // A reference shows what it names; it opens no field.
@@ -1471,9 +1478,12 @@ export class HierarchyPage {
       const drag = this.edgeDrag;
       this.edgeDrag = undefined;
       if (drag === undefined) return;
-      if (kept) this.commitWidth(drag.level, drag.width + released.clientX - drag.x);
+      if (kept) this.wantWidth(drag.level, this.clampWidth(drag.width + released.clientX - drag.x));
       else {
-        this.widthShown.delete(drag.level);
+        // A drag let go of keeps nothing: the column shows what it showed before, its width on its way included.
+        const asking = this.widthAsking.get(drag.level);
+        if (asking === undefined) this.widthShown.delete(drag.level);
+        else this.widthShown.set(drag.level, asking.wish === undefined ? asking.shown : asking.wish === 'reset' ? LEVEL_WIDTH : asking.wish);
         this.render();
       }
     };
@@ -1490,8 +1500,7 @@ export class HierarchyPage {
     if (by === 0 && event.key !== 'Home') return;
     event.preventDefault();
     event.stopPropagation();
-    if (by !== 0) this.commitWidth(level, this.widthOf(level) + by);
-    else this.resetWidth(level);
+    this.wantWidth(level, by !== 0 ? this.clampWidth(this.widthOf(level) + by) : 'reset');
   }
 
   private clampWidth(width: number): number {
@@ -1512,40 +1521,68 @@ export class HierarchyPage {
   }
 
   /**
-   * Keeps a width for a column, held to the range: its first by the gesture of the page that adds
-   * one, or a change of the one the document keeps. The width it has already sends nothing.
+   * Keeps a width for a column, held to the range, or gives it the page's own width again. While a
+   * width of that column is on its way, the column shows the one wanted and only the latest is
+   * remembered, asked for once the one on its way is answered.
    */
-  private commitWidth(level: number, width: number): void {
+  private wantWidth(level: number, wish: number | 'reset'): void {
+    const asking = this.widthAsking.get(level);
+    if (asking === undefined) {
+      this.askWidth(level, wish);
+      return;
+    }
+    asking.wish = wish;
+    this.widthShown.set(level, wish === 'reset' ? LEVEL_WIDTH : wish);
+    this.render();
+  }
+
+  /**
+   * Asks for a width as the document keeps it now: its first by the gesture of the page that adds
+   * one, a change of the one the document keeps, or its removal for the page's own width. The width
+   * it has already, or a removal of one it does not keep, sends nothing. The column is remembered to
+   * put it back when it is refused; one that is not asked goes back now.
+   */
+  private askWidth(level: number, wish: number | 'reset'): void {
     const view = this.view;
-    const wanted = this.clampWidth(width);
     const stored = this.kept.get(level);
-    if (view === undefined || wanted === (stored?.width ?? LEVEL_WIDTH)) {
-      this.widthShown.delete(level);
+    const kept = stored?.width ?? LEVEL_WIDTH;
+    if (view === undefined || (wish === 'reset' ? stored === undefined : wish === kept)) {
+      if (this.edgeDrag?.level !== level) this.widthShown.delete(level);
       this.render();
       return;
     }
-    const gesture = stored === undefined ? view.pageGestures.addWidth : stored.gestures.resize;
-    const args: Record<string, TableValue> = {};
-    if (gesture?.params.width !== undefined) args[gesture.params.width] = wanted;
-    if (stored === undefined && gesture?.params.level !== undefined) args[gesture.params.level] = String(level);
-    this.widthShown.set(level, wanted);
-    this.askWidth(level, gesture, stored?.id, args);
-  }
-
-  /** Gives a column the page's own width again, removing the width the document keeps; one it does not keep sends nothing. */
-  private resetWidth(level: number): void {
-    const stored = this.kept.get(level);
-    if (stored === undefined) return;
-    this.widthShown.set(level, LEVEL_WIDTH);
-    this.askWidth(level, stored.gestures.remove, stored.id, {});
-  }
-
-  /** Asks for a width's gesture, remembering its column to put it back when it is refused; one that is not asked puts it back now. */
-  private askWidth(level: number, gesture: HierarchyGestureState | undefined, on: string | undefined, args: Readonly<Record<string, TableValue>>): void {
     const before = this.seq;
-    this.run(gesture, on, args);
-    if (this.seq !== before) this.widthAsked.set(this.seq, level);
-    else this.widthShown.delete(level);
+    if (wish === 'reset') this.run(stored?.gestures.remove, stored?.id, {});
+    else {
+      const gesture = stored === undefined ? view.pageGestures.addWidth : stored.gestures.resize;
+      const args: Record<string, TableValue> = {};
+      if (gesture?.params.width !== undefined) args[gesture.params.width] = wish;
+      if (stored === undefined && gesture?.params.level !== undefined) args[gesture.params.level] = String(level);
+      this.run(gesture, stored?.id, args);
+    }
+    const shown = wish === 'reset' ? LEVEL_WIDTH : wish;
+    if (this.seq !== before) {
+      this.widthAsked.set(this.seq, level);
+      this.widthAsking.set(level, { seq: this.seq, shown });
+      this.widthShown.set(level, shown);
+    } else if (this.edgeDrag?.level !== level) this.widthShown.delete(level);
+    this.render();
+  }
+
+  /**
+   * A column's width gesture was answered. The view that follows an applied one came before its
+   * answer, so what was wanted meanwhile is asked for against the widths the document keeps now. A
+   * refused or cancelled one leaves the document as it was: the column goes back to the width it
+   * keeps, and what was wanted meanwhile is dropped.
+   */
+  private widthAnswered(level: number, applied: boolean): void {
+    const asking = this.widthAsking.get(level);
+    this.widthAsking.delete(level);
+    if (applied && asking?.wish !== undefined) {
+      this.askWidth(level, asking.wish);
+      return;
+    }
+    if (this.edgeDrag?.level !== level) this.widthShown.delete(level);
     this.render();
   }
 
