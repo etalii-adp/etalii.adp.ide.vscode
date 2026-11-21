@@ -1,6 +1,6 @@
 import type { FromCanvas, ToCanvas } from '../../core/frame/protocol';
 import type { Action } from '../../core/frame/toolType';
-import type { TableBarItem, TableCell, TableEntry, TableFinding, TableField, TableGestures, TableGroup, TableMenu, TableOperation, TablePanel, TableProperty, TableRequest, TableRow, TableValue, TableView } from '../../core/tool/tableView';
+import type { TableBarItem, TableCell, TableEntry, TableFinding, TableGestures, TableGroup, TableMenu, TableOperation, TablePanel, TableProperty, TableRequest, TableRow, TableValue, TableView } from '../../core/tool/tableView';
 import { html } from '../diagram/dom';
 import { icon } from '../diagram/icons';
 import { Menu } from '../diagram/menu';
@@ -8,6 +8,10 @@ import { afterOf, follow, reorder, stepped } from './drag';
 import { controlOf, given, tag } from './editors';
 import { EntryMenu } from './entries';
 import { Panels } from './panels';
+import { filled, SELECTION } from './requests';
+import { SelectionBar } from './selection';
+import { openCellList } from './cellList';
+import { lineHeight, windowFrom, windowOf } from './windowing';
 
 // The table surface of a designer: it draws the table view it is sent and asks for every change
 // with a request. It never changes the model itself, so what it shows after a gesture is the view
@@ -15,18 +19,8 @@ import { Panels } from './panels';
 
 /** The width of the column of row numbers and of a column that gives none, in pixels. */
 const numberWidth = 44;
-/** From how many lines the body draws only those near sight, how tall a line is taken to be, and how many lines beyond sight are drawn. */
-const windowFrom = 300;
-const lineHeight = 30;
-const overscan = 40;
 /** The width of the lead column of a surface with gestures: a row's checkbox and its handle. */
 const leadWidth = 52;
-/** How a gesture names the rows selected. */
-const SELECTION = '$selection';
-/** Where a request leaves a value to be typed or picked. */
-const TYPED = '$typed';
-/** Where a request names the one row of several it is made for. */
-const ROW = '$row';
 const defaultWidth = 160;
 /** The narrowest a drag of its border leaves a column, as in the standalone host; and how far a key widens or narrows it. */
 const minimumWidth = 60;
@@ -51,9 +45,6 @@ const moves: Readonly<Record<string, readonly [number, number]>> = {
 const clamp = (value: number, last: number): number => Math.max(0, Math.min(value, last));
 const same = (left: readonly string[], right: readonly string[]): boolean => left.length === right.length && left.every((id, index) => id === right[index]);
 const placeOf = (cell: HTMLElement): Place => ({ key: cell.closest('tr')?.dataset.key ?? '', column: cell.dataset.column ?? '' });
-/** A request with what was typed or picked in the place of `$typed`, and a row in the place of `$row`. */
-const filled = (request: TableRequest, typed: string | number | boolean | undefined, row: string | undefined): TableRequest => (typed === undefined && row === undefined ? request
-  : JSON.parse(JSON.stringify(request), (_key, value: unknown) => (value === TYPED && typed !== undefined ? typed : value === ROW && row !== undefined ? row : value)) as TableRequest);
 /** The gravest first: how a cell with several findings is marked. */
 const gravity = ['error', 'warning', 'information', 'hint'];
 /** Marks a cell with the findings about it: a sign in the colour of the gravest, and their sentences as its title and its name for assistive technology. */
@@ -86,8 +77,7 @@ export class Table {
   private windowed = false;
   private readonly status = html('p', { class: 'adp-table-status', role: 'status' });
   /** The bar of the rows selected: how many, a value set for all of them, delete, and clearing the selection. */
-  private readonly bar = html('div', { class: 'adp-table-selection', role: 'group', 'aria-label': 'Selected rows' });
-  private barDrawn = '';
+  private readonly bar = new SelectionBar((request) => this.make(request), () => this.select([]));
   private readonly tune = html('button', { class: 'adp-table-tune', type: 'button', 'aria-label': 'Settings', title: 'Settings', 'aria-haspopup': 'menu' }, icon('mdi-tune-variant'));
   /** The editor of the settings control, or the options panel, that is open. */
   private panel: TablePanel | undefined;
@@ -97,7 +87,7 @@ export class Table {
   });
   private readonly root = html('div', { class: 'adp-table' },
     this.tabs,
-    html('div', { class: 'adp-table-toolbar', role: 'toolbar', 'aria-label': 'Table' }, this.buttons, this.search, this.chips, this.tune, this.bar),
+    html('div', { class: 'adp-table-toolbar', role: 'toolbar', 'aria-label': 'Table' }, this.buttons, this.search, this.chips, this.tune, this.bar.element),
     this.panels.element, this.options, this.notice, this.scroller, this.status);
   private readonly menu: Menu;
   private readonly entries: EntryMenu;
@@ -290,7 +280,8 @@ export class Table {
         }),
         ...later(adding(gestures?.newRowIn?.[group.key], group.key))])])
       : [...view.rows.map((row) => () => line(row, row.id)), ...later(adding(gestures?.newRow))];
-    const [start, end] = this.windowOf(body.length);
+    const [start, end] = windowOf(body.length, this.scroller.scrollTop, this.scroller.clientHeight);
+    this.windowed = body.length > windowFrom;
     const spacer = (lines: number): HTMLElement[] => {
       if (lines === 0) return [];
       const element = html('tr', { class: 'adp-table-spacer', 'aria-hidden': 'true' }, html('td', { colspan: span }));
@@ -336,14 +327,7 @@ export class Table {
     if (within) this.focus(this.place);
   }
 
-  /** The lines of the body to draw: all of a short table, and those in and near sight of a long one. */
-  private windowOf(count: number): [number, number] {
-    this.windowed = count > windowFrom;
-    if (!this.windowed) return [0, count];
-    const sight = this.scroller.clientHeight > 0 ? this.scroller.clientHeight : 1200;
-    const first = Math.max(0, Math.floor(this.scroller.scrollTop / lineHeight) - overscan);
-    return [Math.min(first, count), Math.min(count, first + Math.ceil(sight / lineHeight) + 2 * overscan)];
-  }
+
 
   /** One cell of a row: its text, its tags or its checkbox. */
   private cellOf(row: TableRow, property: TableProperty): HTMLTableCellElement {
@@ -777,53 +761,10 @@ export class Table {
     this.entries.open(menu, x ?? box.left, y ?? box.bottom, header.textContent ?? '');
   }
 
-  /** An entry of a menu chosen: its request, made at once or after what it leaves out is asked. */
-  /** Draws the bar of the rows selected, again only when what it offers changed, so that a value typed in it stays. */
+  /** Draws the bar of the rows selected, again only when what it offers changed. */
   private drawBar(): void {
     const rows = this.selection.filter((id) => this.rows.has(id));
-    const bulk = this.gestures?.bulk;
-    const key = rows.length === 0 || !bulk ? '' : JSON.stringify([rows.length, bulk]);
-    this.bar.hidden = key === '';
-    if (key === this.barDrawn) return;
-    this.barDrawn = key;
-    if (!bulk || key === '') {
-      this.bar.replaceChildren();
-      return;
-    }
-    const properties = (this.view?.properties ?? []).filter((property) => bulk.set[property.id]);
-    const which = html('select', { 'aria-label': 'Property to set' }, ...properties.map((property) => html('option', { value: property.id }, property.name)));
-    const slot = html('span', { class: 'adp-table-selection-value' });
-    let value: () => string | number | boolean | undefined = () => undefined;
-    const field = (): void => {
-      const given: TableField | undefined = bulk.set[which.value];
-      if (!given) return;
-      if (given.control === 'choice') {
-        const select = html('select', { 'aria-label': 'Value' }, ...(given.options ?? []).map((option) => html('option', { value: option.value }, option.label)));
-        value = () => (select.value === 'true' || select.value === 'false' ? select.value === 'true' : select.value);
-        slot.replaceChildren(select);
-      } else {
-        const input = html('input', { 'aria-label': 'Value', type: given.control === 'dateTime' || given.control === 'none' ? 'text' : given.control });
-        value = () => (input.value === '' && given.control !== 'text' ? undefined : given.control === 'number' ? Number(input.value) : input.value);
-        slot.replaceChildren(input);
-      }
-    };
-    which.addEventListener('change', field);
-    field();
-    const set = html('button', { type: 'button', class: 'adp-table-panel-button', 'data-control': 'set' }, 'Set');
-    set.addEventListener('click', () => {
-      const given = bulk.set[which.value];
-      const typed = value();
-      if (!given?.request || typed === undefined) return;
-      const chosen = this.selection.filter((id) => this.rows.has(id));
-      const steps = chosen.map((row) => filled(given.request!, typed, row));
-      this.make({ kind: 'steps', steps });
-    });
-    const label = rows.length > 1 && bulk.remove.plural ? bulk.remove.plural.replace('{count}', String(rows.length)) : bulk.remove.label;
-    const remove = html('button', { type: 'button', class: 'adp-table-panel-button', 'data-control': 'delete' }, icon('mdi-trash-can-outline'), label);
-    remove.addEventListener('click', () => bulk.remove.request && this.make(bulk.remove.request));
-    const clear = html('button', { type: 'button', class: 'adp-table-panel-close', 'data-control': 'clear', 'aria-label': 'Clear the selection' }, '×');
-    clear.addEventListener('click', () => this.select([]));
-    this.bar.replaceChildren(html('span', { class: 'adp-table-selection-count' }, `${rows.length} selected`), which, slot, set, remove, clear);
+    this.bar.draw(rows, this.gestures?.bulk, this.view?.properties ?? []);
   }
 
   /** A menu for the rows selected: each entry with a label for several says how many. */
@@ -832,6 +773,7 @@ export class Table {
     return menu.map((group) => group.map((entry) => (entry.plural && count > 1 ? { ...entry, label: entry.plural.replace('{count}', String(count)) } : entry)));
   }
 
+  /** An entry of a menu chosen: renamed in place, a panel opened, or its request made. */
   private chosen(entry: TableEntry): void {
     if (entry.inPlace && entry.request && this.menuAt?.isConnected) this.rename(this.menuAt, entry.request);
     else if (entry.opens) this.openPanel(entry.opens);
@@ -1172,84 +1114,20 @@ export class Table {
   private pick(cell: HTMLElement, at: At): void {
     this.list?.close();
     const { row, property } = at;
-    const many = property.editor === 'choices';
     const here = placeOf(cell);
-    const state = many ? 'aria-checked' : 'aria-selected';
-    const option = (value: string, content: Node | string): HTMLLIElement => html('li', { role: 'option', tabindex: -1, 'data-value': value }, content);
-    const items = [...(many ? [] : [option('', 'None')]), ...property.options.map((candidate) => option(candidate.id, tag(candidate.name, candidate.colour)))];
-    const element = html('ul', { class: 'adp-table-list', role: 'listbox', 'aria-label': property.name, 'aria-multiselectable': many ? 'true' : undefined }, ...items);
-    // With gestures, a search field over the list has the focus; a name that is no option makes one and chooses it.
-    const create = this.gestures?.createOption?.[property.id];
-    const search = this.gestures ? html('input', { class: 'adp-table-list-search', type: 'text', 'aria-label': `Search or create an option of ${property.name}`, placeholder: create ? 'Search, or create an option' : 'Search' }) : undefined;
-    const frame = search ? html('div', { class: 'adp-table-picker' }, search, element) : element;
-    const shown = (): HTMLLIElement[] => items.filter((item) => !item.hidden);
-    const has = (value: string): boolean => {
-      const held = this.rows.get(row.id)?.cells[property.id];
-      return many ? held?.items.some((item) => item.value === value) === true : (held?.value ?? '') === value;
-    };
-    const sync = (): void => items.forEach((item) => item.setAttribute(state, String(has(item.dataset.value ?? ''))));
-    const outside = (event: Event): void => {
-      if (!frame.contains(event.target as Node)) close(false);
-    };
-    const close = (refocus: boolean): void => {
-      frame.remove();
-      window.removeEventListener('pointerdown', outside, true);
-      this.list = undefined;
-      if (refocus) this.focus(here);
-    };
-    const choose = (item: HTMLElement): void => {
-      const value = item.dataset.value ?? '';
-      if (many) {
-        const present = item.getAttribute(state) !== 'true';
-        item.setAttribute(state, String(present));
-        this.request({ kind: 'item', row: row.id, property: property.id, value, present });
-        return;
-      }
-      const unchanged = has(value);
-      close(true);
-      if (!unchanged) this.request({ kind: 'cell', row: row.id, property: property.id, value: value === '' ? null : value });
-    };
-    element.addEventListener('click', (event) => {
-      const item = (event.target as HTMLElement).closest<HTMLElement>('[role="option"]');
-      if (item) choose(item);
+    const gestures = this.gestures;
+    this.list = openCellList(this.root, cell, property, {
+      held: () => this.rows.get(row.id)?.cells[property.id],
+      searchable: gestures !== undefined,
+      creates: gestures?.createOption?.[property.id] !== undefined,
+      choose: (value, present) => this.request(present === undefined
+        ? { kind: 'cell', row: row.id, property: property.id, value: value === '' ? null : value }
+        : { kind: 'item', row: row.id, property: property.id, value, present }),
+      create: (name) => this.make(gestures!.createOption![property.id], undefined, name, row.id),
+      closed: (refocus) => {
+        this.list = undefined;
+        if (refocus) this.focus(here);
+      },
     });
-    element.addEventListener('keydown', (event) => {
-      event.stopPropagation();
-      const index = items.indexOf(document.activeElement as HTMLLIElement);
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') items[clamp(index + (event.key === 'ArrowDown' ? 1 : -1), items.length - 1)]?.focus();
-      else if ((event.key === 'Enter' || event.key === ' ') && items[index]) choose(items[index]);
-      else if (event.key === 'Escape' || event.key === 'Tab') close(true);
-      else return;
-      event.preventDefault();
-    });
-    search?.addEventListener('input', () => {
-      const needle = search.value.trim().toLowerCase();
-      for (const item of items) item.hidden = needle !== '' && !(item.textContent ?? '').toLowerCase().includes(needle);
-    });
-    search?.addEventListener('keydown', (event) => {
-      event.stopPropagation();
-      const typed = search.value.trim();
-      if (event.key === 'ArrowDown') shown()[0]?.focus();
-      else if (event.key === 'Escape' || event.key === 'Tab') close(true);
-      else if (event.key === 'Enter') {
-        const same = items.find((item) => item.dataset.value !== '' && (item.textContent ?? '').toLowerCase() === typed.toLowerCase());
-        if (same ?? (typed !== '' ? undefined : shown()[0])) choose((same ?? shown()[0])!);
-        else if (typed !== '' && create) {
-          close(true);
-          this.make(create, undefined, typed, row.id);
-        } else if (shown()[0]) choose(shown()[0]);
-      } else return;
-      event.preventDefault();
-    });
-    const box = cell.getBoundingClientRect();
-    const bounds = this.root.getBoundingClientRect();
-    frame.style.left = `${box.left - bounds.left}px`;
-    frame.style.top = `${box.bottom - bounds.top}px`;
-    this.root.append(frame);
-    sync();
-    if (search) search.focus();
-    else (items.find((item) => item.getAttribute(state) === 'true') ?? items[0])?.focus();
-    window.addEventListener('pointerdown', outside, true);
-    this.list = { sync, close: () => close(false) };
   }
 }
