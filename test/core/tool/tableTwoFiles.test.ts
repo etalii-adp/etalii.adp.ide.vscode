@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { EditOutcome, Source } from '../../../src/core/frame/toolType';
 import { plugins as registry } from '../../../src/core/plugins/index';
 import type { TableRequest } from '../../../src/core/tool/tableView';
-import { relativePath } from '../../../src/core/tool/toolTypeFrom';
+import { movedName, relativePath } from '../../../src/core/tool/toolTypeFrom';
 import { applied, definitionOf, designerOf, refusal, spliced } from './support';
 
 // The steps of the Knowledge designer that write two files (etalii.adp spec 080, FR-007, FR-008;
@@ -129,5 +129,82 @@ describe('the gestures of a two-way relation', () => {
       ['Keep the other side as a one-way relation', op('deleteProperty', ['g-country'], { otherSide: 'keep' })],
     ]);
     expect(type.view(regions(), {}).gestures!.columnMenus!['g-neighbour'].flat().find((entry) => entry.id === 'delete')!.request).toEqual(op('deleteProperty', ['g-neighbour'], {}));
+  });
+});
+
+describe('rows deleted that rows of other files relate to', () => {
+  const provincesWith = (peers: readonly string[]): Source => ({
+    fileName: '/work/provinces.yaml', text: provinces, peers,
+    related: { 'cities.yaml': { fileName: '/work/cities.yaml', text: cities } },
+  });
+
+  it('says first how many relate to them, and goes ahead once confirmed', () => {
+    const source = provincesWith(['cities.yaml']);
+    const asked = type.edit(source, op('deleteRows', ['nh'], {}), {}, false);
+    expect(asked).toEqual({ kind: 'confirm', title: 'Delete row', confirmLabel: 'Delete', danger: true,
+      message: '1 row in another table relates to this row. Deleting it leaves that relation pointing at nothing.' });
+    expect(spliced(provinces, applied(type.edit(source, op('deleteRows', ['nh'], {}), {}, true)).splices)).not.toContain('- id: nh\n');
+  });
+
+  it('asks nothing where no row of another file relates to them', () => {
+    expect(applied(type.edit(provincesWith([]), op('deleteRows', ['nh'], {}), {}, false)).splices.length).toBeGreaterThan(0);
+    expect(applied(type.edit(provincesWith(['cities.yaml']), op('deleteRows', ['an'], {}), {}, false)).splices.length).toBeGreaterThan(0);
+  });
+});
+
+
+describe('a relation\'s file renamed or moved', () => {
+  it('is named anew in each document that names it, in one file\'s step', () => {
+    const source = citiesWith(provinces);
+    const splices = type.retargeted!(source, movedName('/work/cities.yaml', [{ from: '/work/provinces.yaml', to: '/work/regions/provinces.yaml' }]))!;
+    expect(spliced(cities, splices)).toBe(cities.replace('target: provinces.yaml', 'target: regions/provinces.yaml'));
+  });
+
+  it('is named anew where the document moves, and not where both move together', () => {
+    expect(movedName('/work/a/cities.yaml', [{ from: '/work/a/cities.yaml', to: '/work/b/cities.yaml' }])('provinces.yaml')).toBe('../a/provinces.yaml');
+    expect(movedName('/work/a/cities.yaml', [{ from: '/work/a', to: '/work/c' }])('provinces.yaml')).toBeUndefined();
+    expect(movedName('/work/a/cities.yaml', [{ from: '/work/a/provinces.yaml', to: '/work/p.yaml' }])('../a/provinces.yaml')).toBe('../p.yaml');
+    expect(movedName('/work/cities.yaml', [{ from: '/work/other.yaml', to: '/work/x.yaml' }])('provinces.yaml')).toBeUndefined();
+  });
+
+  it('changes nothing where no relation names a file that moved', () => {
+    expect(type.retargeted!(citiesWith(provinces), () => undefined)).toEqual([]);
+  });
+});
+
+describe('a relation edited', () => {
+  it('shows its file, its limit and whether it is two-way, in its column menu', () => {
+    const menu = type.view(citiesWith(provinces), {}).gestures!.columnMenus!.p5.flat();
+    const edit = menu.find((entry) => entry.id === 'relation')!;
+    expect(edit.entries!.map((entry) => [entry.label, entry.checked ?? null, entry.disabled !== undefined])).toEqual([
+      ['Related to provinces.yaml', null, true], ['No limit', false, false], ['1 row', true, false], ['Two-way relation', false, false],
+    ]);
+    expect(type.view(countries(), {}).gestures!.columnMenus!['c-regions'].flat().some((entry) => entry.id === 'relation')).toBe(false);
+  });
+
+  it('changes its limit in this file alone', () => {
+    const source = citiesWith(provinces);
+    const done = applied(type.edit(source, op('setRelationLimit', ['p5'], { limit: 'none' }), {}, false));
+    expect(done.others).toBeUndefined();
+    expect(spliced(cities, done.splices)).toBe(cities.replace('    target: provinces.yaml\n    limit: one\n', '    target: provinces.yaml\n'));
+  });
+
+  it('is made two-way with its other side in the target, called after this table', () => {
+    const source = citiesWith(provinces);
+    const [here, there] = both(source, type.edit(source, { kind: 'operation', operation: 'setRelationOtherSide', on: ['p5'], args: { twoWay: true } }, {}, false), 'provinces.yaml');
+    const theirs = ids(there).find((id) => !provinces.includes(id))!;
+    expect(here).toBe(cities.replace('    limit: one\n', `    limit: one\n    counterpart: ${theirs}\n`));
+    expect(there).toBe(provinces.replace('views:\n', `  - id: ${theirs}\n    name: Cities\n    type: relation\n    target: cities.yaml\n    counterpart: p5\n    computed: true\nviews:\n`));
+  });
+
+  it('is made one-way, its other side removed from the target', () => {
+    const source = regions();
+    const [here, there] = both(source, type.edit(source, { kind: 'operation', operation: 'setRelationOtherSide', on: ['g-country'], args: { twoWay: false } }, {}, false), 'countries.yaml');
+    expect(here).toBe(source.text.replace('    counterpart: c-regions\n', ''));
+    expect(there).toBe(source.related!['countries.yaml']!.text.replace('  - id: c-regions\n    name: Regions\n    type: relation\n    target: regions.yaml\n    counterpart: g-country\n    computed: true\n', ''));
+  });
+
+  it('refuses on the other side of a two-way relation', () => {
+    expect(refusal(type.edit(countries(), op('setRelationLimit', ['c-regions'], { limit: 'one' }), {}, false))).toBe('That property is not a relation of this table\'s own.');
   });
 });

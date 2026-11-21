@@ -6,7 +6,7 @@
 
 import type { Model, ModelElement, Value } from '../../disl/model';
 import type { Change } from '../../disl/behavior';
-import type { TableAcross, TableData, TableFound, TableRelation, TableStep } from '../../tool/tableView';
+import type { TableAcross, TableConfirm, TableData, TableFound, TableRelation, TableStep } from '../../tool/tableView';
 
 const text = (value: Value | undefined): string => (value === undefined || value === null ? '' : String(value));
 const SELF = '.';
@@ -104,10 +104,110 @@ export const CHOOSE_OTHER_SIDE = 'Choose whether the other side of the relation 
  * deleted too or kept as a one-way relation, as the user chose (`otherSide`). Each is planned in
  * full before either file is written. Any other operation writes one file.
  */
-export function across(step: TableStep): TableAcross | { readonly refused: string } | undefined {
+export function across(step: TableStep): TableAcross | { readonly refused: string } | { readonly confirm: TableConfirm } | undefined {
   if (step.operation === 'createRelation') return twoWay(step);
   if (step.operation === 'deleteProperty') return oneSideDeleted(step);
+  if (step.operation === 'deleteRows' && !step.confirmed) return relating(step);
+  if (step.operation === SET_LIMIT) return limited(step);
+  if (step.operation === SET_OTHER_SIDE) return otherSide(step);
   return undefined;
+}
+
+/**
+ * The steps of "Edit relation" (spec 079, FR-011; spec 080, FR-011), which the definition has no
+ * operation for: a relation's limit, and whether it has another side. Raised in etalii.adp as a
+ * difference; until it is settled, the tool type makes them itself, as the standalone host does.
+ */
+export const SET_LIMIT = 'setRelationLimit';
+export const SET_OTHER_SIDE = 'setRelationOtherSide';
+export const ownSteps = [SET_LIMIT, SET_OTHER_SIDE];
+
+const GONE = 'That property is no longer in this table.';
+const NOT_OWN = 'That property is not a relation of this table\'s own.';
+const PARENT_HOLDS_ONE = 'The parent relation holds one row.';
+
+/** The relation a step is on: one that holds its own values, not the shown side of another table's. */
+function ownRelation(step: TableStep): ModelElement | { readonly refused: string } {
+  const property = step.before.elements.find((element) => element.id === step.on[0] && element.type === 'Property');
+  if (!property) return { refused: GONE };
+  return property.attributes.valueType === 'relation' && property.attributes.computed !== true && text(property.attributes.targetFile) !== '' ? property : { refused: NOT_OWN };
+}
+
+/** How many rows a relation's cell may hold: one, or any number. A cell that holds more than a new limit of one keeps them. */
+function limited(step: TableStep): TableAcross | { readonly refused: string } {
+  const property = ownRelation(step);
+  if ('refused' in property) return property;
+  const one = text(step.args.limit) === 'one';
+  if (one === (property.attributes.limit === 'one')) return { file: SELF, here: [], there: [] };
+  if (property.attributes.isParent === true) return { refused: PARENT_HOLDS_ONE };
+  return { file: SELF, here: [{ kind: 'set', id: property.id, attributes: { limit: one ? 'one' : null } }], there: [] };
+}
+
+/**
+ * Whether a relation is shown in the file it relates to as well: made two-way, its other side is
+ * added there under the name given, or this table's; made one-way, that side is removed. The values
+ * are this side's own either way, so no row changes.
+ */
+function otherSide(step: TableStep): TableAcross | { readonly refused: string } {
+  const property = ownRelation(step);
+  if ('refused' in property) return property;
+  const file = text(property.attributes.targetFile);
+  const self = file === SELF;
+  const target = self ? step.before : step.related?.(file)?.model;
+  if (!target) return { refused: UNREAD(file) };
+  const counterpart = text(property.attributes.counterpart);
+  const other = counterpart === '' ? undefined : target.elements.find((element) => element.id === counterpart && element.type === 'Property');
+  const twoWay = step.args.twoWay === true || step.args.twoWay === 'true';
+  if (twoWay === (other !== undefined)) return { file: SELF, here: [], there: [] };
+  let mine: Change;
+  let theirs: Change;
+  if (other) {
+    mine = { kind: 'set', id: property.id, attributes: { counterpart: null } };
+    theirs = { kind: 'remove', id: other.id };
+  } else {
+    const id = step.newId('Property');
+    const asked = text(step.args.counterpartName).trim();
+    const own = text(step.before.diagram.name).trim();
+    mine = { kind: 'set', id: property.id, attributes: { counterpart: id } };
+    theirs = {
+      kind: 'add', id, type: 'Property',
+      attributes: { name: uniqueName(asked !== '' ? asked : own !== '' ? own : 'Relation', propertyNames(target)), valueType: 'relation', targetFile: self ? SELF : step.back(file), computed: true, counterpart: property.id },
+    };
+  }
+  return self ? { file, here: [mine, theirs], there: [] } : { file, here: [mine], there: [theirs] };
+}
+
+/** A file's name without a leading `./`, so that two spellings of one name compare equal. */
+const plain = (file: string): string => file.replace(/^(\.\/)+/, '');
+
+/**
+ * Rows deleted that rows of other knowledge files relate to: how many relate, asked before the step
+ * is made (`knowledge.md`, Requirement 5.8; spec 080, FR-009). Their values stay, naming nothing.
+ */
+function relating(step: TableStep): { readonly confirm: TableConfirm } | undefined {
+  const kept = new Set(step.after.elements.filter((element) => element.type === 'Row').map((element) => element.id));
+  const gone = new Set(step.before.elements.filter((element) => element.type === 'Row' && !kept.has(element.id)).map((element) => element.id));
+  if (gone.size === 0) return undefined;
+  let count = 0;
+  for (const peer of step.peers) {
+    const model = step.related?.(peer)?.model;
+    if (!model) continue;
+    // The side of a two-way relation that holds no values of its own names nothing.
+    const naming = new Set(relationsOf(model).filter((property) => property.attributes.computed !== true && plain(text(property.attributes.targetFile)) === plain(step.back(peer))).map((property) => property.id));
+    if (naming.size === 0) continue;
+    const cells = new Map(model.elements.filter((element) => element.type === 'Cell' && naming.has(text(element.attributes.property))).map((cell) => [cell.id, cell.parent ?? '']));
+    const rows = new Set(model.elements.filter((item) => item.type === 'CellItem' && item.parent !== undefined && cells.has(item.parent) && gone.has(text(item.attributes.row))).map((item) => cells.get(item.parent!)!));
+    count += rows.size;
+  }
+  if (count === 0) return undefined;
+  const one = gone.size === 1;
+  return {
+    confirm: {
+      title: one ? 'Delete row' : `Delete ${gone.size} rows`,
+      message: `${count === 1 ? '1 row in another table relates' : `${count} rows in other tables relate`} to ${one ? 'this row' : 'these rows'}. Deleting ${one ? 'it' : 'them'} leaves ${count === 1 ? 'that relation' : 'those relations'} pointing at nothing.`,
+      confirmLabel: 'Delete', danger: true,
+    },
+  };
 }
 
 /** A relation asked for with the name of its other side: that side added to the target, computed, each side naming the other. */
@@ -163,4 +263,19 @@ function oneSideDeleted(step: TableStep): TableAcross | { readonly refused: stri
 /** The target of a new relation: this file first, then each other knowledge file the host knows of (spec 080, FR-006). */
 export function choices(table: TableData): Record<string, Record<string, { value: string; label: string }[]>> {
   return { createRelation: { targetFile: [{ value: SELF, label: 'This file' }, ...(table.peers ?? []).map((peer) => ({ value: peer, label: peer }))] } };
+}
+
+/**
+ * The relations' files named anew when files move (`knowledge.md`, "Rename or move a target file";
+ * spec 080, FR-010): each `targetFile` whose file moved, or that the document's own move changes.
+ */
+export function retarget(model: Model, moved: (file: string) => string | undefined): Change[] {
+  const changes: Change[] = [];
+  for (const property of relationsOf(model)) {
+    const file = text(property.attributes.targetFile);
+    if (file === SELF) continue;
+    const now = moved(file);
+    if (now !== undefined && now !== file) changes.push({ kind: 'set', id: property.id, attributes: { targetFile: now } });
+  }
+  return changes;
 }

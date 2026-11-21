@@ -222,6 +222,21 @@ suite('The Knowledge designer in Visual Studio Code', () => {
     await vscode.commands.executeCommand('workbench.action.files.revert');
   });
 
+  test('renaming provinces.yaml rewrites the relation\'s target in a file that names it, in one step with the rename', async () => {
+    const provinces = example('knowledge-test', 'provinces.yaml');
+    fs.writeFileSync(provinces.fsPath, exampleText('provinces.yaml'));
+    const cities = written(exampleText('cities.yaml'));
+    const moved = example('knowledge-test', 'regions', 'provinces.yaml');
+    const rename = new vscode.WorkspaceEdit();
+    rename.renameFile(provinces, moved);
+    assert.ok(await vscode.workspace.applyEdit(rename));
+    const document = await vscode.workspace.openTextDocument(cities);
+    assert.strictEqual(document.getText(), exampleText('cities.yaml').replace('target: provinces.yaml', 'target: regions/provinces.yaml'));
+    await vscode.window.showTextDocument(document);
+    await vscode.commands.executeCommand('workbench.action.files.revert');
+    fs.rmSync(moved.fsPath, { force: true });
+  });
+
   test('a refusal shows the definition\'s sentence and writes nothing', async () => {
     const { document, original } = await open();
     assert.deepStrictEqual(await edit({ kind: 'operation', operation: 'renameProperty', on: ['p3'], args: { name: 'Name' } }), { result: 'refused', sentence: 'A property named `Name` already exists.' });

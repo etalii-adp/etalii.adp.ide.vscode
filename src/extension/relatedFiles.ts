@@ -10,7 +10,7 @@ import type { RelatedFile } from '../core/frame/toolType';
 export const relatedUri = (document: vscode.Uri, path: string): vscode.Uri => vscode.Uri.joinPath(document, '..', path);
 
 /** The text of one file a document names, or null when it cannot be read. */
-async function textOf(uri: vscode.Uri): Promise<RelatedFile | null> {
+export async function textOf(uri: vscode.Uri): Promise<RelatedFile | null> {
   // An editor's unsaved changes are what the file holds for now; without any, the file on disk is, which may have gone.
   const open = vscode.workspace.textDocuments.find((document) => document.uri.toString() === uri.toString());
   if (open?.isDirty) return { fileName: open.fileName, text: open.getText() };
@@ -114,8 +114,9 @@ export class ToolFiles implements vscode.Disposable {
     this.subscriptions.push(watcher, watcher.onDidCreate(again), watcher.onDidDelete(again));
   }
 
-  /** The documents, by their address. */
-  files(): Promise<vscode.Uri[]> {
+  /** The documents, by their address: found again when `fresh`, so that a file made a moment ago is among them. */
+  files(fresh = false): Promise<vscode.Uri[]> {
+    if (fresh) this.found = undefined;
     this.found ??= this.find();
     return this.found;
   }

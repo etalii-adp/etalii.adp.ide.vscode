@@ -8,6 +8,7 @@
 import type { ModelElement, Value } from '../../disl/model';
 import { ROW, TYPED, type TableBarItem, type TableData, type TableEntry, type TableField, type TableGestures, type TableGroup, type TableMenu, type TableMoves, type TableNest, type TableProperty, type TableRequest, type ThemedColour } from '../../tool/tableView';
 import { calculationsFor, movesOf, optionsOf, settingsOf, type Group } from './settings';
+import { SET_LIMIT, SET_OTHER_SIDE } from './relations';
 
 const operation = (name: string, on: readonly string[] = [], args: Readonly<Record<string, string | number | boolean>> = {}): TableRequest => ({ kind: 'operation', operation: name, on, args });
 const text = (value: Value | undefined): string => (value === undefined || value === null ? '' : String(value));
@@ -63,6 +64,7 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
     const element = model.elements.find((found) => found.id === property.id);
     const parentable = property.valueType === 'relation' && text(element?.attributes.targetFile) === '.';
     const twoWay = property.valueType === 'relation' && text(element?.attributes.counterpart) !== '';
+    const ownRelation = property.valueType === 'relation' && element !== undefined && element.attributes.computed !== true && text(element.attributes.targetFile) !== '';
     const menu: TableEntry[][] = [
       [
         { id: 'rename', label: 'Rename', icon: 'pencil-outline', inPlace: true, request: operation('renameProperty', [property.id], { name: TYPED }) },
@@ -72,6 +74,7 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
           entries: types.filter((type) => type.key !== 'relation').map((type): TableEntry => ({ id: type.key, label: type.label, ...icon(type.icon), request: operation('changePropertyType', [property.id], { valueType: type.key }) })),
         },
         ...(selecting ? [{ id: 'options', label: 'Edit options', icon: 'format-list-bulleted-square', opens: { panel: 'options' as const, property: property.id } }] : []),
+        ...(ownRelation ? [editRelation(property.id, element!)] : []),
       ],
       [
         { id: 'filter', label: 'Filter', icon: 'filter-outline', request: operation('addCondition', [view.id], { property: property.id }) },
@@ -240,5 +243,23 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
     items: [...sorts, ...filters],
     ...(view === undefined ? {} : { settings: settingsOf(table, view, columns, every), calculations: calculationsFor(table, view) }),
     options: optionsOf(table, colour),
+  };
+}
+
+/**
+ * "Edit relation" (spec 079, FR-011; spec 080, FR-011): the file the relation relates to, which is
+ * said and never changed, how many rows a cell holds, and whether the other file shows it too.
+ */
+function editRelation(property: string, element: ModelElement): TableEntry {
+  const target = text(element.attributes.targetFile);
+  const one = element.attributes.limit === 'one';
+  const twoWay = text(element.attributes.counterpart) !== '';
+  return {
+    id: 'relation', label: 'Edit relation', icon: 'arrow-top-right', entries: [
+      { id: 'target', label: `Related to ${target === '.' ? 'this table' : target}`, disabled: 'The file a relation relates to is chosen when it is made.' },
+      { id: 'limitNone', label: 'No limit', checked: !one, request: operation(SET_LIMIT, [property], { limit: 'none' }) },
+      { id: 'limitOne', label: '1 row', checked: one, request: operation(SET_LIMIT, [property], { limit: 'one' }) },
+      { id: 'twoWay', label: 'Two-way relation', checked: twoWay, request: operation(SET_OTHER_SIDE, [property], { twoWay: !twoWay }) },
+    ],
   };
 }

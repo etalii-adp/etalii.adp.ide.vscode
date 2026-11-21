@@ -10,8 +10,8 @@ import type { TableRequest, TableView } from '../core/tool/tableView';
 import type { Findings } from './findings';
 import { handBack } from './opening';
 import { pickLink } from './projectLinkPicker';
-import { relativePath } from '../core/tool/toolTypeFrom';
-import { RelatedFiles, relatedUri, ToolFiles } from './relatedFiles';
+import { movedName, relativePath } from '../core/tool/toolTypeFrom';
+import { RelatedFiles, relatedUri, textOf, ToolFiles } from './relatedFiles';
 import type { AnyToolType } from './toolTypes';
 import { webviewHtml } from './webviewHtml';
 
@@ -219,7 +219,8 @@ export class Tools implements vscode.Disposable {
   refresh(diagram: OpenTool, cause?: ViewCause): void {
     const source = diagram.source;
     // The files the document names now are read, and followed; the view comes again once they are.
-    if (diagram.related && diagram.type.related) diagram.related.follow(diagram.type.related(source));
+    // The other documents of the tool type are read too: what deleting rows would leave naming nothing is counted in them (spec 080, FR-009).
+    if (diagram.related && diagram.type.related) diagram.related.follow([...new Set([...diagram.type.related(source), ...(diagram.peers ?? [])])]);
     // The document changed since the canvas was last sent a scene: a layout that runs on every change starts
     // from where the nodes are on screen, so that what the change did not touch moves little (DISL 10.4).
     const shown = diagram.lastView;
@@ -510,10 +511,8 @@ export class Tools implements vscode.Disposable {
   // The documents of each tool type that reads other files, by its origin.
   private readonly toolFiles = new Map<string, ToolFiles>();
 
-  /** The other documents of a diagram's tool type in the workspace, as it names them: found, and found again when they change. */
-  async findPeers(diagram: OpenTool): Promise<void> {
-    const type = diagram.type;
-    if (!type.related) return;
+  /** The documents of a tool type in the workspace, found once and followed. */
+  private filesOf(type: AnyToolType): ToolFiles {
     let files = this.toolFiles.get(type.origin);
     if (!files) {
       files = new ToolFiles((fileName, text) => type.claimed(fileName, text), type.claims.flatMap((claim) => claim.extensions), () => {
@@ -521,10 +520,43 @@ export class Tools implements vscode.Disposable {
       });
       this.toolFiles.set(type.origin, files);
     }
-    const found = await files.files();
+    return files;
+  }
+
+  /** The other documents of a diagram's tool type in the workspace, as it names them: found, and found again when they change. */
+  async findPeers(diagram: OpenTool): Promise<void> {
+    const type = diagram.type;
+    if (!type.related) return;
+    const found = await this.filesOf(type).files();
     const own = diagram.document.uri.toString();
     diagram.peers = found.filter((uri) => uri.toString() !== own).map((uri) => relativePath(diagram.document.uri.path, uri.path));
     if (this.open.has(diagram)) this.refresh(diagram);
+  }
+
+  /**
+   * Files or folders about to move (etalii.adp spec 080, FR-010, research R3): every document of a
+   * tool type that names other files, and names one that moves or moves itself, has those names
+   * rewritten in the same step as the move. Only a document in a trusted folder of the workspace is
+   * written.
+   */
+  async retargetings(types: readonly AnyToolType[], files: readonly { readonly oldUri: vscode.Uri; readonly newUri: vscode.Uri }[]): Promise<vscode.WorkspaceEdit> {
+    const edit = new vscode.WorkspaceEdit();
+    if (!vscode.workspace.isTrusted) return edit;
+    const moves = files.map((file) => ({ from: file.oldUri.path, to: file.newUri.path }));
+    for (const type of types) {
+      if (!type.retargeted) continue;
+      // A rename is rare and must miss no document, so they are looked for again.
+      for (const uri of await this.filesOf(type).files(true)) {
+        if (vscode.workspace.getWorkspaceFolder(uri) === undefined) continue;
+        const given = await textOf(uri);
+        if (!given) continue;
+        const splices = type.retargeted({ fileName: given.fileName, text: given.text }, movedName(uri.path, moves));
+        for (const splice of spliceRanges(given.text, splices ?? [])) {
+          edit.replace(uri, new vscode.Range(splice.start.line, splice.start.character, splice.end.line, splice.end.character), splice.text);
+        }
+      }
+    }
+    return edit;
   }
 
   /** The row each document opened by a link selects once its page is ready, by the document's address. */

@@ -414,7 +414,14 @@ export interface ViewLogic {
    * What an operation that was run changes beyond what its definition says, where it is a step that
    * writes two files: nothing for any other, or why it cannot be made.
    */
-  across?(step: TableStep): TableAcross | { readonly refused: string } | undefined;
+  across?(step: TableStep): TableAcross | { readonly refused: string } | { readonly confirm: TableConfirm } | undefined;
+  /**
+   * Operations the definition does not have, which the tool type makes itself: each is given to
+   * `across` with nothing changed by the definition, and is refused there when it cannot be made.
+   */
+  readonly ownSteps?: readonly string[];
+  /** The changes that keep a document's names of other files true when files move: `moved` gives a name's new form, undefined for one that stays. */
+  retarget?(model: Model, moved: (file: string) => string | undefined): readonly Change[];
   /**
    * The values a parameter of an operation may take where the definition types it as text but only
    * some values make sense, such as a file of the same tool type: by operation, then parameter. A
@@ -437,6 +444,18 @@ export interface TableStep {
   readonly back: (file: string) => string;
   /** A new id for an element of a type. */
   readonly newId: (type: string) => string;
+  /** The other documents of the same tool type the host knows of, as the document names them: their text is in `related` too. */
+  readonly peers: readonly string[];
+  /** Whether the user has confirmed the step already. */
+  readonly confirmed: boolean;
+}
+
+/** A question to ask before a step is made. */
+export interface TableConfirm {
+  readonly title: string;
+  readonly message: string;
+  readonly confirmLabel: string;
+  readonly danger: boolean;
 }
 
 /** The rest of a step that writes two files: what it adds of this document, and what it changes of the other. */

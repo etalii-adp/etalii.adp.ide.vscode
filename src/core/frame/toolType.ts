@@ -197,6 +197,12 @@ export interface ToolType<View, Request> {
   claimed(fileName: string, text: string): boolean;
   /** The other files the document names whose text it needs, as it names them: given back in `Source.related`. */
   related?(source: Source): readonly string[];
+  /**
+   * The splices that keep the names of other files a document writes true when files move: `moved`
+   * gives a name's new form, undefined for one that stays. Empty when nothing changes, undefined
+   * when the document cannot be read.
+   */
+  retargeted?(source: Source, moved: (file: string) => string | undefined): readonly TextSplice[] | undefined;
   /** Whether a file of a shared extension looks like this type, from the binding's `claims.suggest`. */
   suggests(fileName: string, text: string): boolean;
   /** Everything wrong with the document. Never throws. */

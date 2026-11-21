@@ -893,6 +893,8 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     const reasonOf = (request: unknown): string | undefined => {
       const asked = request as TableRequest | undefined;
       if (asked?.kind !== 'operation' || (asked.on ?? []).some((id) => id.startsWith('$'))) return undefined;
+      // A step of the tool type's own says why it cannot be made when it is made.
+      if (logic?.ownSteps?.includes(asked.operation)) return undefined;
       const state = run.availability(model, asked.operation, asked.on ?? []);
       return !state.offered ? NOT_HERE : state.available ? undefined : state.reason ?? `${state.label} cannot be done now.`;
     };
@@ -1106,6 +1108,11 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
 
     switch (request.kind) {
       case 'operation':
+        // A step of the tool type's own, which the definition cannot state: its whole change is the tool type's.
+        if (logic?.ownSteps?.includes(request.operation)) {
+          const none: Done = { changes: [], after: open.model, created: [], effects: [], collapsed: {}, view: [], renamed: new Map() };
+          return across(source, open, request, none, confirmed) ?? { kind: 'refused', sentence: NOT_HERE };
+        }
         return operated(open, request, confirmed, done);
       case 'renumber': {
         if (!open.model.elements.some((element) => element.id === request.id)) return refused(ENTRY_GONE);
@@ -1164,7 +1171,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
    * both files' changes planned first, neither written when either is refused, and both given as one
    * outcome, which the host applies as one edit. Undefined for an operation that writes one file.
    */
-  function across(source: Source, open: Open, request: { readonly operation: string; readonly on?: readonly string[]; readonly args?: Readonly<Record<string, TableValue>> }, outcome: Done): EditOutcome | undefined {
+  function across(source: Source, open: Open, request: { readonly operation: string; readonly on?: readonly string[]; readonly args?: Readonly<Record<string, TableValue>> }, outcome: Done, confirmed: boolean): EditOutcome | undefined {
     if (!logic?.across || !tableSurface) return undefined;
     const related = relatedOf(source);
     const step = logic.across({
@@ -1173,9 +1180,11 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
       ...(related ? { related } : {}),
       back: (file) => relativePath(source.related?.[file]?.fileName ?? file, source.fileName),
       newId: (type) => newId(persistence, entryOf(persistence, type).as),
+      peers: source.peers ?? [], confirmed,
     });
     if (step === undefined) return undefined;
     if ('refused' in step) return { kind: 'refused', sentence: step.refused };
+    if ('confirm' in step) return { kind: 'confirm', ...step.confirm };
     const made = outcome.created.find((id) => outcome.after.elements.some((element) => element.id === id && (element.type === tableSurface.rows.type || element.type === tableSurface.columns.type)));
     const here = written(source, open, [...outcome.changes, ...step.here], made);
     if (here.kind !== 'applied' || step.file === '.' || step.there.length === 0) return here;
@@ -1235,7 +1244,12 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
 
     switch (request.kind) {
       case 'operation':
-        return operated(open, request, confirmed, (outcome) => (outcome.refused === undefined ? across(source, open, request, outcome as Done) : undefined) ?? done(outcome));
+        // A step of the tool type's own, which the definition cannot state: its whole change is the tool type's.
+        if (logic?.ownSteps?.includes(request.operation)) {
+          const none: Done = { changes: [], after: open.model, created: [], effects: [], collapsed: {}, view: [], renamed: new Map() };
+          return across(source, open, request, none, confirmed) ?? { kind: 'refused', sentence: NOT_HERE };
+        }
+        return operated(open, request, confirmed, (outcome) => (outcome.refused === undefined ? across(source, open, request, outcome as Done, confirmed) : undefined) ?? done(outcome));
       case 'cell':
         return done(run.setCell(open.model, request.row, request.property, request.value));
       case 'item':
@@ -1349,6 +1363,16 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
       const open = opened(source);
       return open.unreadable ? [] : logic?.targets?.(open.model) ?? [];
     },
+    ...(logic?.retarget ? {
+      retargeted: (source: Source, moved: (file: string) => string | undefined) => {
+        const open = readOpen(source);
+        if (open.unreadable) return undefined;
+        const changes = logic.retarget!(open.model, moved);
+        if (changes.length === 0) return [];
+        const outcome = written(source, open, changes);
+        return outcome.kind === 'applied' ? outcome.splices : undefined;
+      },
+    } : {}),
     view,
     toolbox,
     fields,
@@ -1393,4 +1417,41 @@ export function relativePath(from: string, to: string): string {
   let shared = 0;
   while (shared < folder.length && shared < b.length - 1 && folder[shared] === b[shared]) shared += 1;
   return [...folder.slice(shared).map(() => '..'), ...b.slice(shared)].join('/');
+}
+
+/** A path with `.` and `..` worked out and forward slashes; a leading slash or drive is kept. */
+function normalPath(path: string): string {
+  const parts: string[] = [];
+  const given = path.replace(/\\/g, '/');
+  for (const part of given.split('/')) {
+    if (part === '.' || (part === '' && parts.length > 0)) continue;
+    if (part === '..' && parts.length > 0 && parts[parts.length - 1] !== '..' && parts[parts.length - 1] !== '') parts.pop();
+    else parts.push(part);
+  }
+  return parts.join('/');
+}
+
+/** Where a path is once files or folders have moved, each from its `from` to its `to`; the path itself when none of them holds it. */
+function movedPath(path: string, moves: readonly { readonly from: string; readonly to: string }[]): string {
+  for (const move of moves) {
+    const [from, to] = [normalPath(move.from), normalPath(move.to)];
+    if (path === from) return to;
+    if (path.startsWith(`${from}/`)) return `${to}${path.slice(from.length)}`;
+  }
+  return path;
+}
+
+/**
+ * How a document names, once files have moved, each file it named before (etalii.adp spec 080,
+ * FR-010): undefined for a name that stays. The document may itself be among what moved. `document`
+ * and the moves are full paths.
+ */
+export function movedName(document: string, moves: readonly { readonly from: string; readonly to: string }[]): (file: string) => string | undefined {
+  const before = normalPath(document);
+  const after = movedPath(before, moves);
+  const folder = before.slice(0, before.lastIndexOf('/'));
+  return (file) => {
+    const named = relativePath(after, movedPath(normalPath(`${folder}/${file}`), moves));
+    return named === file ? undefined : named;
+  };
 }
