@@ -132,8 +132,13 @@ function shown(table: TableData): ShownView {
 
   // ---- the rows: what the filter keeps, in the order the sorts give ----
 
+  // The conditions and groups of conditions under each parent, gathered once: a row is tested against them many times.
+  const filters = new Map<string, ModelElement[]>();
+  for (const element of model.elements) {
+    if ((element.type === 'Condition' || element.type === 'FilterGroup') && element.parent !== undefined) filters.set(element.parent, [...(filters.get(element.parent) ?? []), element]);
+  }
   const kept = (parent: string, match: Value | undefined, row: TableRow): boolean => {
-    const results = model.elements.filter((element) => element.parent === parent && (element.type === 'Condition' || element.type === 'FilterGroup')).flatMap((element) => {
+    const results = (filters.get(parent) ?? []).flatMap((element) => {
       if (element.type === 'FilterGroup') return [kept(element.id, element.attributes.match, row)];
       // A condition that names no property of the table is left out: the view opens without it.
       const property = propertyOf(element.attributes.property);
@@ -182,7 +187,8 @@ function shown(table: TableData): ShownView {
     for (const row of rows) {
       const parent = parentOf(row);
       if (parent === undefined) roots.push(row);
-      else children.set(parent, [...(children.get(parent) ?? []), row]);
+      else if (children.has(parent)) children.get(parent)!.push(row);
+      else children.set(parent, [row]);
     }
     tree = {};
     const ordered: TableRow[] = [];

@@ -466,7 +466,24 @@ export function tableReader(parts: TableParts) {
   const { surface, metamodel, logic } = parts;
   const { columns, cells, rows, views } = surface;
   const locale = parts.locale ?? 'en';
-  const childrenOf = (model: Model, id: string, type: string): ModelElement[] => model.elements.filter((element) => element.parent === id && element.type === type);
+  // The children of each element, gathered once for a model: a table of many rows asks for them for every row and cell.
+  const indexes = new WeakMap<readonly ModelElement[], { readonly children: Map<string, ModelElement[]>; readonly title: ModelElement | undefined }>();
+  const indexOf = (model: Model): { readonly children: Map<string, ModelElement[]>; readonly title: ModelElement | undefined } => {
+    const known = indexes.get(model.elements);
+    if (known) return known;
+    const children = new Map<string, ModelElement[]>();
+    for (const element of model.elements) {
+      if (element.parent === undefined) continue;
+      const siblings = children.get(element.parent);
+      if (siblings) siblings.push(element);
+      else children.set(element.parent, [element]);
+    }
+    const title = columns.title === undefined ? undefined : model.elements.find((element) => element.type === columns.type && element.attributes[columns.title!] === true);
+    const index = { children, title };
+    indexes.set(model.elements, index);
+    return index;
+  };
+  const childrenOf = (model: Model, id: string, type: string): ModelElement[] => (indexOf(model).children.get(id) ?? []).filter((element) => element.type === type);
   const valueTypeOf = (column: ModelElement): ValueType | undefined => {
     const name = column.attributes[columns.valueType];
     return typeof name === 'string' && Object.hasOwn(surface.valueTypes, name) ? surface.valueTypes[name] : undefined;
@@ -474,7 +491,7 @@ export function tableReader(parts: TableParts) {
 
   /** The text of a row's cell of the column that titles a row, when the surface names how one is marked. */
   const titleOf = (model: Model, row: string): string => {
-    const column = columns.title === undefined ? undefined : model.elements.find((element) => element.type === columns.type && element.attributes[columns.title!] === true);
+    const column = indexOf(model).title;
     const valueType = column && valueTypeOf(column);
     const cell = column && childrenOf(model, row, cells.type).find((candidate) => candidate.attributes[cells.column] === column.id);
     return cell && valueType ? textOf(cell.attributes[valueType.key]) : '';
@@ -583,12 +600,13 @@ export function tableReader(parts: TableParts) {
     };
     if (active !== undefined) within(active, 0);
 
+    const rowById = new Map(all.rows.map((row) => [row.id, row]));
     // The document is named by its first required attribute that is a string, as an element type is (DESL 4.5).
     const named = Object.keys(metamodel.diagram).find((name) => metamodel.diagram[name].type === 'string' && metamodel.diagram[name].required === true);
     return {
       name: named === undefined ? '' : textOf(model.diagram[named]),
       properties: [...listed, ...all.properties.filter((property) => !listed.some((column) => column.id === property.id))],
-      rows: shown.rows === undefined ? all.rows : shown.rows.flatMap((id) => all.rows.filter((row) => row.id === id)),
+      rows: shown.rows === undefined ? all.rows : shown.rows.flatMap((id) => rowById.get(id) ?? []),
       total: all.rows.length,
       ...(shown.groups === undefined ? {} : { groups: shown.groups }),
       ...(shown.tree === undefined ? {} : { tree: shown.tree }),

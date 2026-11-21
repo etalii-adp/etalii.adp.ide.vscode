@@ -297,3 +297,17 @@ describe('the findings of a Knowledge table, on what they are about', () => {
     expect(type.view(source, {}).rows.some((row) => Object.values(row.cells).some((cell) => cell.findings))).toBe(false);
   });
 });
+
+describe('a Knowledge table of 10,000 rows', () => {
+  it('is made into its view in a few seconds at most, not in a time that grows with the square of its rows', () => {
+    const text = example('cities.yaml').text.replace(/\r\n/g, '\n');
+    const rows = Array.from({ length: 10_000 }, (_, at) => `  - id: g${at}\n    cells:\n      - property: p1\n        text: City ${at}\n      - property: p2\n        option: ${at % 2 ? 'o1' : 'o2'}\n      - property: p3\n        number: ${(at * 7919) % 1_000_000}\n`);
+    const source: Source = { fileName: 'big.yaml', text: text.slice(0, text.indexOf('\nrows:\n') + 7).replace('activeView: v1', 'activeView: v2') + rows.join('') };
+    // Read once first, so the time below is the view's alone (it was 13 seconds before each row's cells were found by an index).
+    type.findings(source);
+    const started = performance.now();
+    const shown = type.view(source, {});
+    expect(shown.rows).toHaveLength(10_000);
+    expect(performance.now() - started).toBeLessThan(3_000);
+  }, 120_000);
+});

@@ -167,7 +167,8 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
 
   const placed = (after?: string): Readonly<Record<string, string>> => (after === undefined ? {} : { after });
   const viewIds = views.map((tab) => tab.id);
-  const columnOf = (id: string): ModelElement | undefined => (view === undefined ? undefined : model.elements.find((element) => element.parent === view.id && element.type === 'Column' && element.attributes.property === id));
+  const listed = new Map(view === undefined ? [] : model.elements.filter((element) => element.parent === view.id && element.type === 'Column').map((element) => [text(element.attributes.property), element]));
+  const columnOf = (id: string): ModelElement | undefined => listed.get(id);
   const columnSetting = (id: string, width?: number | string): TableRequest => {
     const shown = columns.find((column) => column.id === id);
     const given = width ?? shown?.width;
