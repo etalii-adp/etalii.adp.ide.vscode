@@ -48,7 +48,7 @@ import { composedSplices, modelChangesOf, viewStepsOf, type Refused } from './mo
 import { missingPlugins, pluginReferences, type PluginRegistry } from './pluginRegistry';
 import { layoutOf, newRegistration, withLayout, type Corner } from './registrationLayout';
 import { hierarchyReader, type HierarchyRequest, type HierarchyView, type NodeFinding } from './hierarchyView';
-import { CREATED, tableReader, type TableEntry, type TableGestures, type TableMenu, type TableProperty, type TableRequest, type TableValue, type TableView } from './tableView';
+import { CREATED, tableReader, type TableGestures, type TableProperty, type TableRequest, type TableValue, type TableView } from './tableView';
 import { wireIdsOf } from './wireIds';
 
 // The host's own sentences, for what a definition has no words for.
@@ -856,26 +856,32 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     return shown.gestures && operations ? { ...shown, gestures: checkedGestures(shown.gestures, open.model) } : shown;
   };
 
-  /** The surface's gestures, each entry that runs an operation that cannot run now marked with the reason. */
+  /**
+   * The surface's gestures, each entry that runs an operation that cannot run now marked with the
+   * reason, wherever it is: in a menu, an editor of the settings control or a panel.
+   */
   function checkedGestures(gestures: TableGestures, model: Model): TableGestures {
     const run = operations!.value;
-    const entry = (given: TableEntry): TableEntry => {
-      const request = given.request;
-      const on = request?.kind === 'operation' ? request.on ?? [] : [];
-      const state = request?.kind === 'operation' && !on.some((id) => id.startsWith('$')) ? run.availability(model, request.operation, on) : undefined;
-      const disabled = given.disabled ?? (state === undefined ? undefined : !state.offered ? NOT_HERE : state.available ? undefined : state.reason ?? `${state.label} cannot be done now.`);
-      return { ...given, ...(disabled === undefined ? {} : { disabled }), ...(given.entries ? { entries: given.entries.map(entry) } : {}) };
+    const requests = new Set(['request', 'remove', 'add', 'rename', 'moves', 'newView', 'newRow', 'newRowIn']);
+    const reasonOf = (request: unknown): string | undefined => {
+      const asked = request as TableRequest | undefined;
+      if (asked?.kind !== 'operation' || (asked.on ?? []).some((id) => id.startsWith('$'))) return undefined;
+      const state = run.availability(model, asked.operation, asked.on ?? []);
+      return !state.offered ? NOT_HERE : state.available ? undefined : state.reason ?? `${state.label} cannot be done now.`;
     };
-    const menu = (given: TableMenu): TableMenu => given.map((group) => group.map(entry));
-    const menus = (given: Readonly<Record<string, TableMenu>> | undefined): Readonly<Record<string, TableMenu>> | undefined =>
-      given === undefined ? undefined : Object.fromEntries(Object.entries(given).map(([id, items]) => [id, menu(items)]));
-    return {
-      ...gestures,
-      ...(gestures.viewMenus ? { viewMenus: menus(gestures.viewMenus) } : {}),
-      ...(gestures.columnMenus ? { columnMenus: menus(gestures.columnMenus) } : {}),
-      ...(gestures.rowMenu ? { rowMenu: menu(gestures.rowMenu) } : {}),
-      ...(gestures.newProperty ? { newProperty: gestures.newProperty.map(entry) } : {}),
+    const walk = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(walk);
+      if (typeof value !== 'object' || value === null) return value;
+      const given = value as Record<string, unknown>;
+      const walked = Object.fromEntries(Object.entries(given).map(([key, part]) => [key, requests.has(key) ? part : walk(part)]));
+      // An entry: what it is called and the request it makes.
+      if (typeof given.id === 'string' && typeof given.label === 'string' && 'request' in given && given.disabled === undefined) {
+        const disabled = reasonOf(given.request);
+        if (disabled !== undefined) walked.disabled = disabled;
+      }
+      return walked;
     };
+    return walk(gestures) as TableGestures;
   }
 
   const isRow = (model: Model, id: string): boolean => model.elements.some((element) => element.id === id && element.type === tableSurface?.rows.type);

@@ -69,3 +69,76 @@ describe('the gestures of a Knowledge table', () => {
     expect(broken.gestures).toBeUndefined();
   });
 });
+
+describe('the settings control, the options panel and the calculation line of a Knowledge table', () => {
+  const source = example('cities.yaml');
+  const typed = (request: TableRequest, value: string | number): TableRequest => JSON.parse(JSON.stringify(request), (key, given: unknown) => (given === '$typed' ? value : given)) as TableRequest;
+  const viewOf = (text: string) => type.view({ ...source, text }, {});
+  const settings = type.view(source, {}).gestures!.settings!;
+
+  it('lists every property with a tick, the title\'s kept set', () => {
+    expect(settings.visibility.map((entry) => [entry.id, entry.checked])).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9'].map((id) => [id, true]));
+    expect(settings.visibility[0].disabled).toBe('The column that names a row is always there.');
+    const hidden = viewOf(textOf(source, settings.visibility[3].request!));
+    expect(hidden.properties.find((property) => property.id === 'p4')?.visible).toBe(false);
+  });
+
+  it('edits a condition\'s value, comparison and property in one step each', () => {
+    const [condition] = settings.filter.conditions;
+    expect([condition.value.control, condition.value.value, condition.operators.find((entry) => entry.checked)?.id]).toEqual(['choice', 'o1', 'is']);
+    const belgium = textOf(source, typed(condition.value.request!, 'o2'));
+    expect(viewOf(belgium).gestures?.items?.map((item) => item.text)).toContain('Country is Belgium');
+    const not = textOf(source, condition.operators.find((entry) => entry.id === 'is-not')!.request!);
+    expect(viewOf(not).gestures?.items?.map((item) => item.text)).toContain('Country is not Netherlands');
+    const byName = textOf(source, condition.properties.find((entry) => entry.id === 'p1')!.request!);
+    expect(viewOf(byName).gestures?.settings?.filter.conditions[0].operators.find((entry) => entry.checked)?.id).toBe('contains');
+  });
+
+  it('nests filter groups as deep as the definition allows, and says so past it', () => {
+    let text = textOf(source, settings.filter.addGroup!.request!);
+    text = textOf({ ...source, text }, viewOf(text).gestures!.settings!.filter.groups[0].addGroup!.request!);
+    const inner = viewOf(text).gestures!.settings!.filter.groups[0].groups[0];
+    expect(inner.addGroup?.disabled).toBe('Filter groups nest to three levels.');
+  });
+
+  it('turns a sort round and removes it', () => {
+    const [sort] = settings.sortLines;
+    expect([sort.label, sort.direction.find((entry) => entry.checked)?.id]).toEqual(['Population', 'descending']);
+    const up = textOf(source, sort.direction[0].request!);
+    expect(viewOf(up).gestures?.items?.find((item) => item.kind === 'sort')?.descending).toBe(false);
+    expect(settings.addSort.map((entry) => entry.id)).not.toContain('p3');
+  });
+
+  it('hides a group, shows every group again, and orders them by name', () => {
+    const { groups, showAll, order } = settings.group;
+    expect(showAll?.disabled).toBe('No group is hidden.');
+    const belgium = groups!.find((entry) => entry.label === 'Belgium')!;
+    const hidden = textOf(source, belgium.request!);
+    const after = viewOf(hidden).gestures!.settings!.group;
+    expect(after.groups!.find((entry) => entry.label === 'Belgium')?.checked).toBe(false);
+    expect(viewOf(hidden).groups?.map((group) => group.label)).not.toContain('Belgium');
+    expect(viewOf(textOf({ ...source, text: hidden }, after.showAll!.request!)).groups?.map((group) => group.label)).toContain('Belgium');
+    const descending = viewOf(textOf(source, order![1].request!)).groups!.map((group) => group.label).filter((label) => label !== '');
+    expect(descending).toEqual([...descending].sort().reverse());
+  });
+
+  it('renames, recolours and deletes an option in its panel, and adds one', () => {
+    const panel = type.view(source, {}).gestures!.options!.p2;
+    expect(panel.options.map((option) => option.name)).toEqual(['Netherlands', 'Belgium', 'Germany', 'France', 'Finland', 'Italy']);
+    const renamed = textOf(source, typed(panel.options[1].rename, 'België'));
+    expect(viewOf(renamed).properties.find((property) => property.id === 'p2')?.options[1].name).toBe('België');
+    const added = textOf(source, typed(panel.add, 'Spain'));
+    expect(viewOf(added).properties.find((property) => property.id === 'p2')?.options.map((option) => option.name)).toContain('Spain');
+    expect(panel.options[0].colours.find((entry) => entry.checked)).toBeDefined();
+  });
+
+  it('offers the calculations a column\'s type has, and shows the one chosen', () => {
+    const calculations = type.view(source, {}).gestures!.calculations!;
+    const ids = (id: string): string[] => calculations[id].flat().map((entry) => entry.id);
+    expect(ids('p3')).toContain('sum');
+    expect(ids('p1')).not.toContain('sum');
+    expect(ids('p7')).toContain('earliest');
+    const summed = viewOf(textOf(source, calculations.p3.flat().find((entry) => entry.id === 'sum')!.request!));
+    expect(summed.properties.find((property) => property.id === 'p3')?.summary?.label).toBe('Sum');
+  });
+});

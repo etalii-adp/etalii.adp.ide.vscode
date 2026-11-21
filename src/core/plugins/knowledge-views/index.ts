@@ -166,6 +166,8 @@ function shown(table: TableData): ShownView {
 
   const by = propertyOf(view.attributes.groupBy);
   let groups: TableGroup[] | undefined;
+  // Every group of the grouping, hidden ones too, in the order shown: the group editor lists them.
+  let every: { readonly key: string; readonly label: string; readonly colour?: ThemedColour }[] = [];
   if (by && ['choice', 'choices', 'checkbox', 'rows'].includes(by.editor ?? '')) {
     const keysOf = (row: TableRow): string[] => {
       const cell = row.cells[by.id];
@@ -183,6 +185,7 @@ function shown(table: TableData): ShownView {
     const keyed = (slot: string): string[] => settings('GroupSetting', slot).map((setting) => text(setting.attributes.key));
     const [first, hidden, collapsed] = [keyed('groupOrder'), keyed('hiddenGroups'), keyed('collapsed')];
     const ordered = [...first.filter((key) => labels.has(key)), ...[...labels.keys()].filter((key) => !first.includes(key))];
+    every = ordered.map((key) => ({ key, ...labels.get(key)! }));
     groups = ordered.filter((key) => !hidden.includes(key)).map((key): TableGroup => ({
       key, ...labels.get(key)!, collapsed: collapsed.includes(key), rows: rows.filter((row) => keysOf(row).includes(key)).map((row) => row.id),
     })).filter((group) => view.attributes.hideEmptyGroups !== true || group.rows.length > 0);
@@ -211,8 +214,10 @@ function shown(table: TableData): ShownView {
     };
   });
 
-  return { columns, rows: rows.map((row) => row.id), ...(groups ? { groups } : {}), gestures: gesturesOf(table, groups, columns) };
+  return { columns, rows: rows.map((row) => row.id), ...(groups ? { groups } : {}), gestures: gesturesOf(table, groups, columns, every, colour) };
 }
 
+const colour = (key: string): ThemedColour | undefined => (Object.hasOwn(colours, key) ? colours[key] : undefined);
+
 /** The view logic of the tool type `etalii/knowledge`. */
-export const knowledgeViews: ViewLogic = { id: 'etalii/knowledge', shown, colour: (key) => (Object.hasOwn(colours, key) ? colours[key] : undefined) };
+export const knowledgeViews: ViewLogic = { id: 'etalii/knowledge', shown, colour };

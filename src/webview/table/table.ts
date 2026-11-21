@@ -1,11 +1,12 @@
 import type { FromCanvas, ToCanvas } from '../../core/frame/protocol';
 import type { Action } from '../../core/frame/toolType';
-import type { TableBarItem, TableCell, TableEntry, TableGestures, TableGroup, TableOperation, TableProperty, TableRequest, TableRow, TableValue, TableView } from '../../core/tool/tableView';
+import type { TableBarItem, TableCell, TableEntry, TableGestures, TableGroup, TableOperation, TablePanel, TableProperty, TableRequest, TableRow, TableValue, TableView } from '../../core/tool/tableView';
 import { html } from '../diagram/dom';
 import { icon } from '../diagram/icons';
 import { Menu } from '../diagram/menu';
 import { controlOf, given, tag } from './editors';
 import { EntryMenu } from './entries';
+import { Panels } from './panels';
 
 // The table surface of a designer: it draws the table view it is sent and asks for every change
 // with a request. It never changes the model itself, so what it shows after a gesture is the view
@@ -17,6 +18,8 @@ const numberWidth = 44;
 const leadWidth = 52;
 /** How a gesture names the rows selected. */
 const SELECTION = '$selection';
+/** Where a request leaves a value to be typed or picked. */
+const TYPED = '$typed';
 const defaultWidth = 160;
 
 /** Where a cell is: the key of its line (empty for the header) and its column (empty for the row numbers). */
@@ -51,10 +54,17 @@ export class Table {
   private readonly options = html('div', { class: 'adp-table-options' });
   private readonly grid = html('table', { class: 'adp-table-grid', role: 'grid' });
   private readonly status = html('p', { class: 'adp-table-status', role: 'status' });
+  private readonly tune = html('button', { class: 'adp-table-tune', type: 'button', 'aria-label': 'Settings', title: 'Settings', 'aria-haspopup': 'menu' }, icon('mdi-tune-variant'));
+  /** The editor of the settings control, or the options panel, that is open. */
+  private panel: TablePanel | undefined;
+  private readonly panels = new Panels((request, typed) => this.make(request, undefined, typed), () => {
+    this.panel = undefined;
+    this.render();
+  });
   private readonly root = html('div', { class: 'adp-table' },
     this.tabs,
-    html('div', { class: 'adp-table-toolbar', role: 'toolbar', 'aria-label': 'Table' }, this.buttons, this.search, this.chips),
-    this.options, this.notice, html('div', { class: 'adp-table-scroll' }, this.grid), this.status);
+    html('div', { class: 'adp-table-toolbar', role: 'toolbar', 'aria-label': 'Table' }, this.buttons, this.search, this.chips, this.tune),
+    this.panels.element, this.options, this.notice, html('div', { class: 'adp-table-scroll' }, this.grid), this.status);
   private readonly menu: Menu;
   private readonly entries: EntryMenu;
   private readonly find = html('button', { class: 'adp-table-find', type: 'button', 'aria-label': 'Search', 'aria-expanded': 'false' }, icon('mdi-magnify'));
@@ -165,6 +175,9 @@ export class Table {
     this.find.hidden = gestures === undefined;
     if (!gestures) this.searching(true);
     else if (this.search.value === '' && document.activeElement !== this.search) this.searching(false);
+    this.tune.hidden = gestures?.settings === undefined;
+    if (this.panel?.panel === 'options' && !gestures?.options?.[this.panel.property]) this.panel = undefined;
+    this.panels.draw(gestures, this.panel);
     this.chips.replaceChildren(...(gestures ? (gestures.items ?? []).map((item) => this.itemOf(item)) : view.settings.map((setting) => {
       const chip = html('button', { class: 'adp-table-chip', type: 'button', 'data-id': setting.id, 'data-depth': setting.depth }, setting.label);
       chip.style.marginLeft = `${setting.depth * 12}px`;
@@ -227,9 +240,13 @@ export class Table {
         ...(gestures?.newProperty ? [html('th', { class: 'adp-table-add-column', role: 'columnheader', scope: 'col' },
           html('button', { class: 'adp-table-new-property', type: 'button', 'aria-label': 'New property', title: 'New property', 'aria-haspopup': 'dialog' }, icon('mdi-plus')))] : []))),
       html('tbody', {}, ...(view.groups ? view.groups.flatMap(grouped) : view.rows.map((row) => line(row, row.id))), ...(view.groups ? [] : adding(gestures?.newRow))),
-      ...(columns.some((property) => property.summary) ? [html('tfoot', {}, html('tr', { role: 'row' },
+      ...(columns.some((property) => property.summary) || gestures?.calculations ? [html('tfoot', {}, html('tr', { role: 'row' },
         html('td', { class: 'adp-table-number' }),
-        ...columns.map((property) => frozen(html('td', {}, property.summary ? `${property.summary.label} ${property.summary.text}` : ''), property))))] : []),
+        ...columns.map((property) => frozen(html('td', { 'data-calculation': property.id }, gestures?.calculations?.[property.id]
+          ? html('button', { type: 'button', class: property.summary ? 'adp-table-calculate adp-table-calculated' : 'adp-table-calculate', 'aria-haspopup': 'menu', 'data-property': property.id },
+            ...(property.summary ? [html('span', { class: 'adp-table-calculation-label' }, property.summary.label), ` ${property.summary.text}`] : ['Calculate']))
+          : property.summary ? `${property.summary.label} ${property.summary.text}` : ''), property)),
+        ...(gestures?.newProperty ? [html('td', {})] : [])))] : []),
     );
     this.filter();
     this.mark();
@@ -576,7 +593,27 @@ export class Table {
     const remove = target.closest<HTMLElement>('.adp-table-item-remove');
     const header = target.closest<HTMLElement>('[role="columnheader"][data-id]');
     const adding = target.closest<HTMLElement>('.adp-table-new-row');
-    if (target.closest('.adp-table-find')) {
+    const item = target.closest<HTMLElement>('.adp-table-item');
+    const calculate = target.closest<HTMLElement>('.adp-table-calculate');
+    if (target.closest('.adp-table-tune')) {
+      const tune = target.closest<HTMLElement>('.adp-table-tune')!;
+      this.entries.returnTo(tune);
+      this.entries.open([[
+        { id: 'visibility', label: 'Property visibility', icon: 'eye-outline', opens: { panel: 'visibility' } },
+        { id: 'filter', label: 'Filter', icon: 'filter-outline', opens: { panel: 'filter' } },
+        { id: 'sort', label: 'Sort', icon: 'sort', opens: { panel: 'sort' } },
+        { id: 'group', label: 'Group', icon: 'format-list-group', opens: { panel: 'group' } },
+      ]], ...below(tune), 'Settings');
+    } else if (calculate) {
+      const menu = gestures.calculations?.[calculate.dataset.property ?? ''];
+      if (!menu) return false;
+      this.entries.returnTo(calculate);
+      this.entries.open(menu, ...below(calculate), 'Calculate');
+    } else if (item && !target.closest('.adp-table-item-remove')) {
+      const opens = gestures.items?.find((candidate) => candidate.id === item.dataset.id)?.opens;
+      if (!opens) return false;
+      this.openPanel(opens);
+    } else if (target.closest('.adp-table-find')) {
       this.searching(true);
       this.search.focus();
     } else if (target.closest('.adp-table-new-view') && gestures.newView) {
@@ -614,7 +651,15 @@ export class Table {
 
   /** An entry of a menu chosen: its request, made at once or after what it leaves out is asked. */
   private chosen(entry: TableEntry): void {
-    if (entry.request) this.make(entry.request);
+    if (entry.opens) this.openPanel(entry.opens);
+    else if (entry.request) this.make(entry.request);
+  }
+
+  /** Opens an editor of the settings control, or a column's options, in place of the one that was open. */
+  private openPanel(panel: TablePanel): void {
+    this.panel = panel;
+    this.render();
+    this.panels.element.querySelector<HTMLElement>('select, input, button:not(.adp-table-panel-close)')?.focus();
   }
 
   /**
@@ -622,7 +667,9 @@ export class Table {
    * parameters of its operation that it does not give asked first. Of several steps, the first
    * operation's are asked.
    */
-  private make(request: TableRequest, name?: string): void {
+  private make(given: TableRequest, name?: string, typed?: string | number): void {
+    // What was typed or picked goes in the place the request leaves for it.
+    const request = typed === undefined ? given : JSON.parse(JSON.stringify(given), (_key, value: unknown) => (value === TYPED ? typed : value)) as TableRequest;
     const rows = this.selection.filter((id) => this.rows.has(id));
     const put = (given: TableRequest): TableRequest => (given.kind === 'operation' ? { ...given, on: (given.on ?? []).flatMap((id) => (id === SELECTION ? rows : [id])), ...(name === undefined ? {} : { args: { name, ...given.args } }) } : given);
     const resolved: TableRequest = request.kind === 'steps' ? { ...request, steps: request.steps.map((step, index) => (index === 0 ? put(step) : step)) } : put(request);
