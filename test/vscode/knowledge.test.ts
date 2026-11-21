@@ -1,7 +1,7 @@
 import * as assert from 'node:assert';
 import * as fs from 'node:fs';
 import * as vscode from 'vscode';
-import { closeAll, drawn, example, until } from './support';
+import { closeAll, drawn, example, state, until } from './support';
 
 // The Knowledge designer in a real Visual Studio Code (etalii.adp spec 027, User Story 3). The
 // designer has no code of its own in the extension: it is the tool type read from
@@ -172,6 +172,37 @@ suite('The Knowledge designer in Visual Studio Code', () => {
     assert.strictEqual(document.getText(), original.replace('    name: Map\r\n', '    name: Map\r\n    sorts:\r\n      - property: p3\r\n        direction: descending\r\n'), 'one sort, and nothing else');
     await vscode.commands.executeCommand('undo');
     await until('the one undo', () => document.getText() === original);
+  });
+
+  // A relation to another file (etalii.adp spec 080, FR-001, FR-002, FR-004): the cities relate to provinces.yaml beside them.
+  type Related = { rows: { id: string; cells: Record<string, { text: string } | undefined> }[] };
+  const provinceOf = async (row: string): Promise<string | undefined> => ((await drawn()).table as unknown as Related).rows.find((candidate) => candidate.id === row)?.cells.p5?.text;
+
+  test('a related row is shown by its title, and pressing it opens provinces.yaml in the designer with that row selected', async () => {
+    const provinces = example('knowledge-test', 'provinces.yaml');
+    fs.writeFileSync(provinces.fsPath, exampleText('provinces.yaml'));
+    await open();
+    await until('the province by its title', async () => (await provinceOf('r1')) === 'Noord-Holland');
+    // The request the link makes (held by test/webview/table/related.test.ts).
+    assert.deepStrictEqual(await edit({ kind: 'follow', file: 'provinces.yaml', row: 'nh' }), { result: 'applied' });
+    await until('provinces.yaml in the designer', () => inDesigner(provinces));
+    await until('the row selected', async () => {
+      const shown = await state();
+      return shown?.table?.name === 'Provinces' && shown.selection.join() === 'nh' ? shown : undefined;
+    });
+  });
+
+  test('a change of provinces.yaml in another editor is followed by the titles, unsaved', async () => {
+    const provinces = example('knowledge-test', 'provinces.yaml');
+    fs.writeFileSync(provinces.fsPath, exampleText('provinces.yaml'));
+    const other = await vscode.workspace.openTextDocument(provinces);
+    await open();
+    await until('the province by its title', async () => (await provinceOf('r1')) === 'Noord-Holland');
+    const change = new vscode.WorkspaceEdit();
+    const at = other.getText().indexOf('Noord-Holland');
+    change.replace(provinces, new vscode.Range(other.positionAt(at), other.positionAt(at + 'Noord-Holland'.length)), 'North Holland');
+    assert.ok(await vscode.workspace.applyEdit(change));
+    await until('the new title', async () => (await provinceOf('r1')) === 'North Holland');
   });
 
   test('a refusal shows the definition\'s sentence and writes nothing', async () => {

@@ -186,14 +186,25 @@ export class Table {
       // A refusal is followed by no view: what a gesture changed on screen goes back to what the view says.
       if (message.result === 'refused') this.render();
     } else if (message.type === 'reveal') {
-      const line = [...this.grid.querySelectorAll<HTMLElement>('tr[data-id]')].find((row) => row.dataset.id === message.id);
-      const cell = line?.querySelector<HTMLElement>('[role="rowheader"]') ?? this.cell({ key: '', column: message.id });
-      if (!cell || message.id === '') return;
-      this.place = placeOf(cell);
-      this.rove();
-      this.select([message.id]);
-      cell.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+      this.reveal(message.id);
     }
+  }
+
+  /** A row selected and brought into sight, or a column's header focused. */
+  private reveal(id: string): void {
+    const line = [...this.grid.querySelectorAll<HTMLElement>('tr[data-id]')].find((row) => row.dataset.id === id);
+    const cell = line?.querySelector<HTMLElement>('[role="rowheader"]') ?? this.cell({ key: '', column: id });
+    if (!cell || id === '') return;
+    this.place = placeOf(cell);
+    this.rove();
+    this.select([id]);
+    cell.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }
+
+  /** A related row opened: one of this table selected in place, one of another file opened there. */
+  private follow(file: string, row: string): void {
+    if (file === '.') this.reveal(row);
+    else this.request({ kind: 'follow', file, row });
   }
 
   // Drawing.
@@ -343,7 +354,9 @@ export class Table {
       box.disabled = !editable;
       element.append(box);
     } else if (several(property)) {
-      element.append(...(cell?.items ?? []).map((item) => tag(item.label, item.colour ?? cell?.colour, { 'data-id': item.id },
+      // A related row is a link to it where it lives (etalii.adp spec 080, FR-001, FR-002).
+      element.append(...(cell?.items ?? []).map((item) => tag(item.link ? '' : item.label, item.colour ?? cell?.colour, { 'data-id': item.id },
+        item.link ? html('button', { class: 'adp-table-link', type: 'button', tabindex: -1, title: `Open ${item.label}`, 'data-file': item.link.file, 'data-row': item.link.row }, item.label) : undefined,
         property.editor === 'rows' && editable
           ? html('button', { class: 'adp-table-remove', type: 'button', tabindex: -1, 'aria-label': `Remove ${item.label}`, 'data-value': item.value }, '×')
           : undefined)));
@@ -504,6 +517,11 @@ export class Table {
 
   private click(event: MouseEvent): void {
     const target = event.target as HTMLElement;
+    const link = target.closest<HTMLElement>('.adp-table-link');
+    if (link) {
+      this.follow(link.dataset.file ?? '', link.dataset.row ?? '');
+      return;
+    }
     if (this.gestures && this.gesture(target)) return;
     const remove = target.closest<HTMLElement>('.adp-table-remove');
     const tab = target.closest<HTMLElement>('[role="tab"]');
@@ -563,6 +581,11 @@ export class Table {
     } else if ((event.key === 'Enter' || event.key === ' ') && this.gestures && cell.matches('[role="columnheader"][data-id]')) {
       event.preventDefault();
       this.columnMenu(cell);
+    } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && cell.querySelector('.adp-table-link')) {
+      // The keyboard's press on a related row: the first the cell names.
+      event.preventDefault();
+      const link = cell.querySelector<HTMLElement>('.adp-table-link')!;
+      this.follow(link.dataset.file ?? '', link.dataset.row ?? '');
     } else if (event.key === 'Enter' && event.shiftKey && this.gestures?.newRowAfter && line.dataset.id !== undefined) {
       // As in the standalone host: a row under the one the key was pressed on.
       event.preventDefault();
@@ -1061,7 +1084,7 @@ export class Table {
     if (!cell || !at || !this.editable(at.property)) return;
     if (at.property.editor === 'checkbox') {
       if (typed === undefined || typed === ' ') this.request({ kind: 'cell', row: at.row.id, property: at.property.id, value: at.cell?.value !== true });
-    } else if (at.property.editor === 'choice' || at.property.editor === 'choices') {
+    } else if (at.property.editor === 'choice' || at.property.editor === 'choices' || (at.property.editor === 'rows' && at.property.related)) {
       this.pick(cell, at);
     } else {
       this.type(cell, at, typed);
@@ -1120,9 +1143,15 @@ export class Table {
       held: () => this.rows.get(row.id)?.cells[property.id],
       searchable: gestures !== undefined,
       creates: gestures?.createOption?.[property.id] !== undefined,
-      choose: (value, present) => this.request(present === undefined
-        ? { kind: 'cell', row: row.id, property: property.id, value: value === '' ? null : value }
-        : { kind: 'item', row: row.id, property: property.id, value, present }),
+      choose: (value, present) => this.request(present !== undefined
+        ? { kind: 'item', row: row.id, property: property.id, value, present }
+        : property.editor === 'rows'
+          // A relation that holds one row: the row chosen replaces the one there, as one step.
+          ? { kind: 'steps', steps: [
+            ...(this.rows.get(row.id)?.cells[property.id]?.items ?? []).map((item): TableRequest => ({ kind: 'item', row: row.id, property: property.id, value: item.value, present: false })),
+            ...(value === '' ? [] : [{ kind: 'item', row: row.id, property: property.id, value, present: true } as const]),
+          ] }
+          : { kind: 'cell', row: row.id, property: property.id, value: value === '' ? null : value }),
       create: (name) => this.make(gestures!.createOption![property.id], undefined, name, row.id),
       closed: (refocus) => {
         this.list = undefined;

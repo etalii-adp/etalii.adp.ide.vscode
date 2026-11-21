@@ -52,6 +52,10 @@ export interface TableProperty {
   readonly summary?: { readonly label: string; readonly text: string };
   /** Why its cells are shown and not edited; absent for a column that is edited. */
   readonly readOnly?: string;
+  /** For a column whose values name rows: the rows a cell may name, by title, when their file can be read. */
+  readonly related?: readonly TableOption[];
+  /** Whether a cell names one row at most, so that choosing another replaces it. */
+  readonly single?: boolean;
 }
 
 /** One of several values of a cell. */
@@ -61,6 +65,8 @@ export interface TableItem {
   readonly value: string;
   readonly label: string;
   readonly colour?: ThemedColour;
+  /** For a row it names: where that row lives, its file as the column names it (`.` for this one) and its id. */
+  readonly link?: { readonly file: string; readonly row: string };
 }
 
 /** A row's value for one column. */
@@ -376,7 +382,9 @@ export type TableRequest =
    * Several requests made one after another as one edit and one undo step: a gesture that is more than one
    * operation. A value written `$created:N` stands for the Nth element the steps before it created, from 0.
    */
-  | { readonly kind: 'steps'; readonly steps: readonly TableRequest[] };
+  | { readonly kind: 'steps'; readonly steps: readonly TableRequest[] }
+  /** A related row opened where it lives: its file as the column names it, and its id. Nothing is written. */
+  | { readonly kind: 'follow'; readonly file: string; readonly row: string };
 
 /** How a step names what a step before it created. */
 export const CREATED = '$created:';
@@ -395,7 +403,34 @@ export interface ViewLogic {
   shown(table: TableData): ShownView;
   /** The colour of an option, by the value its colour attribute holds. */
   colour?(key: string): ThemedColour | undefined;
+  /** The files other than its own that a document's columns name rows of, as it writes them. */
+  targets?(model: Model): readonly string[];
+  /** The columns whose values name rows, by the property's id: of which file, and that file's rows. */
+  relations?(table: TableData): Readonly<Record<string, TableRelation>>;
+  /** What the tool type finds of those values and files that no constraint can state, because it reads another file. */
+  findings?(table: TableData, relations: Readonly<Record<string, TableRelation>>): readonly TableFound[];
 }
+
+/** A column whose values name rows of a file. */
+export interface TableRelation {
+  /** The file as the column names it; `.` is the document itself. */
+  readonly file: string;
+  /** Whether a cell names one row at most. */
+  readonly single: boolean;
+  /** Its rows, by title, in its order; absent when the file cannot be read as a document of this tool type. */
+  readonly rows?: readonly TableOption[];
+}
+
+/** A finding of the tool type's own, on the element it is about. */
+export interface TableFound {
+  readonly code: string;
+  readonly severity: Severity;
+  readonly message: string;
+  readonly element: string;
+}
+
+/** The rows of a file a document names, by title; undefined when it cannot be read as a document of the same tool type. */
+export type RelatedRows = (file: string) => readonly TableOption[] | undefined;
 
 /** The table of a document before a view is applied to it. */
 export interface TableData {
@@ -405,6 +440,8 @@ export interface TableData {
   readonly view?: string;
   readonly properties: readonly TableProperty[];
   readonly rows: readonly TableRow[];
+  /** The rows of another file the document names; absent where the host gives none. */
+  readonly related?: RelatedRows;
 }
 
 export interface ShownView {
@@ -578,12 +615,12 @@ export function tableReader(parts: TableParts) {
   }
 
   /** The table view of a model: the view the document is left in, else the first (DESL 7.4), applied to its columns and rows. */
-  function view(model: Model, state: Pick<TableView, 'readOnly' | 'notice'>): TableView {
+  function view(model: Model, state: Pick<TableView, 'readOnly' | 'notice'>, related?: RelatedRows): TableView {
     const tabs = model.elements.filter((element) => element.type === views.type);
     const left = views.active === undefined ? undefined : model.diagram[views.active];
     const active = (tabs.find((tab) => tab.id === left) ?? tabs[0])?.id;
-    const all = { properties: propertiesOf(model), rows: rowsOf(model) };
-    const shown: ShownView = logic?.shown({ model, metamodel, ...(active === undefined ? {} : { view: active }), ...all }) ?? {};
+    const all = tableOf(model, related);
+    const shown: ShownView = logic?.shown({ model, metamodel, ...(active === undefined ? {} : { view: active }), properties: all.properties, rows: all.rows, ...(related ? { related } : {}) }) ?? {};
     const listed = (shown.columns ?? []).flatMap((column) => {
       const property = all.properties.find((candidate) => candidate.id === column.id);
       return property ? [{ ...property, ...column }] : [];
@@ -618,7 +655,53 @@ export function tableReader(parts: TableParts) {
     };
   }
 
-  return { view, propertiesOf, rowsOf };
+  /** The rows of a model by their titles, in its order: what another document that names them shows. */
+  const titlesOf = (model: Model): TableOption[] => model.elements.filter((element) => element.type === rows.type).map((row) => ({ id: row.id, name: titleOf(model, row.id) }));
+
+  /**
+   * The columns and rows of a model with each value that names a row shown by that row's title, as a
+   * link to it, and what the tool type finds of them: a related row is named by its title, not its id.
+   */
+  // The last table made: the view and the findings of one document ask for it in turn.
+  let last: { readonly model: Model; readonly related?: RelatedRows; readonly table: ReturnType<typeof tableOf> } | undefined;
+  function tableOf(model: Model, related?: RelatedRows): { readonly properties: readonly TableProperty[]; readonly rows: readonly TableRow[]; readonly found: readonly TableFound[] } {
+    if (last && last.model === model && last.related === related) return last.table;
+    const table = linkedTable(model, related);
+    last = { model, ...(related ? { related } : {}), table };
+    return table;
+  }
+
+  function linkedTable(model: Model, related?: RelatedRows): { readonly properties: readonly TableProperty[]; readonly rows: readonly TableRow[]; readonly found: readonly TableFound[] } {
+    const data: TableData = { model, metamodel, properties: propertiesOf(model), rows: rowsOf(model), ...(related ? { related } : {}) };
+    const relations = logic?.relations?.(data) ?? {};
+    if (Object.keys(relations).length === 0) return { properties: data.properties, rows: data.rows, found: [] };
+    const titles = new Map(Object.entries(relations).map(([id, relation]) => [id, relation.rows && new Map(relation.rows.map((row) => [row.id, row.name]))]));
+    const properties = data.properties.map((property) => {
+      const relation = relations[property.id];
+      return relation ? { ...property, single: relation.single, ...(relation.rows ? { related: relation.rows } : {}) } : property;
+    });
+    const linked = data.rows.map((row): TableRow => {
+      let cells: Record<string, TableCell> | undefined;
+      for (const [id, relation] of Object.entries(relations)) {
+        const cell = row.cells[id];
+        const named = titles.get(id);
+        if (!cell || !named) continue;
+        const items = cell.items.map((item): TableItem => {
+          const title = named.get(item.value);
+          return title === undefined ? { ...item, label: item.value } : { ...item, label: title || item.value, link: { file: relation.file, row: item.value } };
+        });
+        cells ??= { ...row.cells };
+        cells[id] = { ...cell, items, text: items.map((item) => item.label).join(', ') };
+      }
+      return cells ? { ...row, cells } : row;
+    });
+    return { properties, rows: linked, found: logic?.findings?.(data, relations) ?? [] };
+  }
+
+  /** What the tool type finds of the values that name rows of another file. */
+  const foundOf = (model: Model, related?: RelatedRows): readonly TableFound[] => (logic?.relations ? tableOf(model, related).found : []);
+
+  return { view, propertiesOf, rowsOf, titlesOf, foundOf };
 }
 
 /**

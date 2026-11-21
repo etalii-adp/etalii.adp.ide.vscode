@@ -4,7 +4,8 @@ import { tag } from './editors';
 
 // The list of a column's options over a cell (etalii.adp spec 079, FR-024): one of them or none for
 // a choice, any number for choices. With gestures, a search field over the list has the focus, and
-// a name that is no option makes one and chooses it.
+// a name that is no option makes one and chooses it. A relation's cell lists the rows of its file by
+// title the same way (spec 080, FR-003): one or none where it holds one row, any number otherwise.
 
 export interface CellListHost {
   /** What the cell holds now: the list follows it while it is open. */
@@ -23,17 +24,20 @@ const clamp = (value: number, last: number): number => Math.max(0, Math.min(valu
 
 /** Opens the list under the cell; `sync` marks what the cell holds again, `close` closes it without moving the focus. */
 export function openCellList(root: HTMLElement, cell: HTMLElement, property: TableProperty, host: CellListHost): { sync(): void; close(): void } {
-  const many = property.editor === 'choices';
+  const rows = property.editor === 'rows';
+  const many = property.editor === 'choices' || (rows && property.single !== true);
   const state = many ? 'aria-checked' : 'aria-selected';
   const option = (value: string, content: Node | string): HTMLLIElement => html('li', { role: 'option', tabindex: -1, 'data-value': value }, content);
-  const items = [...(many ? [] : [option('', 'None')]), ...property.options.map((candidate) => option(candidate.id, tag(candidate.name, candidate.colour)))];
+  const choices = rows ? property.related ?? [] : property.options;
+  const items = [...(many ? [] : [option('', 'None')]), ...choices.map((candidate) => option(candidate.id, tag(candidate.name || candidate.id, candidate.colour)))];
   const element = html('ul', { class: 'adp-table-list', role: 'listbox', 'aria-label': property.name, 'aria-multiselectable': many ? 'true' : undefined }, ...items);
   const search = host.searchable ? html('input', { class: 'adp-table-list-search', type: 'text', 'aria-label': `Search or create an option of ${property.name}`, placeholder: host.creates ? 'Search, or create an option' : 'Search' }) : undefined;
   const frame = search ? html('div', { class: 'adp-table-picker' }, search, element) : element;
   const shown = (): HTMLLIElement[] => items.filter((item) => !item.hidden);
   const has = (value: string): boolean => {
     const held = host.held();
-    return many ? held?.items.some((item) => item.value === value) === true : (held?.value ?? '') === value;
+    if (many) return held?.items.some((item) => item.value === value) === true;
+    return (rows ? held?.items[0]?.value ?? '' : held?.value ?? '') === value;
   };
   const sync = (): void => items.forEach((item) => item.setAttribute(state, String(has(item.dataset.value ?? ''))));
   const outside = (event: Event): void => {

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { Finding, Severity } from '../core/frame/toolType';
+import type { Finding, Severity, Source } from '../core/frame/toolType';
 import type { AnyToolType } from './toolTypes';
 
 const severities: Record<Severity, vscode.DiagnosticSeverity> = {
@@ -16,8 +16,10 @@ const severities: Record<Severity, vscode.DiagnosticSeverity> = {
 export class Findings implements vscode.Disposable {
   private readonly collection = vscode.languages.createDiagnosticCollection('ADP');
 
-  show(document: vscode.TextDocument, type: AnyToolType): void {
-    this.collection.set(document.uri, type.findings({ fileName: document.fileName, text: document.getText() }).map((finding) => this.diagnostic(document, finding)));
+  /** `related` is the text of the files the document names, where an editor of it has read them. */
+  show(document: vscode.TextDocument, type: AnyToolType, related?: Source['related']): void {
+    const source: Source = { fileName: document.fileName, text: document.getText(), ...(related === undefined ? {} : { related }) };
+    this.collection.set(document.uri, type.findings(source).map((finding) => this.diagnostic(document, finding)));
   }
 
   clear(uri: vscode.Uri): void {
