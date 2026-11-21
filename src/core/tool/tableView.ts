@@ -142,6 +142,98 @@ export interface TableEntry {
   readonly disabled?: string;
   readonly request?: TableRequest;
   readonly entries?: readonly TableEntry[];
+  /** For an entry that is a state: whether it is on (a tick, an eye, the choice made). */
+  readonly checked?: boolean;
+  readonly colour?: ThemedColour;
+  /** A panel of the surface the entry opens instead of making a request. */
+  readonly opens?: TablePanel;
+}
+
+/** A panel the table surface opens under its bar or over a column. */
+export type TablePanel =
+  | { readonly panel: 'visibility' | 'filter' | 'sort' | 'group' }
+  | { readonly panel: 'options'; readonly property: string };
+
+/**
+ * A value a request leaves to be typed or picked: the surface puts what was given in its place,
+ * as the kind of value of `TableField.control`.
+ */
+export const TYPED = '$typed';
+
+/** A value the surface asks in place: what it holds now, how it is edited, and the request that sets it, with `$typed` for the value. */
+export interface TableField {
+  readonly control: 'text' | 'number' | 'date' | 'dateTime' | 'time' | 'choice' | 'none';
+  readonly value: string;
+  readonly options?: readonly { readonly value: string; readonly label: string }[];
+  readonly request?: TableRequest;
+}
+
+/** A condition of a filter, as its editor shows it. */
+export interface TableCondition {
+  readonly id: string;
+  /** Each property it may compare, the one it compares checked; another replaces the condition by one on that property. */
+  readonly properties: readonly TableEntry[];
+  readonly operators: readonly TableEntry[];
+  readonly value: TableField;
+  readonly remove: TableRequest;
+}
+
+/** A filter, or a group of conditions in it: all or any of them, its conditions and the groups in it. */
+export interface TableFilter {
+  readonly id: string;
+  readonly match: readonly TableEntry[];
+  readonly conditions: readonly TableCondition[];
+  readonly groups: readonly TableFilter[];
+  /** A condition on each property, to add. */
+  readonly add: readonly TableEntry[];
+  readonly addGroup?: TableEntry;
+  readonly remove?: TableRequest;
+}
+
+/** A sort of the view, as its editor shows it. */
+export interface TableSortLine {
+  readonly id: string;
+  readonly label: string;
+  readonly direction: readonly TableEntry[];
+  readonly remove: TableRequest;
+  /** Moves it to the top, and after each other sort, by that sort's id. */
+  readonly moves?: Readonly<Record<string, TableRequest>>;
+}
+
+/** The four editors of the settings control. */
+export interface TableSettings {
+  /** One tick per property: shown or hidden in the view. */
+  readonly visibility: readonly TableEntry[];
+  readonly filter: TableFilter;
+  readonly sortLines: readonly TableSortLine[];
+  readonly addSort: readonly TableEntry[];
+  readonly group: {
+    /** None and each property a view can be grouped by, the one it is grouped by checked. */
+    readonly by: readonly TableEntry[];
+    readonly hideEmpty?: TableEntry;
+    /** The groups in their order by name, each way. */
+    readonly order?: readonly TableEntry[];
+    /** Every group, hidden ones too: checked for one that is shown. */
+    readonly groups?: readonly TableEntry[];
+    readonly showAll?: TableEntry;
+    /** Moves a group to the top, and after each other group, by that group's key. */
+    readonly moves?: Readonly<Record<string, Readonly<Record<string, TableRequest>>>>;
+  };
+}
+
+/** The options of a property, as its options panel edits them. */
+export interface TableOptionsPanel {
+  readonly options: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly colour?: ThemedColour;
+    readonly rename: TableRequest;
+    readonly colours: readonly TableEntry[];
+    readonly remove: TableRequest;
+    /** Moves it to the top, and after each other option, by that option's id. */
+    readonly moves?: Readonly<Record<string, TableRequest>>;
+  }[];
+  readonly add: TableRequest;
 }
 
 /** A menu: its entries in groups, a line between two groups. */
@@ -155,6 +247,8 @@ export interface TableBarItem {
   /** For a sort: whether it is descending. */
   readonly descending?: boolean;
   readonly remove?: TableRequest;
+  /** The editor pressing it opens. */
+  readonly opens?: TablePanel;
 }
 
 /**
@@ -178,6 +272,12 @@ export interface TableGestures {
   readonly newRowIn?: Readonly<Record<string, TableRequest>>;
   /** The sorts and filters of the view, in words. */
   readonly items?: readonly TableBarItem[];
+  /** The editors of the settings control. */
+  readonly settings?: TableSettings;
+  /** The options panel of each property with options, by its id. */
+  readonly options?: Readonly<Record<string, TableOptionsPanel>>;
+  /** What the calculation line offers under each column, by the property's id. */
+  readonly calculations?: Readonly<Record<string, TableMenu>>;
 }
 
 /** What a table surface draws. */

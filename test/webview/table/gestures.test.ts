@@ -169,3 +169,127 @@ describe('a column of options on a table with gestures', () => {
     expect(one('.adp-table-options').hidden).toBe(true);
   });
 });
+
+describe('the settings control and the panels of a table with gestures', () => {
+  const settings: NonNullable<TableGestures['settings']> = {
+    visibility: [
+      { id: 'name', label: 'name', checked: true, disabled: 'The column that names a row is always there.', request: op('setColumn', ['va'], { property: 'name', visible: false }) },
+      { id: 'size', label: 'size', checked: true, request: op('setColumn', ['va'], { property: 'size', visible: false }) },
+    ],
+    filter: {
+      id: 'va', match: [{ id: 'all', label: 'All', checked: true, request: op('setMatch', ['va'], { match: 'all' }) }, { id: 'any', label: 'Any', request: op('setMatch', ['va'], { match: 'any' }) }],
+      conditions: [{
+        id: 'c1',
+        properties: [{ id: 'size', label: 'size', checked: true }],
+        operators: [{ id: 'equals', label: '=', checked: true }, { id: 'greater-than', label: '>', request: op('setCondition', ['c1'], { operator: 'greater-than' }) }],
+        value: { control: 'number', value: '3', request: { kind: 'steps', steps: [op('removeCondition', ['c1']), op('addCondition', ['va'], { property: 'size', operator: 'equals', number: '$typed' })] } },
+        remove: op('removeCondition', ['c1']),
+      }],
+      groups: [],
+      add: [{ id: 'name', label: 'name', request: op('addCondition', ['va'], { property: 'name', operator: 'contains' }) }],
+      addGroup: { id: 'addGroup', label: 'Add filter group', request: op('addFilterGroup', ['va']) },
+    },
+    sortLines: [{ id: 's1', label: 'size', direction: [{ id: 'ascending', label: 'Ascending' }, { id: 'descending', label: 'Descending', checked: true }], remove: op('removeSort', ['s1']) }],
+    addSort: [{ id: 'name', label: 'name', request: op('addSort', ['va'], { property: 'name', direction: 'ascending' }) }],
+    group: {
+      by: [{ id: '', label: 'None' }, { id: 'kind', label: 'kind', checked: true }],
+      groups: [{ id: 'big', label: 'Big', checked: true, request: op('setGroup', ['va'], { slot: 'hiddenGroups', key: 'big' }) }],
+      showAll: { id: 'showAll', label: 'Show all', disabled: 'No group is hidden.', request: { kind: 'steps', steps: [] } },
+    },
+  };
+  const more: TableGestures = {
+    ...gestures,
+    items: gestures.items!.map((item) => ({ ...item, opens: { panel: item.kind } })),
+    columnMenus: { size: [[{ id: 'options', label: 'Edit options', opens: { panel: 'options', property: 'size' } }]] },
+    settings,
+    options: { size: { options: [{ id: 'o1', name: 'Small', rename: op('renameOption', ['o1'], { name: '$typed' }), colours: [{ id: 'red', label: 'Red', request: op('recolourOption', ['o1'], { colour: 'red' }) }], remove: op('deleteOption', ['o1']) }], add: op('addOption', ['size'], { name: '$typed' }) } },
+    calculations: { name: [[{ id: '', label: 'None', checked: true }], [{ id: 'countAll', label: 'Count all', request: op('calculate', ['va'], { property: 'name', calculation: 'countAll' }) }]], size: [[{ id: '', label: 'None' }]] },
+  };
+  const shown: TableView = { ...view, gestures: more, properties: view.properties.map((given) => (given.id === 'size' ? { ...given, summary: { label: 'Sum', text: '12' } } : given)) };
+  const panel = (): HTMLElement => one('.adp-table-panel');
+  const change = (control: HTMLInputElement | HTMLSelectElement, value: string): void => {
+    control.value = value;
+    control.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+
+  beforeEach(() => surface.receive(message(shown)));
+
+  it('lists the four editors under one control, opens one at a time and closes it', () => {
+    press(one('.adp-table-tune'));
+    expect(entries().map((item) => item.textContent)).toEqual(['Property visibility', 'Filter', 'Sort', 'Group']);
+    press(entry('filter'));
+    expect([panel().hidden, panel().dataset.panel]).toEqual([false, 'filter']);
+    press(one('.adp-table-tune'));
+    press(entry('sort'));
+    expect(all('.adp-table-panel')).toHaveLength(1);
+    expect(panel().dataset.panel).toBe('sort');
+    press(one('.adp-table-panel-close'));
+    expect(panel().hidden).toBe(true);
+  });
+
+  it('opens the editor of a sort or a filter when its item is pressed', () => {
+    press(all('.adp-table-item-text')[1]);
+    expect(panel().dataset.panel).toBe('filter');
+    press(all('.adp-table-item-text')[0]);
+    expect(panel().dataset.panel).toBe('sort');
+    expect(edits()).toEqual([]);
+  });
+
+  it('shows and hides a property by its tick, the title\'s kept set', () => {
+    press(one('.adp-table-tune'));
+    press(entry('visibility'));
+    const boxes = all<HTMLInputElement>('.adp-table-panel input[type="checkbox"]');
+    expect(boxes.map((box) => [box.checked, box.disabled])).toEqual([[true, true], [true, false]]);
+    tick(boxes[1]);
+    expect(edits()).toEqual([op('setColumn', ['va'], { property: 'size', visible: false })]);
+  });
+
+  it('edits a condition in place: its comparison, and its value as a number', () => {
+    press(all('.adp-table-item-text')[1]);
+    change(one<HTMLSelectElement>('.adp-table-condition select[aria-label="Comparison"]'), 'greater-than');
+    change(one<HTMLInputElement>('.adp-table-condition input[aria-label="Value"]'), '5');
+    expect(edits()).toEqual([op('setCondition', ['c1'], { operator: 'greater-than' }), { kind: 'steps', steps: [op('removeCondition', ['c1']), op('addCondition', ['va'], { property: 'size', operator: 'equals', number: 5 })] }]);
+  });
+
+  it('adds a filter and a sort from their lists, and hides a group by its eye', () => {
+    press(all('.adp-table-item-text')[1]);
+    change(one<HTMLSelectElement>('.adp-table-panel select[aria-label="Add filter"]'), 'name');
+    press(all('.adp-table-item-text')[0]);
+    change(one<HTMLSelectElement>('.adp-table-panel select[aria-label="Add sort"]'), 'name');
+    press(one('.adp-table-tune'));
+    press(entry('group'));
+    press(one('.adp-table-eye'));
+    press(all<HTMLElement>('.adp-table-panel-button').find((button) => button.textContent === 'Show all')!);
+    expect(edits()).toEqual([op('addCondition', ['va'], { property: 'name', operator: 'contains' }), op('addSort', ['va'], { property: 'name', direction: 'ascending' }), op('setGroup', ['va'], { slot: 'hiddenGroups', key: 'big' })]);
+  });
+
+  it('keeps what is typed in an editor when the same view comes again', () => {
+    press(all('.adp-table-item-text')[1]);
+    const value = one<HTMLInputElement>('.adp-table-condition input[aria-label="Value"]');
+    value.value = '42';
+    surface.receive(message(shown));
+    expect(one<HTMLInputElement>('.adp-table-condition input[aria-label="Value"]')).toBe(value);
+    expect(value.value).toBe('42');
+  });
+
+  it('edits a column\'s options in its panel: rename in place, colour, delete, and a new one', () => {
+    press(one('[role="columnheader"][data-id="size"]'));
+    press(entry('options'));
+    expect(panel().dataset.panel).toBe('options');
+    change(one<HTMLInputElement>('.adp-table-panel input[aria-label="Name of Small"]'), 'Tiny');
+    change(one<HTMLSelectElement>('.adp-table-panel select[aria-label="Colour of Small"]'), 'red');
+    press(one('.adp-table-panel .adp-table-panel-remove'));
+    const adding = one<HTMLInputElement>('.adp-table-panel input[aria-label="New option"]');
+    adding.value = 'Huge';
+    adding.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    expect(edits()).toEqual([op('renameOption', ['o1'], { name: 'Tiny' }), op('recolourOption', ['o1'], { colour: 'red' }), op('deleteOption', ['o1']), op('addOption', ['size'], { name: 'Huge' })]);
+  });
+
+  it('has a calculation line: each column\'s calculation, or Calculate, whose menu chooses one', () => {
+    expect(all('.adp-table-calculate').map((button) => button.textContent)).toEqual(['Calculate', 'Sum 12']);
+    press(all('.adp-table-calculate')[0]);
+    expect(entries().map((item) => item.textContent)).toEqual(['None', 'Count all']);
+    press(entry('countAll'));
+    expect(edits()).toEqual([op('calculate', ['va'], { property: 'name', calculation: 'countAll' })]);
+  });
+});

@@ -6,7 +6,8 @@
 // form for a parameter an entry's request leaves out.
 
 import type { ModelElement, Value } from '../../disl/model';
-import type { TableBarItem, TableData, TableEntry, TableGestures, TableGroup, TableMenu, TableProperty, TableRequest } from '../../tool/tableView';
+import type { TableBarItem, TableData, TableEntry, TableGestures, TableGroup, TableMenu, TableProperty, TableRequest, ThemedColour } from '../../tool/tableView';
+import { calculationsFor, optionsOf, settingsOf, type Group } from './settings';
 
 const operation = (name: string, on: readonly string[] = [], args: Readonly<Record<string, string | number | boolean>> = {}): TableRequest => ({ kind: 'operation', operation: name, on, args });
 const text = (value: Value | undefined): string => (value === undefined || value === null ? '' : String(value));
@@ -24,7 +25,7 @@ const comparisons: Readonly<Record<string, string>> = {
 };
 
 /** The surface's gestures for the view that is shown. */
-export function gesturesOf(table: TableData, groups: readonly TableGroup[] | undefined, columns: readonly { readonly id: string; readonly visible?: boolean; readonly width?: number; readonly wrap?: boolean; readonly frozen?: boolean }[]): TableGestures {
+export function gesturesOf(table: TableData, groups: readonly TableGroup[] | undefined, columns: readonly { readonly id: string; readonly visible?: boolean; readonly width?: number; readonly wrap?: boolean; readonly frozen?: boolean }[], every: readonly Group[], colour: (key: string) => ThemedColour | undefined): TableGestures {
   const { model } = table;
   const views = model.elements.filter((element) => element.type === 'View');
   const view = views.find((element) => element.id === table.view);
@@ -69,7 +70,7 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
           ...(property.title ? { disabled: 'The column that names a row is always text.' } : {}),
           entries: types.filter((type) => type.key !== 'relation').map((type): TableEntry => ({ id: type.key, label: type.label, ...icon(type.icon), request: operation('changePropertyType', [property.id], { valueType: type.key }) })),
         },
-        ...(selecting ? [{ id: 'options', label: 'New option', icon: 'format-list-bulleted-square', request: operation('addOption', [property.id]) }] : []),
+        ...(selecting ? [{ id: 'options', label: 'Edit options', icon: 'format-list-bulleted-square', opens: { panel: 'options' as const, property: property.id } }] : []),
       ],
       [
         { id: 'filter', label: 'Filter', icon: 'filter-outline', request: operation('addCondition', [view.id], { property: property.id }) },
@@ -117,7 +118,7 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
   const sorts = settings('Sort').flatMap((sort): TableBarItem[] => {
     const property = propertyOf(sort.attributes.property);
     const descending = sort.attributes.direction === 'descending';
-    return property ? [{ id: sort.id, kind: 'sort', text: property.name, descending, remove: operation('removeSort', [sort.id]) }] : [];
+    return property ? [{ id: sort.id, kind: 'sort', text: property.name, descending, remove: operation('removeSort', [sort.id]), opens: { panel: 'sort' } }] : [];
   });
   const compared = (condition: ModelElement, property: TableProperty): string => {
     const attributes = condition.attributes;
@@ -129,10 +130,10 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
   const filters = [...settings('Condition'), ...settings('FilterGroup')].flatMap((condition): TableBarItem[] => {
     if (condition.type === 'FilterGroup') {
       const count = model.elements.filter((element) => element.parent === condition.id).length;
-      return [{ id: condition.id, kind: 'filter', text: `${count} ${count === 1 ? 'rule' : 'rules'}`, remove: operation('removeCondition', [condition.id]) }];
+      return [{ id: condition.id, kind: 'filter', text: `${count} ${count === 1 ? 'rule' : 'rules'}`, remove: operation('removeCondition', [condition.id]), opens: { panel: 'filter' } }];
     }
     const property = propertyOf(condition.attributes.property);
-    return property ? [{ id: condition.id, kind: 'filter', text: compared(condition, property), remove: operation('removeCondition', [condition.id]) }] : [];
+    return property ? [{ id: condition.id, kind: 'filter', text: compared(condition, property), remove: operation('removeCondition', [condition.id]), opens: { panel: 'filter' } }] : [];
   });
 
   return {
@@ -144,5 +145,7 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
     newRow,
     newRowIn,
     items: [...sorts, ...filters],
+    ...(view === undefined ? {} : { settings: settingsOf(table, view, columns, every), calculations: calculationsFor(table, view) }),
+    options: optionsOf(table, colour),
   };
 }
