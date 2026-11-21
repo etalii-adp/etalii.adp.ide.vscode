@@ -577,3 +577,21 @@ describe('dragging on a table with gestures, and the keyboard\'s way to the same
     expect(one('thead [data-id="size"] .adp-table-name').hidden).toBe(false);
   });
 });
+
+describe('the findings on a table', () => {
+  it('marks a cell and a row with their findings, the gravest\'s colour, and says them', () => {
+    const rows = [
+      { ...view.rows[0], cells: { name: { ...view.rows[0].cells.name, findings: [{ severity: 'warning' as const, message: 'Looks odd.' }, { severity: 'error' as const, message: 'Not a number.' }] } } },
+      { ...view.rows[1], findings: [{ severity: 'information' as const, message: 'About the row.' }] },
+    ];
+    surface.receive(message({ ...view, rows }));
+    const cell = one('tbody tr[data-id="r1"] [data-column="name"]');
+    expect(cell.classList.contains('adp-table-finding-error')).toBe(true);
+    expect(cell.getAttribute('aria-invalid')).toBe('true');
+    expect(cell.querySelector('.adp-table-finding-mark')?.getAttribute('aria-label')).toBe('Looks odd.\nNot a number.');
+    const lead = one('tbody tr[data-id="r2"] [role="rowheader"]');
+    expect(lead.classList.contains('adp-table-finding-information')).toBe(true);
+    expect(lead.title).toBe('About the row.');
+    expect(all('.adp-table-finding')).toHaveLength(2);
+  });
+});

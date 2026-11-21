@@ -941,3 +941,28 @@ thead .adp-table-lead .adp-table-check,
   background: var(--vscode-inputValidation-errorBackground, var(--vscode-editorWidget-background, var(--vscode-editor-background)));
   border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-focusBorder));
 }
+
+/* ---- the findings on a cell or a row: a sign in the colour of the gravest, an underline under the cell ---- */
+
+.adp-table-grid .adp-table-finding {
+  box-shadow: inset 0 -2px 0 var(--adp-table-finding-colour);
+}
+
+.adp-table-finding-error {
+  --adp-table-finding-colour: var(--vscode-editorError-foreground, #f14c4c);
+}
+
+.adp-table-finding-warning {
+  --adp-table-finding-colour: var(--vscode-editorWarning-foreground, #cca700);
+}
+
+.adp-table-finding-information,
+.adp-table-finding-hint {
+  --adp-table-finding-colour: var(--vscode-editorInfo-foreground, #3794ff);
+}
+
+.adp-table-finding-mark {
+  float: right;
+  margin-left: 4px;
+  color: var(--adp-table-finding-colour);
+}

@@ -153,6 +153,18 @@ suite('The Knowledge designer in Visual Studio Code', () => {
     await until('the undo', () => document.getText() === original);
   });
 
+  test('a row added under the Netherlands group has the country Netherlands, and one undo removes it', async () => {
+    const { document, original } = await open();
+    // The request `+ New` under the group makes (the plugin's own, held by test/core/plugins/knowledgeGestures.test.ts).
+    const request = { kind: 'steps', steps: [{ kind: 'operation', operation: 'addRow', on: [], args: {} }, { kind: 'operation', operation: 'setOption', on: ['$created:0'], args: { property: 'p2', value: 'o1' } }] };
+    assert.deepStrictEqual(await edit(request), { result: 'applied' });
+    const added = document.getText();
+    assert.ok(added.startsWith(original), 'the row is appended, and nothing before it changes');
+    assert.match(added.slice(original.length), /^ {2}- id: [0-9a-z]{25}\r\n {4}cells:\r\n {6}- property: p2\r\n {8}option: o1\r\n$/, 'the new row is in the group');
+    await vscode.commands.executeCommand('undo');
+    await until('the one undo', () => document.getText() === original);
+  });
+
   test('a refusal shows the definition\'s sentence and writes nothing', async () => {
     const { document, original } = await open();
     assert.deepStrictEqual(await edit({ kind: 'operation', operation: 'renameProperty', on: ['p3'], args: { name: 'Name' } }), { result: 'refused', sentence: 'A property named `Name` already exists.' });

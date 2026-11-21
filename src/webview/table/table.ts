@@ -1,6 +1,6 @@
 import type { FromCanvas, ToCanvas } from '../../core/frame/protocol';
 import type { Action } from '../../core/frame/toolType';
-import type { TableBarItem, TableCell, TableEntry, TableField, TableGestures, TableGroup, TableMenu, TableOperation, TablePanel, TableProperty, TableRequest, TableRow, TableValue, TableView } from '../../core/tool/tableView';
+import type { TableBarItem, TableCell, TableEntry, TableFinding, TableField, TableGestures, TableGroup, TableMenu, TableOperation, TablePanel, TableProperty, TableRequest, TableRow, TableValue, TableView } from '../../core/tool/tableView';
 import { html } from '../diagram/dom';
 import { icon } from '../diagram/icons';
 import { Menu } from '../diagram/menu';
@@ -54,6 +54,19 @@ const placeOf = (cell: HTMLElement): Place => ({ key: cell.closest('tr')?.datase
 /** A request with what was typed or picked in the place of `$typed`, and a row in the place of `$row`. */
 const filled = (request: TableRequest, typed: string | number | boolean | undefined, row: string | undefined): TableRequest => (typed === undefined && row === undefined ? request
   : JSON.parse(JSON.stringify(request), (_key, value: unknown) => (value === TYPED && typed !== undefined ? typed : value === ROW && row !== undefined ? row : value)) as TableRequest);
+/** The gravest first: how a cell with several findings is marked. */
+const gravity = ['error', 'warning', 'information', 'hint'];
+/** Marks a cell with the findings about it: a sign in the colour of the gravest, and their sentences as its title and its name for assistive technology. */
+const marked = <E extends HTMLElement>(element: E, findings: readonly TableFinding[] | undefined): E => {
+  if (!findings || findings.length === 0) return element;
+  const worst = [...findings].sort((a, b) => gravity.indexOf(a.severity) - gravity.indexOf(b.severity))[0].severity;
+  const said = findings.map((finding) => finding.message).join('\n');
+  element.classList.add('adp-table-finding', `adp-table-finding-${worst}`);
+  if (worst === 'error') element.setAttribute('aria-invalid', 'true');
+  element.title = [element.title, said].filter((part) => part !== '').join('\n');
+  element.append(html('span', { class: 'adp-table-finding-mark', role: 'img', 'aria-label': said }, icon(worst === 'error' ? 'mdi-alert-circle' : worst === 'warning' ? 'mdi-alert' : 'mdi-information-outline')));
+  return element;
+};
 const several = (property: TableProperty): boolean => property.many || property.editor === 'choices' || property.editor === 'rows';
 const menuButton = (name: string, tabindex: number): HTMLButtonElement => html('button',
   { class: 'adp-table-menu-button', type: 'button', tabindex, 'aria-haspopup': 'menu', 'aria-label': `Menu of ${name}` }, icon('mdi-dots-horizontal'));
@@ -243,11 +256,11 @@ export class Table {
       return cell;
     };
     const numbers = new Map(view.rows.map((row, index) => [row.id, index + 1]));
-    const leadOf = (row: TableRow): HTMLElement => (gestures
+    const leadOf = (row: TableRow): HTMLElement => marked(gestures
       ? html('th', { class: 'adp-table-number adp-table-lead', role: 'rowheader', scope: 'row', 'data-column': '', tabindex: -1, 'aria-keyshortcuts': gestures.moves?.rows ? 'Alt+ArrowUp Alt+ArrowDown' : undefined },
         html('span', { class: gestures.moves?.rows ? 'adp-table-handle adp-table-movable' : 'adp-table-handle', 'aria-hidden': 'true', title: gestures.moves?.rows ? 'Drag to move' : undefined }, icon('mdi-drag-vertical')),
         html('input', { class: 'adp-table-check', type: 'checkbox', tabindex: -1, 'aria-label': `Select ${row.cells[columns.find((property) => property.title)?.id ?? '']?.text || 'row'}`, 'data-row': row.id }))
-      : html('th', { class: 'adp-table-number', role: 'rowheader', scope: 'row', 'data-column': '', tabindex: -1 }, String(numbers.get(row.id) ?? '')));
+      : html('th', { class: 'adp-table-number', role: 'rowheader', scope: 'row', 'data-column': '', tabindex: -1 }, String(numbers.get(row.id) ?? '')), row.findings);
     const line = (row: TableRow, key: string): HTMLElement => html('tr', { class: 'adp-table-row', role: 'row', 'data-id': row.id, 'data-key': key, 'aria-level': view.tree?.[row.id] ? String(view.tree[row.id].depth + 1) : undefined },
       leadOf(row), ...columns.map((property) => frozen(this.cellOf(row, property), property)));
     const span = columns.length + (gestures?.newProperty ? 2 : 1);
@@ -365,7 +378,7 @@ export class Table {
         ? html('button', { type: 'button', class: 'adp-table-fold adp-table-row-fold', tabindex: -1, 'data-row': row.id, 'aria-expanded': String(!nest.collapsed), 'aria-label': `${nest.collapsed ? 'Expand' : 'Collapse'} ${cell?.text ?? 'row'}` }, icon(nest.collapsed ? 'mdi-chevron-right' : 'mdi-chevron-down'))
         : html('span', { class: 'adp-table-fold-space', 'aria-hidden': 'true' }));
     }
-    return element;
+    return marked(element, cell?.findings);
   }
 
   /** The actions of the document as buttons, while nothing is selected. */

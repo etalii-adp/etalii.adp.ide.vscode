@@ -48,7 +48,7 @@ import { composedSplices, modelChangesOf, viewStepsOf, type Refused } from './mo
 import { missingPlugins, pluginReferences, type PluginRegistry } from './pluginRegistry';
 import { layoutOf, newRegistration, withLayout, type Corner } from './registrationLayout';
 import { hierarchyReader, type HierarchyRequest, type HierarchyView, type NodeFinding } from './hierarchyView';
-import { CREATED, tableReader, type TableGestures, type TableProperty, type TableRequest, type TableValue, type TableView } from './tableView';
+import { CREATED, tableReader, withFindings, type TableGestures, type TableProperty, type TableRequest, type TableValue, type TableView } from './tableView';
 import { wireIdsOf } from './wireIds';
 
 // The host's own sentences, for what a definition has no words for.
@@ -852,7 +852,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
       });
     }
     if (!table || open.unreadable) return emptyTable(open.refusal ?? UNREADABLE);
-    const shown = table.view(open.model, { readOnly: open.refusal !== undefined, ...(open.refusal === undefined ? {} : { notice: open.refusal }) });
+    const shown = withFindings(table.view(open.model, { readOnly: open.refusal !== undefined, ...(open.refusal === undefined ? {} : { notice: open.refusal }) }), open.found, open.model);
     return shown.gestures && operations ? { ...shown, gestures: checkedGestures(shown.gestures, open.model) } : shown;
   };
 

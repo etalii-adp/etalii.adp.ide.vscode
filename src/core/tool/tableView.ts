@@ -7,6 +7,7 @@ import type { DesignerOperation, Parameter } from '../desl/operations';
 import type { Editor, TableSurface, ValueType } from '../desl/surface';
 import { attributesOf, defaultOf, valueKind, type Metamodel } from '../disl/metamodel';
 import type { Model, ModelElement, Value } from '../disl/model';
+import type { Severity } from '../frame/toolType';
 import { isCel, localized } from '../disl/specification';
 
 /** A value of the model as a request carries it. */
@@ -72,6 +73,14 @@ export interface TableCell {
   /** The value as the cell shows it: its written form, the name of an option, the items' labels joined. */
   readonly text: string;
   readonly colour?: ThemedColour;
+  /** The findings about the cell or a value in it. */
+  readonly findings?: readonly TableFinding[];
+}
+
+/** A finding as a cell or a row shows it: how grave it is, and its sentence. */
+export interface TableFinding {
+  readonly severity: Severity;
+  readonly message: string;
 }
 
 export interface TableRow {
@@ -80,6 +89,8 @@ export interface TableRow {
   readonly title: string;
   /** By the column's id. A column the row has no value for has no entry. */
   readonly cells: Readonly<Record<string, TableCell>>;
+  /** The findings about the row itself rather than one of its cells. */
+  readonly findings?: readonly TableFinding[];
 }
 
 /** The rows that share a value of the column a view is grouped by. */
@@ -455,7 +466,24 @@ export function tableReader(parts: TableParts) {
   const { surface, metamodel, logic } = parts;
   const { columns, cells, rows, views } = surface;
   const locale = parts.locale ?? 'en';
-  const childrenOf = (model: Model, id: string, type: string): ModelElement[] => model.elements.filter((element) => element.parent === id && element.type === type);
+  // The children of each element, gathered once for a model: a table of many rows asks for them for every row and cell.
+  const indexes = new WeakMap<readonly ModelElement[], { readonly children: Map<string, ModelElement[]>; readonly title: ModelElement | undefined }>();
+  const indexOf = (model: Model): { readonly children: Map<string, ModelElement[]>; readonly title: ModelElement | undefined } => {
+    const known = indexes.get(model.elements);
+    if (known) return known;
+    const children = new Map<string, ModelElement[]>();
+    for (const element of model.elements) {
+      if (element.parent === undefined) continue;
+      const siblings = children.get(element.parent);
+      if (siblings) siblings.push(element);
+      else children.set(element.parent, [element]);
+    }
+    const title = columns.title === undefined ? undefined : model.elements.find((element) => element.type === columns.type && element.attributes[columns.title!] === true);
+    const index = { children, title };
+    indexes.set(model.elements, index);
+    return index;
+  };
+  const childrenOf = (model: Model, id: string, type: string): ModelElement[] => (indexOf(model).children.get(id) ?? []).filter((element) => element.type === type);
   const valueTypeOf = (column: ModelElement): ValueType | undefined => {
     const name = column.attributes[columns.valueType];
     return typeof name === 'string' && Object.hasOwn(surface.valueTypes, name) ? surface.valueTypes[name] : undefined;
@@ -463,7 +491,7 @@ export function tableReader(parts: TableParts) {
 
   /** The text of a row's cell of the column that titles a row, when the surface names how one is marked. */
   const titleOf = (model: Model, row: string): string => {
-    const column = columns.title === undefined ? undefined : model.elements.find((element) => element.type === columns.type && element.attributes[columns.title!] === true);
+    const column = indexOf(model).title;
     const valueType = column && valueTypeOf(column);
     const cell = column && childrenOf(model, row, cells.type).find((candidate) => candidate.attributes[cells.column] === column.id);
     return cell && valueType ? textOf(cell.attributes[valueType.key]) : '';
@@ -572,12 +600,13 @@ export function tableReader(parts: TableParts) {
     };
     if (active !== undefined) within(active, 0);
 
+    const rowById = new Map(all.rows.map((row) => [row.id, row]));
     // The document is named by its first required attribute that is a string, as an element type is (DESL 4.5).
     const named = Object.keys(metamodel.diagram).find((name) => metamodel.diagram[name].type === 'string' && metamodel.diagram[name].required === true);
     return {
       name: named === undefined ? '' : textOf(model.diagram[named]),
       properties: [...listed, ...all.properties.filter((property) => !listed.some((column) => column.id === property.id))],
-      rows: shown.rows === undefined ? all.rows : shown.rows.flatMap((id) => all.rows.filter((row) => row.id === id)),
+      rows: shown.rows === undefined ? all.rows : shown.rows.flatMap((id) => rowById.get(id) ?? []),
       total: all.rows.length,
       ...(shown.groups === undefined ? {} : { groups: shown.groups }),
       ...(shown.tree === undefined ? {} : { tree: shown.tree }),
@@ -590,4 +619,44 @@ export function tableReader(parts: TableParts) {
   }
 
   return { view, propertiesOf, rowsOf };
+}
+
+/**
+ * The view with each finding on what it is about (etalii.adp spec 079, FR-025): on the cell it
+ * names or the cell a value it names is in, on the row it names, and, where it names nothing, on
+ * the cell or row its line falls in. A finding about anything else stays in the Problems panel only.
+ */
+export function withFindings(view: TableView, found: readonly { readonly severity: Severity; readonly message: string; readonly line: number; readonly element?: string }[], model: Model): TableView {
+  if (found.length === 0) return view;
+  const byId = new Map(model.elements.map((element) => [element.id, element]));
+  const shown = new Map<string, string>();
+  for (const row of view.rows) {
+    shown.set(row.id, row.id);
+    for (const cell of Object.values(row.cells)) shown.set(cell.id, cell.id);
+  }
+  // The element a finding that names none is about: the last to start at or above its line, which counts from 0 where an element's counts from 1.
+  const startsAbove = (line: number): string | undefined => {
+    let best: ModelElement | undefined;
+    for (const element of model.elements) if (element.line > 0 && element.line <= line + 1 && (best === undefined || element.line >= best.line)) best = element;
+    return best?.id;
+  };
+  // What it is shown on: that element, or the nearest around it that is shown.
+  const onto = (finding: (typeof found)[number]): string | undefined => {
+    const named = finding.element ?? (finding.line > 0 ? startsAbove(finding.line) : undefined);
+    for (let id = named; id !== undefined; id = byId.get(id)?.parent) if (shown.has(id)) return id;
+    return undefined;
+  };
+  const marks = new Map<string, TableFinding[]>();
+  for (const finding of found) {
+    const id = onto(finding);
+    if (id !== undefined) marks.set(id, [...(marks.get(id) ?? []), { severity: finding.severity, message: finding.message }]);
+  }
+  if (marks.size === 0) return view;
+  return {
+    ...view,
+    rows: view.rows.map((row) => {
+      const cells = Object.fromEntries(Object.entries(row.cells).map(([key, cell]) => [key, marks.has(cell.id) ? { ...cell, findings: marks.get(cell.id)! } : cell]));
+      return { ...row, cells, ...(marks.has(row.id) ? { findings: marks.get(row.id)! } : {}) };
+    }),
+  };
 }

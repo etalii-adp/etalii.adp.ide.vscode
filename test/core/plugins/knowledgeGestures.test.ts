@@ -282,3 +282,32 @@ describe('a Knowledge view grouped by the parent relation', () => {
     expect(type.view({ ...source, text: textOf({ ...source, text: folded }, shown.gestures!.folds!.b) }, {}).rows).toHaveLength(4);
   });
 });
+
+describe('the findings of a Knowledge table, on what they are about', () => {
+  const source = example('cities.yaml');
+  const broken = { ...source, text: source.text.replace('activeView: v1', 'activeView: v2').replace('        number: 931298', '        text: many') };
+
+  it('marks a cell with the findings about it, and no other', () => {
+    const found = type.findings(broken);
+    expect(found.length).toBeGreaterThan(0);
+    const shown = type.view(broken, {});
+    const marked = shown.rows.flatMap((row) => Object.entries(row.cells).filter(([, cell]) => cell.findings).map(([property]) => `${row.id}.${property}`));
+    expect(marked).toEqual(['r1.p3']);
+    expect(shown.rows.find((row) => row.id === 'r1')!.cells.p3.findings!.map((finding) => finding.message)).toEqual(found.map((finding) => finding.message));
+    expect(type.view(source, {}).rows.some((row) => Object.values(row.cells).some((cell) => cell.findings))).toBe(false);
+  });
+});
+
+describe('a Knowledge table of 10,000 rows', () => {
+  it('is made into its view in a few seconds at most, not in a time that grows with the square of its rows', () => {
+    const text = example('cities.yaml').text.replace(/\r\n/g, '\n');
+    const rows = Array.from({ length: 10_000 }, (_, at) => `  - id: g${at}\n    cells:\n      - property: p1\n        text: City ${at}\n      - property: p2\n        option: ${at % 2 ? 'o1' : 'o2'}\n      - property: p3\n        number: ${(at * 7919) % 1_000_000}\n`);
+    const source: Source = { fileName: 'big.yaml', text: text.slice(0, text.indexOf('\nrows:\n') + 7).replace('activeView: v1', 'activeView: v2') + rows.join('') };
+    // Read once first, so the time below is the view's alone (it was 13 seconds before each row's cells were found by an index).
+    type.findings(source);
+    const started = performance.now();
+    const shown = type.view(source, {});
+    expect(shown.rows).toHaveLength(10_000);
+    expect(performance.now() - started).toBeLessThan(3_000);
+  }, 120_000);
+});
