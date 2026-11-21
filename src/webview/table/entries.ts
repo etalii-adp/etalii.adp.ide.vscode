@@ -58,9 +58,11 @@ export class EntryMenu {
   }
 
   private item(entry: TableEntry, x: number, y: number): HTMLElement {
-    const item = html('button', { class: 'adp-menu-item', type: 'button', role: 'menuitem', 'data-entry': entry.id, title: entry.disabled ?? '', 'aria-haspopup': entry.entries ? 'menu' : undefined },
+    // An entry that is a state says whether it is on, with a tick where a submenu's arrow would be.
+    const state = entry.checked !== undefined;
+    const item = html('button', { class: 'adp-menu-item', type: 'button', role: state ? 'menuitemcheckbox' : 'menuitem', 'data-entry': entry.id, title: entry.disabled ?? '', 'aria-haspopup': entry.entries ? 'menu' : undefined, 'aria-checked': state ? String(entry.checked) : undefined },
       icon(entry.icon === undefined ? undefined : `mdi-${entry.icon}`), html('span', { class: 'adp-menu-label' }, entry.label),
-      html('span', { class: 'adp-menu-shortcut' }, entry.entries ? '›' : ''));
+      html('span', { class: 'adp-menu-shortcut' }, entry.entries ? '›' : entry.checked === true ? '✓' : ''));
     if (entry.disabled !== undefined) item.setAttribute('aria-disabled', 'true');
     item.addEventListener('click', () => {
       if (entry.disabled !== undefined) return;

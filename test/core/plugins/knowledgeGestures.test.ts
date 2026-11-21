@@ -311,3 +311,47 @@ describe('a Knowledge table of 10,000 rows', () => {
     expect(performance.now() - started).toBeLessThan(3_000);
   }, 120_000);
 });
+
+describe('each column gesture of the standalone host (etalii.adp spec 079, T004)', () => {
+  const source = example('cities.yaml');
+  const gestures = type.view(source, {}).gestures!;
+  const after = (request: TableRequest): Source => ({ ...source, text: textOf(source, request) });
+  const column = (text: Source, id: string) => type.view(text, {}).properties.find((property) => property.id === id)!;
+
+  it('wraps a column, keeping it shown and its width, and unwraps it', () => {
+    const wrapped = after(find(gestures.columnMenus?.p3, 'wrap').request!);
+    expect(column(wrapped, 'p3')).toMatchObject({ wrap: true, visible: true, width: 120 });
+    const again = type.view(wrapped, {}).gestures!;
+    expect(find(again.columnMenus?.p3, 'wrap').label).toBe('Do not wrap');
+    expect(column({ ...wrapped, text: textOf(wrapped, find(again.columnMenus?.p3, 'wrap').request!) }, 'p3')).toMatchObject({ wrap: false, width: 120 });
+  });
+
+  it('freezes the columns up to one, and unfreezes them', () => {
+    const frozen = after(find(gestures.columnMenus?.p2, 'freeze').request!);
+    expect(column(frozen, 'p2').frozen).toBe(true);
+    const unfreeze = find(type.view(frozen, {}).gestures!.columnMenus?.p2, 'freeze');
+    expect([unfreeze.label, unfreeze.request]).toEqual(['Unfreeze columns', { kind: 'operation', operation: 'unfreeze', on: ['v1'], args: {} }]);
+    expect(column({ ...frozen, text: textOf(frozen, unfreeze.request!) }, 'p2').frozen).toBe(false);
+  });
+
+  it('sorts ascending and descending, filters and groups by the column it was opened on, without asking which', () => {
+    expect(['sortAscending', 'sortDescending', 'filter', 'group'].map((id) => find(gestures.columnMenus?.p6, id).request)).toEqual([
+      { kind: 'operation', operation: 'addSort', on: ['v1'], args: { property: 'p6', direction: 'ascending' } },
+      { kind: 'operation', operation: 'addSort', on: ['v1'], args: { property: 'p6', direction: 'descending' } },
+      { kind: 'operation', operation: 'addCondition', on: ['v1'], args: { property: 'p6' } },
+      { kind: 'operation', operation: 'groupBy', on: ['v1'], args: { property: 'p6' } },
+    ]);
+    expect(after(find(gestures.columnMenus?.p6, 'group').request!).text).toContain('    groupBy: p6\r\n');
+  });
+
+  it('inserts a property left and right of the column, of the type chosen', () => {
+    const left = find(gestures.columnMenus?.p3, 'insertLeft').entries!.find((entry) => entry.id === 'number')!.request!;
+    const right = find(gestures.columnMenus?.p3, 'insertRight').entries!.find((entry) => entry.id === 'number')!.request!;
+    expect(right).toMatchObject({ operation: 'addProperty', args: { valueType: 'number', after: 'p3' } });
+    expect(left).toMatchObject({ operation: 'addProperty', args: { valueType: 'number', after: 'p2' } });
+  });
+
+  it('offers nesting only on a relation to the table itself', () => {
+    expect(['p2', 'p3', 'p5'].map((id) => (gestures.columnMenus?.[id] ?? []).flat().some((entry) => entry.id === 'nest'))).toEqual([false, false, false]);
+  });
+});

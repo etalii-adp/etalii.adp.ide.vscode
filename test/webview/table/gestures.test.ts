@@ -58,7 +58,7 @@ const one = <E extends HTMLElement = HTMLElement>(selector: string): E => docume
 const press = (target: Element): void => {
   for (const kind of ['mousedown', 'mouseup', 'click']) target.dispatchEvent(new MouseEvent(kind, { bubbles: true, cancelable: true }));
 };
-const entries = (): HTMLElement[] => (one('.adp-table-menu').hidden ? [] : all('.adp-table-menu [role="menuitem"]'));
+const entries = (): HTMLElement[] => (one('.adp-table-menu').hidden ? [] : all('.adp-table-menu [role="menuitem"], .adp-table-menu [role="menuitemcheckbox"]'));
 const entry = (id: string): HTMLElement => entries().find((item) => item.dataset.entry === id)!;
 const tick = (box: HTMLInputElement): void => {
   box.checked = !box.checked;
@@ -288,7 +288,7 @@ describe('the settings control and the panels of a table with gestures', () => {
   it('has a calculation line: each column\'s calculation, or Calculate, whose menu chooses one', () => {
     expect(all('.adp-table-calculate').map((button) => button.textContent)).toEqual(['Calculate', 'Sum 12']);
     press(all('.adp-table-calculate')[0]);
-    expect(entries().map((item) => item.textContent)).toEqual(['None', 'Count all']);
+    expect(entries().map((item) => [item.querySelector('.adp-menu-label')?.textContent, item.getAttribute('aria-checked')])).toEqual([['None', 'true'], ['Count all', null]]);
     press(entry('countAll'));
     expect(edits()).toEqual([op('calculate', ['va'], { property: 'name', calculation: 'countAll' })]);
   });
