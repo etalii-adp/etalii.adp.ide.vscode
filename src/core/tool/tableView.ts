@@ -6,6 +6,7 @@
 import type { DesignerOperation, Parameter } from '../desl/operations';
 import type { Editor, TableSurface, ValueType } from '../desl/surface';
 import { attributesOf, defaultOf, valueKind, type Metamodel } from '../disl/metamodel';
+import type { Change } from '../disl/behavior';
 import type { Model, ModelElement, Value } from '../disl/model';
 import type { Severity } from '../frame/toolType';
 import { isCel, localized } from '../disl/specification';
@@ -409,6 +410,41 @@ export interface ViewLogic {
   relations?(table: TableData): Readonly<Record<string, TableRelation>>;
   /** What the tool type finds of those values and files that no constraint can state, because it reads another file. */
   findings?(table: TableData, relations: Readonly<Record<string, TableRelation>>): readonly TableFound[];
+  /**
+   * What an operation that was run changes beyond what its definition says, where it is a step that
+   * writes two files: nothing for any other, or why it cannot be made.
+   */
+  across?(step: TableStep): TableAcross | { readonly refused: string } | undefined;
+  /**
+   * The values a parameter of an operation may take where the definition types it as text but only
+   * some values make sense, such as a file of the same tool type: by operation, then parameter. A
+   * required one is still asked, starting at the first.
+   */
+  choices?(table: TableData): Readonly<Record<string, Readonly<Record<string, readonly { readonly value: string; readonly label: string }[]>>>>;
+}
+
+/** An operation run on a document, as a step that may write another file too. */
+export interface TableStep {
+  readonly operation: string;
+  readonly on: readonly string[];
+  readonly args: Readonly<Record<string, TableValue>>;
+  /** The model before the operation, and after it, with what it created. */
+  readonly before: Model;
+  readonly after: Model;
+  readonly created: readonly string[];
+  readonly related?: RelatedRows;
+  /** How a file the document names names the document in turn. */
+  readonly back: (file: string) => string;
+  /** A new id for an element of a type. */
+  readonly newId: (type: string) => string;
+}
+
+/** The rest of a step that writes two files: what it adds of this document, and what it changes of the other. */
+export interface TableAcross {
+  /** The other file as the document names it; `.` when the other side is the document itself, whose changes are then all `here`. */
+  readonly file: string;
+  readonly here: readonly Change[];
+  readonly there: readonly Change[];
 }
 
 /** A column whose values name rows of a file. */
@@ -419,6 +455,13 @@ export interface TableRelation {
   readonly single: boolean;
   /** Its rows, by title, in its order; absent when the file cannot be read as a document of this tool type. */
   readonly rows?: readonly TableOption[];
+  /**
+   * For a column that holds no values of its own but shows those of another: the rows it shows, by
+   * the id of each row of this document. Its cells are made of them.
+   */
+  readonly values?: Readonly<Record<string, readonly string[]>>;
+  /** Why its cells are shown and not edited. */
+  readonly readOnly?: string;
 }
 
 /** A finding of the tool type's own, on the element it is about. */
@@ -429,8 +472,14 @@ export interface TableFound {
   readonly element: string;
 }
 
-/** The rows of a file a document names, by title; undefined when it cannot be read as a document of the same tool type. */
-export type RelatedRows = (file: string) => readonly TableOption[] | undefined;
+/** Another document of the same tool type that a document names: its rows by title, and its model. */
+export interface RelatedTable {
+  readonly rows: readonly TableOption[];
+  readonly model: Model;
+}
+
+/** A file a document names, read; undefined when it cannot be read as a document of the same tool type. */
+export type RelatedRows = (file: string) => RelatedTable | undefined;
 
 /** The table of a document before a view is applied to it. */
 export interface TableData {
@@ -442,6 +491,8 @@ export interface TableData {
   readonly rows: readonly TableRow[];
   /** The rows of another file the document names; absent where the host gives none. */
   readonly related?: RelatedRows;
+  /** The other documents of the same tool type the host knows of, each as this one would name it. */
+  readonly peers?: readonly string[];
 }
 
 export interface ShownView {
@@ -615,12 +666,19 @@ export function tableReader(parts: TableParts) {
   }
 
   /** The table view of a model: the view the document is left in, else the first (DESL 7.4), applied to its columns and rows. */
-  function view(model: Model, state: Pick<TableView, 'readOnly' | 'notice'>, related?: RelatedRows): TableView {
+  function view(model: Model, state: Pick<TableView, 'readOnly' | 'notice'>, related?: RelatedRows, peers?: readonly string[]): TableView {
     const tabs = model.elements.filter((element) => element.type === views.type);
     const left = views.active === undefined ? undefined : model.diagram[views.active];
     const active = (tabs.find((tab) => tab.id === left) ?? tabs[0])?.id;
     const all = tableOf(model, related);
-    const shown: ShownView = logic?.shown({ model, metamodel, ...(active === undefined ? {} : { view: active }), properties: all.properties, rows: all.rows, ...(related ? { related } : {}) }) ?? {};
+    const data: TableData = { model, metamodel, ...(active === undefined ? {} : { view: active }), properties: all.properties, rows: all.rows, ...(related ? { related } : {}), ...(peers ? { peers } : {}) };
+    const shown: ShownView = logic?.shown(data) ?? {};
+    const operations = operationsOf(model, metamodel, parts.operations, locale, labelOf);
+    for (const [operation, params] of Object.entries(logic?.choices?.(data) ?? {})) {
+      const given = operations[operation];
+      if (!given) continue;
+      operations[operation] = { ...given, params: given.params.map((param) => (params[param.name]?.length ? { ...param, control: 'choice', options: params[param.name] } : param)) };
+    }
     const listed = (shown.columns ?? []).flatMap((column) => {
       const property = all.properties.find((candidate) => candidate.id === column.id);
       return property ? [{ ...property, ...column }] : [];
@@ -649,7 +707,7 @@ export function tableReader(parts: TableParts) {
       ...(shown.tree === undefined ? {} : { tree: shown.tree }),
       views: tabs.map((tab) => ({ id: tab.id, name: textOf(tab.attributes[views.name]), active: tab.id === active })),
       settings,
-      operations: operationsOf(model, metamodel, parts.operations, locale, labelOf),
+      operations,
       ...state,
       ...(shown.gestures === undefined || state.readOnly ? {} : { gestures: shown.gestures }),
     };
@@ -678,12 +736,16 @@ export function tableReader(parts: TableParts) {
     const titles = new Map(Object.entries(relations).map(([id, relation]) => [id, relation.rows && new Map(relation.rows.map((row) => [row.id, row.name]))]));
     const properties = data.properties.map((property) => {
       const relation = relations[property.id];
-      return relation ? { ...property, single: relation.single, ...(relation.rows ? { related: relation.rows } : {}) } : property;
+      return relation ? { ...property, single: relation.single, ...(relation.rows ? { related: relation.rows } : {}), ...(relation.readOnly === undefined ? {} : { readOnly: relation.readOnly }) } : property;
     });
     const linked = data.rows.map((row): TableRow => {
       let cells: Record<string, TableCell> | undefined;
       for (const [id, relation] of Object.entries(relations)) {
-        const cell = row.cells[id];
+        // A column that shows the values of another is given cells of them; it holds none of its own.
+        const shown = relation.values?.[row.id];
+        const cell = shown && shown.length > 0
+          ? { id: `${row.id}/${id}`, value: null, text: '', items: shown.map((value) => ({ id: `${row.id}/${id}/${value}`, value, label: value })) }
+          : row.cells[id];
         const named = titles.get(id);
         if (!cell || !named) continue;
         const items = cell.items.map((item): TableItem => {

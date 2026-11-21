@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { EditRequest, Field, Source, ViewOptions } from '../core/frame/toolType';
+import type { EditRequest, Field, Source, TextSplice, ViewOptions } from '../core/frame/toolType';
 import { viewTypeOf } from '../core/frame/toolType';
 import type { FromCanvas, ToCanvas, ViewCause } from '../core/frame/protocol';
 import { linkKind } from '../core/disl/metamodel';
@@ -10,7 +10,8 @@ import type { TableRequest, TableView } from '../core/tool/tableView';
 import type { Findings } from './findings';
 import { handBack } from './opening';
 import { pickLink } from './projectLinkPicker';
-import { RelatedFiles, relatedUri } from './relatedFiles';
+import { relativePath } from '../core/tool/toolTypeFrom';
+import { RelatedFiles, relatedUri, ToolFiles } from './relatedFiles';
 import type { AnyToolType } from './toolTypes';
 import { webviewHtml } from './webviewHtml';
 
@@ -50,6 +51,8 @@ export class OpenTool {
   related: RelatedFiles | undefined;
   /** A row to select once the page has drawn its first view: one a link in another document opened. */
   selectOnReady: string | undefined;
+  /** The other documents of its tool type in the workspace, as this one names them; undefined until they are found. */
+  peers: readonly string[] | undefined;
 
   constructor(readonly type: AnyToolType, readonly document: vscode.TextDocument, readonly panel: vscode.WebviewPanel) {
     this.registrationUri = registrationUriOf(document.uri);
@@ -58,7 +61,10 @@ export class OpenTool {
   get source(): Source {
     const source = { fileName: this.document.fileName, text: this.document.getText() };
     const related = this.related?.texts;
-    return { ...source, ...(this.registration === undefined ? {} : { registration: this.registration }), ...(related === undefined ? {} : { related }) };
+    return {
+      ...source, ...(this.registration === undefined ? {} : { registration: this.registration }), ...(related === undefined ? {} : { related }),
+      ...(this.peers === undefined ? {} : { peers: this.peers }),
+    };
   }
 
   fields(): Field[] {
@@ -182,6 +188,7 @@ export class Tools implements vscode.Disposable {
 
   dispose(): void {
     this.changed.dispose();
+    for (const files of this.toolFiles.values()) files.dispose();
   }
 
   add(diagram: OpenTool): void {
@@ -478,6 +485,48 @@ export class Tools implements vscode.Disposable {
     return { result: 'applied' };
   }
 
+  /**
+   * The splices of another file a step writes, added to the edit of the document: refused for a file
+   * outside the workspace or in a workspace that is not trusted (research R4), and for one that changed
+   * since the step was planned on it.
+   */
+  private async otherSplices(diagram: OpenTool, other: { readonly file: string; readonly splices: readonly TextSplice[] }, edit: vscode.WorkspaceEdit, metadata: vscode.WorkspaceEditEntryMetadata | undefined): Promise<string | undefined> {
+    const uri = relatedUri(diagram.document.uri, other.file);
+    if (!vscode.workspace.isTrusted || vscode.workspace.getWorkspaceFolder(uri) === undefined) return `${other.file} is not in a trusted folder of this workspace, so neither file is changed.`;
+    const planned = diagram.related?.texts?.[other.file]?.text;
+    let document: vscode.TextDocument;
+    try {
+      document = await vscode.workspace.openTextDocument(uri);
+    } catch {
+      return `${other.file} cannot be opened, so neither file is changed.`;
+    }
+    if (planned === undefined || document.getText() !== planned) return `${other.file} changed meanwhile, so neither file is changed. Try again.`;
+    for (const splice of spliceRanges(document.getText(), other.splices)) {
+      edit.replace(uri, new vscode.Range(splice.start.line, splice.start.character, splice.end.line, splice.end.character), splice.text, metadata);
+    }
+    return undefined;
+  }
+
+  // The documents of each tool type that reads other files, by its origin.
+  private readonly toolFiles = new Map<string, ToolFiles>();
+
+  /** The other documents of a diagram's tool type in the workspace, as it names them: found, and found again when they change. */
+  async findPeers(diagram: OpenTool): Promise<void> {
+    const type = diagram.type;
+    if (!type.related) return;
+    let files = this.toolFiles.get(type.origin);
+    if (!files) {
+      files = new ToolFiles((fileName, text) => type.claimed(fileName, text), type.claims.flatMap((claim) => claim.extensions), () => {
+        for (const other of this.open) if (other.type === type) void this.findPeers(other);
+      });
+      this.toolFiles.set(type.origin, files);
+    }
+    const found = await files.files();
+    const own = diagram.document.uri.toString();
+    diagram.peers = found.filter((uri) => uri.toString() !== own).map((uri) => relativePath(diagram.document.uri.path, uri.path));
+    if (this.open.has(diagram)) this.refresh(diagram);
+  }
+
   /** The row each document opened by a link selects once its page is ready, by the document's address. */
   readonly selecting = new Map<string, string>();
 
@@ -552,7 +601,7 @@ export class Tools implements vscode.Disposable {
         // Every splice of the gesture goes into one edit, so one gesture is one undo step. The
         // ranges are all of the text as it is before the edit (etalii.adp spec 027, research R5).
         const edit = new vscode.WorkspaceEdit();
-        const documentChanges = outcome.splices.length > 0;
+        const documentChanges = outcome.splices.length > 0 || (outcome.others ?? []).some((other) => other.splices.length > 0);
         // The request changed what this editor shows: the options it gives are taken over.
         if (outcome.viewOptions !== undefined) diagram.options = { ...diagram.options, ...outcome.viewOptions };
         const registrationBefore = diagram.registration;
@@ -561,6 +610,12 @@ export class Tools implements vscode.Disposable {
         for (const splice of spliceRanges(diagram.document.getText(), outcome.splices)) {
           const range = new vscode.Range(splice.start.line, splice.start.character, splice.end.line, splice.end.character);
           edit.replace(diagram.document.uri, range, splice.text, metadata);
+        }
+        // A step that writes two files (etalii.adp spec 080, research R2): the other file's splices go into
+        // the same edit, so both are written or neither is, and one undo takes both back.
+        for (const other of outcome.others ?? []) {
+          const refusal = await this.otherSplices(diagram, other, edit, metadata);
+          if (refusal !== undefined) return { result: 'refused', sentence: refusal };
         }
 
         // The registration's new text, or undefined when the edit removes the file.
@@ -636,6 +691,7 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
     // A diagram is drawn on the canvas, a designer on its table or its page of boxes.
     panel.webview.html = webviewHtml(panel.webview, this.context.extensionUri, this.type.page, this.type.displayName);
     this.tools.add(diagram);
+    void this.tools.findPeers(diagram);
 
     const subscriptions: vscode.Disposable[] = [
       panel.webview.onDidReceiveMessage((message: FromCanvas) => void this.receive(diagram, message)),

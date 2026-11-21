@@ -205,6 +205,23 @@ suite('The Knowledge designer in Visual Studio Code', () => {
     await until('the new title', async () => (await provinceOf('r1')) === 'North Holland');
   });
 
+  test('a two-way relation is made in both files in one edit, and neither file is saved by it', async () => {
+    const provinces = example('knowledge-test', 'provinces.yaml');
+    fs.writeFileSync(provinces.fsPath, exampleText('provinces.yaml'));
+    const { document, original } = await open();
+    await until('the province by its title', async () => (await provinceOf('r1')) === 'Noord-Holland');
+    // The request the new-property panel makes (held by test/webview/table/related.test.ts).
+    const request = { kind: 'operation', operation: 'createRelation', on: [], args: { name: 'Seat of', targetFile: 'provinces.yaml', limit: 'none', counterpartName: 'Seats' } };
+    assert.deepStrictEqual(await edit(request), { result: 'applied' });
+    const other = await vscode.workspace.openTextDocument(provinces);
+    assert.match(document.getText().slice(0, document.getText().indexOf('views:')), /name: Seat of\r\n {4}type: relation\r\n {4}target: provinces\.yaml\r\n {4}counterpart: [0-9a-z]{25}\r\n/);
+    assert.match(other.getText(), /name: Seats\r\n {4}type: relation\r\n {4}target: work-\d+\.yaml\r\n {4}counterpart: [0-9a-z]{25}\r\n {4}computed: true\r\n/);
+    assert.ok(document.getText() !== original && other.isDirty, 'both files are changed, and neither is saved');
+    // The other file's change is taken back, so that closing every editor asks nothing.
+    await vscode.window.showTextDocument(other);
+    await vscode.commands.executeCommand('workbench.action.files.revert');
+  });
+
   test('a refusal shows the definition\'s sentence and writes nothing', async () => {
     const { document, original } = await open();
     assert.deepStrictEqual(await edit({ kind: 'operation', operation: 'renameProperty', on: ['p3'], args: { name: 'Name' } }), { result: 'refused', sentence: 'A property named `Name` already exists.' });

@@ -795,7 +795,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     const known = relatedRead.get(key);
     if (known && known.text === given.text) return known.rows;
     const open = claimingBinding(bindings, given.fileName, given.text) === undefined ? undefined : readOpen({ fileName: given.fileName, text: given.text });
-    const rows = open === undefined || open.unreadable ? undefined : table.titlesOf(open.model);
+    const rows = open === undefined || open.unreadable ? undefined : { rows: table.titlesOf(open.model), model: open.model };
     relatedRead.set(key, { text: given.text, rows });
     return rows;
   });
@@ -879,7 +879,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     }
     if (!table || open.unreadable) return emptyTable(open.refusal ?? UNREADABLE);
     const related = relatedOf(source);
-    const shown = withFindings(table.view(open.model, { readOnly: open.refusal !== undefined, ...(open.refusal === undefined ? {} : { notice: open.refusal }) }, related), [...open.found, ...relatedFound(source, open)], open.model);
+    const shown = withFindings(table.view(open.model, { readOnly: open.refusal !== undefined, ...(open.refusal === undefined ? {} : { notice: open.refusal }) }, related, source.peers), [...open.found, ...relatedFound(source, open)], open.model);
     return shown.gestures && operations ? { ...shown, gestures: checkedGestures(shown.gestures, open.model) } : shown;
   };
 
@@ -1159,6 +1159,34 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     return editTable(source, request as TableRequest, options, confirmed);
   }
 
+  /**
+   * An operation that is a step writing two files (`knowledge.md`, etalii.adp spec 080, FR-007, FR-008):
+   * both files' changes planned first, neither written when either is refused, and both given as one
+   * outcome, which the host applies as one edit. Undefined for an operation that writes one file.
+   */
+  function across(source: Source, open: Open, request: { readonly operation: string; readonly on?: readonly string[]; readonly args?: Readonly<Record<string, TableValue>> }, outcome: Done): EditOutcome | undefined {
+    if (!logic?.across || !tableSurface) return undefined;
+    const related = relatedOf(source);
+    const step = logic.across({
+      operation: request.operation, on: request.on ?? [], args: request.args ?? {},
+      before: open.model, after: outcome.after, created: outcome.created,
+      ...(related ? { related } : {}),
+      back: (file) => relativePath(source.related?.[file]?.fileName ?? file, source.fileName),
+      newId: (type) => newId(persistence, entryOf(persistence, type).as),
+    });
+    if (step === undefined) return undefined;
+    if ('refused' in step) return { kind: 'refused', sentence: step.refused };
+    const made = outcome.created.find((id) => outcome.after.elements.some((element) => element.id === id && (element.type === tableSurface.rows.type || element.type === tableSurface.columns.type)));
+    const here = written(source, open, [...outcome.changes, ...step.here], made);
+    if (here.kind !== 'applied' || step.file === '.' || step.there.length === 0) return here;
+    const given = source.related?.[step.file];
+    if (!given) return { kind: 'refused', sentence: `${step.file} cannot be read, so it is not changed, and neither is this file.` };
+    const other: Source = { fileName: given.fileName, text: given.text };
+    const there = bodyEdits(other, readOpen(other), step.there);
+    if ('refused' in there) return { kind: 'refused', sentence: there.refused };
+    return { ...here, others: [{ file: step.file, splices: there.length === 0 ? [] : composedSplices(there) }] };
+  }
+
   /** A request with every id it names given by `now`: an id written in a step before, or one a step before created. */
   function renamed(request: TableRequest, now: (id: string) => string): TableRequest {
     const value = <V>(given: V): V => (typeof given === 'string' ? now(given) as V : given);
@@ -1207,7 +1235,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
 
     switch (request.kind) {
       case 'operation':
-        return operated(open, request, confirmed, done);
+        return operated(open, request, confirmed, (outcome) => (outcome.refused === undefined ? across(source, open, request, outcome as Done) : undefined) ?? done(outcome));
       case 'cell':
         return done(run.setCell(open.model, request.row, request.property, request.value));
       case 'item':
@@ -1351,4 +1379,18 @@ export function toolTypesFrom(folders: ReadonlyMap<string, ReadonlyMap<string, U
     else types.push(toolTypeFrom(read.definition, read.bindings, plugins));
   }
   return { types, skipped };
+}
+
+/**
+ * How a file names another by a path from its own folder, with forward slashes, as a relation's
+ * target is written; `.` for the file itself.
+ */
+export function relativePath(from: string, to: string): string {
+  const parts = (path: string): string[] => path.replace(/\\/g, '/').split('/').filter((part) => part !== '' && part !== '.');
+  const [a, b] = [parts(from), parts(to)];
+  if (a.join('/') === b.join('/')) return '.';
+  const folder = a.slice(0, -1);
+  let shared = 0;
+  while (shared < folder.length && shared < b.length - 1 && folder[shared] === b[shared]) shared += 1;
+  return [...folder.slice(shared).map(() => '..'), ...b.slice(shared)].join('/');
 }

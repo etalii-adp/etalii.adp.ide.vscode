@@ -32,7 +32,8 @@ export function controlOf(param: TableParam): Control {
       param.required ? undefined : html('option', { value: '' }),
       ...(param.options ?? []).map((option) => html('option', { value: option.value }, option.label)));
     select.required = param.required;
-    select.value = start;
+    // A required choice with nothing to start at starts at its first value.
+    if (start !== '' || !param.required) select.value = start;
     return select;
   }
   if (param.control === 'multiline') {

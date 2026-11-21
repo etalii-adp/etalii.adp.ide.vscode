@@ -62,6 +62,7 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
     const selecting = property.valueType === 'selection' || property.valueType === 'multipleSelection';
     const element = model.elements.find((found) => found.id === property.id);
     const parentable = property.valueType === 'relation' && text(element?.attributes.targetFile) === '.';
+    const twoWay = property.valueType === 'relation' && text(element?.attributes.counterpart) !== '';
     const menu: TableEntry[][] = [
       [
         { id: 'rename', label: 'Rename', icon: 'pencil-outline', inPlace: true, request: operation('renameProperty', [property.id], { name: TYPED }) },
@@ -90,7 +91,13 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
         { id: 'insertLeft', label: 'Insert left', icon: 'table-column-plus-before', entries: index === 0 ? newProperty(undefined, true) : newProperty(properties[index - 1].id) },
         { id: 'insertRight', label: 'Insert right', icon: 'table-column-plus-after', entries: newProperty(property.id) },
         { id: 'duplicate', label: 'Duplicate', icon: 'content-duplicate', request: operation('duplicateProperty', [property.id]) },
-        { id: 'delete', label: 'Delete', icon: 'trash-can-outline', request: operation('deleteProperty', [property.id]) },
+        // One side of a two-way relation asks what becomes of the other (etalii.adp spec 080, FR-008).
+        twoWay
+          ? { id: 'delete', label: 'Delete', icon: 'trash-can-outline', entries: [
+            { id: 'deleteBoth', label: 'Delete both sides', request: operation('deleteProperty', [property.id], { otherSide: 'delete' }) },
+            { id: 'keepOther', label: 'Keep the other side as a one-way relation', request: operation('deleteProperty', [property.id], { otherSide: 'keep' }) },
+          ] }
+          : { id: 'delete', label: 'Delete', icon: 'trash-can-outline', request: operation('deleteProperty', [property.id]) },
       ],
     ];
     return [property.id, menu];

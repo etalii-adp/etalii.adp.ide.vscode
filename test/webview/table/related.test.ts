@@ -112,3 +112,32 @@ describe('a relation\'s cells', () => {
     expect(edits()).toEqual([{ kind: 'item', row: 'r2', property: 'province', value: 'an', present: true }]);
   });
 });
+
+describe('a new relation', () => {
+  it('asks its target among the knowledge files, this file first, then its limit and its other side', () => {
+    const shown = viewOf(true);
+    surface.receive(message({
+      ...shown,
+      gestures: { newProperty: [{ id: 'relation', label: 'Relation', request: { kind: 'operation', operation: 'createRelation', on: [], args: {} } }] },
+      operations: {
+        createRelation: { id: 'createRelation', label: 'New relation', params: [
+          { name: 'name', label: 'Name', control: 'text', required: true },
+          { name: 'targetFile', label: 'Target file', control: 'choice', required: true, options: [{ value: '.', label: 'This file' }, { value: 'provinces.yaml', label: 'provinces.yaml' }] },
+          { name: 'limit', label: 'Limit', control: 'choice', required: false, value: 'none', options: [{ value: 'none', label: 'No limit' }, { value: 'one', label: '1 row' }] },
+          { name: 'counterpartName', label: 'Other side', control: 'text', required: false },
+        ] },
+      },
+    }));
+    press(one('.adp-table-new-property'));
+    one<HTMLInputElement>('.adp-table-property-name').value = 'Seat of';
+    press(one('.adp-table-types [data-entry="relation"]'));
+    const form = one<HTMLFormElement>('.adp-table-params');
+    expect([...form.querySelectorAll<HTMLElement>('[name]')].map((field) => field.getAttribute('name'))).toEqual(['targetFile', 'limit', 'counterpartName']);
+    const target = form.querySelector<HTMLSelectElement>('select[name="targetFile"]')!;
+    expect(target.value).toBe('.');
+    target.value = 'provinces.yaml';
+    form.querySelector<HTMLInputElement>('input[name="counterpartName"]')!.value = 'Seats';
+    form.requestSubmit();
+    expect(edits()).toEqual([{ kind: 'operation', operation: 'createRelation', on: [], args: { name: 'Seat of', targetFile: 'provinces.yaml', limit: 'none', counterpartName: 'Seats' } }]);
+  });
+});
