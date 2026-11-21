@@ -545,7 +545,7 @@ export class Table {
     const menu = target.closest('.adp-menu');
     if (menu) {
       // The menu closes itself on Escape; the focus goes back to where it came from.
-      const items = [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+      const items = [...menu.querySelectorAll<HTMLElement>('[role="menuitem"], [role="menuitemcheckbox"]')];
       const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
       if (event.key === 'Escape') this.focus(this.place);
       else if (step !== 0) items[(items.indexOf(target) + step + items.length) % items.length]?.focus();
