@@ -830,3 +830,19 @@ thead .adp-table-lead .adp-table-check,
   box-sizing: border-box;
   margin-bottom: 4px;
 }
+
+/* ---- rows nested under their parents, and the spacers of a long table ---- */
+
+.adp-table-row-fold {
+  margin-right: 2px;
+}
+
+.adp-table-fold-space {
+  display: inline-block;
+  width: 22px;
+}
+
+.adp-table-grid tr.adp-table-spacer td {
+  padding: 0;
+  border: none;
+}

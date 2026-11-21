@@ -376,3 +376,45 @@ describe('the rows and groups of a table with gestures', () => {
     expect(edits()).toEqual([{ kind: 'steps', steps: [op('addOption', ['kind'], { name: 'Huge' }), op('setOption', ['r2'], { property: 'kind', value: '$created:0' })] }]);
   });
 });
+
+describe('rows nested under their parents', () => {
+  const nested: TableView = {
+    ...view,
+    rows: [...view.rows, { id: 'r3', title: 'Three', cells: { name: { id: 'r3.name', value: 'Three', items: [], text: 'Three' } } }],
+    tree: { r1: { depth: 0, parent: true, collapsed: false }, r2: { depth: 1, parent: false, collapsed: false }, r3: { depth: 0, parent: true, collapsed: true } },
+    gestures: { ...gestures, folds: { r1: op('setGroup', ['va'], { slot: 'collapsed', key: 'r1' }), r3: op('unsetGroup', ['g9']) } },
+  };
+
+  it('indents a row\'s title by its depth, gives a parent its fold, and folds it in one edit', () => {
+    surface.receive(message(nested));
+    const title = (row: string): HTMLElement => one(`tbody tr[data-id="${row}"] [role="gridcell"][data-column="name"]`);
+    expect(['r1', 'r2', 'r3'].map((row) => [title(row).style.paddingLeft, one(`tbody tr[data-id="${row}"]`).getAttribute('aria-level')])).toEqual([['8px', '1'], ['26px', '2'], ['8px', '1']]);
+    expect(all('.adp-table-row-fold').map((fold) => [fold.dataset.row, fold.getAttribute('aria-expanded')])).toEqual([['r1', 'true'], ['r3', 'false']]);
+    press(title('r1').querySelector('.adp-table-row-fold')!);
+    expect(edits()).toEqual([op('setGroup', ['va'], { slot: 'collapsed', key: 'r1' })]);
+  });
+});
+
+describe('a long table', () => {
+  const many = Array.from({ length: 10_000 }, (_, index) => ({ id: `r${index}`, title: `Row ${index}`, cells: { name: { id: `r${index}.name`, value: `Row ${index}`, items: [], text: `Row ${index}` } } }));
+  const long: TableView = { ...view, rows: many, total: 10_000 };
+
+  it('draws only the rows near sight, with the scroll bar spanning them all and the whole count told', async () => {
+    surface.receive(message(long));
+    const drawn = all('tbody tr.adp-table-row');
+    expect(drawn.length).toBeGreaterThan(0);
+    expect(drawn.length).toBeLessThan(200);
+    expect(one('table[role="grid"]').getAttribute('aria-rowcount')).toBe('10001');
+    const spacers = all<HTMLElement>('tbody tr.adp-table-spacer');
+    expect(spacers).toHaveLength(1);
+    expect(parseInt(spacers[0].style.height, 10)).toBeGreaterThan(200_000);
+    const scroller = one<HTMLElement>('.adp-table-scroll');
+    Object.defineProperty(scroller, 'scrollTop', { value: 150_000, configurable: true });
+    scroller.dispatchEvent(new Event('scroll'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const ids = all('tbody tr.adp-table-row').map((row) => Number(row.dataset.id?.slice(1)));
+    expect(Math.min(...ids)).toBeLessThanOrEqual(5_000);
+    expect(Math.max(...ids)).toBeGreaterThanOrEqual(5_000);
+    expect(all('tbody tr.adp-table-spacer')).toHaveLength(2);
+  });
+});

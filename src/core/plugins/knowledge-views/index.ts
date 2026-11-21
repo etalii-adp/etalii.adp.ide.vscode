@@ -4,13 +4,11 @@
 // and a grouping select and order rows) is implemented by each host". This is that logic for this
 // host, in the names of `knowledge.des`: which columns a view shows and how, the rows its filter
 // keeps in the order its sorts give, its groups, and what the line under a column shows.
-//
-// simplified: a view grouped by the parent relation shows its rows as one list under their parents'
-// groups, not nested; nest them when the table surface draws a tree. `docs/disl-support.md` records it.
+
 
 import type { ModelElement, Value } from '../../disl/model';
 import { gesturesOf } from './gestures';
-import type { ShownView, TableCell, TableData, TableGroup, TableProperty, TableRow, ThemedColour, ViewLogic } from '../../tool/tableView';
+import type { ShownView, TableCell, TableNest, TableData, TableGroup, TableProperty, TableRow, ThemedColour, ViewLogic } from '../../tool/tableView';
 
 /** Notion's ten names, each as one colour for a light theme and one for a dark one; `default` is the surface's own. */
 const colours: Readonly<Record<string, ThemedColour>> = {
@@ -168,7 +166,47 @@ function shown(table: TableData): ShownView {
   let groups: TableGroup[] | undefined;
   // Every group of the grouping, hidden ones too, in the order shown: the group editor lists them.
   let every: { readonly key: string; readonly label: string; readonly colour?: ThemedColour }[] = [];
-  if (by && ['choice', 'choices', 'checkbox', 'rows'].includes(by.editor ?? '')) {
+  let tree: Record<string, TableNest> | undefined;
+  const byParent = by !== undefined && model.elements.find((element) => element.id === by.id)?.attributes.isParent === true;
+  if (by && byParent) {
+    // Grouped by the parent relation: each row under its parent, to any depth, in the order the view gives
+    // (knowledge.md, "Grouping"). A row whose parent is not in sight is at the top. `collapsed` folds a parent.
+    const sight = new Set(rows.map((row) => row.id));
+    const parentOf = (row: TableRow): string | undefined => {
+      const id = row.cells[by.id]?.items[0]?.value;
+      return id !== undefined && sight.has(id) && id !== row.id ? id : undefined;
+    };
+    const folded = new Set(settings('GroupSetting', 'collapsed').map((setting) => text(setting.attributes.key)));
+    const children = new Map<string, TableRow[]>();
+    const roots: TableRow[] = [];
+    for (const row of rows) {
+      const parent = parentOf(row);
+      if (parent === undefined) roots.push(row);
+      else children.set(parent, [...(children.get(parent) ?? []), row]);
+    }
+    tree = {};
+    const ordered: TableRow[] = [];
+    const seen = new Set<string>();
+    const place = (row: TableRow, depth: number): void => {
+      // A cycle of parents is drawn once, where it is first met.
+      if (seen.has(row.id)) return;
+      seen.add(row.id);
+      ordered.push(row);
+      const under = children.get(row.id) ?? [];
+      tree![row.id] = { depth, parent: under.length > 0, collapsed: folded.has(row.id) };
+      if (!folded.has(row.id)) under.forEach((child) => place(child, depth + 1));
+      else under.forEach((child) => markHidden(child));
+    };
+    const markHidden = (row: TableRow): void => {
+      if (seen.has(row.id)) return;
+      seen.add(row.id);
+      (children.get(row.id) ?? []).forEach(markHidden);
+    };
+    roots.forEach((row) => place(row, 0));
+    // Rows only in a cycle have no root; they are drawn at the top.
+    rows.filter((row) => !seen.has(row.id)).forEach((row) => place(row, 0));
+    rows = ordered;
+  } else if (by && ['choice', 'choices', 'checkbox', 'rows'].includes(by.editor ?? '')) {
     const keysOf = (row: TableRow): string[] => {
       const cell = row.cells[by.id];
       if (by.editor === 'checkbox') return [String(cell?.value === true)];
@@ -214,7 +252,7 @@ function shown(table: TableData): ShownView {
     };
   });
 
-  return { columns, rows: rows.map((row) => row.id), ...(groups ? { groups } : {}), gestures: gesturesOf(table, groups, columns, every, colour) };
+  return { columns, rows: rows.map((row) => row.id), ...(groups ? { groups } : {}), ...(tree ? { tree } : {}), gestures: gesturesOf(table, groups, columns, every, colour, tree) };
 }
 
 const colour = (key: string): ThemedColour | undefined => (Object.hasOwn(colours, key) ? colours[key] : undefined);

@@ -6,7 +6,7 @@
 // form for a parameter an entry's request leaves out.
 
 import type { ModelElement, Value } from '../../disl/model';
-import { ROW, TYPED, type TableBarItem, type TableData, type TableEntry, type TableField, type TableGestures, type TableGroup, type TableMenu, type TableProperty, type TableRequest, type ThemedColour } from '../../tool/tableView';
+import { ROW, TYPED, type TableBarItem, type TableData, type TableEntry, type TableField, type TableGestures, type TableGroup, type TableMenu, type TableNest, type TableProperty, type TableRequest, type ThemedColour } from '../../tool/tableView';
 import { calculationsFor, optionsOf, settingsOf, type Group } from './settings';
 
 const operation = (name: string, on: readonly string[] = [], args: Readonly<Record<string, string | number | boolean>> = {}): TableRequest => ({ kind: 'operation', operation: name, on, args });
@@ -25,7 +25,7 @@ const comparisons: Readonly<Record<string, string>> = {
 };
 
 /** The surface's gestures for the view that is shown. */
-export function gesturesOf(table: TableData, groups: readonly TableGroup[] | undefined, columns: readonly { readonly id: string; readonly visible?: boolean; readonly width?: number; readonly wrap?: boolean; readonly frozen?: boolean }[], every: readonly Group[], colour: (key: string) => ThemedColour | undefined): TableGestures {
+export function gesturesOf(table: TableData, groups: readonly TableGroup[] | undefined, columns: readonly { readonly id: string; readonly visible?: boolean; readonly width?: number; readonly wrap?: boolean; readonly frozen?: boolean }[], every: readonly Group[], colour: (key: string) => ThemedColour | undefined, tree?: Readonly<Record<string, TableNest>>): TableGestures {
   const { model } = table;
   const views = model.elements.filter((element) => element.type === 'View');
   const view = views.find((element) => element.id === table.view);
@@ -130,6 +130,13 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
     }];
   }));
 
+  // ---- the fold of a row others are nested under ----
+
+  const folds = view === undefined || tree === undefined ? undefined : Object.fromEntries(Object.entries(tree).filter(([, nest]) => nest.parent).map(([row]) => {
+    const folded = groupSettings('collapsed').find((setting) => text(setting.attributes.key) === row);
+    return [row, folded ? operation('unsetGroup', [folded.id]) : operation('setGroup', [view.id], { slot: 'collapsed', key: row })];
+  }));
+
   // ---- the bar of selected rows, a new option from a cell, a row added under another ----
 
   const setterOf = (property: TableProperty): TableField | undefined => {
@@ -190,6 +197,7 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
     bulk,
     createOption,
     newRowAfter,
+    ...(folds ? { folds } : {}),
     newRow,
     newRowIn,
     items: [...sorts, ...filters],

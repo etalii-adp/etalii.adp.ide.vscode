@@ -188,3 +188,39 @@ describe('the rows and groups of a Knowledge table', () => {
     expect(gestures.newRowAfter).toEqual({ kind: 'operation', operation: 'addRow', on: [], args: {} });
   });
 });
+
+describe('a Knowledge view grouped by the parent relation', () => {
+  const tasks = (collapsed = ''): Source => ({
+    fileName: 'tasks.yaml',
+    text: [
+      'ded: "0.1"', 'designer: etalii/knowledge', 'name: Tasks', 'activeView: v1',
+      'properties:', '  - id: t', '    name: Name', '    type: text', '    title: true',
+      '  - id: up', '    name: Parent', '    type: relation', '    target: .', '    limit: one', '    parent: true',
+      'views:', '  - id: v1', '    name: All', '    groupBy: up', ...(collapsed ? ['    collapsed:', `      - key: ${collapsed}`] : []),
+      'rows:',
+      '  - id: a', '    cells:', '      - property: t', '        text: Plan',
+      '  - id: c', '    cells:', '      - property: t', '        text: Deep', '      - property: up', '        rows:', '          - row: b',
+      '  - id: b', '    cells:', '      - property: t', '        text: Step', '      - property: up', '        rows:', '          - row: a',
+      '  - id: d', '    cells:', '      - property: t', '        text: Other',
+      '',
+    ].join('\n'),
+  });
+
+  it('nests rows under their parents to any depth, each parent with its fold', () => {
+    const shown = type.view(tasks(), {});
+    expect(type.findings(tasks())).toEqual([]);
+    expect(shown.groups).toBeUndefined();
+    expect(shown.rows.map((row) => [row.id, shown.tree?.[row.id]?.depth])).toEqual([['a', 0], ['b', 1], ['c', 2], ['d', 0]]);
+    expect(Object.keys(shown.gestures?.folds ?? {}).sort()).toEqual(['a', 'b']);
+  });
+
+  it('folds a parent, stored with the view, and its rows are out of sight', () => {
+    const source = tasks();
+    const folded = textOf(source, type.view(source, {}).gestures!.folds!.b);
+    expect(folded).toContain('collapsed');
+    const shown = type.view({ ...source, text: folded }, {});
+    expect(shown.rows.map((row) => row.id)).toEqual(['a', 'b', 'd']);
+    expect(shown.tree?.b).toEqual({ depth: 1, parent: true, collapsed: true });
+    expect(type.view({ ...source, text: textOf({ ...source, text: folded }, shown.gestures!.folds!.b) }, {}).rows).toHaveLength(4);
+  });
+});
