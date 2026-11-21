@@ -1,6 +1,6 @@
 import type { FromCanvas, ToCanvas } from '../../core/frame/protocol';
 import type { Action } from '../../core/frame/toolType';
-import type { TableBarItem, TableCell, TableEntry, TableGestures, TableGroup, TableOperation, TablePanel, TableProperty, TableRequest, TableRow, TableValue, TableView } from '../../core/tool/tableView';
+import type { TableBarItem, TableCell, TableEntry, TableField, TableGestures, TableGroup, TableMenu, TableOperation, TablePanel, TableProperty, TableRequest, TableRow, TableValue, TableView } from '../../core/tool/tableView';
 import { html } from '../diagram/dom';
 import { icon } from '../diagram/icons';
 import { Menu } from '../diagram/menu';
@@ -20,6 +20,8 @@ const leadWidth = 52;
 const SELECTION = '$selection';
 /** Where a request leaves a value to be typed or picked. */
 const TYPED = '$typed';
+/** Where a request names the one row of several it is made for. */
+const ROW = '$row';
 const defaultWidth = 160;
 
 /** Where a cell is: the key of its line (empty for the header) and its column (empty for the row numbers). */
@@ -54,6 +56,9 @@ export class Table {
   private readonly options = html('div', { class: 'adp-table-options' });
   private readonly grid = html('table', { class: 'adp-table-grid', role: 'grid' });
   private readonly status = html('p', { class: 'adp-table-status', role: 'status' });
+  /** The bar of the rows selected: how many, a value set for all of them, delete, and clearing the selection. */
+  private readonly bar = html('div', { class: 'adp-table-selection', role: 'group', 'aria-label': 'Selected rows' });
+  private barDrawn = '';
   private readonly tune = html('button', { class: 'adp-table-tune', type: 'button', 'aria-label': 'Settings', title: 'Settings', 'aria-haspopup': 'menu' }, icon('mdi-tune-variant'));
   /** The editor of the settings control, or the options panel, that is open. */
   private panel: TablePanel | undefined;
@@ -63,7 +68,7 @@ export class Table {
   });
   private readonly root = html('div', { class: 'adp-table' },
     this.tabs,
-    html('div', { class: 'adp-table-toolbar', role: 'toolbar', 'aria-label': 'Table' }, this.buttons, this.search, this.chips, this.tune),
+    html('div', { class: 'adp-table-toolbar', role: 'toolbar', 'aria-label': 'Table' }, this.buttons, this.search, this.chips, this.tune, this.bar),
     this.panels.element, this.options, this.notice, html('div', { class: 'adp-table-scroll' }, this.grid), this.status);
   private readonly menu: Menu;
   private readonly entries: EntryMenu;
@@ -210,10 +215,20 @@ export class Table {
     const span = columns.length + (gestures?.newProperty ? 2 : 1);
     const adding = (request: TableRequest | undefined, group?: string): HTMLElement[] => (request === undefined || view.readOnly ? [] : [html('tr', { class: 'adp-table-new', role: 'row', 'data-group': group },
       html('td', { colspan: span }, html('button', { class: 'adp-table-new-row', type: 'button', 'data-group': group }, icon('mdi-plus'), 'New')))]);
-    const heading = (group: TableGroup): HTMLElement => html('tr', { class: 'adp-table-group', role: 'row', 'aria-expanded': String(!group.collapsed) },
-      html('th', { role: 'rowheader', scope: 'rowgroup', colspan: span },
-        html('span', { class: 'adp-table-group-label' }, group.colour ? tag(group.label || 'No value', group.colour) : group.label || 'No value'),
-        html('span', { class: 'adp-table-count' }, String(group.rows.length))));
+    const control = (kind: string, label: string, name: string): HTMLElement => html('button', { type: 'button', class: `adp-table-group-control adp-table-group-${kind}`, 'data-control': kind, 'aria-label': label, title: label }, icon(name));
+    const heading = (group: TableGroup): HTMLElement => {
+      const head = gestures?.groupHeads?.[group.key];
+      const label = group.label || 'No value';
+      return html('tr', { class: 'adp-table-group', role: 'row', 'aria-expanded': String(!group.collapsed), 'data-group': group.key },
+        html('th', { role: 'rowheader', scope: 'rowgroup', colspan: span },
+          head ? html('button', { type: 'button', class: 'adp-table-fold', 'data-control': 'fold', 'aria-expanded': String(!group.collapsed), 'aria-label': `${group.collapsed ? 'Expand' : 'Collapse'} ${label}` }, icon(group.collapsed ? 'mdi-chevron-right' : 'mdi-chevron-down')) : undefined,
+          html('span', { class: head ? 'adp-table-group-label adp-table-folds' : 'adp-table-group-label' }, group.colour ? tag(label, group.colour) : label),
+          html('span', { class: 'adp-table-count' }, String(group.rows.length)),
+          ...(head ? [html('span', { class: 'adp-table-group-controls' },
+            head.up ? control('up', `Move ${label} up`, 'mdi-arrow-up') : undefined,
+            head.down ? control('down', `Move ${label} down`, 'mdi-arrow-down') : undefined,
+            control('hide', `Hide ${label}`, 'mdi-eye-off-outline'))] : [])));
+    };
     const grouped = (group: TableGroup, index: number): HTMLElement[] => [heading(group), ...(group.collapsed ? [] : [...group.rows.flatMap((id) => {
       const row = this.rows.get(id);
       return row ? [line(row, `${index}/${id}`)] : [];
@@ -323,6 +338,7 @@ export class Table {
     const every = this.grid.querySelector<HTMLInputElement>('.adp-table-all');
     if (every) every.checked = boxes.length > 0 && boxes.every((box) => box.checked);
     this.root.classList.toggle('adp-table-picking', this.selection.some((id) => this.rows.has(id)));
+    this.drawBar();
   }
 
   // Focus and selection.
@@ -473,6 +489,10 @@ export class Table {
     } else if ((event.key === 'Enter' || event.key === ' ') && this.gestures && cell.matches('[role="columnheader"][data-id]')) {
       event.preventDefault();
       this.columnMenu(cell);
+    } else if (event.key === 'Enter' && event.shiftKey && this.gestures?.newRowAfter && line.dataset.id !== undefined) {
+      // As in the standalone host: a row under the one the key was pressed on.
+      event.preventDefault();
+      this.make(this.gestures.newRowAfter, undefined, undefined, line.dataset.id);
     } else if (event.key === 'Enter' || event.key === 'F2') {
       event.preventDefault();
       this.edit(cell);
@@ -497,7 +517,7 @@ export class Table {
       const tab = element.closest<HTMLElement>('.adp-table-tab');
       if (header) this.columnMenu(header, x, y);
       else if (tab) this.entries.open(gestures.viewMenus?.[tab.dataset.id ?? ''] ?? [], x, y, 'View');
-      else if (element.closest('tr.adp-table-row')) this.entries.open(gestures.rowMenu ?? [], x, y, 'Row');
+      else if (element.closest('tr.adp-table-row')) this.entries.open(this.counted(gestures.rowMenu ?? []), x, y, 'Row');
       return;
     }
     if (this.awaiting) this.wanted = { x, y };
@@ -594,6 +614,13 @@ export class Table {
     const header = target.closest<HTMLElement>('[role="columnheader"][data-id]');
     const adding = target.closest<HTMLElement>('.adp-table-new-row');
     const item = target.closest<HTMLElement>('.adp-table-item');
+    const groupControl = target.closest<HTMLElement>('.adp-table-group [data-control]');
+    if (groupControl) {
+      const head = gestures.groupHeads?.[groupControl.closest<HTMLElement>('tr')?.dataset.group ?? ''];
+      const request = head?.[groupControl.dataset.control as 'fold' | 'up' | 'down' | 'hide'];
+      if (request) this.make(request);
+      return request !== undefined;
+    }
     const calculate = target.closest<HTMLElement>('.adp-table-calculate');
     if (target.closest('.adp-table-tune')) {
       const tune = target.closest<HTMLElement>('.adp-table-tune')!;
@@ -650,6 +677,60 @@ export class Table {
   }
 
   /** An entry of a menu chosen: its request, made at once or after what it leaves out is asked. */
+  /** Draws the bar of the rows selected, again only when what it offers changed, so that a value typed in it stays. */
+  private drawBar(): void {
+    const rows = this.selection.filter((id) => this.rows.has(id));
+    const bulk = this.gestures?.bulk;
+    const key = rows.length === 0 || !bulk ? '' : JSON.stringify([rows.length, bulk]);
+    this.bar.hidden = key === '';
+    if (key === this.barDrawn) return;
+    this.barDrawn = key;
+    if (!bulk || key === '') {
+      this.bar.replaceChildren();
+      return;
+    }
+    const properties = (this.view?.properties ?? []).filter((property) => bulk.set[property.id]);
+    const which = html('select', { 'aria-label': 'Property to set' }, ...properties.map((property) => html('option', { value: property.id }, property.name)));
+    const slot = html('span', { class: 'adp-table-selection-value' });
+    let value: () => string | number | boolean | undefined = () => undefined;
+    const field = (): void => {
+      const given: TableField | undefined = bulk.set[which.value];
+      if (!given) return;
+      if (given.control === 'choice') {
+        const select = html('select', { 'aria-label': 'Value' }, ...(given.options ?? []).map((option) => html('option', { value: option.value }, option.label)));
+        value = () => (select.value === 'true' || select.value === 'false' ? select.value === 'true' : select.value);
+        slot.replaceChildren(select);
+      } else {
+        const input = html('input', { 'aria-label': 'Value', type: given.control === 'dateTime' || given.control === 'none' ? 'text' : given.control });
+        value = () => (input.value === '' && given.control !== 'text' ? undefined : given.control === 'number' ? Number(input.value) : input.value);
+        slot.replaceChildren(input);
+      }
+    };
+    which.addEventListener('change', field);
+    field();
+    const set = html('button', { type: 'button', class: 'adp-table-panel-button', 'data-control': 'set' }, 'Set');
+    set.addEventListener('click', () => {
+      const given = bulk.set[which.value];
+      const typed = value();
+      if (!given?.request || typed === undefined) return;
+      const chosen = this.selection.filter((id) => this.rows.has(id));
+      const steps = chosen.map((row) => JSON.parse(JSON.stringify(given.request), (_key, part: unknown) => (part === TYPED ? typed : part === ROW ? row : part)) as TableRequest);
+      this.make({ kind: 'steps', steps });
+    });
+    const label = rows.length > 1 && bulk.remove.plural ? bulk.remove.plural.replace('{count}', String(rows.length)) : bulk.remove.label;
+    const remove = html('button', { type: 'button', class: 'adp-table-panel-button', 'data-control': 'delete' }, icon('mdi-trash-can-outline'), label);
+    remove.addEventListener('click', () => bulk.remove.request && this.make(bulk.remove.request));
+    const clear = html('button', { type: 'button', class: 'adp-table-panel-close', 'data-control': 'clear', 'aria-label': 'Clear the selection' }, '×');
+    clear.addEventListener('click', () => this.select([]));
+    this.bar.replaceChildren(html('span', { class: 'adp-table-selection-count' }, `${rows.length} selected`), which, slot, set, remove, clear);
+  }
+
+  /** A menu for the rows selected: each entry with a label for several says how many. */
+  private counted(menu: TableMenu): TableMenu {
+    const count = this.selection.filter((id) => this.rows.has(id)).length;
+    return menu.map((group) => group.map((entry) => (entry.plural && count > 1 ? { ...entry, label: entry.plural.replace('{count}', String(count)) } : entry)));
+  }
+
   private chosen(entry: TableEntry): void {
     if (entry.opens) this.openPanel(entry.opens);
     else if (entry.request) this.make(entry.request);
@@ -667,9 +748,10 @@ export class Table {
    * parameters of its operation that it does not give asked first. Of several steps, the first
    * operation's are asked.
    */
-  private make(given: TableRequest, name?: string, typed?: string | number): void {
-    // What was typed or picked goes in the place the request leaves for it.
-    const request = typed === undefined ? given : JSON.parse(JSON.stringify(given), (_key, value: unknown) => (value === TYPED ? typed : value)) as TableRequest;
+  private make(given: TableRequest, name?: string, typed?: string | number | boolean, row?: string): void {
+    // What was typed or picked goes in the place the request leaves for it, and the row it is for in the row's.
+    const request = typed === undefined && row === undefined ? given
+      : JSON.parse(JSON.stringify(given), (_key, value: unknown) => (value === TYPED && typed !== undefined ? typed : value === ROW && row !== undefined ? row : value)) as TableRequest;
     const rows = this.selection.filter((id) => this.rows.has(id));
     const put = (given: TableRequest): TableRequest => (given.kind === 'operation' ? { ...given, on: (given.on ?? []).flatMap((id) => (id === SELECTION ? rows : [id])), ...(name === undefined ? {} : { args: { name, ...given.args } }) } : given);
     const resolved: TableRequest = request.kind === 'steps' ? { ...request, steps: request.steps.map((step, index) => (index === 0 ? put(step) : step)) } : put(request);
@@ -804,16 +886,21 @@ export class Table {
     const option = (value: string, content: Node | string): HTMLLIElement => html('li', { role: 'option', tabindex: -1, 'data-value': value }, content);
     const items = [...(many ? [] : [option('', 'None')]), ...property.options.map((candidate) => option(candidate.id, tag(candidate.name, candidate.colour)))];
     const element = html('ul', { class: 'adp-table-list', role: 'listbox', 'aria-label': property.name, 'aria-multiselectable': many ? 'true' : undefined }, ...items);
+    // With gestures, a search field over the list has the focus; a name that is no option makes one and chooses it.
+    const create = this.gestures?.createOption?.[property.id];
+    const search = this.gestures ? html('input', { class: 'adp-table-list-search', type: 'text', 'aria-label': `Search or create an option of ${property.name}`, placeholder: create ? 'Search, or create an option' : 'Search' }) : undefined;
+    const frame = search ? html('div', { class: 'adp-table-picker' }, search, element) : element;
+    const shown = (): HTMLLIElement[] => items.filter((item) => !item.hidden);
     const has = (value: string): boolean => {
       const held = this.rows.get(row.id)?.cells[property.id];
       return many ? held?.items.some((item) => item.value === value) === true : (held?.value ?? '') === value;
     };
     const sync = (): void => items.forEach((item) => item.setAttribute(state, String(has(item.dataset.value ?? ''))));
     const outside = (event: Event): void => {
-      if (!element.contains(event.target as Node)) close(false);
+      if (!frame.contains(event.target as Node)) close(false);
     };
     const close = (refocus: boolean): void => {
-      element.remove();
+      frame.remove();
       window.removeEventListener('pointerdown', outside, true);
       this.list = undefined;
       if (refocus) this.focus(here);
@@ -843,13 +930,33 @@ export class Table {
       else return;
       event.preventDefault();
     });
+    search?.addEventListener('input', () => {
+      const needle = search.value.trim().toLowerCase();
+      for (const item of items) item.hidden = needle !== '' && !(item.textContent ?? '').toLowerCase().includes(needle);
+    });
+    search?.addEventListener('keydown', (event) => {
+      event.stopPropagation();
+      const typed = search.value.trim();
+      if (event.key === 'ArrowDown') shown()[0]?.focus();
+      else if (event.key === 'Escape' || event.key === 'Tab') close(true);
+      else if (event.key === 'Enter') {
+        const same = items.find((item) => item.dataset.value !== '' && (item.textContent ?? '').toLowerCase() === typed.toLowerCase());
+        if (same ?? (typed !== '' ? undefined : shown()[0])) choose((same ?? shown()[0])!);
+        else if (typed !== '' && create) {
+          close(true);
+          this.make(create, undefined, typed, row.id);
+        } else if (shown()[0]) choose(shown()[0]);
+      } else return;
+      event.preventDefault();
+    });
     const box = cell.getBoundingClientRect();
-    const frame = this.root.getBoundingClientRect();
-    element.style.left = `${box.left - frame.left}px`;
-    element.style.top = `${box.bottom - frame.top}px`;
-    this.root.append(element);
+    const bounds = this.root.getBoundingClientRect();
+    frame.style.left = `${box.left - bounds.left}px`;
+    frame.style.top = `${box.bottom - bounds.top}px`;
+    this.root.append(frame);
     sync();
-    (items.find((item) => item.getAttribute(state) === 'true') ?? items[0])?.focus();
+    if (search) search.focus();
+    else (items.find((item) => item.getAttribute(state) === 'true') ?? items[0])?.focus();
     window.addEventListener('pointerdown', outside, true);
     this.list = { sync, close: () => close(false) };
   }

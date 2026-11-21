@@ -142,6 +142,8 @@ export interface TableEntry {
   readonly disabled?: string;
   readonly request?: TableRequest;
   readonly entries?: readonly TableEntry[];
+  /** Its label when it acts on several rows, `{count}` standing for how many. */
+  readonly plural?: string;
   /** For an entry that is a state: whether it is on (a tick, an eye, the choice made). */
   readonly checked?: boolean;
   readonly colour?: ThemedColour;
@@ -278,7 +280,29 @@ export interface TableGestures {
   readonly options?: Readonly<Record<string, TableOptionsPanel>>;
   /** What the calculation line offers under each column, by the property's id. */
   readonly calculations?: Readonly<Record<string, TableMenu>>;
+  /** The controls of each group heading, by the group's key. */
+  readonly groupHeads?: Readonly<Record<string, TableGroupHead>>;
+  /**
+   * What the bar of selected rows sets for all of them, by property: one request per row, `$row`
+   * standing for each and `$typed` for the value; and what deletes them.
+   */
+  readonly bulk?: { readonly set: Readonly<Record<string, TableField>>; readonly remove: TableEntry };
+  /** A new option made and chosen in a cell's list, by property: `$row` the row, `$typed` the name. */
+  readonly createOption?: Readonly<Record<string, TableRequest>>;
+  /** A row added under another, `$row` standing for that one: the key that adds a row. */
+  readonly newRowAfter?: TableRequest;
 }
+
+/** The controls of a group heading. */
+export interface TableGroupHead {
+  readonly fold: TableRequest;
+  readonly up?: TableRequest;
+  readonly down?: TableRequest;
+  readonly hide: TableRequest;
+}
+
+/** How a gesture names one row of several it is made for. */
+export const ROW = '$row';
 
 /** What a table surface draws. */
 export interface TableView {

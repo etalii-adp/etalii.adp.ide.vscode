@@ -142,3 +142,49 @@ describe('the settings control, the options panel and the calculation line of a 
     expect(summed.properties.find((property) => property.id === 'p3')?.summary?.label).toBe('Sum');
   });
 });
+
+describe('the rows and groups of a Knowledge table', () => {
+  const source = example('cities.yaml');
+  const viewOf = (text: string) => type.view({ ...source, text }, {});
+  /** The view without a filter, where every row is in sight. */
+  const everyRow = (text: string) => type.view({ ...source, text: text.replace('activeView: v1', 'activeView: v2') }, {});
+  const put = (request: TableRequest, row: string, value: string | number | boolean): TableRequest => JSON.parse(JSON.stringify(request), (_key, given: unknown) => (given === '$row' ? row : given === '$typed' ? value : given)) as TableRequest;
+  const gestures = type.view(source, {}).gestures!;
+
+  it('folds a group, moves it up and down, and hides it, each as one edit', () => {
+    const order = (text: string): string[] => viewOf(text).groups!.map((group) => group.label);
+    const before = order(source.text);
+    const belgium = viewOf(source.text).groups!.find((group) => group.label === 'Belgium')!.key;
+    const head = gestures.groupHeads![belgium];
+    expect(viewOf(textOf(source, head.fold)).groups!.find((group) => group.key === belgium)?.collapsed).toBe(true);
+    const up = order(textOf(source, head.up!));
+    expect(up.indexOf('Belgium')).toBe(before.indexOf('Belgium') - 1);
+    expect(order(textOf(source, head.down!)).indexOf('Belgium')).toBe(before.indexOf('Belgium') + 1);
+    expect(order(textOf(source, head.hide))).not.toContain('Belgium');
+    expect(gestures.groupHeads![viewOf(source.text).groups![0].key].up).toBeUndefined();
+  });
+
+  it('sets one property of every selected row in one edit', () => {
+    const set = gestures.bulk!.set.p3;
+    const request: TableRequest = { kind: 'steps', steps: ['r1', 'r2'].map((row) => put(set.request!, row, 7)) };
+    const after = everyRow(textOf(source, request));
+    expect(['r1', 'r2'].map((row) => after.rows.find((candidate) => candidate.id === row)?.cells.p3?.value)).toEqual([7, 7]);
+    expect(gestures.bulk!.remove).toMatchObject({ label: 'Delete row', plural: 'Delete {count} rows' });
+  });
+
+  it('makes an option from a cell\'s list and chooses it, in one edit', () => {
+    const after = everyRow(textOf(source, put(gestures.createOption!.p2, 'r2', 'Luxembourg')));
+    const option = after.properties.find((property) => property.id === 'p2')!.options.find((candidate) => candidate.name === 'Luxembourg');
+    expect(option).toBeDefined();
+    expect(after.rows.find((row) => row.id === 'r2')?.cells.p2?.value).toBe(option!.id);
+  });
+
+  it('adds a row directly under another in a view without a sort', () => {
+    const map = { ...source, text: source.text.replace('activeView: v1', 'activeView: v2') };
+    const request = type.view(map, {}).gestures!.newRowAfter!;
+    const rows = type.view({ ...map, text: textOf(map, put(request, 'r1', '')) }, {}).rows.map((row) => row.id);
+    expect(rows[0]).toBe('r1');
+    expect(['r1', 'r2', 'r3', 'r4']).not.toContain(rows[1]);
+    expect(gestures.newRowAfter).toEqual({ kind: 'operation', operation: 'addRow', on: [], args: {} });
+  });
+});
