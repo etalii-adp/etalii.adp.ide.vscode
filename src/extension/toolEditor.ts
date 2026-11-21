@@ -10,6 +10,7 @@ import type { TableRequest, TableView } from '../core/tool/tableView';
 import type { Findings } from './findings';
 import { handBack } from './opening';
 import { pickLink } from './projectLinkPicker';
+import { RelatedFiles, relatedUri } from './relatedFiles';
 import type { AnyToolType } from './toolTypes';
 import { webviewHtml } from './webviewHtml';
 
@@ -45,6 +46,10 @@ export class OpenTool {
   lastCause: ViewCause | undefined;
   /** The questions the page asks in its own place, by the `seq` of the edit that asks, until it answers. */
   readonly confirming = new Map<number, (confirmed: boolean) => void>();
+  /** The files the document names that its tool type reads as well, where it reads any. */
+  related: RelatedFiles | undefined;
+  /** A row to select once the page has drawn its first view: one a link in another document opened. */
+  selectOnReady: string | undefined;
 
   constructor(readonly type: AnyToolType, readonly document: vscode.TextDocument, readonly panel: vscode.WebviewPanel) {
     this.registrationUri = registrationUriOf(document.uri);
@@ -52,7 +57,8 @@ export class OpenTool {
 
   get source(): Source {
     const source = { fileName: this.document.fileName, text: this.document.getText() };
-    return this.registration === undefined ? source : { ...source, registration: this.registration };
+    const related = this.related?.texts;
+    return { ...source, ...(this.registration === undefined ? {} : { registration: this.registration }), ...(related === undefined ? {} : { related }) };
   }
 
   fields(): Field[] {
@@ -205,6 +211,8 @@ export class Tools implements vscode.Disposable {
    */
   refresh(diagram: OpenTool, cause?: ViewCause): void {
     const source = diagram.source;
+    // The files the document names now are read, and followed; the view comes again once they are.
+    if (diagram.related && diagram.type.related) diagram.related.follow(diagram.type.related(source));
     // The document changed since the canvas was last sent a scene: a layout that runs on every change starts
     // from where the nodes are on screen, so that what the change did not touch moves little (DISL 10.4).
     const shown = diagram.lastView;
@@ -219,7 +227,7 @@ export class Tools implements vscode.Disposable {
       actions: view.readOnly ? [] : diagram.type.actions(source, diagram.selection, diagram.options),
       version: diagram.document.version, ...(cause === undefined ? {} : { cause }),
     });
-    this.findings.show(diagram.document, diagram.type);
+    this.findings.show(diagram.document, diagram.type, source.related);
     if (diagram === this.current) this.changed.fire();
   }
 
@@ -234,6 +242,8 @@ export class Tools implements vscode.Disposable {
     const uri = document.uri.toString();
     const causeOf = (diagram: OpenTool): ViewCause => (diagram.performing > 0 ? 'edit' : 'outside');
     for (const diagram of this.open) {
+      // A file the document names changed in its editor: what the document shows of it follows.
+      if (diagram.document !== document && diagram.related?.documentChanged(document)) continue;
       if (diagram.document === document) {
         this.refresh(diagram, causeOf(diagram));
       } else if (diagram.registrationUri.toString() === uri) {
@@ -446,6 +456,31 @@ export class Tools implements vscode.Disposable {
     });
   }
 
+  /**
+   * A related row opened where it lives (etalii.adp spec 080, FR-002): its file in this tool, or
+   * brought forward where it is open already, with the row selected.
+   */
+  private async follow(diagram: OpenTool, path: string, row: string): Promise<Performed> {
+    const target = relatedUri(diagram.document.uri, path);
+    const shown = [...this.open].find((other) => other.document.uri.toString() === target.toString() && other.type === diagram.type);
+    if (shown) {
+      shown.panel.reveal();
+      shown.post({ v: 2, type: 'reveal', id: row });
+      return { result: 'applied' };
+    }
+    try {
+      await vscode.workspace.fs.stat(target);
+    } catch {
+      return { result: 'refused', sentence: `${path} is not there, so it is not opened.` };
+    }
+    this.selecting.set(target.toString(), row);
+    await vscode.commands.executeCommand('vscode.openWith', target, viewTypeOf(diagram.type));
+    return { result: 'applied' };
+  }
+
+  /** The row each document opened by a link selects once its page is ready, by the document's address. */
+  readonly selecting = new Map<string, string>();
+
   private async carryOut(diagram: OpenTool, request: EditRequest | TableRequest | HierarchyRequest, version: number | undefined, seq: number | undefined): Promise<Performed> {
     if (version !== undefined && version !== diagram.document.version) return { result: 'cancelled' };
 
@@ -483,6 +518,7 @@ export class Tools implements vscode.Disposable {
         return this.perform(diagram, { kind: 'setField', id: outcome.id, field: outcome.field, value: picked.value });
       }
       case 'open': {
+        if (outcome.select !== undefined) return this.follow(diagram, outcome.path, outcome.select);
         // An address is opened in the browser. A path, read against the document's folder when it is
         // relative, is shown in the Explorer and opened when it lies in the workspace; any other path
         // is shown, with why it was not opened and an offer to copy it (DISL 9.4).
@@ -591,6 +627,9 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
       return;
     }
     const diagram = new OpenTool(this.type, document, panel);
+    if (this.type.related) diagram.related = new RelatedFiles(document.uri, () => this.tools.refresh(diagram));
+    diagram.selectOnReady = this.tools.selecting.get(document.uri.toString());
+    this.tools.selecting.delete(document.uri.toString());
     diagram.readOnly = await isReadOnly(document);
     diagram.registration = await readText(diagram.registrationUri);
     panel.webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'dist')] };
@@ -610,6 +649,7 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
       // A question the page can no longer answer is answered no.
       for (const answer of diagram.confirming.values()) answer(false);
       diagram.confirming.clear();
+      diagram.related?.dispose();
       this.tools.remove(diagram);
     });
   }
@@ -618,6 +658,8 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
     switch (message.type) {
       case 'ready':
         this.tools.refresh(diagram);
+        if (diagram.selectOnReady !== undefined) diagram.post({ v: 2, type: 'reveal', id: diagram.selectOnReady });
+        diagram.selectOnReady = undefined;
         return;
       case 'viewOptions':
         this.tools.setOptions(diagram, message.options);

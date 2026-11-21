@@ -966,3 +966,18 @@ thead .adp-table-lead .adp-table-check,
   margin-left: 4px;
   color: var(--adp-table-finding-colour);
 }
+
+/* A related row: its title, as a link to it where it lives (etalii.adp spec 080, FR-001). */
+.adp-table-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--vscode-textLink-foreground);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.adp-table-link:hover {
+  color: var(--vscode-textLink-activeForeground);
+}

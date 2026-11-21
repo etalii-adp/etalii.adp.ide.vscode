@@ -48,7 +48,7 @@ import { composedSplices, modelChangesOf, viewStepsOf, type Refused } from './mo
 import { missingPlugins, pluginReferences, type PluginRegistry } from './pluginRegistry';
 import { layoutOf, newRegistration, withLayout, type Corner } from './registrationLayout';
 import { hierarchyReader, type HierarchyRequest, type HierarchyView, type NodeFinding } from './hierarchyView';
-import { CREATED, tableReader, withFindings, type TableGestures, type TableProperty, type TableRequest, type TableValue, type TableView } from './tableView';
+import { CREATED, tableReader, withFindings, type RelatedRows, type TableGestures, type TableProperty, type TableRequest, type TableValue, type TableView } from './tableView';
 import { wireIdsOf } from './wireIds';
 
 // The host's own sentences, for what a definition has no words for.
@@ -780,6 +780,33 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
   let last: { readonly source: Source; readonly open: Open } | undefined;
   function opened(source: Source): Open {
     if (last && last.source.text === source.text && last.source.fileName === source.fileName && last.source.registration === source.registration) return last.open;
+    const open = readOpen(source);
+    last = { source, open };
+    return open;
+  }
+
+  // The files a document names, each read once for its text: a large one is read again only when it changes.
+  const relatedRead = new Map<string, { readonly text: string; readonly rows: ReturnType<RelatedRows> }>();
+  /** The rows of each file a document names, read through this tool type's bindings: none for a file that is not one of its documents. */
+  const relatedOf = (source: Source): RelatedRows | undefined => source.related && ((file) => {
+    const given = source.related?.[file];
+    if (!given || !table) return undefined;
+    const key = `${file}\u0000${given.fileName}`;
+    const known = relatedRead.get(key);
+    if (known && known.text === given.text) return known.rows;
+    const open = claimingBinding(bindings, given.fileName, given.text) === undefined ? undefined : readOpen({ fileName: given.fileName, text: given.text });
+    const rows = open === undefined || open.unreadable ? undefined : table.titlesOf(open.model);
+    relatedRead.set(key, { text: given.text, rows });
+    return rows;
+  });
+  /** The tool type's own findings of the values that name rows of the files a document names. */
+  const relatedFound = (source: Source, open: Open): NodeFinding[] => {
+    if (!table || open.unreadable) return [];
+    const lines = new Map(open.model.elements.map((element) => [element.id, element.line]));
+    return table.foundOf(open.model, relatedOf(source)).map((found) => ({ rule: found.code, severity: found.severity, message: found.message, line: Math.max(0, (lines.get(found.element) ?? 1) - 1), element: found.element }));
+  };
+
+  function readOpen(source: Source): Open {
     const binding = claimingBinding(bindings, source.fileName, source.text) ?? bindings[0];
     const body = bodyOf(binding, source);
     const read = body.model;
@@ -811,7 +838,6 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
       unreadable: read.unreadable, refusal: read.unreadable ? found[0]?.message ?? UNREADABLE : gate,
       unnumbered: counted.unnumbered, renumbered, stored, implied, foreign,
     };
-    last = { source, open };
     return open;
   }
 
@@ -852,7 +878,8 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
       });
     }
     if (!table || open.unreadable) return emptyTable(open.refusal ?? UNREADABLE);
-    const shown = withFindings(table.view(open.model, { readOnly: open.refusal !== undefined, ...(open.refusal === undefined ? {} : { notice: open.refusal }) }), open.found, open.model);
+    const related = relatedOf(source);
+    const shown = withFindings(table.view(open.model, { readOnly: open.refusal !== undefined, ...(open.refusal === undefined ? {} : { notice: open.refusal }) }, related), [...open.found, ...relatedFound(source, open)], open.model);
     return shown.gestures && operations ? { ...shown, gestures: checkedGestures(shown.gestures, open.model) } : shown;
   };
 
@@ -1143,6 +1170,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
       case 'steps': return { ...request, steps: request.steps.map((step) => renamed(step, now)) };
       case 'cell': return { ...request, row: now(request.row), property: now(request.property), value: value(request.value) };
       case 'item': return { ...request, row: now(request.row), property: now(request.property), value: now(request.value) };
+      case 'follow': return { ...request, row: now(request.row) };
     }
   }
 
@@ -1186,6 +1214,8 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
         return done(run.setItem(open.model, request.row, request.property, request.value, request.present));
       case 'show':
         return done(run.activate(open.model, request.view));
+      case 'follow':
+        return { kind: 'open', path: request.file, select: request.row };
       case 'steps': {
         // One after another on what the one before left, written once: one edit and one undo step.
         const changes: Change[] = [];
@@ -1283,7 +1313,14 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     claims: claimsOf(bindings),
     claimed: (fileName, text) => claimingBinding(bindings, fileName, text) !== undefined,
     suggests: (fileName, text) => suggests(bindings, fileName, text),
-    findings: (source) => [...opened(source).findings, ...ofDefinition, ...ofPlugins],
+    findings: (source) => {
+      const open = opened(source);
+      return [...open.findings, ...relatedFound(source, open).map(({ rule, severity, message, line }) => ({ rule, severity, message, line })), ...ofDefinition, ...ofPlugins];
+    },
+    related: (source) => {
+      const open = opened(source);
+      return open.unreadable ? [] : logic?.targets?.(open.model) ?? [];
+    },
     view,
     toolbox,
     fields,

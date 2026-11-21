@@ -138,7 +138,11 @@ export type EditOutcome =
   /** The request is answered in ADP Properties: the named field is where the user goes on. */
   | { readonly kind: 'showField'; readonly field: string }
   /** A linked file or folder is opened by the extension; nothing is written. */
-  | { readonly kind: 'open'; readonly path: string }
+  | {
+    readonly kind: 'open'; readonly path: string;
+    /** The element to select once the file is open in this tool type, which then opens it rather than its default editor. */
+    readonly select?: string;
+  }
   /** A path is asked with the platform's file and folder dialog; chosen, it is set as the named field, relative to the document. */
   | { readonly kind: 'pickPath'; readonly id: string; readonly field: string };
 
@@ -147,6 +151,18 @@ export interface Source {
   readonly fileName: string;
   readonly text: string;
   readonly registration?: string;
+  /**
+   * The files the document names that its tool type reads as well, by the name the document gives
+   * each (`ToolType.related`): their text, or null for one that cannot be read. One not given is read
+   * as one that cannot be.
+   */
+  readonly related?: Readonly<Record<string, RelatedFile | null>>;
+}
+
+/** A file a document names, as the host found it: open in an editor, unsaved changes and all, or on disk. */
+export interface RelatedFile {
+  readonly fileName: string;
+  readonly text: string;
 }
 
 /** One binding's claim, as its FBL `claims` states it. */
@@ -175,6 +191,8 @@ export interface ToolType<View, Request> {
   readonly claims: readonly Claim[];
   /** Whether a file is this tool type's: extension and marker both. */
   claimed(fileName: string, text: string): boolean;
+  /** The other files the document names whose text it needs, as it names them: given back in `Source.related`. */
+  related?(source: Source): readonly string[];
   /** Whether a file of a shared extension looks like this type, from the binding's `claims.suggest`. */
   suggests(fileName: string, text: string): boolean;
   /** Everything wrong with the document. Never throws. */
