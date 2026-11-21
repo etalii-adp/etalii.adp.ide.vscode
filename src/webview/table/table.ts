@@ -117,6 +117,8 @@ export class Table {
   private form: HTMLFormElement | undefined;
   /** What a view's or a column's menu was opened on: a name renamed in place is typed there. */
   private menuAt: HTMLElement | undefined;
+  /** Whether the property made last was given no name: it asks for one in its header once it is shown. */
+  private nameNext = false;
   /** A name typed in place and sent: what its outcome does. */
   private renaming: { readonly seq: number; readonly refused: (sentence: string) => void; readonly done: () => void } | undefined;
 
@@ -199,6 +201,13 @@ export class Table {
     this.rove();
     this.select([id]);
     cell.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    // A property added without a name asks its name in its header at once (etalii.adp spec 079, FR-014).
+    if (this.nameNext) {
+      this.nameNext = false;
+      const header = [...this.grid.querySelectorAll<HTMLElement>('[role="columnheader"][data-id]')].find((candidate) => candidate.dataset.id === id);
+      const rename = this.gestures?.columnMenus?.[id]?.flat().find((entry) => entry.inPlace && entry.request);
+      if (header && rename?.request) this.rename(header, rename.request);
+    }
   }
 
   /** A related row opened: one of this table selected in place, one of another file opened there. */
@@ -798,7 +807,8 @@ export class Table {
 
   /** An entry of a menu chosen: renamed in place, a panel opened, or its request made. */
   private chosen(entry: TableEntry): void {
-    if (entry.inPlace && entry.request && this.menuAt?.isConnected) this.rename(this.menuAt, entry.request);
+    if (entry.named && entry.entries && this.menuAt?.isConnected) this.newProperty(this.menuAt, entry.entries);
+    else if (entry.inPlace && entry.request && this.menuAt?.isConnected) this.rename(this.menuAt, entry.request);
     else if (entry.opens) this.openPanel(entry.opens);
     else if (entry.request) this.make(entry.request);
   }
@@ -855,6 +865,7 @@ export class Table {
       if (type.disabled !== undefined || !type.request) return;
       const name = input.value.trim();
       close();
+      this.nameNext = name === '';
       this.make(type.request, name === '' ? type.label : name);
     };
     list.addEventListener('click', (event) => {

@@ -91,8 +91,8 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
           : { id: 'freeze', label: 'Freeze up to column', icon: 'pin-outline', request: operation('freeze', [view.id], { property: property.id }) },
       ],
       [
-        { id: 'insertLeft', label: 'Insert left', icon: 'table-column-plus-before', entries: index === 0 ? newProperty(undefined, true) : newProperty(properties[index - 1].id) },
-        { id: 'insertRight', label: 'Insert right', icon: 'table-column-plus-after', entries: newProperty(property.id) },
+        { id: 'insertLeft', label: 'Insert left', icon: 'table-column-plus-before', named: true, entries: index === 0 ? newProperty(undefined, true) : newProperty(properties[index - 1].id) },
+        { id: 'insertRight', label: 'Insert right', icon: 'table-column-plus-after', named: true, entries: newProperty(property.id) },
         { id: 'duplicate', label: 'Duplicate', icon: 'content-duplicate', request: operation('duplicateProperty', [property.id]) },
         // One side of a two-way relation asks what becomes of the other (etalii.adp spec 080, FR-008).
         twoWay

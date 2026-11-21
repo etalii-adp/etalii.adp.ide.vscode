@@ -66,7 +66,7 @@ export class EntryMenu {
     if (entry.disabled !== undefined) item.setAttribute('aria-disabled', 'true');
     item.addEventListener('click', () => {
       if (entry.disabled !== undefined) return;
-      if (entry.entries) {
+      if (entry.entries && !entry.named) {
         this.open([entry.entries], x, y, entry.label);
         return;
       }
