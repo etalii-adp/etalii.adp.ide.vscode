@@ -9,9 +9,12 @@
 # writes the skipped tests and their reasons to the job summary and keeps its test reports on every run that was not
 # cancelled.
 #
-# One job publishes, and only it holds contents: write. development-build runs on develop, after both other jobs
+# Two jobs publish, and only they hold contents: write. development-build runs on develop, after both other jobs
 # passed, and keeps one "development" pre-release on the Releases page in step with it, moving only forward. It cannot
-# run for a pull request, whose ref is refs/pull/<n>/merge.
+# run for a pull request, whose ref is refs/pull/<n>/merge. release runs for a tag v<version> pushed on a commit of
+# develop, after both other jobs passed on that commit: it makes the release v<version> with the plug-in the plugin job
+# made, and publishes that same file to the Visual Studio Marketplace (with the VSCE_PAT secret) and, when the
+# OVSX_PAT secret is set, to Open VSX.
 name: Build
 
 on:
@@ -19,6 +22,7 @@ on:
     branches: [develop]
   push:
     branches: [develop]
+    tags: ['v*.*.*']
   workflow_dispatch:
 
 permissions:
@@ -139,6 +143,91 @@ jobs:
             # The tag moves last, so a job that stopped half-way is not taken for "already published" when re-run.
             gh api -X PATCH "repos/$GH_REPO/git/refs/tags/$DEVELOPMENT_TAG" -f sha="$GITHUB_SHA" -F force=true >/dev/null
           fi
+
+  # Releases the plug-in a tag v<version> names: the release v<version> on the Releases page, the Visual Studio
+  # Marketplace, and Open VSX when its token is set. The tag must name the version package.json gives and a commit of
+  # develop, so a release is always a plug-in that passed every check on develop. Each step can be re-run after a
+  # failure: the release is made only when it is missing, and a store already holding the version is left as it is.
+  release:
+    needs: [check, plugin]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Take the plug-in the plugin job made
+        uses: actions/download-artifact@v8
+        with:
+          pattern: etalii-adp-*.vsix
+          merge-multiple: true
+          # The artifact is the .vsix itself; without this it would be unpacked.
+          skip-decompress: true
+          path: plugin
+      - name: Check the tag against the plug-in and develop
+        id: plugin
+        run: |
+          vsix=$(find plugin -type f -name 'etalii-adp-*.vsix' | head -n 1)
+          [ -n "$vsix" ] || { echo "::error::The plugin job's plug-in was not found among the downloaded artifacts."; exit 1; }
+          version=$(basename "$vsix")
+          version=${version#etalii-adp-}
+          version=${version%.vsix}
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::The tag $TAG does not name the plug-in's version $version; tag v$version, or change the version in package.json first."
+            exit 1
+          fi
+          status=$(gh api "repos/$GH_REPO/compare/develop...$GITHUB_SHA" --jq .status)
+          if [ "$status" != "identical" ] && [ "$status" != "behind" ]; then
+            echo "::error::The tag $TAG names $GITHUB_SHA, which is not a commit of develop ($status)."
+            exit 1
+          fi
+          echo "vsix=$vsix" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Make the release
+        env:
+          VSIX: ${{ steps.plugin.outputs.vsix }}
+          VERSION: ${{ steps.plugin.outputs.version }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::The release $TAG exists already, so it is left as it is."
+            exit 0
+          fi
+          {
+            echo "ADP: A Different Perspective $VERSION, from \`develop\` at [$GITHUB_SHA]($GITHUB_SERVER_URL/$GH_REPO/commit/$GITHUB_SHA)."
+            echo
+            echo "Install it from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=etalii.adp), or download \`$(basename "$VSIX")\` below and choose **Install from VSIX...** in the Extensions view."
+            echo
+            echo "Checked by [this run]($GITHUB_SERVER_URL/$GH_REPO/actions/runs/$GITHUB_RUN_ID)."
+          } > notes.md
+          gh release create "$TAG" "$VSIX" --verify-tag --latest --title "ADP $VERSION" --notes-file notes.md
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Publish to the Visual Studio Marketplace
+        env:
+          VSIX: ${{ steps.plugin.outputs.vsix }}
+          VERSION: ${{ steps.plugin.outputs.version }}
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          [ -n "$VSCE_PAT" ] || { echo "::error::The repository has no VSCE_PAT secret, so the Marketplace cannot be published to (README.md, Release)."; exit 1; }
+          if npx --yes @vscode/vsce@4 show etalii.adp --json 2>/dev/null | jq -e --arg v "$VERSION" '.versions[]? | select(.version == $v)' >/dev/null; then
+            echo "::notice::The Marketplace holds $VERSION already, so it is left as it is."
+            exit 0
+          fi
+          npx --yes @vscode/vsce@4 publish --packagePath "$VSIX"
+      - name: Publish to Open VSX
+        env:
+          VSIX: ${{ steps.plugin.outputs.vsix }}
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if [ -z "$OVSX_PAT" ]; then
+            echo "::notice::The repository has no OVSX_PAT secret, so Open VSX is skipped."
+            exit 0
+          fi
+          npx --yes ovsx@1 publish "$VSIX" --skip-duplicate
 
   # Flags a retired use of the ADP vocabulary (etalii.adp spec 002, FR-017). The runner and its list of retired
   # patterns and allowances live in etalii.adp and are read from its develop branch, so every repository is checked

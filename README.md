@@ -20,6 +20,10 @@ Each tool is an editor on the file's own text: every change is one step in Visua
 
 **No tool type is written in code here.** Each is read from its definition in [etalii.adp](https://github.com/etalii-adp/etalii.adp/tree/develop/definitions), a DISL specification for a diagram or a DESL specification for a designer, with its [FBL](https://github.com/etalii-adp/etalii.adp/blob/develop/specifications/fbl/FBL-specification.md) binding, copied unchanged into [`definitions/`](definitions) ([spec 027 in etalii.adp](https://github.com/etalii-adp/etalii.adp/tree/develop/specs/027-vscode-disl-fbl-tools)). Three records say how far that goes: [docs/disl-support.md](docs/disl-support.md), what the plug-in reads of DISL 0.4 and DESL 0.2 and where a tool type differs from its definition; [docs/fbl.md](docs/fbl.md), what it implements of FBL 0.8; and [docs/parity.md](docs/parity.md), what this host does in its own way.
 
+## Install from the Marketplace
+
+Search for **ADP: A Different Perspective** in the Extensions view, or install `etalii.adp` from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=etalii.adp), once its first release is published (see [Release](#release)).
+
 ## Install from a file
 
 1. Download `etalii-adp-<version>.vsix` from the [Releases page](https://github.com/etalii-adp/etalii.adp.ide.vscode/releases): the **Development build** pre-release is the plug-in from the current `develop` after it passed every check.
@@ -49,6 +53,23 @@ The build fetches the language server of `.atd` tool descriptions from the deskt
 Reports are written to `reports/`. On Windows, keep the clone at a short path: the Visual Studio Code the tests download does not start from a path near the 260-character limit.
 
 Every pull request into `develop` and every change to `develop` is checked by the Build workflow (`.github/workflows/build.yml`), which runs the same commands. Its summary lists the tests that were skipped and why, and its test reports are kept with the run.
+
+## Release
+
+A release is a tag `v<version>` on a commit of `develop`, where `<version>` is the `version` in `package.json`. Pushing the tag runs the Build workflow on that commit; when every check passes, its `release` job makes the release `v<version>` on the Releases page with `etalii-adp-<version>.vsix`, and publishes that same file to the Visual Studio Marketplace and, when the `OVSX_PAT` secret is set, to Open VSX. A tag that names another version, or a commit that is not on `develop`, is refused.
+
+```sh
+git tag v0.1.0 origin/develop
+git push origin v0.1.0
+```
+
+Raise the version in `package.json` right after a release: the Marketplace accepts each version once.
+
+It needs, once:
+
+- A Marketplace publisher whose id is the `publisher` in `package.json` (`etalii`), made at <https://marketplace.visualstudio.com/manage>.
+- A personal access token of Azure DevOps for that publisher, with the organization **All accessible organizations** and the scope **Marketplace: Manage**, stored as the repository secret `VSCE_PAT`.
+- For Open VSX, optionally: a namespace `etalii` there and an access token, stored as the repository secret `OVSX_PAT`. Without it, Open VSX is skipped.
 
 ## Debug
 
