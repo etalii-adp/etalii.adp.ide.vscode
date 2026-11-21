@@ -63,6 +63,15 @@ The designer is read from its definition; where the definition and the standalon
 | The page is a tree to the keyboard and to assistive technology: the arrow keys, Home and End move the selection through the boxes in the order they are drawn, Left and Right also collapse and expand a level, and Alt with an arrow moves the selected box earlier or later among its kind, out of its level or into the level before it. "ADP: Move Earlier" and "ADP: Move Later" do so from the Command Palette. The standalone host's page is a tree to assistive technology, but its boxes are selected and moved by the pointer only. | The accessibility pass the maintainer asked for: everything a pointer does has a key, by the same move operation a drag runs. Alt+Left and Alt+Right are kept from Visual Studio Code, which goes back and forward between editors with them elsewhere. |
 | In high contrast, the focus is a dashed outline in the contrast's active border, two pixels wide, on a control and on the selected box while the page has the focus. | Visual Studio Code's high contrast themes tell the focus by that colour; dashed, it is told from the selection's solid outline. |
 
+## Knowledge designer
+
+Its differences from the definition and from the standalone host are listed in [disl-support.md, *Knowledge*](disl-support.md#knowledge); the ones its table surface still has are etalii.adp spec 079's to close.
+
+| Difference | Why |
+|---|---|
+| Nothing of the table is dragged yet: a column, a row and a view are moved by their "Move" operation. | Spec 079 brings drag in a pull request of its own. |
+| Renaming a view or a property asks the name in a form, not in the tab or the header. | The same; the form is the one every operation with a parameter uses. |
+
 ## Native dialogs, seen in a real window
 
 A test in a real Visual Studio Code cannot answer a native dialog, so each one the three new tool types raise is looked at once by a person (etalii.adp spec 027, FR-015). Peter Vrenken saw them on 2026-10-13 in Visual Studio Code 1.141.0 on Windows, with the Development build of the plug-in at `9849baf`. Each appeared and read as its definition states.

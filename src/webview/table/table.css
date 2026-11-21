@@ -342,8 +342,8 @@ body {
 .adp-table-tag {
   display: inline-block;
   margin-right: 4px;
-  padding: 0 6px;
-  border-radius: 3px;
+  padding: 0 8px;
+  border-radius: 999px;
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
 }
@@ -486,4 +486,126 @@ body {
 
 .adp-menu-shortcut {
   color: var(--vscode-descriptionForeground);
+}
+
+/* ---- the surface of a tool type that gives its gestures (etalii.adp spec 079) ---- */
+
+.adp-table-new-view,
+.adp-table-find,
+.adp-table-new-property,
+.adp-table-new-row,
+.adp-table-item-remove {
+  padding: 2px 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  line-height: 0;
+  cursor: pointer;
+}
+
+.adp-table-new-view:hover,
+.adp-table-find:hover,
+.adp-table-new-property:hover,
+.adp-table-new-row:hover,
+.adp-table-item-remove:hover {
+  background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
+  color: var(--vscode-foreground);
+}
+
+.adp-table-gestures [role='tab'][aria-selected='true'] {
+  cursor: pointer;
+}
+
+.adp-table-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 6px;
+  padding: 1px 4px 1px 8px;
+  border: 1px solid var(--adp-table-line);
+  border-radius: 999px;
+  color: var(--vscode-foreground);
+}
+
+.adp-table-item-remove {
+  line-height: 1;
+}
+
+.adp-table-gestures .adp-table-grid thead th[data-id] {
+  padding-right: 8px;
+  cursor: pointer;
+}
+
+.adp-table-gestures .adp-table-grid thead th[data-id]:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.adp-table-grid .adp-table-lead {
+  width: 52px;
+  padding: 0 4px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+/* The checkbox and the handle of a row show where the pointer is, and every checkbox while rows are selected. */
+.adp-table-lead .adp-table-check,
+.adp-table-lead .adp-table-handle {
+  visibility: hidden;
+}
+
+.adp-table-handle {
+  color: var(--vscode-descriptionForeground);
+  cursor: grab;
+}
+
+.adp-table-row:hover .adp-table-lead .adp-table-check,
+.adp-table-row:hover .adp-table-lead .adp-table-handle,
+thead .adp-table-lead .adp-table-check,
+.adp-table-picking .adp-table-lead .adp-table-check {
+  visibility: visible;
+}
+
+.adp-table-add-column {
+  width: 32px;
+}
+
+.adp-table-grid .adp-table-new td {
+  border-bottom: none;
+}
+
+.adp-table-new-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  line-height: normal;
+}
+
+.adp-menu-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--adp-table-line);
+}
+
+.adp-table-new-panel {
+  width: 240px;
+}
+
+.adp-table-property-name {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.adp-table-types {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+}
+
+.adp-table-params .adp-table-types button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  text-align: left;
 }

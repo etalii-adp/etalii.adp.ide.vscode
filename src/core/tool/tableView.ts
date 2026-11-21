@@ -127,6 +127,59 @@ export interface TableOperation {
   readonly params: readonly TableParam[];
 }
 
+/**
+ * An entry of a menu the table surface draws (a column's, a view tab's, a row's) or of a control
+ * of it (the `+` after the tabs and after the headers, a `+ New` line): what it is called and the
+ * request it makes. An operation whose parameters the request does not give all of is asked in a
+ * form, with the given ones left out. An entry with `entries` opens them instead.
+ */
+export interface TableEntry {
+  readonly id: string;
+  readonly label: string;
+  /** A Material Design icon name. */
+  readonly icon?: string;
+  /** Why it cannot be done now; absent for an entry that can. */
+  readonly disabled?: string;
+  readonly request?: TableRequest;
+  readonly entries?: readonly TableEntry[];
+}
+
+/** A menu: its entries in groups, a line between two groups. */
+export type TableMenu = readonly (readonly TableEntry[])[];
+
+/** A sort or a filter of the view that is shown, as the bar says it: in words, with what removes it. */
+export interface TableBarItem {
+  readonly id: string;
+  readonly kind: 'sort' | 'filter';
+  readonly text: string;
+  /** For a sort: whether it is descending. */
+  readonly descending?: boolean;
+  readonly remove?: TableRequest;
+}
+
+/**
+ * What a tool type offers on its table, beside what the view shows: the gestures of the surface,
+ * each as the request of its definition that carries it out. A tool type without them offers what
+ * its definition's operations offer for what is selected.
+ */
+export interface TableGestures {
+  /** The `+` after the view tabs. */
+  readonly newView?: TableRequest;
+  /** The menu of each view tab, by the view's id. */
+  readonly viewMenus?: Readonly<Record<string, TableMenu>>;
+  /** The `+` after the last header: one entry per type a new property may have; the name typed is given as `name`. */
+  readonly newProperty?: readonly TableEntry[];
+  /** The menu of each column, by the property's id. */
+  readonly columnMenus?: Readonly<Record<string, TableMenu>>;
+  /** The menu of a row, or of several selected rows; `$selection` stands for the rows selected. */
+  readonly rowMenu?: TableMenu;
+  /** The `+ New` line under the rows, and under each group by its key. */
+  readonly newRow?: TableRequest;
+  readonly newRowIn?: Readonly<Record<string, TableRequest>>;
+  /** The sorts and filters of the view, in words. */
+  readonly items?: readonly TableBarItem[];
+}
+
 /** What a table surface draws. */
 export interface TableView {
   /** The name of the document. */
@@ -147,6 +200,8 @@ export interface TableView {
   readonly readOnly: boolean;
   /** Why the table is read-only or empty, when there is something to say. */
   readonly notice?: string;
+  /** The surface's gestures, where the tool type gives them. */
+  readonly gestures?: TableGestures;
 }
 
 /** Every gesture a table surface or the property grid can ask of a designer. */
@@ -160,7 +215,15 @@ export type TableRequest =
   /** Another view shown. */
   | { readonly kind: 'show'; readonly view: string }
   /** A property of a row edited in ADP Properties. */
-  | { readonly kind: 'setField'; readonly id: string; readonly field: string; readonly value: string };
+  | { readonly kind: 'setField'; readonly id: string; readonly field: string; readonly value: string }
+  /**
+   * Several requests made one after another as one edit and one undo step: a gesture that is more than one
+   * operation. A value written `$created:N` stands for the Nth element the steps before it created, from 0.
+   */
+  | { readonly kind: 'steps'; readonly steps: readonly TableRequest[] };
+
+/** How a step names what a step before it created. */
+export const CREATED = '$created:';
 
 // ---- the table of a model ----
 
@@ -189,6 +252,8 @@ export interface TableData {
 }
 
 export interface ShownView {
+  /** The surface's gestures for this view, where the tool type gives them. */
+  readonly gestures?: TableGestures;
   /** What the view says of its columns, in its order. A column it does not list follows, as it is by default. */
   readonly columns?: readonly (Partial<Pick<TableProperty, 'visible' | 'width' | 'wrap' | 'frozen' | 'summary'>> & { readonly id: string })[];
   /** The ids of the rows in sight, in order. Absent for every row, in the document's order. */
@@ -363,6 +428,7 @@ export function tableReader(parts: TableParts) {
       settings,
       operations: operationsOf(model, metamodel, parts.operations, locale, labelOf),
       ...state,
+      ...(shown.gestures === undefined || state.readOnly ? {} : { gestures: shown.gestures }),
     };
   }
 

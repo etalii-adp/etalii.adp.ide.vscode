@@ -1,10 +1,11 @@
 import type { FromCanvas, ToCanvas } from '../../core/frame/protocol';
 import type { Action } from '../../core/frame/toolType';
-import type { TableCell, TableGroup, TableOperation, TableProperty, TableRequest, TableRow, TableValue, TableView } from '../../core/tool/tableView';
+import type { TableBarItem, TableCell, TableEntry, TableGestures, TableGroup, TableOperation, TableProperty, TableRequest, TableRow, TableValue, TableView } from '../../core/tool/tableView';
 import { html } from '../diagram/dom';
 import { icon } from '../diagram/icons';
 import { Menu } from '../diagram/menu';
 import { controlOf, given, tag } from './editors';
+import { EntryMenu } from './entries';
 
 // The table surface of a designer: it draws the table view it is sent and asks for every change
 // with a request. It never changes the model itself, so what it shows after a gesture is the view
@@ -12,6 +13,10 @@ import { controlOf, given, tag } from './editors';
 
 /** The width of the column of row numbers and of a column that gives none, in pixels. */
 const numberWidth = 44;
+/** The width of the lead column of a surface with gestures: a row's checkbox and its handle. */
+const leadWidth = 52;
+/** How a gesture names the rows selected. */
+const SELECTION = '$selection';
 const defaultWidth = 160;
 
 /** Where a cell is: the key of its line (empty for the header) and its column (empty for the row numbers). */
@@ -51,6 +56,8 @@ export class Table {
     html('div', { class: 'adp-table-toolbar', role: 'toolbar', 'aria-label': 'Table' }, this.buttons, this.search, this.chips),
     this.options, this.notice, html('div', { class: 'adp-table-scroll' }, this.grid), this.status);
   private readonly menu: Menu;
+  private readonly entries: EntryMenu;
+  private readonly find = html('button', { class: 'adp-table-find', type: 'button', 'aria-label': 'Search', 'aria-expanded': 'false' }, icon('mdi-magnify'));
 
   private view: TableView | undefined;
   private rows = new Map<string, TableRow>();
@@ -78,6 +85,9 @@ export class Table {
   constructor(host: HTMLElement, private readonly send: (message: FromCanvas) => void) {
     host.append(this.root);
     this.menu = new Menu(this.root, (action) => this.run(action, true));
+    this.entries = new EntryMenu(this.root, (entry) => this.chosen(entry));
+    this.search.before(this.find);
+    this.find.hidden = true;
     this.root.addEventListener('click', (event) => this.click(event));
     this.root.addEventListener('keydown', (event) => this.key(event));
     this.root.addEventListener('contextmenu', (event) => {
@@ -91,9 +101,13 @@ export class Table {
       const box = event.target;
       const at = box instanceof HTMLInputElement && box.type === 'checkbox' ? this.at(box.closest<HTMLElement>('[data-column]')) : undefined;
       if (box instanceof HTMLInputElement && at) this.request({ kind: 'cell', row: at.row.id, property: at.property.id, value: box.checked });
+      if (box instanceof HTMLInputElement && box.classList.contains('adp-table-check')) this.checked(box);
     });
     window.addEventListener('mouseup', () => { this.silent = false; });
     this.search.addEventListener('input', () => this.filter());
+    this.search.addEventListener('blur', () => {
+      if (this.gestures && this.search.value === '') this.searching(false);
+    });
     // The colours of the options are those of the kind of theme, which changes without a message.
     new MutationObserver(() => this.render()).observe(document.body, { attributes: true, attributeFilter: ['class'] });
   }
@@ -142,14 +156,20 @@ export class Table {
     const within = this.grid.contains(document.activeElement);
     this.notice.textContent = view.notice ?? '';
     this.notice.hidden = view.notice === undefined;
+    const gestures = this.gestures;
+    this.root.classList.toggle('adp-table-gestures', gestures !== undefined);
     this.tabs.replaceChildren(...view.views.map((tab) => html('span', { class: 'adp-table-tab', 'data-id': tab.id },
-      html('button', { type: 'button', role: 'tab', 'aria-selected': String(tab.active), 'data-view': tab.id }, tab.name),
-      view.readOnly ? undefined : menuButton(tab.name, 0))));
-    this.chips.replaceChildren(...view.settings.map((setting) => {
+      html('button', { type: 'button', role: 'tab', 'aria-selected': String(tab.active), 'data-view': tab.id, 'aria-haspopup': gestures && tab.active ? 'menu' : undefined }, tab.name),
+      view.readOnly || gestures ? undefined : menuButton(tab.name, 0))),
+    ...(gestures?.newView ? [html('button', { class: 'adp-table-new-view', type: 'button', 'aria-label': 'New view', title: 'New view' }, icon('mdi-plus'))] : []));
+    this.find.hidden = gestures === undefined;
+    if (!gestures) this.searching(true);
+    else if (this.search.value === '' && document.activeElement !== this.search) this.searching(false);
+    this.chips.replaceChildren(...(gestures ? (gestures.items ?? []).map((item) => this.itemOf(item)) : view.settings.map((setting) => {
       const chip = html('button', { class: 'adp-table-chip', type: 'button', 'data-id': setting.id, 'data-depth': setting.depth }, setting.label);
       chip.style.marginLeft = `${setting.depth * 12}px`;
       return chip;
-    }));
+    })));
     this.drawActions();
     this.drawOptions();
 
@@ -157,7 +177,8 @@ export class Table {
     const widths = columns.map((property) => property.width ?? defaultWidth);
     // A frozen column stays at the sum of the widths of what is frozen before it.
     const lefts = new Map<string, number>();
-    columns.reduce((left, property, index) => (property.frozen ? (lefts.set(property.id, left), left + widths[index]) : left), numberWidth);
+    const lead = gestures ? leadWidth : numberWidth;
+    columns.reduce((left, property, index) => (property.frozen ? (lefts.set(property.id, left), left + widths[index]) : left), lead);
     const frozen = <E extends HTMLElement>(cell: E, property: TableProperty): E => {
       const left = lefts.get(property.id);
       if (left === undefined) return cell;
@@ -166,33 +187,46 @@ export class Table {
       return cell;
     };
     const numbers = new Map(view.rows.map((row, index) => [row.id, index + 1]));
+    const leadOf = (row: TableRow): HTMLElement => (gestures
+      ? html('th', { class: 'adp-table-number adp-table-lead', role: 'rowheader', scope: 'row', 'data-column': '', tabindex: -1 },
+        html('span', { class: 'adp-table-handle', 'aria-hidden': 'true' }, icon('mdi-drag-vertical')),
+        html('input', { class: 'adp-table-check', type: 'checkbox', tabindex: -1, 'aria-label': `Select ${row.cells[columns.find((property) => property.title)?.id ?? '']?.text || 'row'}`, 'data-row': row.id }))
+      : html('th', { class: 'adp-table-number', role: 'rowheader', scope: 'row', 'data-column': '', tabindex: -1 }, String(numbers.get(row.id) ?? '')));
     const line = (row: TableRow, key: string): HTMLElement => html('tr', { class: 'adp-table-row', role: 'row', 'data-id': row.id, 'data-key': key },
-      html('th', { class: 'adp-table-number', role: 'rowheader', scope: 'row', 'data-column': '', tabindex: -1 }, String(numbers.get(row.id) ?? '')),
-      ...columns.map((property) => frozen(this.cellOf(row, property), property)));
+      leadOf(row), ...columns.map((property) => frozen(this.cellOf(row, property), property)));
+    const span = columns.length + (gestures?.newProperty ? 2 : 1);
+    const adding = (request: TableRequest | undefined, group?: string): HTMLElement[] => (request === undefined || view.readOnly ? [] : [html('tr', { class: 'adp-table-new', role: 'row', 'data-group': group },
+      html('td', { colspan: span }, html('button', { class: 'adp-table-new-row', type: 'button', 'data-group': group }, icon('mdi-plus'), 'New')))]);
     const heading = (group: TableGroup): HTMLElement => html('tr', { class: 'adp-table-group', role: 'row', 'aria-expanded': String(!group.collapsed) },
-      html('th', { role: 'rowheader', scope: 'rowgroup', colspan: columns.length + 1 },
+      html('th', { role: 'rowheader', scope: 'rowgroup', colspan: span },
         html('span', { class: 'adp-table-group-label' }, group.colour ? tag(group.label || 'No value', group.colour) : group.label || 'No value'),
         html('span', { class: 'adp-table-count' }, String(group.rows.length))));
-    const grouped = (group: TableGroup, index: number): HTMLElement[] => [heading(group), ...(group.collapsed ? [] : group.rows.flatMap((id) => {
+    const grouped = (group: TableGroup, index: number): HTMLElement[] => [heading(group), ...(group.collapsed ? [] : [...group.rows.flatMap((id) => {
       const row = this.rows.get(id);
       return row ? [line(row, `${index}/${id}`)] : [];
-    }))];
+    }), ...adding(gestures?.newRowIn?.[group.key], group.key)])];
+
 
     this.grid.setAttribute('aria-label', view.name);
     this.grid.setAttribute('aria-rowcount', String(view.total + 1));
     this.grid.setAttribute('aria-colcount', String(columns.length + 1));
-    this.grid.style.width = `${widths.reduce((sum, width) => sum + width, numberWidth)}px`;
+    this.grid.style.width = `${widths.reduce((sum, width) => sum + width, lead + (gestures?.newProperty ? 32 : 0))}px`;
     this.grid.replaceChildren(
       html('thead', {}, html('tr', { role: 'row', 'data-key': '' },
-        html('th', { class: 'adp-table-number', role: 'columnheader', scope: 'col', 'data-column': '', tabindex: -1, 'aria-label': 'Row' }),
+        gestures
+          ? html('th', { class: 'adp-table-number adp-table-lead', role: 'columnheader', scope: 'col', 'data-column': '', tabindex: -1, 'aria-label': 'Row' },
+            html('input', { class: 'adp-table-check adp-table-all', type: 'checkbox', tabindex: -1, 'aria-label': 'Select all rows' }))
+          : html('th', { class: 'adp-table-number', role: 'columnheader', scope: 'col', 'data-column': '', tabindex: -1, 'aria-label': 'Row' }),
         ...columns.map((property, index) => {
-          const cell = html('th', { role: 'columnheader', scope: 'col', 'data-id': property.id, 'data-column': property.id, tabindex: -1 },
+          const cell = html('th', { role: 'columnheader', scope: 'col', 'data-id': property.id, 'data-column': property.id, tabindex: -1, 'aria-haspopup': gestures?.columnMenus?.[property.id] ? 'menu' : undefined },
             property.icon ? icon(property.icon) : undefined, html('span', { class: 'adp-table-name' }, property.name),
-            view.readOnly ? undefined : menuButton(property.name, -1));
+            view.readOnly || gestures ? undefined : menuButton(property.name, -1));
           cell.style.width = `${widths[index]}px`;
           return frozen(cell, property);
-        }))),
-      html('tbody', {}, ...(view.groups ? view.groups.flatMap(grouped) : view.rows.map((row) => line(row, row.id)))),
+        }),
+        ...(gestures?.newProperty ? [html('th', { class: 'adp-table-add-column', role: 'columnheader', scope: 'col' },
+          html('button', { class: 'adp-table-new-property', type: 'button', 'aria-label': 'New property', title: 'New property', 'aria-haspopup': 'dialog' }, icon('mdi-plus')))] : []))),
+      html('tbody', {}, ...(view.groups ? view.groups.flatMap(grouped) : view.rows.map((row) => line(row, row.id))), ...(view.groups ? [] : adding(gestures?.newRow))),
       ...(columns.some((property) => property.summary) ? [html('tfoot', {}, html('tr', { role: 'row' },
         html('td', { class: 'adp-table-number' }),
         ...columns.map((property) => frozen(html('td', {}, property.summary ? `${property.summary.label} ${property.summary.text}` : ''), property))))] : []),
@@ -232,7 +266,7 @@ export class Table {
 
   /** The actions of the document as buttons, while nothing is selected. */
   private drawActions(): void {
-    const offered = this.view && !this.view.readOnly && this.selection.length === 0 && !this.awaiting ? this.actions : [];
+    const offered = this.view && !this.view.readOnly && !this.gestures && this.selection.length === 0 && !this.awaiting ? this.actions : [];
     this.buttons.replaceChildren(...offered.map((action) => {
       const button = html('button', { class: 'adp-table-action', type: 'button', 'data-action': action.id, title: action.enabled ? undefined : action.disabledReason },
         action.icon ? icon(action.icon) : undefined, action.label);
@@ -244,7 +278,8 @@ export class Table {
   /** The options of the column that is selected, or of the one an option of is. */
   private drawOptions(): void {
     const chosen = (id: string): boolean => this.selection.includes(id);
-    const property = this.view?.properties.find((candidate) => candidate.options.length > 0 && (chosen(candidate.id) || candidate.options.some((option) => chosen(option.id))));
+    // A surface with gestures edits options from the column's menu: no strip moves the grid under the pointer.
+    const property = this.gestures ? undefined : this.view?.properties.find((candidate) => candidate.options.length > 0 && (chosen(candidate.id) || candidate.options.some((option) => chosen(option.id))));
     this.options.hidden = !property;
     this.options.setAttribute('aria-label', property ? `Options of ${property.name}` : '');
     this.options.replaceChildren(...(property?.options ?? []).map((option) => html('button', { class: 'adp-table-chip', type: 'button', 'data-id': option.id }, tag(option.name, option.colour))));
@@ -266,6 +301,11 @@ export class Table {
       element.classList.toggle('adp-selected', selected);
       if (element.matches('tr, td, th')) element.setAttribute('aria-selected', String(selected));
     }
+    for (const box of this.grid.querySelectorAll<HTMLInputElement>('.adp-table-check[data-row]')) box.checked = this.selection.includes(box.dataset.row ?? '');
+    const boxes = [...this.grid.querySelectorAll<HTMLInputElement>('.adp-table-check[data-row]')].filter((box) => !box.closest('tr')?.hidden);
+    const every = this.grid.querySelector<HTMLInputElement>('.adp-table-all');
+    if (every) every.checked = boxes.length > 0 && boxes.every((box) => box.checked);
+    this.root.classList.toggle('adp-table-picking', this.selection.some((id) => this.rows.has(id)));
   }
 
   // Focus and selection.
@@ -340,7 +380,7 @@ export class Table {
   private down(event: MouseEvent): void {
     const target = event.target as HTMLElement;
     const cell = target.closest<HTMLElement>('[data-column]');
-    if (!cell || event.button !== 0 || target.closest('.adp-table-editor, button')) return;
+    if (!cell || event.button !== 0 || target.closest('.adp-table-editor, button, .adp-table-check')) return;
     const row = cell.closest('tr')?.dataset.id;
     this.silent = true;
     if (row !== undefined && cell.matches('[role="rowheader"]') && (event.ctrlKey || event.metaKey || event.shiftKey)) {
@@ -361,6 +401,7 @@ export class Table {
 
   private click(event: MouseEvent): void {
     const target = event.target as HTMLElement;
+    if (this.gestures && this.gesture(target)) return;
     const remove = target.closest<HTMLElement>('.adp-table-remove');
     const tab = target.closest<HTMLElement>('[role="tab"]');
     const action = target.closest<HTMLElement>('.adp-table-action');
@@ -412,6 +453,9 @@ export class Table {
     } else if (event.key === 'Delete' || event.key === 'Backspace') {
       const at = this.at(cell);
       if (at && this.editable(at.property) && !several(at.property) && (at.cell?.value ?? null) !== null) this.request({ kind: 'cell', row: at.row.id, property: at.property.id, value: null });
+    } else if ((event.key === 'Enter' || event.key === ' ') && this.gestures && cell.matches('[role="columnheader"][data-id]')) {
+      event.preventDefault();
+      this.columnMenu(cell);
     } else if (event.key === 'Enter' || event.key === 'F2') {
       event.preventDefault();
       this.edit(cell);
@@ -424,10 +468,21 @@ export class Table {
 
   /** Selects what a menu is asked on, and opens the menu when the actions for it are known. */
   private menuFor(element: HTMLElement, x: number, y: number): void {
-    const [id] = this.idsOf(element);
+    // On a surface with gestures, the menu of a row is the row's: of the rows selected, where it is one of them.
+    const line = this.gestures ? element.closest<HTMLElement>('tr.adp-table-row')?.dataset.id : undefined;
+    const [id] = line === undefined ? this.idsOf(element) : [line];
     if (id === undefined) return;
     this.select(this.selection.includes(id) ? this.selection : [id]);
     if (!this.view || this.view.readOnly) return;
+    const gestures = this.gestures;
+    if (gestures) {
+      const header = element.closest<HTMLElement>('[role="columnheader"][data-id]');
+      const tab = element.closest<HTMLElement>('.adp-table-tab');
+      if (header) this.columnMenu(header, x, y);
+      else if (tab) this.entries.open(gestures.viewMenus?.[tab.dataset.id ?? ''] ?? [], x, y, 'View');
+      else if (element.closest('tr.adp-table-row')) this.entries.open(gestures.rowMenu ?? [], x, y, 'Row');
+      return;
+    }
     if (this.awaiting) this.wanted = { x, y };
     else this.menu.open(this.actions, x, y);
   }
@@ -444,9 +499,9 @@ export class Table {
     if (fromMenu) this.focus(this.place);
   }
 
-  private ask(operation: TableOperation, on: readonly string[]): void {
+  private ask(operation: TableOperation, on: readonly string[], fixed: Readonly<Record<string, TableValue>> = {}, made: (args: Record<string, TableValue>) => TableRequest = (args) => ({ kind: 'operation', operation: operation.id, on, args })): void {
     this.form?.remove();
-    const controls = operation.params.map((param) => ({ param, control: controlOf(param) }));
+    const controls = operation.params.filter((param) => !(param.name in fixed)).map((param) => ({ param, control: controlOf(param) }));
     const cancel = html('button', { type: 'button' }, 'Cancel');
     const form = html('form', { class: 'adp-table-params', role: 'dialog', 'aria-label': operation.label },
       ...controls.map(({ param, control }) => html('label', {}, html('span', {}, param.label), control)),
@@ -459,13 +514,13 @@ export class Table {
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       if (!form.checkValidity()) return;
-      const args: Record<string, TableValue> = {};
+      const args: Record<string, TableValue> = { ...fixed };
       for (const { param, control } of controls) {
         const value = given(param, control);
         if (value !== undefined) args[param.name] = value;
       }
       close();
-      this.request({ kind: 'operation', operation: operation.id, on, args });
+      this.request(made(args));
     });
     form.addEventListener('keydown', (event) => {
       event.stopPropagation();
@@ -475,6 +530,160 @@ export class Table {
     this.form = form;
     this.root.append(form);
     controls[0]?.control.focus();
+  }
+
+  // The gestures a tool type gives its table.
+
+  private get gestures(): TableGestures | undefined {
+    return this.view?.readOnly === false ? this.view.gestures : undefined;
+  }
+
+  /** Shows the search box, or folds it back into its magnifier. */
+  private searching(open: boolean): void {
+    this.search.hidden = !open;
+    this.find.setAttribute('aria-expanded', String(open));
+  }
+
+  /** A sort or a filter of the view, in words, with the × that removes it. */
+  private itemOf(item: TableBarItem): HTMLElement {
+    return html('span', { class: `adp-table-item adp-table-${item.kind}`, 'data-id': item.id },
+      icon(item.kind === 'filter' ? 'mdi-filter-outline' : item.descending ? 'mdi-arrow-down' : 'mdi-arrow-up'),
+      html('span', { class: 'adp-table-item-text' }, item.text),
+      item.remove ? html('button', { class: 'adp-table-item-remove', type: 'button', 'aria-label': `Remove ${item.kind} ${item.text}`, 'data-item': item.id }, '×') : undefined);
+  }
+
+  /** A row's checkbox, or the one that selects every row in sight. */
+  private checked(box: HTMLInputElement): void {
+    const rows = this.selection.filter((id) => this.rows.has(id));
+    if (box.classList.contains('adp-table-all')) {
+      const sight = this.lines().flatMap((line) => line.dataset.id ?? []);
+      this.select(box.checked ? [...new Set(sight)] : []);
+    } else {
+      const row = box.dataset.row ?? '';
+      this.anchor = row;
+      this.select(box.checked ? [...rows.filter((id) => id !== row), row] : rows.filter((id) => id !== row));
+    }
+  }
+
+  /** A press on a control of the gesture surface; false for one it does not have. */
+  private gesture(target: HTMLElement): boolean {
+    const gestures = this.gestures!;
+    const below = (element: HTMLElement): [number, number] => {
+      const box = element.getBoundingClientRect();
+      return [box.left, box.bottom];
+    };
+    const tab = target.closest<HTMLElement>('[role="tab"]');
+    const remove = target.closest<HTMLElement>('.adp-table-item-remove');
+    const header = target.closest<HTMLElement>('[role="columnheader"][data-id]');
+    const adding = target.closest<HTMLElement>('.adp-table-new-row');
+    if (target.closest('.adp-table-find')) {
+      this.searching(true);
+      this.search.focus();
+    } else if (target.closest('.adp-table-new-view') && gestures.newView) {
+      this.make(gestures.newView);
+    } else if (tab && tab.getAttribute('aria-selected') === 'true') {
+      const menu = gestures.viewMenus?.[tab.dataset.view ?? ''];
+      if (!menu) return false;
+      this.entries.returnTo(tab);
+      this.entries.open(menu, ...below(tab), tab.textContent ?? '');
+    } else if (remove) {
+      const item = gestures.items?.find((candidate) => candidate.id === remove.dataset.item);
+      if (item?.remove) this.make(item.remove);
+    } else if (target.closest('.adp-table-new-property') && gestures.newProperty) {
+      this.newProperty(target.closest<HTMLElement>('.adp-table-new-property')!, gestures.newProperty);
+    } else if (adding) {
+      const group = adding.dataset.group;
+      const request = group === undefined ? gestures.newRow : gestures.newRowIn?.[group];
+      if (request) this.make(request);
+    } else if (header && !target.closest('.adp-table-check')) {
+      this.columnMenu(header);
+    } else {
+      return false;
+    }
+    return true;
+  }
+
+  /** The menu of a column, under its header or where the pointer is. */
+  private columnMenu(header: HTMLElement, x?: number, y?: number): void {
+    const menu = this.gestures?.columnMenus?.[header.dataset.id ?? ''];
+    if (!menu) return;
+    const box = header.getBoundingClientRect();
+    this.entries.returnTo(header);
+    this.entries.open(menu, x ?? box.left, y ?? box.bottom, header.textContent ?? '');
+  }
+
+  /** An entry of a menu chosen: its request, made at once or after what it leaves out is asked. */
+  private chosen(entry: TableEntry): void {
+    if (entry.request) this.make(entry.request);
+  }
+
+  /**
+   * Makes a gesture's request: the rows selected put in for `$selection`, and the required
+   * parameters of its operation that it does not give asked first. Of several steps, the first
+   * operation's are asked.
+   */
+  private make(request: TableRequest, name?: string): void {
+    const rows = this.selection.filter((id) => this.rows.has(id));
+    const put = (given: TableRequest): TableRequest => (given.kind === 'operation' ? { ...given, on: (given.on ?? []).flatMap((id) => (id === SELECTION ? rows : [id])), ...(name === undefined ? {} : { args: { name, ...given.args } }) } : given);
+    const resolved: TableRequest = request.kind === 'steps' ? { ...request, steps: request.steps.map((step, index) => (index === 0 ? put(step) : step)) } : put(request);
+    const first = resolved.kind === 'steps' ? resolved.steps[0] : resolved;
+    const operation = first?.kind === 'operation' ? this.view?.operations[first.operation] : undefined;
+    const fixed: Record<string, TableValue> = first?.kind === 'operation' ? { ...first.args } : {};
+    const missing = operation?.params.some((param) => param.required && param.value === undefined && !(param.name in fixed)) === true;
+    if (!operation || !missing || first?.kind !== 'operation') {
+      this.request(resolved);
+      return;
+    }
+    // What is given keeps its value; the rest are asked, each starting at its default.
+    this.ask(operation, first.on ?? [], fixed, (args) => {
+      const step: TableRequest = { ...first, args };
+      return resolved.kind === 'steps' ? { ...resolved, steps: [step, ...resolved.steps.slice(1)] } : step;
+    });
+  }
+
+  /** The panel of a new property: its name first, then its type, as the standalone host asks them. */
+  private newProperty(anchor: HTMLElement, types: readonly TableEntry[]): void {
+    this.form?.remove();
+    const input = html('input', { class: 'adp-table-property-name', type: 'text', 'aria-label': 'Property name', placeholder: 'Property name' });
+    const list = html('div', { class: 'adp-table-types', role: 'group', 'aria-label': 'Type' }, ...types.map((type) => {
+      const button = html('button', { type: 'button', 'data-entry': type.id, title: type.disabled ?? '' }, icon(type.icon === undefined ? undefined : `mdi-${type.icon}`), type.label);
+      if (type.disabled !== undefined) button.setAttribute('aria-disabled', 'true');
+      return button;
+    }));
+    const form = html('form', { class: 'adp-table-params adp-table-new-panel', role: 'dialog', 'aria-label': 'New property' }, input, list);
+    const close = (): void => {
+      form.remove();
+      this.form = undefined;
+      anchor.focus();
+    };
+    const create = (type: TableEntry): void => {
+      if (type.disabled !== undefined || !type.request) return;
+      const name = input.value.trim();
+      close();
+      this.make(type.request, name === '' ? type.label : name);
+    };
+    list.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLElement>('[data-entry]');
+      const type = types.find((candidate) => candidate.id === button?.dataset.entry);
+      if (type) create(type);
+    });
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      // Enter makes a property of the first type, as a click on it would.
+      const type = types.find((candidate) => candidate.disabled === undefined);
+      if (type) create(type);
+    });
+    form.addEventListener('keydown', (event) => {
+      event.stopPropagation();
+      if (event.key === 'Escape') close();
+    });
+    const box = anchor.getBoundingClientRect();
+    const frame = this.root.getBoundingClientRect();
+    form.style.left = `${Math.max(0, box.right - frame.left - 240)}px`;
+    form.style.top = `${box.bottom - frame.top}px`;
+    this.form = form;
+    this.root.append(form);
+    input.focus();
   }
 
   // Editing in place.
