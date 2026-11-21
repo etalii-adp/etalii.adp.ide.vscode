@@ -300,7 +300,7 @@ The Knowledge designer is read from its definition, with the view logic this hos
 | What | The definition, followed here | The standalone module | Issue |
 | --- | --- | --- | --- |
 | What a view shows | The companion's sections "Views" and "Values", built for this tool type because DESL cannot state them. Text compares ignoring case, an empty value passes `is-not` and `does-not-contain`, a number under a column is rounded to two decimals and a date range is in days | The same sections, with its own reading of what they leave open | [162](https://github.com/etalii-adp/etalii.adp/issues/162) |
-| Rows grouped by the parent relation | Shown as groups by their parent, one level deep, not nested | Nested to any depth | None: the table surface draws no tree yet |
+| Rows grouped by the parent relation | Nested under their parents to any depth, each parent with a fold stored with the view; a row in a cycle of parents is drawn once | Nested to any depth | None |
 | A relation to another file | A related row is shown by the id the file holds, and one is added by typing its id. A relation to the file itself shows the row's title. The target file is not read, so `knowledge.unresolved-target` and `knowledge.unresolved-row` are not raised | The target file is read: titles, a searchable list of its rows, and the two findings | None: a tool type here is a function of one document's text |
 | A two-way relation, and the steps that write two files | "New relation" adds the property to this file. No counterpart is added to the target, and deleting one side leaves the other | One undoable step over both files | None: the same reason; DESL 5.4 is not built |
 | A relation limited to one row | "Add value" adds a second row, and the definition's `relationOverLimit` reports it | The value is replaced | None |
@@ -311,7 +311,7 @@ The Knowledge designer is read from its definition, with the view logic this hos
 | An entry without an id | Reported as `std.missingId` (warning), FBL's and DESL's own finding, and given an id with the first edit | `knowledge.missing-id` (info) | [162](https://github.com/etalii-adp/etalii.adp/issues/162) |
 | The other findings the companion gives the host | `knowledge.unknown-type` is not raised: such a column is shown, not edited, and its cells are reported by `valueOfAnotherType`. `knowledge.unknown-key`, `knowledge.parent-cycle` and `knowledge.newer-version` are not raised | Raised | [162](https://github.com/etalii-adp/etalii.adp/issues/162) |
 | The colours of options | This host's own ten pairs, one for a light and one for a dark theme | Its own | [162](https://github.com/etalii-adp/etalii.adp/issues/162) |
-| The search | Behind a magnifier; hides the rows without the typed text while the table is open, in the webview | The same | None |
+| The search | Behind a magnifier; hides the rows without the typed text while the table is open, in the webview. A table of more than 300 lines draws only those near sight, and the search hides among those | The same, over every row | None |
 
 ### Mind map
 

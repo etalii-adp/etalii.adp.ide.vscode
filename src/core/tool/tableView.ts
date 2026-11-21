@@ -289,6 +289,8 @@ export interface TableGestures {
   readonly bulk?: { readonly set: Readonly<Record<string, TableField>>; readonly remove: TableEntry };
   /** A new option made and chosen in a cell's list, by property: `$row` the row, `$typed` the name. */
   readonly createOption?: Readonly<Record<string, TableRequest>>;
+  /** The fold of each row rows are nested under, by its id. */
+  readonly folds?: Readonly<Record<string, TableRequest>>;
   /** A row added under another, `$row` standing for that one: the key that adds a row. */
   readonly newRowAfter?: TableRequest;
 }
@@ -316,6 +318,8 @@ export interface TableView {
   readonly total: number;
   /** The groups of the view that is shown, in its order, when it groups its rows. */
   readonly groups?: readonly TableGroup[];
+  /** Where the view nests its rows under their parents: each row's place in the tree, by its id. */
+  readonly tree?: Readonly<Record<string, TableNest>>;
   readonly views: readonly TableTab[];
   readonly settings: readonly TableSetting[];
   /** Every operation of the definition, by its id. */
@@ -383,6 +387,17 @@ export interface ShownView {
   /** The ids of the rows in sight, in order. Absent for every row, in the document's order. */
   readonly rows?: readonly string[];
   readonly groups?: readonly TableGroup[];
+  readonly tree?: Readonly<Record<string, TableNest>>;
+}
+
+/** A row's place where the view nests rows under their parents. */
+export interface TableNest {
+  /** How deep it is: 0 for a row without a parent in sight. */
+  readonly depth: number;
+  /** Whether rows are nested under it. */
+  readonly parent: boolean;
+  /** Whether those rows are folded away. */
+  readonly collapsed: boolean;
 }
 
 /** What a table view is made of. */
@@ -548,6 +563,7 @@ export function tableReader(parts: TableParts) {
       rows: shown.rows === undefined ? all.rows : shown.rows.flatMap((id) => all.rows.filter((row) => row.id === id)),
       total: all.rows.length,
       ...(shown.groups === undefined ? {} : { groups: shown.groups }),
+      ...(shown.tree === undefined ? {} : { tree: shown.tree }),
       views: tabs.map((tab) => ({ id: tab.id, name: textOf(tab.attributes[views.name]), active: tab.id === active })),
       settings,
       operations: operationsOf(model, metamodel, parts.operations, locale, labelOf),

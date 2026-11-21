@@ -14,6 +14,10 @@ import { Panels } from './panels';
 
 /** The width of the column of row numbers and of a column that gives none, in pixels. */
 const numberWidth = 44;
+/** From how many lines the body draws only those near sight, how tall a line is taken to be, and how many lines beyond sight are drawn. */
+const windowFrom = 300;
+const lineHeight = 30;
+const overscan = 40;
 /** The width of the lead column of a surface with gestures: a row's checkbox and its handle. */
 const leadWidth = 52;
 /** How a gesture names the rows selected. */
@@ -55,6 +59,11 @@ export class Table {
   private readonly chips = html('span', { class: 'adp-table-settings' });
   private readonly options = html('div', { class: 'adp-table-options' });
   private readonly grid = html('table', { class: 'adp-table-grid', role: 'grid' });
+  private readonly scroller = html('div', { class: 'adp-table-scroll' }, this.grid);
+  /** A drawing asked for by a scroll and not yet made. */
+  private scrolled = false;
+  /** Whether the body is drawn in part, the lines near sight. */
+  private windowed = false;
   private readonly status = html('p', { class: 'adp-table-status', role: 'status' });
   /** The bar of the rows selected: how many, a value set for all of them, delete, and clearing the selection. */
   private readonly bar = html('div', { class: 'adp-table-selection', role: 'group', 'aria-label': 'Selected rows' });
@@ -69,7 +78,7 @@ export class Table {
   private readonly root = html('div', { class: 'adp-table' },
     this.tabs,
     html('div', { class: 'adp-table-toolbar', role: 'toolbar', 'aria-label': 'Table' }, this.buttons, this.search, this.chips, this.tune, this.bar),
-    this.panels.element, this.options, this.notice, html('div', { class: 'adp-table-scroll' }, this.grid), this.status);
+    this.panels.element, this.options, this.notice, this.scroller, this.status);
   private readonly menu: Menu;
   private readonly entries: EntryMenu;
   private readonly find = html('button', { class: 'adp-table-find', type: 'button', 'aria-label': 'Search', 'aria-expanded': 'false' }, icon('mdi-magnify'));
@@ -119,6 +128,14 @@ export class Table {
       if (box instanceof HTMLInputElement && box.classList.contains('adp-table-check')) this.checked(box);
     });
     window.addEventListener('mouseup', () => { this.silent = false; });
+    this.scroller.addEventListener('scroll', () => {
+      if (!this.windowed || this.scrolled) return;
+      this.scrolled = true;
+      requestAnimationFrame(() => {
+        this.scrolled = false;
+        this.render();
+      });
+    });
     this.search.addEventListener('input', () => this.filter());
     this.search.addEventListener('blur', () => {
       if (this.gestures && this.search.value === '') this.searching(false);
@@ -210,7 +227,7 @@ export class Table {
         html('span', { class: 'adp-table-handle', 'aria-hidden': 'true' }, icon('mdi-drag-vertical')),
         html('input', { class: 'adp-table-check', type: 'checkbox', tabindex: -1, 'aria-label': `Select ${row.cells[columns.find((property) => property.title)?.id ?? '']?.text || 'row'}`, 'data-row': row.id }))
       : html('th', { class: 'adp-table-number', role: 'rowheader', scope: 'row', 'data-column': '', tabindex: -1 }, String(numbers.get(row.id) ?? '')));
-    const line = (row: TableRow, key: string): HTMLElement => html('tr', { class: 'adp-table-row', role: 'row', 'data-id': row.id, 'data-key': key },
+    const line = (row: TableRow, key: string): HTMLElement => html('tr', { class: 'adp-table-row', role: 'row', 'data-id': row.id, 'data-key': key, 'aria-level': view.tree?.[row.id] ? String(view.tree[row.id].depth + 1) : undefined },
       leadOf(row), ...columns.map((property) => frozen(this.cellOf(row, property), property)));
     const span = columns.length + (gestures?.newProperty ? 2 : 1);
     const adding = (request: TableRequest | undefined, group?: string): HTMLElement[] => (request === undefined || view.readOnly ? [] : [html('tr', { class: 'adp-table-new', role: 'row', 'data-group': group },
@@ -229,10 +246,23 @@ export class Table {
             head.down ? control('down', `Move ${label} down`, 'mdi-arrow-down') : undefined,
             control('hide', `Hide ${label}`, 'mdi-eye-off-outline'))] : [])));
     };
-    const grouped = (group: TableGroup, index: number): HTMLElement[] => [heading(group), ...(group.collapsed ? [] : [...group.rows.flatMap((id) => {
-      const row = this.rows.get(id);
-      return row ? [line(row, `${index}/${id}`)] : [];
-    }), ...adding(gestures?.newRowIn?.[group.key], group.key)])];
+    // Each line of the body as what draws it, so that a long table draws only the lines near sight.
+    const later = (elements: HTMLElement[]): (() => HTMLElement)[] => elements.map((element) => () => element);
+    const body: (() => HTMLElement)[] = view.groups
+      ? view.groups.flatMap((group, index) => [() => heading(group), ...(group.collapsed ? [] : [
+        ...group.rows.flatMap((id) => {
+          const row = this.rows.get(id);
+          return row ? [() => line(row, `${index}/${id}`)] : [];
+        }),
+        ...later(adding(gestures?.newRowIn?.[group.key], group.key))])])
+      : [...view.rows.map((row) => () => line(row, row.id)), ...later(adding(gestures?.newRow))];
+    const [start, end] = this.windowOf(body.length);
+    const spacer = (lines: number): HTMLElement[] => {
+      if (lines === 0) return [];
+      const element = html('tr', { class: 'adp-table-spacer', 'aria-hidden': 'true' }, html('td', { colspan: span }));
+      element.style.height = `${lines * lineHeight}px`;
+      return [element];
+    };
 
 
     this.grid.setAttribute('aria-label', view.name);
@@ -254,7 +284,7 @@ export class Table {
         }),
         ...(gestures?.newProperty ? [html('th', { class: 'adp-table-add-column', role: 'columnheader', scope: 'col' },
           html('button', { class: 'adp-table-new-property', type: 'button', 'aria-label': 'New property', title: 'New property', 'aria-haspopup': 'dialog' }, icon('mdi-plus')))] : []))),
-      html('tbody', {}, ...(view.groups ? view.groups.flatMap(grouped) : view.rows.map((row) => line(row, row.id))), ...(view.groups ? [] : adding(gestures?.newRow))),
+      html('tbody', {}, ...spacer(start), ...body.slice(start, end).map((draw) => draw()), ...spacer(body.length - end)),
       ...(columns.some((property) => property.summary) || gestures?.calculations ? [html('tfoot', {}, html('tr', { role: 'row' },
         html('td', { class: 'adp-table-number' }),
         ...columns.map((property) => frozen(html('td', { 'data-calculation': property.id }, gestures?.calculations?.[property.id]
@@ -268,6 +298,15 @@ export class Table {
     this.rove();
     this.list?.sync();
     if (within) this.focus(this.place);
+  }
+
+  /** The lines of the body to draw: all of a short table, and those in and near sight of a long one. */
+  private windowOf(count: number): [number, number] {
+    this.windowed = count > windowFrom;
+    if (!this.windowed) return [0, count];
+    const sight = this.scroller.clientHeight > 0 ? this.scroller.clientHeight : 1200;
+    const first = Math.max(0, Math.floor(this.scroller.scrollTop / lineHeight) - overscan);
+    return [Math.min(first, count), Math.min(count, first + Math.ceil(sight / lineHeight) + 2 * overscan)];
   }
 
   /** One cell of a row: its text, its tags or its checkbox. */
@@ -292,6 +331,16 @@ export class Table {
       element.append(tag(cell.text, cell.colour));
     } else {
       element.textContent = cell?.text ?? '';
+    }
+    // Where rows nest under their parents, the title is indented by its depth, a parent's with its fold.
+    const nest = property.title ? this.view?.tree?.[row.id] : undefined;
+    if (nest) {
+      const fold = this.gestures?.folds?.[row.id];
+      element.classList.add('adp-table-nested');
+      element.style.paddingLeft = `${8 + nest.depth * 18}px`;
+      element.prepend(nest.parent && fold
+        ? html('button', { type: 'button', class: 'adp-table-fold adp-table-row-fold', tabindex: -1, 'data-row': row.id, 'aria-expanded': String(!nest.collapsed), 'aria-label': `${nest.collapsed ? 'Expand' : 'Collapse'} ${cell?.text ?? 'row'}` }, icon(nest.collapsed ? 'mdi-chevron-right' : 'mdi-chevron-down'))
+        : html('span', { class: 'adp-table-fold-space', 'aria-hidden': 'true' }));
     }
     return element;
   }
@@ -614,6 +663,12 @@ export class Table {
     const header = target.closest<HTMLElement>('[role="columnheader"][data-id]');
     const adding = target.closest<HTMLElement>('.adp-table-new-row');
     const item = target.closest<HTMLElement>('.adp-table-item');
+    const rowFold = target.closest<HTMLElement>('.adp-table-row-fold');
+    if (rowFold) {
+      const request = gestures.folds?.[rowFold.dataset.row ?? ''];
+      if (request) this.make(request);
+      return request !== undefined;
+    }
     const groupControl = target.closest<HTMLElement>('.adp-table-group [data-control]');
     if (groupControl) {
       const head = gestures.groupHeads?.[groupControl.closest<HTMLElement>('tr')?.dataset.group ?? ''];
