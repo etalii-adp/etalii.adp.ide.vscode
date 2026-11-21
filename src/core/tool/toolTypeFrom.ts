@@ -48,7 +48,7 @@ import { composedSplices, modelChangesOf, viewStepsOf, type Refused } from './mo
 import { missingPlugins, pluginReferences, type PluginRegistry } from './pluginRegistry';
 import { layoutOf, newRegistration, withLayout, type Corner } from './registrationLayout';
 import { hierarchyReader, type HierarchyRequest, type HierarchyView, type NodeFinding } from './hierarchyView';
-import { tableReader, type TableProperty, type TableRequest, type TableValue, type TableView } from './tableView';
+import { CREATED, tableReader, type TableEntry, type TableGestures, type TableMenu, type TableProperty, type TableRequest, type TableValue, type TableView } from './tableView';
 import { wireIdsOf } from './wireIds';
 
 // The host's own sentences, for what a definition has no words for.
@@ -852,8 +852,31 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
       });
     }
     if (!table || open.unreadable) return emptyTable(open.refusal ?? UNREADABLE);
-    return table.view(open.model, { readOnly: open.refusal !== undefined, ...(open.refusal === undefined ? {} : { notice: open.refusal }) });
+    const shown = table.view(open.model, { readOnly: open.refusal !== undefined, ...(open.refusal === undefined ? {} : { notice: open.refusal }) });
+    return shown.gestures && operations ? { ...shown, gestures: checkedGestures(shown.gestures, open.model) } : shown;
   };
+
+  /** The surface's gestures, each entry that runs an operation that cannot run now marked with the reason. */
+  function checkedGestures(gestures: TableGestures, model: Model): TableGestures {
+    const run = operations!.value;
+    const entry = (given: TableEntry): TableEntry => {
+      const request = given.request;
+      const on = request?.kind === 'operation' ? request.on ?? [] : [];
+      const state = request?.kind === 'operation' && !on.some((id) => id.startsWith('$')) ? run.availability(model, request.operation, on) : undefined;
+      const disabled = given.disabled ?? (state === undefined ? undefined : !state.offered ? NOT_HERE : state.available ? undefined : state.reason ?? `${state.label} cannot be done now.`);
+      return { ...given, ...(disabled === undefined ? {} : { disabled }), ...(given.entries ? { entries: given.entries.map(entry) } : {}) };
+    };
+    const menu = (given: TableMenu): TableMenu => given.map((group) => group.map(entry));
+    const menus = (given: Readonly<Record<string, TableMenu>> | undefined): Readonly<Record<string, TableMenu>> | undefined =>
+      given === undefined ? undefined : Object.fromEntries(Object.entries(given).map(([id, items]) => [id, menu(items)]));
+    return {
+      ...gestures,
+      ...(gestures.viewMenus ? { viewMenus: menus(gestures.viewMenus) } : {}),
+      ...(gestures.columnMenus ? { columnMenus: menus(gestures.columnMenus) } : {}),
+      ...(gestures.rowMenu ? { rowMenu: menu(gestures.rowMenu) } : {}),
+      ...(gestures.newProperty ? { newProperty: gestures.newProperty.map(entry) } : {}),
+    };
+  }
 
   const isRow = (model: Model, id: string): boolean => model.elements.some((element) => element.id === id && element.type === tableSurface?.rows.type);
   const editors: Readonly<Record<string, Control>> = { number: 'number', checkbox: 'choice', choice: 'choice', choices: 'tags', rows: 'tags' };
@@ -1103,6 +1126,20 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     return editTable(source, request as TableRequest, options, confirmed);
   }
 
+  /** A request with every id it names given by `now`: an id written in a step before, or one a step before created. */
+  function renamed(request: TableRequest, now: (id: string) => string): TableRequest {
+    const value = <V>(given: V): V => (typeof given === 'string' ? now(given) as V : given);
+    switch (request.kind) {
+      case 'operation':
+        return { ...request, ...(request.on ? { on: request.on.map(now) } : {}), ...(request.args ? { args: Object.fromEntries(Object.entries(request.args).map(([name, given]) => [name, value(given)])) } : {}) };
+      case 'show': return { ...request, view: now(request.view) };
+      case 'setField': return { ...request, id: now(request.id), field: now(request.field) };
+      case 'steps': return { ...request, steps: request.steps.map((step) => renamed(step, now)) };
+      case 'cell': return { ...request, row: now(request.row), property: now(request.property), value: value(request.value) };
+      case 'item': return { ...request, row: now(request.row), property: now(request.property), value: now(request.value) };
+    }
+  }
+
   function editTable(source: Source, request: TableRequest, options: ViewOptions, confirmed: boolean): EditOutcome {
     const open = opened(source);
     if (!operations || !table || open.refusal !== undefined) return { kind: 'refused', sentence: open.refusal ?? UNREADABLE };
@@ -1121,11 +1158,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
       }
       const named = placesOf(open.read, body.model);
       const now = (id: string): string => named.get(id) ?? id;
-      const asked: TableRequest = request.kind === 'operation'
-        ? { ...request, ...(request.on ? { on: request.on.map(now) } : {}), ...(request.args ? { args: Object.fromEntries(Object.entries(request.args).map(([name, value]) => [name, typeof value === 'string' ? now(value) : value])) } : {}) }
-        : request.kind === 'show' ? { ...request, view: now(request.view) }
-          : request.kind === 'setField' ? { ...request, id: now(request.id), field: now(request.field) }
-            : { ...request, row: now(request.row), property: now(request.property), ...(typeof request.value === 'string' ? { value: now(request.value) } : {}) } as TableRequest;
+      const asked = renamed(request, now);
       const outcome = editTable({ ...source, text: decode(body.bytes) }, asked, options, confirmed);
       if (outcome.kind !== 'applied' || outcome.splices.length === 0) return outcome;
       return { ...outcome, splices: composedSplices([...edits, editOf(outcome.splices)]) };
@@ -1147,6 +1180,37 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
         return done(run.setItem(open.model, request.row, request.property, request.value, request.present));
       case 'show':
         return done(run.activate(open.model, request.view));
+      case 'steps': {
+        // One after another on what the one before left, written once: one edit and one undo step.
+        const changes: Change[] = [];
+        const created: string[] = [];
+        let model = open.model;
+        for (const given of request.steps) {
+          const step = renamed(given, (id) => (id.startsWith(CREATED) ? created[Number(id.slice(CREATED.length))] ?? id : id));
+          let outcome: Outcome;
+          if (step.kind === 'operation') {
+            const state = run.availability(model, step.operation, step.on ?? []);
+            if (!state.offered) return { kind: 'refused', sentence: NOT_HERE };
+            if (!state.available) return { kind: 'refused', sentence: state.reason ?? `${state.label} cannot be done now.` };
+            if (state.confirm && !confirmed) return { kind: 'confirm', title: state.confirm.title, message: state.confirm.message, confirmLabel: state.confirm.confirmLabel, danger: state.confirm.danger };
+            const args = Object.fromEntries(Object.entries(step.args ?? {}).filter((entry): entry is [string, string | number | boolean] => entry[1] !== null));
+            outcome = run.run(model, step.operation, step.on ?? [], args);
+          } else if (step.kind === 'cell') {
+            outcome = run.setCell(model, step.row, step.property, step.value);
+          } else if (step.kind === 'item') {
+            outcome = run.setItem(model, step.row, step.property, step.value, step.present);
+          } else if (step.kind === 'show') {
+            outcome = run.activate(model, step.view);
+          } else {
+            return { kind: 'refused', sentence: NOT_HERE };
+          }
+          if (outcome.refused !== undefined) return { kind: 'refused', sentence: outcome.refused };
+          changes.push(...outcome.changes);
+          created.push(...outcome.created);
+          model = outcome.after;
+        }
+        return done({ changes, created, after: model, effects: [], collapsed: {}, view: [], renamed: new Map() });
+      }
       case 'setField': {
         const column = table.propertiesOf(open.model).find((property) => property.id === request.field);
         if (!column || !isRow(open.model, request.id)) return { kind: 'refused', sentence: GONE };

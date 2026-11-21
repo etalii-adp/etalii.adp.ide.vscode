@@ -9,6 +9,7 @@
 // groups, not nested; nest them when the table surface draws a tree. `docs/disl-support.md` records it.
 
 import type { ModelElement, Value } from '../../disl/model';
+import { gesturesOf } from './gestures';
 import type { ShownView, TableCell, TableData, TableGroup, TableProperty, TableRow, ThemedColour, ViewLogic } from '../../tool/tableView';
 
 /** Notion's ten names, each as one colour for a light theme and one for a dark one; `default` is the surface's own. */
@@ -210,7 +211,7 @@ function shown(table: TableData): ShownView {
     };
   });
 
-  return { columns, rows: rows.map((row) => row.id), ...(groups ? { groups } : {}) };
+  return { columns, rows: rows.map((row) => row.id), ...(groups ? { groups } : {}), gestures: gesturesOf(table, groups, columns) };
 }
 
 /** The view logic of the tool type `etalii/knowledge`. */
