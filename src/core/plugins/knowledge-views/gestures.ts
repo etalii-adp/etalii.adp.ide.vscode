@@ -6,8 +6,8 @@
 // form for a parameter an entry's request leaves out.
 
 import type { ModelElement, Value } from '../../disl/model';
-import { ROW, TYPED, type TableBarItem, type TableData, type TableEntry, type TableField, type TableGestures, type TableGroup, type TableMenu, type TableNest, type TableProperty, type TableRequest, type ThemedColour } from '../../tool/tableView';
-import { calculationsFor, optionsOf, settingsOf, type Group } from './settings';
+import { ROW, TYPED, type TableBarItem, type TableData, type TableEntry, type TableField, type TableGestures, type TableGroup, type TableMenu, type TableMoves, type TableNest, type TableProperty, type TableRequest, type ThemedColour } from '../../tool/tableView';
+import { calculationsFor, movesOf, optionsOf, settingsOf, type Group } from './settings';
 
 const operation = (name: string, on: readonly string[] = [], args: Readonly<Record<string, string | number | boolean>> = {}): TableRequest => ({ kind: 'operation', operation: name, on, args });
 const text = (value: Value | undefined): string => (value === undefined || value === null ? '' : String(value));
@@ -36,7 +36,7 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
   // ---- views ----
 
   const viewMenus = Object.fromEntries(views.map((tab): [string, TableMenu] => [tab.id, [[
-    { id: 'rename', label: 'Rename', icon: 'pencil-outline', request: operation('renameView', [tab.id]) },
+    { id: 'rename', label: 'Rename', icon: 'pencil-outline', inPlace: true, request: operation('renameView', [tab.id], { name: TYPED }) },
     { id: 'duplicate', label: 'Duplicate', icon: 'content-duplicate', request: operation('duplicateView', [tab.id]) },
     { id: 'delete', label: 'Delete', icon: 'trash-can-outline', request: operation('deleteView', [tab.id]) },
   ]]]));
@@ -64,7 +64,7 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
     const parentable = property.valueType === 'relation' && text(element?.attributes.targetFile) === '.';
     const menu: TableEntry[][] = [
       [
-        { id: 'rename', label: 'Rename', icon: 'pencil-outline', request: operation('renameProperty', [property.id]) },
+        { id: 'rename', label: 'Rename', icon: 'pencil-outline', inPlace: true, request: operation('renameProperty', [property.id], { name: TYPED }) },
         {
           id: 'changeType', label: 'Change type', icon: 'swap-horizontal',
           ...(property.title ? { disabled: 'The column that names a row is always text.' } : {}),
@@ -163,6 +163,33 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
   const sorted = view !== undefined && model.elements.some((element) => element.parent === view.id && element.type === 'Sort');
   const newRowAfter: TableRequest = sorted ? newRow : { kind: 'steps', steps: [newRow, operation('moveRow', ['$created:0'], { after: ROW })] };
 
+  // ---- what dragging moves: a view's tab, a column's header, a row's handle; a column's border ----
+
+  const placed = (after?: string): Readonly<Record<string, string>> => (after === undefined ? {} : { after });
+  const viewIds = views.map((tab) => tab.id);
+  const columnOf = (id: string): ModelElement | undefined => (view === undefined ? undefined : model.elements.find((element) => element.parent === view.id && element.type === 'Column' && element.attributes.property === id));
+  const columnSetting = (id: string, width?: number | string): TableRequest => {
+    const shown = columns.find((column) => column.id === id);
+    const given = width ?? shown?.width;
+    return operation('setColumn', [view!.id], { property: id, visible: shown?.visible ?? true, wrap: shown?.wrap ?? false, ...(given === undefined ? {} : { width: given }) });
+  };
+  // The order of the columns is the view's own: a column moved there, and each before it, is first given a setting where it has none.
+  const columnMoved = (id: string, after?: string): TableRequest => {
+    const others = columns.map((column) => column.id).filter((other) => other !== id);
+    const order = [...others.slice(0, after === undefined ? 0 : others.indexOf(after) + 1), id];
+    const unlisted = order.filter((other) => columnOf(other) === undefined);
+    const ref = (other: string): string => columnOf(other)?.id ?? `$created:${unlisted.indexOf(other)}`;
+    const move = operation('moveColumn', [ref(id)], placed(after === undefined ? undefined : ref(after)));
+    return unlisted.length === 0 ? move : { kind: 'steps', steps: [...unlisted.map((other) => columnSetting(other)), move] };
+  };
+  const moves: TableMoves | undefined = view === undefined ? undefined : {
+    views: Object.fromEntries(viewIds.map((id) => [id, movesOf(viewIds, id, (after) => operation('moveView', [id], placed(after)))])),
+    columns: Object.fromEntries(columns.map((column) => [column.id, movesOf(columns.map((other) => other.id), column.id, (after) => columnMoved(column.id, after))])),
+    // In a view with a sort, the sort places the rows: a row's handle moves nothing.
+    ...(sorted ? {} : { rows: { first: operation('moveRow', [ROW]), after: operation('moveRow', [ROW], { after: TYPED }) } }),
+  };
+  const widths = view === undefined ? undefined : Object.fromEntries(columns.map((column) => [column.id, columnSetting(column.id, TYPED)]));
+
   // ---- the sorts and filters, in words ----
 
   const settings = (type: string): ModelElement[] => (view === undefined ? [] : model.elements.filter((element) => element.parent === view.id && element.type === type));
@@ -198,6 +225,8 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
     createOption,
     newRowAfter,
     ...(folds ? { folds } : {}),
+    ...(moves ? { moves } : {}),
+    ...(widths ? { widths } : {}),
     newRow,
     newRowIn,
     items: [...sorts, ...filters],

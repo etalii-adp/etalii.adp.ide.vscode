@@ -418,3 +418,162 @@ describe('a long table', () => {
     expect(all('tbody tr.adp-table-spacer')).toHaveLength(2);
   });
 });
+
+describe('dragging on a table with gestures, and the keyboard\'s way to the same', () => {
+  const placed = (after?: string): Readonly<Record<string, string>> => (after === undefined ? {} : { after });
+  const listMoves = (ids: readonly string[], operation: string): Record<string, Record<string, TableRequest>> => Object.fromEntries(ids.map((id) => [id,
+    Object.fromEntries([['', op(operation, [id])], ...ids.filter((other) => other !== id).map((other) => [other, op(operation, [id], placed(other))])])]));
+  const moving: TableGestures = {
+    ...gestures,
+    viewMenus: { va: [[{ id: 'rename', label: 'Rename', inPlace: true, request: op('renameView', ['va'], { name: '$typed' }) }]] },
+    columnMenus: { size: [[{ id: 'rename', label: 'Rename', inPlace: true, request: op('renameProperty', ['size'], { name: '$typed' }) }]] },
+    moves: {
+      views: listMoves(['va', 'vb'], 'moveView'),
+      columns: listMoves(['name', 'size'], 'moveColumn'),
+      rows: { first: op('moveRow', ['$row']), after: op('moveRow', ['$row'], { after: '$typed' }) },
+    },
+    widths: { name: op('setColumn', ['va'], { property: 'name', width: '$typed' }), size: op('setColumn', ['va'], { property: 'size', width: '$typed' }) },
+  };
+  const three: TableView = {
+    ...view, gestures: moving, total: 3,
+    rows: [...view.rows, { id: 'r3', title: 'Three', cells: { name: { id: 'r3.name', value: 'Three', items: [], text: 'Three' } } }],
+  };
+  /** Lays elements out side by side, or one under another, each 100 pixels. */
+  const lay = (elements: readonly HTMLElement[], axis: 'x' | 'y'): void => elements.forEach((element, index) => {
+    const at = index * 100;
+    element.getBoundingClientRect = () => ({ left: axis === 'x' ? at : 0, top: axis === 'y' ? at : 0, width: 100, height: 100, right: axis === 'x' ? at + 100 : 100, bottom: axis === 'y' ? at + 100 : 100, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+  });
+  const mouse = (target: EventTarget, kind: string, x: number, y: number): void => {
+    target.dispatchEvent(new MouseEvent(kind, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 }));
+  };
+  /** Presses at one point, moves to another and lets go there, ending with the click a browser sends. */
+  const dragFrom = (target: Element, from: [number, number], to: [number, number]): void => {
+    mouse(target, 'mousedown', ...from);
+    mouse(window, 'mousemove', (from[0] + to[0]) / 2, (from[1] + to[1]) / 2);
+    mouse(window, 'mousemove', ...to);
+    mouse(window, 'mouseup', ...to);
+    mouse(target, 'click', ...to);
+  };
+  const key = (target: Element, name: string, more: KeyboardEventInit = {}): void => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true, ...more }));
+  };
+
+  beforeEach(() => surface.receive(message(three)));
+
+  it('moves a view\'s tab where it is let go, and nothing, with no menu, where it started', () => {
+    lay(all('.adp-table-tab'), 'x');
+    dragFrom(one('[role="tab"][data-view="va"]'), [50, 10], [180, 10]);
+    expect(edits()).toEqual([op('moveView', ['va'], { after: 'vb' })]);
+    dragFrom(one('[role="tab"][data-view="vb"]'), [150, 10], [140, 12]);
+    expect(edits()).toHaveLength(1);
+    expect(entries()).toEqual([]);
+    key(one('[role="tab"][data-view="vb"]'), 'ArrowLeft', { altKey: true });
+    expect(edits()[1]).toEqual(op('moveView', ['vb']));
+  });
+
+  it('shows where a header would land while it is dragged, and moves the column when it is let go', () => {
+    const headers = all('thead [role="columnheader"][data-id]');
+    lay(headers, 'x');
+    mouse(headers[1], 'mousedown', 150, 10);
+    mouse(window, 'mousemove', 20, 10);
+    expect(headers[1].classList.contains('adp-table-dragging')).toBe(true);
+    expect(headers[0].classList.contains('adp-table-drop-before')).toBe(true);
+    mouse(window, 'mouseup', 20, 10);
+    expect(headers[1].classList.contains('adp-table-dragging')).toBe(false);
+    expect(edits()).toEqual([op('moveColumn', ['size'])]);
+    key(one('thead [data-id="name"]'), 'ArrowRight', { altKey: true });
+    expect(edits()[1]).toEqual(op('moveColumn', ['name'], { after: 'size' }));
+  });
+
+  it('widens a column while its border is dragged, never below the minimum, and writes one width when let go', () => {
+    const header = one<HTMLElement>('thead [data-id="size"]');
+    mouse(header.querySelector('.adp-table-resizer')!, 'mousedown', 300, 10);
+    mouse(window, 'mousemove', 340, 10);
+    expect(header.style.width).toBe('200px');
+    expect(edits()).toEqual([]);
+    mouse(window, 'mouseup', 340, 10);
+    expect(edits()).toEqual([op('setColumn', ['va'], { property: 'size', width: 200 })]);
+    mouse(header.querySelector('.adp-table-resizer')!, 'mousedown', 300, 10);
+    mouse(window, 'mousemove', 0, 10);
+    expect(header.style.width).toBe('60px');
+    mouse(window, 'mouseup', 0, 10);
+    expect(edits()[1]).toEqual(op('setColumn', ['va'], { property: 'size', width: 60 }));
+    key(header, 'ArrowRight', { altKey: true, shiftKey: true });
+    expect(edits()[2]).toEqual(op('setColumn', ['va'], { property: 'size', width: 180 }));
+  });
+
+  it('moves a row by its handle, the rows selected with it, and by Alt with an arrow', () => {
+    const lines = all('tbody tr.adp-table-row');
+    lay(lines, 'y');
+    dragFrom(lines[0].querySelector('.adp-table-handle')!, [10, 50], [10, 260]);
+    expect(edits()).toEqual([op('moveRow', ['r1'], { after: 'r3' })]);
+    key(lines[2].querySelector('[role="rowheader"]')!, 'Escape');
+    tick(lines[0].querySelector<HTMLInputElement>('.adp-table-check')!);
+    tick(lines[1].querySelector<HTMLInputElement>('.adp-table-check')!);
+    dragFrom(lines[1].querySelector('.adp-table-handle')!, [10, 150], [10, 260]);
+    expect(edits()[1]).toEqual({ kind: 'steps', steps: [op('moveRow', ['r1'], { after: 'r3' }), op('moveRow', ['r2'], { after: 'r1' })] });
+    key(lines[2].querySelector('[role="rowheader"]')!, 'ArrowUp', { altKey: true });
+    expect(edits()[2]).toEqual(op('moveRow', ['r3'], { after: 'r1' }));
+  });
+
+  it('moves no row in a view whose sort places them', () => {
+    surface.receive(message({ ...three, gestures: { ...moving, moves: { views: moving.moves!.views, columns: moving.moves!.columns } } }));
+    const lines = all('tbody tr.adp-table-row');
+    lay(lines, 'y');
+    dragFrom(lines[0].querySelector('.adp-table-handle')!, [10, 50], [10, 260]);
+    key(lines[0].querySelector('[role="rowheader"]')!, 'ArrowDown', { altKey: true });
+    expect(edits()).toEqual([]);
+    expect(lines[0].querySelector('.adp-table-movable')).toBeNull();
+  });
+
+  it('moves a sort in its editor by its handle, dragged or by the arrow keys', () => {
+    const settings: NonNullable<TableGestures['settings']> = {
+      visibility: [], addSort: [],
+      filter: { id: 'va', match: [], conditions: [], groups: [], add: [] },
+      sortLines: ['s1', 's2'].map((id, index) => ({ id, label: `sort ${index + 1}`, direction: [], remove: op('removeSort', [id]), moves: listMoves(['s1', 's2'], 'moveSort')[id] })),
+      group: { by: [] },
+    };
+    surface.receive(message({ ...three, gestures: { ...moving, settings, items: [{ id: 's1', kind: 'sort', text: 'sort 1', opens: { panel: 'sort' } }] } }));
+    press(one('.adp-table-item'));
+    const handles = all('.adp-table-panel .adp-table-panel-handle');
+    expect(handles.map((handle) => handle.getAttribute('aria-label'))).toEqual(['Move sort sort 1', 'Move sort sort 2']);
+    lay(handles.map((handle) => handle.closest<HTMLElement>('.adp-table-panel-line')!), 'y');
+    dragFrom(handles[0], [10, 50], [10, 180]);
+    expect(edits()).toEqual([op('moveSort', ['s1'], { after: 's2' })]);
+    key(handles[1], 'ArrowUp');
+    expect(edits()[1]).toEqual(op('moveSort', ['s2']));
+  });
+
+  it('renames a view in its tab: Enter keeps it once the document has, a refusal is said at the field', () => {
+    press(one('[role="tab"][data-view="va"]'));
+    press(entry('rename'));
+    const input = one<HTMLInputElement>('.adp-table-rename');
+    expect(document.activeElement).toBe(input);
+    expect(input.value).toBe('All');
+    input.value = 'Every thing';
+    key(input, 'Enter');
+    expect(edits()).toEqual([op('renameView', ['va'], { name: 'Every thing' })]);
+    surface.receive({ v: 2, type: 'outcome', seq: 1, result: 'refused', sentence: 'A view has that name.' });
+    expect(one('.adp-table-rename-error').textContent).toBe('A view has that name.');
+    expect(one('.adp-table-rename').getAttribute('aria-invalid')).toBe('true');
+    input.value = 'Every';
+    key(input, 'Enter');
+    surface.receive({ v: 2, type: 'outcome', seq: 2, result: 'applied' });
+    expect(all('.adp-table-rename')).toHaveLength(0);
+    expect(document.activeElement).toBe(one('[role="tab"][data-view="va"]'));
+  });
+
+  it('renames a column in its header, and keeps the old name on Escape or an empty one', () => {
+    press(one('thead [data-id="size"]'));
+    press(entry('rename'));
+    const input = one<HTMLInputElement>('thead .adp-table-rename');
+    input.value = 'Weight';
+    key(input, 'Escape');
+    press(one('thead [data-id="size"]'));
+    press(entry('rename'));
+    one<HTMLInputElement>('thead .adp-table-rename').value = '  ';
+    key(one('thead .adp-table-rename'), 'Enter');
+    expect(edits()).toEqual([]);
+    expect(one('thead [data-id="size"] .adp-table-name').hidden).toBe(false);
+  });
+});
