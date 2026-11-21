@@ -17,6 +17,7 @@ const read = (name: string): string => readFileSync(`examples/knowledge/${name}`
 const source: Source = { fileName: 'cities.yaml', text: read('cities.yaml'), related: { 'provinces.yaml': { fileName: 'provinces.yaml', text: read('provinces.yaml') } } };
 
 let sent: FromCanvas[];
+let surface: Table;
 const all = <E extends HTMLElement = HTMLElement>(selector: string): E[] => [...document.querySelectorAll<E>(selector)];
 const one = <E extends HTMLElement = HTMLElement>(selector: string): E => document.querySelector<E>(selector)!;
 const press = (target: Element): void => {
@@ -33,7 +34,8 @@ beforeEach(() => {
   sent = [];
   const view = type.view(source, {}) as TableView;
   const message: ToCanvas = { v: 2, type: 'view', origin: 'etalii/knowledge', kind: 'designer', view, actions: [], version: 1 };
-  new Table(document.body, (given) => sent.push(given)).receive(message);
+  surface = new Table(document.body, (given) => sent.push(given));
+  surface.receive(message);
 });
 
 describe('a column\'s menu', () => {
@@ -75,5 +77,38 @@ describe('a column\'s menu', () => {
     ]);
     press(entry('twoWay'));
     expect(edits()).toEqual([{ kind: 'operation', operation: 'setRelationOtherSide', on: ['p5'], args: { twoWay: true } }]);
+  });
+
+  it('inserts a property beside the column through the panel of a new property: its name, then its type', () => {
+    press(header('p3'));
+    press(entry('insertRight'));
+    expect(one('.adp-table-menu').hidden).toBe(true);
+    const name = one<HTMLInputElement>('.adp-table-new-panel .adp-table-property-name');
+    name.value = 'Area';
+    press(one('.adp-table-new-panel [data-entry="number"]'));
+    expect(edits()).toEqual([{ kind: 'operation', operation: 'addProperty', on: [], args: { name: 'Area', valueType: 'number', after: 'p3' } }]);
+  });
+
+  it('asks the name of a property added without one in its header, once it is shown', () => {
+    press(header('p3'));
+    press(entry('insertRight'));
+    press(one('.adp-table-new-panel [data-entry="number"]'));
+    expect(edits()).toEqual([{ kind: 'operation', operation: 'addProperty', on: [], args: { name: 'Number', valueType: 'number', after: 'p3' } }]);
+    // The extension reveals what a step made once its view is shown; p3 stands in for the new property here.
+    surface.receive({ v: 2, type: 'reveal', id: 'p3' });
+    const input = one<HTMLInputElement>('[role="columnheader"][data-id="p3"] .adp-table-rename');
+    expect(document.activeElement).toBe(input);
+    input.value = 'Inhabitants';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    expect(edits().at(-1)).toEqual({ kind: 'operation', operation: 'renameProperty', on: ['p3'], args: { name: 'Inhabitants' } });
+  });
+
+  it('asks nothing of a property given its name', () => {
+    press(header('p3'));
+    press(entry('insertRight'));
+    one<HTMLInputElement>('.adp-table-new-panel .adp-table-property-name').value = 'Area';
+    press(one('.adp-table-new-panel [data-entry="number"]'));
+    surface.receive({ v: 2, type: 'reveal', id: 'p3' });
+    expect(document.querySelector('.adp-table-rename')).toBeNull();
   });
 });

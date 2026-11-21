@@ -169,6 +169,8 @@ export interface TableEntry {
   readonly opens?: TablePanel;
   /** Its request's `$typed` is a new name, typed in place of the name of what the menu was opened on. */
   readonly inPlace?: boolean;
+  /** Its entries are the types of something new, asked in the panel of a new property: its name first, then its type. */
+  readonly named?: boolean;
 }
 
 /** A panel the table surface opens under its bar or over a column. */
