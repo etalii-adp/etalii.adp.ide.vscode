@@ -203,6 +203,41 @@ suite('The Knowledge designer in Visual Studio Code', () => {
     change.replace(provinces, new vscode.Range(other.positionAt(at), other.positionAt(at + 'Noord-Holland'.length)), 'North Holland');
     assert.ok(await vscode.workspace.applyEdit(change));
     await until('the new title', async () => (await provinceOf('r1')) === 'North Holland');
+    // The change is taken back: a document left changed would be what provinces.yaml holds for the tests after this one.
+    await vscode.window.showTextDocument(other);
+    await vscode.commands.executeCommand('workbench.action.files.revert');
+  });
+
+  test('a two-way relation is made in both files in one edit, and neither file is saved by it', async () => {
+    const provinces = example('knowledge-test', 'provinces.yaml');
+    fs.writeFileSync(provinces.fsPath, exampleText('provinces.yaml'));
+    const { document, original } = await open();
+    await until('the province by its title', async () => (await provinceOf('r1')) === 'Noord-Holland');
+    // The request the new-property panel makes (held by test/webview/table/related.test.ts).
+    const request = { kind: 'operation', operation: 'createRelation', on: [], args: { name: 'Seat of', targetFile: 'provinces.yaml', limit: 'none', counterpartName: 'Seats' } };
+    assert.deepStrictEqual(await edit(request), { result: 'applied' });
+    const other = await vscode.workspace.openTextDocument(provinces);
+    assert.match(document.getText().slice(0, document.getText().indexOf('views:')), /name: Seat of\r\n {4}type: relation\r\n {4}target: provinces\.yaml\r\n {4}counterpart: [0-9a-z]{25}\r\n/);
+    assert.match(other.getText(), /name: Seats\r\n {4}type: relation\r\n {4}target: work-\d+\.yaml\r\n {4}counterpart: [0-9a-z]{25}\r\n {4}computed: true\r\n/);
+    assert.ok(document.getText() !== original && other.isDirty, 'both files are changed, and neither is saved');
+    // The other file's change is taken back, so that closing every editor asks nothing.
+    await vscode.window.showTextDocument(other);
+    await vscode.commands.executeCommand('workbench.action.files.revert');
+  });
+
+  test('renaming provinces.yaml rewrites the relation\'s target in a file that names it, in one step with the rename', async () => {
+    const provinces = example('knowledge-test', 'provinces.yaml');
+    fs.writeFileSync(provinces.fsPath, exampleText('provinces.yaml'));
+    const cities = written(exampleText('cities.yaml'));
+    const moved = example('knowledge-test', 'regions', 'provinces.yaml');
+    const rename = new vscode.WorkspaceEdit();
+    rename.renameFile(provinces, moved);
+    assert.ok(await vscode.workspace.applyEdit(rename));
+    const document = await vscode.workspace.openTextDocument(cities);
+    assert.strictEqual(document.getText(), exampleText('cities.yaml').replace('target: provinces.yaml', 'target: regions/provinces.yaml'));
+    await vscode.window.showTextDocument(document);
+    await vscode.commands.executeCommand('workbench.action.files.revert');
+    fs.rmSync(moved.fsPath, { force: true });
   });
 
   test('a refusal shows the definition\'s sentence and writes nothing', async () => {

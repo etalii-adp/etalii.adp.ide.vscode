@@ -84,3 +84,17 @@ describe('a relation to another knowledge file', () => {
     expect(nl.items.map((item) => [item.label, item.link])).toEqual([['Benelux', { file: '.', row: 'benelux' }]]);
   });
 });
+
+describe('the other side of a two-way relation', () => {
+  const regions: Source = { fileName: 'regions.yaml', text: read(`${relations}/regions.yaml`) };
+  const countries: Source = { fileName: 'countries.yaml', text: read(`${relations}/countries.yaml`), related: { 'regions.yaml': regions } };
+
+  it('shows for each row the rows of the other file whose side names it, by title, and is not edited', () => {
+    const view = tableOf(countries);
+    expect(cellOf(view, 'nl', 'c-regions').items.map((item) => [item.label, item.link])).toEqual([
+      ['Friesland', { file: 'regions.yaml', row: 'friesland' }], ['Limburg', { file: 'regions.yaml', row: 'limburg-nl' }],
+    ]);
+    expect(view.properties.find((property) => property.id === 'c-regions')!.readOnly).toBe('The other side of a two-way relation is duplicated from its own table.');
+    expect(type.findings(countries).some((finding) => finding.rule.startsWith('knowledge.unresolved'))).toBe(false);
+  });
+});

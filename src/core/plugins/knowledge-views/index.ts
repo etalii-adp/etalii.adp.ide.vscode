@@ -8,7 +8,7 @@
 
 import type { ModelElement, Value } from '../../disl/model';
 import { gesturesOf } from './gestures';
-import { findings, relations, targets } from './relations';
+import { across, choices, findings, ownSteps, relations, retarget, targets } from './relations';
 import type { ShownView, TableCell, TableNest, TableData, TableGroup, TableProperty, TableRow, ThemedColour, ViewLogic } from '../../tool/tableView';
 
 /** Notion's ten names, each as one colour for a light theme and one for a dark one; `default` is the surface's own. */
@@ -265,4 +265,4 @@ function shown(table: TableData): ShownView {
 const colour = (key: string): ThemedColour | undefined => (Object.hasOwn(colours, key) ? colours[key] : undefined);
 
 /** The view logic of the tool type `etalii/knowledge`. */
-export const knowledgeViews: ViewLogic = { id: 'etalii/knowledge', shown, colour, targets, relations, findings };
+export const knowledgeViews: ViewLogic = { id: 'etalii/knowledge', shown, colour, targets, relations, findings, across, ownSteps, retarget, choices };

@@ -126,6 +126,8 @@ export type EditOutcome =
   /** The splices of the gesture, and the registration's new text when the edit changed it (null removes it). */
   | {
     readonly kind: 'applied'; readonly splices: readonly TextSplice[]; readonly viewOptions?: ViewOptions; readonly registration?: string | null; readonly select?: string; readonly editLabel?: boolean; readonly multiline?: boolean;
+    /** The splices of other files the step changes as well, each by the name the document gives it in `Source.related`: written with the document's, or none is. */
+    readonly others?: readonly { readonly file: string; readonly splices: readonly TextSplice[] }[];
     /** False when the edit changes only what the registration keeps outside the history (FBL 0.7 7.1): it is written at once and is no undo step. */
     readonly history?: false;
   }
@@ -157,6 +159,8 @@ export interface Source {
    * as one that cannot be.
    */
   readonly related?: Readonly<Record<string, RelatedFile | null>>;
+  /** The other documents of the same tool type the host knows of, each as this document would name it. */
+  readonly peers?: readonly string[];
 }
 
 /** A file a document names, as the host found it: open in an editor, unsaved changes and all, or on disk. */
@@ -193,6 +197,12 @@ export interface ToolType<View, Request> {
   claimed(fileName: string, text: string): boolean;
   /** The other files the document names whose text it needs, as it names them: given back in `Source.related`. */
   related?(source: Source): readonly string[];
+  /**
+   * The splices that keep the names of other files a document writes true when files move: `moved`
+   * gives a name's new form, undefined for one that stays. Empty when nothing changes, undefined
+   * when the document cannot be read.
+   */
+  retargeted?(source: Source, moved: (file: string) => string | undefined): readonly TextSplice[] | undefined;
   /** Whether a file of a shared extension looks like this type, from the binding's `claims.suggest`. */
   suggests(fileName: string, text: string): boolean;
   /** Everything wrong with the document. Never throws. */

@@ -61,6 +61,8 @@ export function activate(context: vscode.ExtensionContext): AdpApi {
       tools.refreshDocument(event.document, event.contentChanges.length > 0);
     }),
     vscode.workspace.onDidCloseTextDocument((document) => findings.clear(document.uri)),
+    // A file that documents name, renamed or moved: their names of it follow, in one step with the move (etalii.adp spec 080, FR-010).
+    vscode.workspace.onWillRenameFiles((event) => event.waitUntil(tools.retargetings(types, event.files))),
   );
 
   // `.atd` tool descriptions get the ADP tool language's server and its three commands (etalii.adp spec 035).
