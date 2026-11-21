@@ -1,6 +1,7 @@
 import type { TableEntry, TableField, TableFilter, TableGestures, TablePanel, TableRequest } from '../../core/tool/tableView';
 import { html } from '../diagram/dom';
 import { icon } from '../diagram/icons';
+import { afterOf, reorder, stepped } from './drag';
 import { tag } from './editors';
 
 // The editors of the table surface's settings control (property visibility, filter, sort, group)
@@ -8,6 +9,9 @@ import { tag } from './editors';
 // type gives and making its requests. A value typed or picked goes in the place of `$typed`.
 
 export type Make = (request: TableRequest, typed?: string | number) => void;
+/** Gives the focus back to a line's handle once the editor is drawn again, by the line's id. */
+type Keep = (id: string) => void;
+type Moves = Readonly<Record<string, TableRequest>>;
 
 const titles: Readonly<Record<TablePanel['panel'], string>> = { visibility: 'Property visibility', filter: 'Filter', sort: 'Sort', group: 'Group', options: 'Options' };
 
@@ -46,6 +50,39 @@ const remover = (label: string, request: TableRequest | undefined, make: Make): 
   return element;
 };
 
+/**
+ * The handle of a line the editor's order is changed by: dragged among the lines with handles, or
+ * moved one place with the arrow keys (FR-008, FR-016, FR-030). `moves` has the request that puts
+ * it first, by `''`, and after each other line, by its id.
+ */
+function handle(label: string, moves: Moves | undefined, make: Make, keep: Keep): HTMLButtonElement | undefined {
+  if (!moves) return undefined;
+  const element = html('button', { type: 'button', class: 'adp-table-panel-handle', 'aria-label': `Move ${label}`, title: 'Drag to move', 'aria-keyshortcuts': 'ArrowUp ArrowDown' }, icon('mdi-drag-vertical'));
+  const lines = (): HTMLElement[] => [...(element.closest('.adp-table-panel-line')?.parentElement?.children ?? [])]
+    .filter((line): line is HTMLElement => line instanceof HTMLElement && line.classList.contains('adp-table-panel-line') && line.querySelector('.adp-table-panel-handle') !== null);
+  const moved = (after: string | undefined): void => {
+    const request = after === undefined ? undefined : moves[after];
+    if (request) make(request);
+  };
+  element.addEventListener('mousedown', (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const all = lines();
+    const index = all.indexOf(element.closest<HTMLElement>('.adp-table-panel-line')!);
+    reorder(event, all, index, 'y', (to) => moved(afterOf(all.map((line) => line.dataset.id ?? ''), index, to)));
+  });
+  element.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    event.preventDefault();
+    const all = lines();
+    const line = element.closest<HTMLElement>('.adp-table-panel-line')!;
+    const after = stepped(all.map((each) => each.dataset.id ?? ''), all.indexOf(line), event.key === 'ArrowUp' ? -1 : 1);
+    if (after !== undefined && moves[after]) keep(line.dataset.id ?? '');
+    moved(after);
+  });
+  return element;
+}
+
 /** The control of a value asked in place: it commits when it changes. */
 function field(label: string, given: TableField, make: Make): HTMLElement | undefined {
   if (given.control === 'none' || !given.request) return undefined;
@@ -80,7 +117,7 @@ function filterOf(filter: TableFilter, make: Make, depth: number): HTMLElement {
 }
 
 /** The body of one editor. */
-function bodyOf(gestures: TableGestures, panel: TablePanel, make: Make): HTMLElement[] {
+function bodyOf(gestures: TableGestures, panel: TablePanel, make: Make, keep: Keep): HTMLElement[] {
   const settings = gestures.settings;
   switch (panel.panel) {
     case 'visibility':
@@ -96,6 +133,7 @@ function bodyOf(gestures: TableGestures, panel: TablePanel, make: Make): HTMLEle
     case 'sort':
       return settings ? [
         ...settings.sortLines.map((sort) => html('div', { class: 'adp-table-panel-line', 'data-id': sort.id },
+          handle(`sort ${sort.label}`, sort.moves, make, keep),
           html('span', { class: 'adp-table-panel-grow' }, sort.label), choice('Direction', sort.direction, make), remover(`sort ${sort.label}`, sort.remove, make))),
         html('div', { class: 'adp-table-panel-line' }, choice('Add sort', settings.addSort, make, '+ Add sort')),
       ] : [];
@@ -114,7 +152,7 @@ function bodyOf(gestures: TableGestures, panel: TablePanel, make: Make): HTMLEle
         ...(group.groups ?? []).map((entry) => {
           const eye = html('button', { type: 'button', class: 'adp-table-eye', 'aria-pressed': String(entry.checked === true), 'aria-label': `${entry.checked ? 'Hide' : 'Show'} ${entry.label}` }, icon(entry.checked ? 'mdi-eye-outline' : 'mdi-eye-off-outline'));
           eye.addEventListener('click', () => entry.request && make(entry.request));
-          return html('div', { class: 'adp-table-panel-line', 'data-id': entry.id }, html('span', { class: 'adp-table-panel-grow' }, entry.colour ? tag(entry.label, entry.colour) : entry.label), eye);
+          return html('div', { class: 'adp-table-panel-line', 'data-id': entry.id }, handle(entry.label, group.moves?.[entry.id], make, keep), html('span', { class: 'adp-table-panel-grow' }, entry.colour ? tag(entry.label, entry.colour) : entry.label), eye);
         }),
         ...(group.showAll ? [html('div', { class: 'adp-table-panel-line' }, button(group.showAll, make, 'adp-table-panel-button'))] : []),
       ];
@@ -135,7 +173,7 @@ function bodyOf(gestures: TableGestures, panel: TablePanel, make: Make): HTMLEle
           name.addEventListener('change', () => {
             if (name.value.trim() !== '' && name.value !== option.name) make(option.rename, name.value.trim());
           });
-          return html('div', { class: 'adp-table-panel-line', 'data-id': option.id }, tag('', option.colour, { class: 'adp-table-tag adp-table-swatch' }), name, choice(`Colour of ${option.name}`, option.colours, make), remover(`option ${option.name}`, option.remove, make));
+          return html('div', { class: 'adp-table-panel-line', 'data-id': option.id }, handle(`option ${option.name}`, option.moves, make, keep), tag('', option.colour, { class: 'adp-table-tag adp-table-swatch' }), name, choice(`Colour of ${option.name}`, option.colours, make), remover(`option ${option.name}`, option.remove, make));
         }),
         html('div', { class: 'adp-table-panel-line' }, adding),
       ];
@@ -147,6 +185,8 @@ function bodyOf(gestures: TableGestures, panel: TablePanel, make: Make): HTMLEle
 export class Panels {
   readonly element = html('div', { class: 'adp-table-panel', role: 'region' });
   private drawn = '';
+  /** The line whose handle has the focus again once the editor is drawn anew. */
+  private kept: string | undefined;
 
   constructor(private readonly make: Make, private readonly closed: () => void) {
     this.element.hidden = true;
@@ -167,7 +207,11 @@ export class Panels {
     close.addEventListener('click', () => this.closed());
     this.element.setAttribute('aria-label', titles[panel.panel]);
     this.element.dataset.panel = panel.panel;
-    this.element.replaceChildren(html('div', { class: 'adp-table-panel-head' }, html('span', { class: 'adp-table-panel-grow' }, titles[panel.panel]), close), ...bodyOf(gestures, panel, this.make));
+    this.element.replaceChildren(html('div', { class: 'adp-table-panel-head' }, html('span', { class: 'adp-table-panel-grow' }, titles[panel.panel]), close), ...bodyOf(gestures, panel, this.make, (id) => { this.kept = id; }));
     this.element.hidden = false;
+    if (this.kept !== undefined) {
+      [...this.element.querySelectorAll<HTMLElement>('.adp-table-panel-line')].find((line) => line.dataset.id === this.kept)?.querySelector<HTMLElement>('.adp-table-panel-handle')?.focus();
+      this.kept = undefined;
+    }
   }
 }

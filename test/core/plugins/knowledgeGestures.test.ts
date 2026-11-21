@@ -189,6 +189,64 @@ describe('the rows and groups of a Knowledge table', () => {
   });
 });
 
+describe('what dragging moves in a Knowledge table', () => {
+  const source = example('cities.yaml');
+  const map = { ...source, text: source.text.replace('activeView: v1', 'activeView: v2') };
+  const put = (request: TableRequest, row: string, value: string | number): TableRequest => JSON.parse(JSON.stringify(request), (_key, given: unknown) => (given === '$row' ? row : given === '$typed' ? value : given)) as TableRequest;
+  const moves = type.view(source, {}).gestures!.moves!;
+  const order = (text: string, file = source): string[] => type.view({ ...file, text }, {}).properties.map((property) => property.id);
+
+  it('moves a view\'s tab first and after another, as one edit each', () => {
+    expect(type.view({ ...source, text: textOf(source, moves.views!.v1.v2) }, {}).views.map((tab) => tab.id)).toEqual(['v2', 'v1']);
+    expect(type.view({ ...source, text: textOf(source, moves.views!.v2['']) }, {}).views.map((tab) => tab.id)).toEqual(['v2', 'v1']);
+  });
+
+  it('moves a column in the view\'s own order, giving a setting to each it passes that has none', () => {
+    const before = order(source.text);
+    expect(before.slice(0, 3)).toEqual(['p3', 'p1', 'p2']);
+    expect(order(textOf(source, moves.columns!.p2['']))).toEqual(['p2', ...before.filter((id) => id !== 'p2')]);
+    const after = order(textOf(source, moves.columns!.p4.p1));
+    expect(after.slice(0, 4)).toEqual(['p3', 'p1', 'p4', 'p2']);
+    expect(after).toHaveLength(before.length);
+    // The other view keeps its order: a column's place is the view's.
+    expect(order(textOf(source, moves.columns!.p4.p1).replace('activeView: v1', 'activeView: v2'))).toEqual(order(map.text, map));
+  });
+
+  it('moves a row where the view has no sort, and offers no row move where it has one', () => {
+    expect(moves.rows).toBeUndefined();
+    const rows = type.view(map, {}).gestures!.moves!.rows!;
+    const ids = (text: string): string[] => type.view({ ...map, text }, {}).rows.map((row) => row.id);
+    const before = ids(map.text);
+    expect(ids(textOf(map, put(rows.first, before[2], ''))).slice(0, 3)).toEqual([before[2], before[0], before[1]]);
+    expect(ids(textOf(map, put(rows.after, before[0], before[2]))).slice(0, 3)).toEqual([before[1], before[2], before[0]]);
+  });
+
+  it('writes a column\'s width, keeping it shown', () => {
+    const widths = type.view(source, {}).gestures!.widths!;
+    const after = type.view({ ...source, text: textOf(source, put(widths.p1, '', 240)) }, {}).properties.find((property) => property.id === 'p1');
+    expect(after).toMatchObject({ width: 240, visible: true });
+  });
+
+  it('renames a view and a column with the name typed in place', () => {
+    const gestures = type.view(source, {}).gestures!;
+    const view = find(gestures.viewMenus?.v1, 'rename');
+    const column = find(gestures.columnMenus?.p3, 'rename');
+    expect([view.inPlace, column.inPlace]).toEqual([true, true]);
+    expect(type.view({ ...source, text: textOf(source, put(view.request!, '', 'Every city')) }, {}).views[0].name).toBe('Every city');
+    expect(order(source.text)).toContain('p3');
+    expect(type.view({ ...source, text: textOf(source, put(column.request!, '', 'Inhabitants')) }, {}).properties.find((property) => property.id === 'p3')?.name).toBe('Inhabitants');
+  });
+
+  it('moves a group in the group editor, the order written again', () => {
+    const keys = (text: string): string[] => type.view({ ...source, text }, {}).groups!.map((group) => group.key);
+    const group = type.view(source, {}).gestures!.settings!.group;
+    const every = group.groups!.map((entry) => entry.id);
+    const last = every[every.length - 1];
+    expect(keys(source.text)[0]).not.toBe(last);
+    expect(keys(textOf(source, group.moves![last]['']))[0]).toBe(last);
+  });
+});
+
 describe('a Knowledge view grouped by the parent relation', () => {
   const tasks = (collapsed = ''): Source => ({
     fileName: 'tasks.yaml',

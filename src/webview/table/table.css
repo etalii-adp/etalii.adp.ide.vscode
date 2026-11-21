@@ -846,3 +846,98 @@ thead .adp-table-lead .adp-table-check,
   padding: 0;
   border: none;
 }
+
+/* ---- dragging: what is dragged, where it lands, and a column's border ---- */
+
+.adp-table-handle:not(.adp-table-movable) {
+  cursor: default;
+}
+
+.adp-table-dragging {
+  opacity: 0.5;
+}
+
+.adp-table-tab.adp-table-drop-before,
+.adp-table-grid th.adp-table-drop-before {
+  box-shadow: inset 2px 0 0 var(--vscode-focusBorder);
+}
+
+.adp-table-tab.adp-table-drop-after,
+.adp-table-grid th.adp-table-drop-after {
+  box-shadow: inset -2px 0 0 var(--vscode-focusBorder);
+}
+
+.adp-table-grid tr.adp-table-drop-before > *,
+.adp-table-panel-line.adp-table-drop-before {
+  box-shadow: inset 0 2px 0 var(--vscode-focusBorder);
+}
+
+.adp-table-grid tr.adp-table-drop-after > *,
+.adp-table-panel-line.adp-table-drop-after {
+  box-shadow: inset 0 -2px 0 var(--vscode-focusBorder);
+}
+
+.adp-table-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 1;
+}
+
+.adp-table-resizer:hover,
+.adp-table-resizing .adp-table-resizer {
+  background: var(--vscode-focusBorder);
+}
+
+.adp-table-panel-handle {
+  display: inline-flex;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: grab;
+}
+
+.adp-table-panel-handle:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+/* ---- a name typed in place, and why it was refused ---- */
+
+.adp-table-renaming {
+  position: relative;
+  display: inline-flex;
+}
+
+/* A name typed in place stands where the name was, not over the cell as a value's editor does. */
+.adp-table-editor.adp-table-rename {
+  position: static;
+  width: 140px;
+  height: auto;
+  font: inherit;
+}
+
+/* In a header the field takes the width the name had, beside the property's icon. */
+.adp-table-grid th .adp-table-renaming {
+  width: calc(100% - 24px);
+  vertical-align: middle;
+}
+
+.adp-table-grid th .adp-table-editor.adp-table-rename {
+  width: 100%;
+}
+
+.adp-table-rename-error {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 2;
+  padding: 2px 6px;
+  white-space: nowrap;
+  color: var(--vscode-inputValidation-errorForeground, var(--vscode-foreground));
+  background: var(--vscode-inputValidation-errorBackground, var(--vscode-editorWidget-background, var(--vscode-editor-background)));
+  border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-focusBorder));
+}

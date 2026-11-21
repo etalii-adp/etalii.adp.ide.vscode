@@ -4,6 +4,7 @@ import type { TableBarItem, TableCell, TableEntry, TableField, TableGestures, Ta
 import { html } from '../diagram/dom';
 import { icon } from '../diagram/icons';
 import { Menu } from '../diagram/menu';
+import { afterOf, follow, reorder, stepped } from './drag';
 import { controlOf, given, tag } from './editors';
 import { EntryMenu } from './entries';
 import { Panels } from './panels';
@@ -27,6 +28,9 @@ const TYPED = '$typed';
 /** Where a request names the one row of several it is made for. */
 const ROW = '$row';
 const defaultWidth = 160;
+/** The narrowest a drag of its border leaves a column, as in the standalone host; and how far a key widens or narrows it. */
+const minimumWidth = 60;
+const widthStep = 20;
 
 /** Where a cell is: the key of its line (empty for the header) and its column (empty for the row numbers). */
 interface Place {
@@ -47,6 +51,9 @@ const moves: Readonly<Record<string, readonly [number, number]>> = {
 const clamp = (value: number, last: number): number => Math.max(0, Math.min(value, last));
 const same = (left: readonly string[], right: readonly string[]): boolean => left.length === right.length && left.every((id, index) => id === right[index]);
 const placeOf = (cell: HTMLElement): Place => ({ key: cell.closest('tr')?.dataset.key ?? '', column: cell.dataset.column ?? '' });
+/** A request with what was typed or picked in the place of `$typed`, and a row in the place of `$row`. */
+const filled = (request: TableRequest, typed: string | number | boolean | undefined, row: string | undefined): TableRequest => (typed === undefined && row === undefined ? request
+  : JSON.parse(JSON.stringify(request), (_key, value: unknown) => (value === TYPED && typed !== undefined ? typed : value === ROW && row !== undefined ? row : value)) as TableRequest);
 const several = (property: TableProperty): boolean => property.many || property.editor === 'choices' || property.editor === 'rows';
 const menuButton = (name: string, tabindex: number): HTMLButtonElement => html('button',
   { class: 'adp-table-menu-button', type: 'button', tabindex, 'aria-haspopup': 'menu', 'aria-label': `Menu of ${name}` }, icon('mdi-dots-horizontal'));
@@ -105,6 +112,10 @@ export class Table {
   /** The list of options that is open over a cell. */
   private list: { sync(): void; close(): void } | undefined;
   private form: HTMLFormElement | undefined;
+  /** What a view's or a column's menu was opened on: a name renamed in place is typed there. */
+  private menuAt: HTMLElement | undefined;
+  /** A name typed in place and sent: what its outcome does. */
+  private renaming: { readonly seq: number; readonly refused: (sentence: string) => void; readonly done: () => void } | undefined;
 
   constructor(host: HTMLElement, private readonly send: (message: FromCanvas) => void) {
     host.append(this.root);
@@ -119,6 +130,7 @@ export class Table {
       this.menuFor(event.target as HTMLElement, event.clientX, event.clientY);
     });
     this.grid.addEventListener('mousedown', (event) => this.down(event));
+    this.root.addEventListener('mousedown', (event) => this.drag(event));
     this.grid.addEventListener('dblclick', (event) => this.edit((event.target as HTMLElement).closest<HTMLElement>('[role="gridcell"]')));
     this.grid.addEventListener('focusin', (event) => this.focused(event.target as HTMLElement));
     this.grid.addEventListener('change', (event) => {
@@ -160,6 +172,12 @@ export class Table {
       this.select(this.selection.filter((id) => known.has(id)));
       if (this.wanted && !this.awaiting && !view.readOnly) this.menu.open(this.actions, this.wanted.x, this.wanted.y);
       this.wanted = undefined;
+    } else if (message.type === 'outcome' && this.renaming?.seq === message.seq) {
+      // A name typed in place stays open with the reason it was refused for, and closes once it is kept.
+      const renaming = this.renaming;
+      this.renaming = undefined;
+      if (message.result === 'refused') renaming.refused(message.sentence ?? '');
+      else renaming.done();
     } else if (message.type === 'outcome' && message.seq === this.seq) {
       this.status.textContent = message.result === 'refused' ? message.sentence ?? '' : '';
       // A refusal is followed by no view: what a gesture changed on screen goes back to what the view says.
@@ -190,10 +208,13 @@ export class Table {
     this.notice.hidden = view.notice === undefined;
     const gestures = this.gestures;
     this.root.classList.toggle('adp-table-gestures', gestures !== undefined);
+    // A tab moved by the keyboard keeps the focus when the tabs are drawn again.
+    const onTab = this.tabs.contains(document.activeElement) ? (document.activeElement as HTMLElement).dataset.view : undefined;
     this.tabs.replaceChildren(...view.views.map((tab) => html('span', { class: 'adp-table-tab', 'data-id': tab.id },
-      html('button', { type: 'button', role: 'tab', 'aria-selected': String(tab.active), 'data-view': tab.id, 'aria-haspopup': gestures && tab.active ? 'menu' : undefined }, tab.name),
+      html('button', { type: 'button', role: 'tab', 'aria-selected': String(tab.active), 'data-view': tab.id, 'aria-haspopup': gestures && tab.active ? 'menu' : undefined, 'aria-keyshortcuts': gestures?.moves?.views ? 'Alt+ArrowLeft Alt+ArrowRight' : undefined }, tab.name),
       view.readOnly || gestures ? undefined : menuButton(tab.name, 0))),
     ...(gestures?.newView ? [html('button', { class: 'adp-table-new-view', type: 'button', 'aria-label': 'New view', title: 'New view' }, icon('mdi-plus'))] : []));
+    if (onTab !== undefined) [...this.tabs.querySelectorAll<HTMLElement>('[role="tab"]')].find((tab) => tab.dataset.view === onTab)?.focus();
     this.find.hidden = gestures === undefined;
     if (!gestures) this.searching(true);
     else if (this.search.value === '' && document.activeElement !== this.search) this.searching(false);
@@ -223,8 +244,8 @@ export class Table {
     };
     const numbers = new Map(view.rows.map((row, index) => [row.id, index + 1]));
     const leadOf = (row: TableRow): HTMLElement => (gestures
-      ? html('th', { class: 'adp-table-number adp-table-lead', role: 'rowheader', scope: 'row', 'data-column': '', tabindex: -1 },
-        html('span', { class: 'adp-table-handle', 'aria-hidden': 'true' }, icon('mdi-drag-vertical')),
+      ? html('th', { class: 'adp-table-number adp-table-lead', role: 'rowheader', scope: 'row', 'data-column': '', tabindex: -1, 'aria-keyshortcuts': gestures.moves?.rows ? 'Alt+ArrowUp Alt+ArrowDown' : undefined },
+        html('span', { class: gestures.moves?.rows ? 'adp-table-handle adp-table-movable' : 'adp-table-handle', 'aria-hidden': 'true', title: gestures.moves?.rows ? 'Drag to move' : undefined }, icon('mdi-drag-vertical')),
         html('input', { class: 'adp-table-check', type: 'checkbox', tabindex: -1, 'aria-label': `Select ${row.cells[columns.find((property) => property.title)?.id ?? '']?.text || 'row'}`, 'data-row': row.id }))
       : html('th', { class: 'adp-table-number', role: 'rowheader', scope: 'row', 'data-column': '', tabindex: -1 }, String(numbers.get(row.id) ?? '')));
     const line = (row: TableRow, key: string): HTMLElement => html('tr', { class: 'adp-table-row', role: 'row', 'data-id': row.id, 'data-key': key, 'aria-level': view.tree?.[row.id] ? String(view.tree[row.id].depth + 1) : undefined },
@@ -276,9 +297,11 @@ export class Table {
             html('input', { class: 'adp-table-check adp-table-all', type: 'checkbox', tabindex: -1, 'aria-label': 'Select all rows' }))
           : html('th', { class: 'adp-table-number', role: 'columnheader', scope: 'col', 'data-column': '', tabindex: -1, 'aria-label': 'Row' }),
         ...columns.map((property, index) => {
-          const cell = html('th', { role: 'columnheader', scope: 'col', 'data-id': property.id, 'data-column': property.id, tabindex: -1, 'aria-haspopup': gestures?.columnMenus?.[property.id] ? 'menu' : undefined },
+          const shortcuts = [...(gestures?.moves?.columns ? ['Alt+ArrowLeft', 'Alt+ArrowRight'] : []), ...(gestures?.widths ? ['Alt+Shift+ArrowLeft', 'Alt+Shift+ArrowRight'] : [])];
+          const cell = html('th', { role: 'columnheader', scope: 'col', 'data-id': property.id, 'data-column': property.id, tabindex: -1, 'aria-haspopup': gestures?.columnMenus?.[property.id] ? 'menu' : undefined, 'aria-keyshortcuts': shortcuts.length > 0 ? shortcuts.join(' ') : undefined },
             property.icon ? icon(property.icon) : undefined, html('span', { class: 'adp-table-name' }, property.name),
-            view.readOnly || gestures ? undefined : menuButton(property.name, -1));
+            view.readOnly || gestures ? undefined : menuButton(property.name, -1),
+            gestures?.widths?.[property.id] ? html('span', { class: 'adp-table-resizer', 'aria-hidden': 'true' }) : undefined);
           cell.style.width = `${widths[index]}px`;
           return frozen(cell, property);
         }),
@@ -474,7 +497,8 @@ export class Table {
       } else {
         this.select(picked.includes(row) ? picked.filter((id) => id !== row) : [...picked, row]);
       }
-    } else {
+    } else if (!(row !== undefined && target.closest('.adp-table-handle') && this.selection.includes(row))) {
+      // A selected row's handle drags the selection: pressing it keeps it.
       this.anchor = row;
       this.select(this.idsOf(target));
     }
@@ -518,6 +542,10 @@ export class Table {
       event.preventDefault();
       const box = target.getBoundingClientRect();
       this.menuFor(target, box.left, box.bottom);
+      return;
+    }
+    if (event.altKey && this.gestures && this.moveByKey(target, event)) {
+      event.preventDefault();
       return;
     }
     const cell = this.grid.contains(target) ? target.closest<HTMLElement>('[data-column]') : null;
@@ -565,7 +593,10 @@ export class Table {
       const header = element.closest<HTMLElement>('[role="columnheader"][data-id]');
       const tab = element.closest<HTMLElement>('.adp-table-tab');
       if (header) this.columnMenu(header, x, y);
-      else if (tab) this.entries.open(gestures.viewMenus?.[tab.dataset.id ?? ''] ?? [], x, y, 'View');
+      else if (tab) {
+        this.menuAt = tab.querySelector<HTMLElement>('[role="tab"]') ?? undefined;
+        this.entries.open(gestures.viewMenus?.[tab.dataset.id ?? ''] ?? [], x, y, 'View');
+      }
       else if (element.closest('tr.adp-table-row')) this.entries.open(this.counted(gestures.rowMenu ?? []), x, y, 'Row');
       return;
     }
@@ -703,6 +734,7 @@ export class Table {
     } else if (tab && tab.getAttribute('aria-selected') === 'true') {
       const menu = gestures.viewMenus?.[tab.dataset.view ?? ''];
       if (!menu) return false;
+      this.menuAt = tab;
       this.entries.returnTo(tab);
       this.entries.open(menu, ...below(tab), tab.textContent ?? '');
     } else if (remove) {
@@ -714,7 +746,7 @@ export class Table {
       const group = adding.dataset.group;
       const request = group === undefined ? gestures.newRow : gestures.newRowIn?.[group];
       if (request) this.make(request);
-    } else if (header && !target.closest('.adp-table-check')) {
+    } else if (header && !target.closest('.adp-table-check, .adp-table-renaming')) {
       this.columnMenu(header);
     } else {
       return false;
@@ -727,6 +759,7 @@ export class Table {
     const menu = this.gestures?.columnMenus?.[header.dataset.id ?? ''];
     if (!menu) return;
     const box = header.getBoundingClientRect();
+    this.menuAt = header;
     this.entries.returnTo(header);
     this.entries.open(menu, x ?? box.left, y ?? box.bottom, header.textContent ?? '');
   }
@@ -769,7 +802,7 @@ export class Table {
       const typed = value();
       if (!given?.request || typed === undefined) return;
       const chosen = this.selection.filter((id) => this.rows.has(id));
-      const steps = chosen.map((row) => JSON.parse(JSON.stringify(given.request), (_key, part: unknown) => (part === TYPED ? typed : part === ROW ? row : part)) as TableRequest);
+      const steps = chosen.map((row) => filled(given.request!, typed, row));
       this.make({ kind: 'steps', steps });
     });
     const label = rows.length > 1 && bulk.remove.plural ? bulk.remove.plural.replace('{count}', String(rows.length)) : bulk.remove.label;
@@ -787,7 +820,8 @@ export class Table {
   }
 
   private chosen(entry: TableEntry): void {
-    if (entry.opens) this.openPanel(entry.opens);
+    if (entry.inPlace && entry.request && this.menuAt?.isConnected) this.rename(this.menuAt, entry.request);
+    else if (entry.opens) this.openPanel(entry.opens);
     else if (entry.request) this.make(entry.request);
   }
 
@@ -805,8 +839,7 @@ export class Table {
    */
   private make(given: TableRequest, name?: string, typed?: string | number | boolean, row?: string): void {
     // What was typed or picked goes in the place the request leaves for it, and the row it is for in the row's.
-    const request = typed === undefined && row === undefined ? given
-      : JSON.parse(JSON.stringify(given), (_key, value: unknown) => (value === TYPED && typed !== undefined ? typed : value === ROW && row !== undefined ? row : value)) as TableRequest;
+    const request = filled(given, typed, row);
     const rows = this.selection.filter((id) => this.rows.has(id));
     const put = (given: TableRequest): TableRequest => (given.kind === 'operation' ? { ...given, on: (given.on ?? []).flatMap((id) => (id === SELECTION ? rows : [id])), ...(name === undefined ? {} : { args: { name, ...given.args } }) } : given);
     const resolved: TableRequest = request.kind === 'steps' ? { ...request, steps: request.steps.map((step, index) => (index === 0 ? put(step) : step)) } : put(request);
@@ -868,6 +901,197 @@ export class Table {
     this.form = form;
     this.root.append(form);
     input.focus();
+  }
+
+  // Moving by dragging, and by the keyboard one place at a time.
+
+  /** A press that may become a drag: of a view's tab, a column's header or its border, or a row's handle. */
+  private drag(event: MouseEvent): void {
+    const moves = this.gestures?.moves;
+    const target = event.target as HTMLElement;
+    if (!this.gestures || event.button !== 0 || target.closest('input, .adp-table-renaming')) return;
+    const resizer = target.closest<HTMLElement>('.adp-table-resizer');
+    const tab = target.closest<HTMLElement>('.adp-table-tab');
+    const header = target.closest<HTMLElement>('[role="columnheader"][data-id]');
+    const handle = target.closest<HTMLElement>('.adp-table-handle');
+    if (resizer && header) {
+      event.preventDefault();
+      this.resize(event, header);
+    } else if (tab && moves?.views) {
+      // Prevented, or the browser selects text and scrolls the table while the pointer moves.
+      event.preventDefault();
+      const tabs = [...this.tabs.querySelectorAll<HTMLElement>('.adp-table-tab')];
+      const index = tabs.indexOf(tab);
+      reorder(event, tabs, index, 'x', (to) => this.moved(moves.views?.[tab.dataset.id ?? ''], afterOf(tabs.map((each) => each.dataset.id ?? ''), index, to)));
+    } else if (header && moves?.columns) {
+      event.preventDefault();
+      const headers = [...this.grid.querySelectorAll<HTMLElement>('thead [role="columnheader"][data-id]')];
+      const index = headers.indexOf(header);
+      reorder(event, headers, index, 'x', (to) => this.moved(moves.columns?.[header.dataset.id ?? ''], afterOf(headers.map((each) => each.dataset.id ?? ''), index, to)));
+    } else if (handle && moves?.rows) {
+      const line = handle.closest<HTMLElement>('tr.adp-table-row');
+      const lines = [...this.grid.querySelectorAll<HTMLElement>('tbody tr.adp-table-row')];
+      const index = line ? lines.indexOf(line) : -1;
+      event.preventDefault();
+      reorder(event, lines, index, 'y', (to) => {
+        const after = afterOf(lines.map((each) => each.dataset.id ?? ''), index, to);
+        if (after !== undefined && line?.dataset.id) this.moveRows(line.dataset.id, after, true);
+      });
+    }
+  }
+
+  /** The request of one of several that lands after another, `''` for the first place. */
+  private moved(moves: Readonly<Record<string, TableRequest>> | undefined, after: string | undefined): void {
+    const request = after === undefined ? undefined : moves?.[after];
+    if (request) this.make(request);
+  }
+
+  /**
+   * Moves a row after another, `''` for the first place, as one edit. A row dragged among the rows
+   * selected takes them along, in their order, each after the one before, as the standalone host
+   * does; a row let go among them moves nothing.
+   */
+  private moveRows(row: string, after: string, withSelection: boolean): void {
+    const rows = this.gestures?.moves?.rows;
+    if (!rows) return;
+    const chosen = this.selection.filter((id) => this.rows.has(id));
+    const sight = [...new Set(this.lines().flatMap((line) => (line.classList.contains('adp-table-row') ? line.dataset.id ?? [] : [])))];
+    const moved = withSelection && chosen.includes(row) ? sight.filter((id) => chosen.includes(id)) : [row];
+    if (moved.includes(after)) return;
+    const steps = moved.map((id, index) => (index > 0 ? filled(rows.after, moved[index - 1], id) : after === '' ? filled(rows.first, undefined, id) : filled(rows.after, after, id)));
+    this.make(steps.length === 1 ? steps[0] : { kind: 'steps', steps });
+  }
+
+  /** A column's border dragged: the column follows the pointer, never narrower than the minimum, and one width is written when it is let go. */
+  private resize(start: MouseEvent, header: HTMLElement): void {
+    const id = header.dataset.id ?? '';
+    const request = this.gestures?.widths?.[id];
+    if (!request) return;
+    const grabbed = this.view?.properties.find((property) => property.id === id)?.width ?? defaultWidth;
+    const table = Number.parseFloat(this.grid.style.width) || 0;
+    const widthAt = (dx: number): number => Math.max(minimumWidth, Math.round(grabbed + dx));
+    header.classList.add('adp-table-resizing');
+    follow(start, (dx) => {
+      const width = widthAt(dx);
+      header.style.width = `${width}px`;
+      this.grid.style.width = `${table + width - grabbed}px`;
+    }, (dx, _dy, dragged) => {
+      header.classList.remove('adp-table-resizing');
+      const width = widthAt(dx);
+      if (dragged && width !== grabbed) this.make(request, undefined, width);
+    });
+  }
+
+  /** Alt with an arrow on a tab, a header or a row: the keyboard's way to what dragging does. */
+  private moveByKey(target: HTMLElement, event: KeyboardEvent): boolean {
+    const gestures = this.gestures!;
+    const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[event.key];
+    if (step === undefined) return false;
+    const across = event.key === 'ArrowLeft' || event.key === 'ArrowRight';
+    const tab = target.closest<HTMLElement>('[role="tab"]');
+    const header = this.grid.contains(target) ? target.closest<HTMLElement>('[role="columnheader"][data-id]') : null;
+    const line = this.grid.contains(target) ? target.closest<HTMLElement>('tr.adp-table-row') : null;
+    if (tab && across && gestures.moves?.views) {
+      const ids = [...this.tabs.querySelectorAll<HTMLElement>('[role="tab"]')].map((each) => each.dataset.view ?? '');
+      const id = tab.dataset.view ?? '';
+      this.moved(gestures.moves.views[id], stepped(ids, ids.indexOf(id), step));
+      return true;
+    }
+    if (header && across && event.shiftKey && gestures.widths?.[header.dataset.id ?? '']) {
+      const id = header.dataset.id ?? '';
+      const width = this.view?.properties.find((property) => property.id === id)?.width ?? defaultWidth;
+      const next = Math.max(minimumWidth, width + step * widthStep);
+      if (next !== width) this.make(gestures.widths[id], undefined, next);
+      return true;
+    }
+    if (header && across && gestures.moves?.columns) {
+      const ids = [...this.grid.querySelectorAll<HTMLElement>('thead [role="columnheader"][data-id]')].map((each) => each.dataset.id ?? '');
+      const id = header.dataset.id ?? '';
+      this.moved(gestures.moves.columns[id], stepped(ids, ids.indexOf(id), step));
+      return true;
+    }
+    if (line?.dataset.id && !across && gestures.moves?.rows) {
+      const ids = [...new Set(this.lines().flatMap((each) => (each.classList.contains('adp-table-row') ? each.dataset.id ?? [] : [])))];
+      const after = stepped(ids, ids.indexOf(line.dataset.id), step);
+      if (after !== undefined) this.moveRows(line.dataset.id, after, false);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * A view's or a column's name typed in place of its name: Enter keeps it once the document has,
+   * and a refusal is said at the field, which stays; Escape, an empty name or the same name keep the
+   * old one; leaving the field keeps what was typed.
+   */
+  private rename(anchor: HTMLElement, request: TableRequest): void {
+    const tab = anchor.matches('[role="tab"]');
+    const name = tab ? anchor : anchor.querySelector<HTMLElement>('.adp-table-name');
+    const place = tab ? anchor.parentElement : anchor;
+    if (!name || !place) return;
+    const before = name.textContent ?? '';
+    const input = html('input', { class: 'adp-table-editor adp-table-rename', type: 'text', 'aria-label': `Rename ${before}` });
+    input.value = before;
+    const error = html('span', { class: 'adp-table-rename-error', role: 'alert' });
+    error.hidden = true;
+    const box = html('span', { class: 'adp-table-renaming' }, input, error);
+    const view = anchor.dataset.view;
+    const column = anchor.dataset.id;
+    const finish = (): void => {
+      if (this.closeEditor !== close) return;
+      this.closeEditor = undefined;
+      this.renaming = undefined;
+      box.remove();
+      name.hidden = false;
+      this.render();
+      if (view !== undefined) [...this.tabs.querySelectorAll<HTMLElement>('[role="tab"]')].find((each) => each.dataset.view === view)?.focus();
+      else if (column !== undefined) this.focus({ key: '', column });
+    };
+    const send = (wait: boolean): void => {
+      const typed = input.value.trim();
+      if (typed === '' || typed === before) {
+        finish();
+        return;
+      }
+      this.make(request, undefined, typed);
+      if (!wait) {
+        finish();
+        return;
+      }
+      this.renaming = {
+        seq: this.seq,
+        refused: (sentence) => {
+          error.textContent = sentence;
+          error.hidden = sentence === '';
+          input.setAttribute('aria-invalid', 'true');
+          input.focus();
+        },
+        done: finish,
+      };
+    };
+    const close = (commit: boolean): void => (commit ? send(false) : finish());
+    input.addEventListener('keydown', (event) => {
+      event.stopPropagation();
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        send(true);
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        finish();
+      }
+    });
+    input.addEventListener('input', () => {
+      error.hidden = true;
+      input.removeAttribute('aria-invalid');
+    });
+    input.addEventListener('blur', () => {
+      if (this.renaming === undefined && this.closeEditor === close) send(false);
+    });
+    this.closeEditor = close;
+    name.hidden = true;
+    place.append(box);
+    input.focus();
+    input.select();
   }
 
   // Editing in place.

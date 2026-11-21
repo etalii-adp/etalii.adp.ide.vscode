@@ -149,6 +149,8 @@ export interface TableEntry {
   readonly colour?: ThemedColour;
   /** A panel of the surface the entry opens instead of making a request. */
   readonly opens?: TablePanel;
+  /** Its request's `$typed` is a new name, typed in place of the name of what the menu was opened on. */
+  readonly inPlace?: boolean;
 }
 
 /** A panel the table surface opens under its bar or over a column. */
@@ -293,6 +295,21 @@ export interface TableGestures {
   readonly folds?: Readonly<Record<string, TableRequest>>;
   /** A row added under another, `$row` standing for that one: the key that adds a row. */
   readonly newRowAfter?: TableRequest;
+  /** What dragging moves, and the keyboard moves one place at a time. */
+  readonly moves?: TableMoves;
+  /** A column's width, by the property's id, `$typed` standing for the width in pixels: dragging its header's right border. */
+  readonly widths?: Readonly<Record<string, TableRequest>>;
+}
+
+/**
+ * What a drag moves. A view or a column, by its id: the request that puts it first, by `''`, and
+ * after each other one, by that one's id.
+ */
+export interface TableMoves {
+  readonly views?: Readonly<Record<string, Readonly<Record<string, TableRequest>>>>;
+  readonly columns?: Readonly<Record<string, Readonly<Record<string, TableRequest>>>>;
+  /** A row, `$row` standing for the one moved and `$typed` for the one it lands after; absent where a sort places the rows. */
+  readonly rows?: { readonly first: TableRequest; readonly after: TableRequest };
 }
 
 /** The controls of a group heading. */

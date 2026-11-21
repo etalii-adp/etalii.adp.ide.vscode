@@ -69,8 +69,8 @@ Its differences from the definition and from the standalone host are listed in [
 
 | Difference | Why |
 |---|---|
-| Nothing of the table is dragged yet: a column, a row, a view, a sort, a group and an option are moved by their "Move" operation. | Spec 079 brings drag in a pull request of its own. |
-| Renaming a view or a property asks the name in a form, not in the tab or the header. An option is renamed in place, in its panel. | The same; the form is the one every operation with a parameter uses. |
+| Every drag also has its keys: Alt with an arrow moves a tab, a column or a row one place, Alt+Shift with an arrow widens or narrows a column by 20 pixels, and the arrows move a line of an editor by its handle. | Spec 079 asks a keyboard path for every drag (FR-030); the standalone host has none for these. |
+| A cell does not yet show the findings on it. | Findings carry a line and no element, so the surface cannot tell which cell one is on (spec 079, FR-025). |
 | The settings control's editors open under the bar, as one panel, and use the editor's own selects and boxes. | A webview draws with the platform's controls; what each editor offers is the standalone one's. |
 
 ## Native dialogs, seen in a real window

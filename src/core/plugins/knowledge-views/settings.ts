@@ -38,8 +38,8 @@ const calculationsOf = (type: string): readonly string[] => [
   ...(type === 'number' ? ['sum', 'average', 'median', 'min', 'max', 'range'] : []),
 ];
 
-/** Moves for each of a list: to the top, and after each other one, by its id. */
-const movesOf = (ids: readonly string[], id: string, move: (after?: string) => TableRequest): Record<string, TableRequest> =>
+/** The requests that move one of several: first, by `''`, and after each other one, by its id. */
+export const movesOf = (ids: readonly string[], id: string, move: (after?: string) => TableRequest): Record<string, TableRequest> =>
   Object.fromEntries([['', move()], ...ids.filter((other) => other !== id).map((other) => [other, move(other)])]);
 
 export interface Group { readonly key: string; readonly label: string; readonly colour?: ThemedColour }
@@ -144,6 +144,13 @@ export function settingsOf(table: TableData, view: ModelElement, columns: readon
           request: setting ? operation('unsetGroup', [setting.id]) : operation('setGroup', [view.id], { slot: 'hiddenGroups', key: each.key }),
         };
       }),
+      // A group dragged in the editor: the whole order of the groups written again, as the heading's arrows do.
+      moves: Object.fromEntries(every.map((each) => [each.key, movesOf(every.map((other) => other.key), each.key, (after) => {
+        const others = every.map((other) => other.key).filter((key) => key !== each.key);
+        const at = after === undefined ? 0 : others.indexOf(after) + 1;
+        const keys = [...others.slice(0, at), each.key, ...others.slice(at)];
+        return steps([...settings('groupOrder').map((setting) => operation('unsetGroup', [setting.id])), ...keys.map((key) => operation('setGroup', [view.id], { slot: 'groupOrder', key }))]);
+      })])),
       showAll: { id: 'showAll', label: 'Show all', ...(hidden.length === 0 ? { disabled: 'No group is hidden.' } : {}), request: steps(hidden.map((setting) => operation('unsetGroup', [setting.id]))) },
     }),
   };
