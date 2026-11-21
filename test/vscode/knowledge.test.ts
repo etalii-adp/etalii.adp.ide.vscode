@@ -203,6 +203,9 @@ suite('The Knowledge designer in Visual Studio Code', () => {
     change.replace(provinces, new vscode.Range(other.positionAt(at), other.positionAt(at + 'Noord-Holland'.length)), 'North Holland');
     assert.ok(await vscode.workspace.applyEdit(change));
     await until('the new title', async () => (await provinceOf('r1')) === 'North Holland');
+    // The change is taken back: a document left changed would be what provinces.yaml holds for the tests after this one.
+    await vscode.window.showTextDocument(other);
+    await vscode.commands.executeCommand('workbench.action.files.revert');
   });
 
   test('a two-way relation is made in both files in one edit, and neither file is saved by it', async () => {
