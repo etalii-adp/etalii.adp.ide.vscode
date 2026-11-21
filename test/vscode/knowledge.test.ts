@@ -165,6 +165,15 @@ suite('The Knowledge designer in Visual Studio Code', () => {
     await until('the one undo', () => document.getText() === original);
   });
 
+  test('"Sort descending" from Population\'s menu adds one sort, and one undo takes it back', async () => {
+    const { document, original } = await open(exampleText('cities.yaml').replace('activeView: v1', 'activeView: v2'));
+    // The request of the entry (the plugin's own, held by test/core/plugins/knowledgeGestures.test.ts).
+    assert.deepStrictEqual(await edit({ kind: 'operation', operation: 'addSort', on: ['v2'], args: { property: 'p3', direction: 'descending' } }), { result: 'applied' });
+    assert.strictEqual(document.getText(), original.replace('    name: Map\r\n', '    name: Map\r\n    sorts:\r\n      - property: p3\r\n        direction: descending\r\n'), 'one sort, and nothing else');
+    await vscode.commands.executeCommand('undo');
+    await until('the one undo', () => document.getText() === original);
+  });
+
   test('a refusal shows the definition\'s sentence and writes nothing', async () => {
     const { document, original } = await open();
     assert.deepStrictEqual(await edit({ kind: 'operation', operation: 'renameProperty', on: ['p3'], args: { name: 'Name' } }), { result: 'refused', sentence: 'A property named `Name` already exists.' });
