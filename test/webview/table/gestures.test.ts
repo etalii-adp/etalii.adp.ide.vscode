@@ -293,3 +293,86 @@ describe('the settings control and the panels of a table with gestures', () => {
     expect(edits()).toEqual([op('calculate', ['va'], { property: 'name', calculation: 'countAll' })]);
   });
 });
+
+describe('the rows and groups of a table with gestures', () => {
+  const kind = property('kind', { valueType: 'selection', editor: 'choice', options: [{ id: 'big', name: 'Big' }, { id: 'small', name: 'Small' }] });
+  const more: TableGestures = {
+    ...gestures,
+    rowMenu: [[{ id: 'delete', label: 'Delete row', plural: 'Delete {count} rows', request: op('deleteRows', ['$selection']) }]],
+    groupHeads: {
+      big: { fold: op('setGroup', ['va'], { slot: 'collapsed', key: 'big' }), down: { kind: 'steps', steps: [op('setGroup', ['va'], { slot: 'groupOrder', key: 'small' })] }, hide: op('setGroup', ['va'], { slot: 'hiddenGroups', key: 'big' }) },
+      small: { fold: op('unsetGroup', ['g1']), up: { kind: 'steps', steps: [op('setGroup', ['va'], { slot: 'groupOrder', key: 'small' })] }, hide: op('setGroup', ['va'], { slot: 'hiddenGroups', key: 'small' }) },
+    },
+    bulk: {
+      set: { size: { control: 'number', value: '', request: op('setNumber', ['$row'], { property: 'size', value: '$typed' }) } },
+      remove: { id: 'delete', label: 'Delete row', plural: 'Delete {count} rows', request: op('deleteRows', ['$selection']) },
+    },
+    createOption: { kind: { kind: 'steps', steps: [op('addOption', ['kind'], { name: '$typed' }), op('setOption', ['$row'], { property: 'kind', value: '$created:0' })] } },
+    newRowAfter: { kind: 'steps', steps: [op('addRow'), op('moveRow', ['$created:0'], { after: '$row' })] },
+  };
+  const shown: TableView = {
+    ...view, properties: [...view.properties, kind], gestures: more,
+    groups: [{ key: 'big', label: 'Big', collapsed: false, rows: ['r1'] }, { key: 'small', label: 'Small', collapsed: true, rows: ['r2'] }],
+  };
+  beforeEach(() => surface.receive(message(shown)));
+
+  it('gives a group heading a fold, its count, and controls that move and hide it', () => {
+    const heads = all('tr.adp-table-group');
+    expect(heads.map((head) => [...head.querySelectorAll<HTMLElement>('[data-control]')].map((control) => control.dataset.control))).toEqual([['fold', 'down', 'hide'], ['fold', 'up', 'hide']]);
+    expect(heads[1].querySelector('.adp-table-fold')?.getAttribute('aria-expanded')).toBe('false');
+    press(heads[0].querySelector('[data-control="fold"]')!);
+    press(heads[0].querySelector('[data-control="down"]')!);
+    press(heads[1].querySelector('[data-control="hide"]')!);
+    expect(edits()).toEqual([more.groupHeads!.big.fold, more.groupHeads!.big.down, more.groupHeads!.small.hide]);
+  });
+
+  it('shows a bar while rows are selected: how many, a value set for all in one edit, delete, and clear', () => {
+    surface.receive(message({ ...shown, groups: undefined }));
+    expect(one('.adp-table-selection').hidden).toBe(true);
+    tick(one<HTMLInputElement>('tbody tr[data-id="r1"] .adp-table-check'));
+    tick(one<HTMLInputElement>('tbody tr[data-id="r2"] .adp-table-check'));
+    expect(one('.adp-table-selection').hidden).toBe(false);
+    expect(one('.adp-table-selection-count').textContent).toBe('2 selected');
+    one<HTMLInputElement>('.adp-table-selection input[aria-label="Value"]').value = '4';
+    press(one('.adp-table-selection [data-control="set"]'));
+    expect(one('.adp-table-selection [data-control="delete"]').textContent).toBe('Delete 2 rows');
+    press(one('.adp-table-selection [data-control="delete"]'));
+    expect(edits()).toEqual([
+      { kind: 'steps', steps: [op('setNumber', ['r1'], { property: 'size', value: 4 }), op('setNumber', ['r2'], { property: 'size', value: 4 })] },
+      op('deleteRows', ['r1', 'r2']),
+    ]);
+    press(one('.adp-table-selection [data-control="clear"]'));
+    expect(one('.adp-table-selection').hidden).toBe(true);
+  });
+
+  it('says how many rows a row\'s menu deletes', () => {
+    surface.receive(message({ ...shown, groups: undefined }));
+    tick(one<HTMLInputElement>('tbody tr[data-id="r1"] .adp-table-check'));
+    tick(one<HTMLInputElement>('tbody tr[data-id="r2"] .adp-table-check'));
+    one('tbody tr[data-id="r1"] [role="gridcell"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    expect(entries().map((item) => item.textContent)).toEqual(['Delete 2 rows']);
+  });
+
+  it('adds a row under the one Shift+Enter is pressed on', () => {
+    surface.receive(message({ ...shown, groups: undefined }));
+    const cell = one<HTMLElement>('tbody tr[data-id="r1"] [role="gridcell"][data-column="name"]');
+    cell.focus();
+    cell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true }));
+    expect(edits()).toEqual([{ kind: 'steps', steps: [op('addRow'), op('moveRow', ['$created:0'], { after: 'r1' })] }]);
+  });
+
+  it('opens a cell\'s options with a search field that has the focus, and makes an option of a new name', () => {
+    surface.receive(message({ ...shown, groups: undefined }));
+    const cell = one<HTMLElement>('tbody tr[data-id="r2"] [role="gridcell"][data-column="kind"]');
+    cell.focus();
+    cell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    const search = one<HTMLInputElement>('.adp-table-list-search');
+    expect(document.activeElement).toBe(search);
+    search.value = 'sma';
+    search.dispatchEvent(new Event('input'));
+    expect(all('.adp-table-list [role="option"]').filter((item) => !item.hidden).map((item) => item.textContent)).toEqual(['Small']);
+    search.value = 'Huge';
+    search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    expect(edits()).toEqual([{ kind: 'steps', steps: [op('addOption', ['kind'], { name: 'Huge' }), op('setOption', ['r2'], { property: 'kind', value: '$created:0' })] }]);
+  });
+});

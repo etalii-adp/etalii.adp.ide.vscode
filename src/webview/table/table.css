@@ -741,3 +741,92 @@ thead .adp-table-lead .adp-table-check,
   font-size: 0.85em;
   text-transform: uppercase;
 }
+
+/* ---- rows and groups (spec 079, part 3) ---- */
+
+.adp-table-gestures .adp-table-group[aria-expanded] .adp-table-folds::before {
+  content: none;
+}
+
+.adp-table-fold,
+.adp-table-group-control {
+  padding: 1px 2px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  line-height: 0;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.adp-table-fold:hover,
+.adp-table-group-control:hover {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-foreground);
+}
+
+.adp-table-group-controls {
+  margin-left: 8px;
+  visibility: hidden;
+}
+
+.adp-table-group:hover .adp-table-group-controls,
+.adp-table-group:focus-within .adp-table-group-controls {
+  visibility: visible;
+}
+
+.adp-table-selection {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.adp-table-picking .adp-table-toolbar > :not(.adp-table-selection, .adp-table-action) {
+  display: none;
+}
+
+.adp-table-selection-count {
+  margin-right: 8px;
+  color: var(--vscode-foreground);
+  font-weight: 600;
+}
+
+.adp-table-selection select,
+.adp-table-selection input,
+.adp-table-picker input {
+  padding: 2px 4px;
+  border: 1px solid var(--vscode-input-border, var(--adp-table-line));
+  border-radius: 4px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+}
+
+.adp-table-selection .adp-table-panel-close {
+  margin-left: auto;
+}
+
+.adp-table-picker {
+  position: absolute;
+  z-index: 20;
+  min-width: 200px;
+  padding: 4px;
+  border: 1px solid var(--adp-table-line);
+  border-radius: 6px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+}
+
+.adp-table-picker .adp-table-list {
+  position: static;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.adp-table-list-search {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 4px;
+}

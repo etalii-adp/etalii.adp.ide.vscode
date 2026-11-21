@@ -6,7 +6,7 @@
 // form for a parameter an entry's request leaves out.
 
 import type { ModelElement, Value } from '../../disl/model';
-import type { TableBarItem, TableData, TableEntry, TableGestures, TableGroup, TableMenu, TableProperty, TableRequest, ThemedColour } from '../../tool/tableView';
+import { ROW, TYPED, type TableBarItem, type TableData, type TableEntry, type TableField, type TableGestures, type TableGroup, type TableMenu, type TableProperty, type TableRequest, type ThemedColour } from '../../tool/tableView';
 import { calculationsFor, optionsOf, settingsOf, type Group } from './settings';
 
 const operation = (name: string, on: readonly string[] = [], args: Readonly<Record<string, string | number | boolean>> = {}): TableRequest => ({ kind: 'operation', operation: name, on, args });
@@ -98,7 +98,8 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
 
   // ---- rows ----
 
-  const rowMenu: TableMenu = [[{ id: 'delete', label: 'Delete', icon: 'trash-can-outline', request: operation('deleteRows', [SELECTION]) }]];
+  const remove: TableEntry = { id: 'delete', label: 'Delete row', plural: 'Delete {count} rows', icon: 'trash-can-outline', request: operation('deleteRows', [SELECTION]) };
+  const rowMenu: TableMenu = [[remove]];
   const newRow = operation('addRow');
   // A row made under a group has the group's value, in the same step (`addRow`'s own words: the host sets it).
   const by = propertyOf(view?.attributes.groupBy);
@@ -111,6 +112,49 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
     return { kind: 'steps', steps: [newRow, given] };
   };
   const newRowIn = Object.fromEntries((groups ?? []).map((group) => [group.key, valued(group.key)]));
+
+  // ---- a group heading: fold, up, down, hide ----
+
+  const groupSettings = (slot: string): ModelElement[] => (view === undefined ? [] : model.elements.filter((element) => element.parent === view.id && element.type === 'GroupSetting' && element.slot === slot));
+  const keys = every.map((group) => group.key);
+  const reordered = (order: readonly string[]): TableRequest => ({ kind: 'steps', steps: [...groupSettings('groupOrder').map((setting) => operation('unsetGroup', [setting.id])), ...order.map((key) => operation('setGroup', [view!.id], { slot: 'groupOrder', key }))] });
+  const swapped = (index: number, other: number): string[] => keys.map((key, at) => (at === index ? keys[other] : at === other ? keys[index] : key));
+  const groupHeads = view === undefined ? {} : Object.fromEntries((groups ?? []).map((group) => {
+    const folded = groupSettings('collapsed').find((setting) => text(setting.attributes.key) === group.key);
+    const index = keys.indexOf(group.key);
+    return [group.key, {
+      fold: folded ? operation('unsetGroup', [folded.id]) : operation('setGroup', [view.id], { slot: 'collapsed', key: group.key }),
+      ...(index > 0 ? { up: reordered(swapped(index, index - 1)) } : {}),
+      ...(index >= 0 && index < keys.length - 1 ? { down: reordered(swapped(index, index + 1)) } : {}),
+      hide: operation('setGroup', [view.id], { slot: 'hiddenGroups', key: group.key }),
+    }];
+  }));
+
+  // ---- the bar of selected rows, a new option from a cell, a row added under another ----
+
+  const setterOf = (property: TableProperty): TableField | undefined => {
+    const on = [ROW];
+    switch (property.valueType) {
+      case 'text': return { control: 'text', value: '', request: operation('setText', on, { property: property.id, value: TYPED }) };
+      case 'number': return { control: 'number', value: '', request: operation('setNumber', on, { property: property.id, value: TYPED }) };
+      case 'checkbox': return { control: 'choice', value: '', options: [{ value: 'true', label: 'Checked' }, { value: 'false', label: 'Unchecked' }], request: operation('setChecked', on, { property: property.id, value: TYPED }) };
+      case 'date': return { control: 'date', value: '', request: operation('setDate', on, { property: property.id, value: TYPED }) };
+      case 'dateTime': return { control: 'dateTime', value: '', request: operation('setDateTime', on, { property: property.id, value: TYPED }) };
+      case 'time': return { control: 'time', value: '', request: operation('setTime', on, { property: property.id, value: TYPED }) };
+      case 'selection': return { control: 'choice', value: '', options: property.options.map((option) => ({ value: option.id, label: option.name })), request: operation('setOption', on, { property: property.id, value: TYPED }) };
+      case 'multipleSelection': return { control: 'choice', value: '', options: property.options.map((option) => ({ value: option.id, label: option.name })), request: { kind: 'item', row: ROW, property: property.id, value: TYPED, present: true } };
+      default: return undefined;
+    }
+  };
+  const bulk = { set: Object.fromEntries(properties.flatMap((property) => { const field = setterOf(property); return field && !property.readOnly ? [[property.id, field]] : []; })), remove };
+  const createOption = Object.fromEntries(properties.filter((property) => property.valueType === 'selection' || property.valueType === 'multipleSelection').map((property): [string, TableRequest] => [property.id, {
+    kind: 'steps', steps: [operation('addOption', [property.id], { name: TYPED }), property.many
+      ? { kind: 'item', row: ROW, property: property.id, value: '$created:0', present: true }
+      : operation('setOption', [ROW], { property: property.id, value: '$created:0' })],
+  }]));
+  // In a view with a sort the row is placed by the sort; elsewhere directly under the one the key was pressed on.
+  const sorted = view !== undefined && model.elements.some((element) => element.parent === view.id && element.type === 'Sort');
+  const newRowAfter: TableRequest = sorted ? newRow : { kind: 'steps', steps: [newRow, operation('moveRow', ['$created:0'], { after: ROW })] };
 
   // ---- the sorts and filters, in words ----
 
@@ -142,6 +186,10 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
     newProperty: newProperty(properties[properties.length - 1]?.id),
     columnMenus,
     rowMenu,
+    groupHeads,
+    bulk,
+    createOption,
+    newRowAfter,
     newRow,
     newRowIn,
     items: [...sorts, ...filters],
