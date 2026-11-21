@@ -282,3 +282,18 @@ describe('a Knowledge view grouped by the parent relation', () => {
     expect(type.view({ ...source, text: textOf({ ...source, text: folded }, shown.gestures!.folds!.b) }, {}).rows).toHaveLength(4);
   });
 });
+
+describe('the findings of a Knowledge table, on what they are about', () => {
+  const source = example('cities.yaml');
+  const broken = { ...source, text: source.text.replace('activeView: v1', 'activeView: v2').replace('        number: 931298', '        text: many') };
+
+  it('marks a cell with the findings about it, and no other', () => {
+    const found = type.findings(broken);
+    expect(found.length).toBeGreaterThan(0);
+    const shown = type.view(broken, {});
+    const marked = shown.rows.flatMap((row) => Object.entries(row.cells).filter(([, cell]) => cell.findings).map(([property]) => `${row.id}.${property}`));
+    expect(marked).toEqual(['r1.p3']);
+    expect(shown.rows.find((row) => row.id === 'r1')!.cells.p3.findings!.map((finding) => finding.message)).toEqual(found.map((finding) => finding.message));
+    expect(type.view(source, {}).rows.some((row) => Object.values(row.cells).some((cell) => cell.findings))).toBe(false);
+  });
+});

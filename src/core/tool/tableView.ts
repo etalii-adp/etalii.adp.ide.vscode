@@ -7,6 +7,7 @@ import type { DesignerOperation, Parameter } from '../desl/operations';
 import type { Editor, TableSurface, ValueType } from '../desl/surface';
 import { attributesOf, defaultOf, valueKind, type Metamodel } from '../disl/metamodel';
 import type { Model, ModelElement, Value } from '../disl/model';
+import type { Severity } from '../frame/toolType';
 import { isCel, localized } from '../disl/specification';
 
 /** A value of the model as a request carries it. */
@@ -72,6 +73,14 @@ export interface TableCell {
   /** The value as the cell shows it: its written form, the name of an option, the items' labels joined. */
   readonly text: string;
   readonly colour?: ThemedColour;
+  /** The findings about the cell or a value in it. */
+  readonly findings?: readonly TableFinding[];
+}
+
+/** A finding as a cell or a row shows it: how grave it is, and its sentence. */
+export interface TableFinding {
+  readonly severity: Severity;
+  readonly message: string;
 }
 
 export interface TableRow {
@@ -80,6 +89,8 @@ export interface TableRow {
   readonly title: string;
   /** By the column's id. A column the row has no value for has no entry. */
   readonly cells: Readonly<Record<string, TableCell>>;
+  /** The findings about the row itself rather than one of its cells. */
+  readonly findings?: readonly TableFinding[];
 }
 
 /** The rows that share a value of the column a view is grouped by. */
@@ -590,4 +601,44 @@ export function tableReader(parts: TableParts) {
   }
 
   return { view, propertiesOf, rowsOf };
+}
+
+/**
+ * The view with each finding on what it is about (etalii.adp spec 079, FR-025): on the cell it
+ * names or the cell a value it names is in, on the row it names, and, where it names nothing, on
+ * the cell or row its line falls in. A finding about anything else stays in the Problems panel only.
+ */
+export function withFindings(view: TableView, found: readonly { readonly severity: Severity; readonly message: string; readonly line: number; readonly element?: string }[], model: Model): TableView {
+  if (found.length === 0) return view;
+  const byId = new Map(model.elements.map((element) => [element.id, element]));
+  const shown = new Map<string, string>();
+  for (const row of view.rows) {
+    shown.set(row.id, row.id);
+    for (const cell of Object.values(row.cells)) shown.set(cell.id, cell.id);
+  }
+  // The element a finding that names none is about: the last to start at or above its line, which counts from 0 where an element's counts from 1.
+  const startsAbove = (line: number): string | undefined => {
+    let best: ModelElement | undefined;
+    for (const element of model.elements) if (element.line > 0 && element.line <= line + 1 && (best === undefined || element.line >= best.line)) best = element;
+    return best?.id;
+  };
+  // What it is shown on: that element, or the nearest around it that is shown.
+  const onto = (finding: (typeof found)[number]): string | undefined => {
+    const named = finding.element ?? (finding.line > 0 ? startsAbove(finding.line) : undefined);
+    for (let id = named; id !== undefined; id = byId.get(id)?.parent) if (shown.has(id)) return id;
+    return undefined;
+  };
+  const marks = new Map<string, TableFinding[]>();
+  for (const finding of found) {
+    const id = onto(finding);
+    if (id !== undefined) marks.set(id, [...(marks.get(id) ?? []), { severity: finding.severity, message: finding.message }]);
+  }
+  if (marks.size === 0) return view;
+  return {
+    ...view,
+    rows: view.rows.map((row) => {
+      const cells = Object.fromEntries(Object.entries(row.cells).map(([key, cell]) => [key, marks.has(cell.id) ? { ...cell, findings: marks.get(cell.id)! } : cell]));
+      return { ...row, cells, ...(marks.has(row.id) ? { findings: marks.get(row.id)! } : {}) };
+    }),
+  };
 }
