@@ -86,7 +86,7 @@ export interface Action {
 /** Every gesture a canvas, the toolbox or the property grid can ask of a diagram. */
 export type EditRequest =
   /** A toolbox entry dropped at a point. */
-  | { readonly kind: 'drop'; readonly entry: string; readonly x: number; readonly y: number }
+  | { readonly kind: 'drop'; readonly entry: string; readonly x: number; readonly y: number; readonly params?: Readonly<Record<string, string>>; readonly check?: boolean }
   /** An element dropped with its top-left at a point. */
   | { readonly kind: 'move'; readonly id: string; readonly x: number; readonly y: number }
   /** An element resized by one of its sides to new bounds. */
@@ -146,7 +146,7 @@ export type EditOutcome =
   | { readonly kind: 'refused'; readonly sentence: string }
   /** Ask first; when confirmed, the same request is made again with `confirmed`. */
   | { readonly kind: 'confirm'; readonly title: string; readonly message: string; readonly confirmLabel: string; readonly danger: boolean }
-  /** The request asks for values first, in the form of its operation: answered, the same request is made again with `params`. */
+  /** The request (an action, or a drop that runs one) asks for values first, in the form of its operation: answered, the same request is made again with `params`. */
   | { readonly kind: 'ask'; readonly title: string; readonly icon?: string; readonly confirmLabel: string; readonly fields: readonly AskedField[] }
   /** The request asks for text edited in place before anything is written. */
   | { readonly kind: 'editInPlace'; readonly id: string; readonly multiline: boolean }

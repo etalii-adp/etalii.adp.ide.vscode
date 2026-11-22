@@ -221,8 +221,10 @@ export function interpretToolbox(specification: Specification, metamodel: Metamo
     const kind = declared.kind ?? (relation ? 'create-edge' : type ? 'create-node' : declared.operation === undefined ? '' : 'operation');
     if (kind === '') report(`The tool \`${declared.id}\` has no \`kind\` and creates nothing, so it does nothing.`);
     const placements = isObject(specification.behavior) && isObject(specification.behavior.placements) ? specification.behavior.placements : {};
-    if (declared.drop?.targets?.length) report(`The tool \`${declared.id}\` chooses what a drop does by what lies under it, which this add-on does not support; it creates at the drop point.`);
-    else if (declared.drop?.place !== undefined && !Object.hasOwn(placements, declared.drop.place)) report(`The tool \`${declared.id}\` places what it creates by \`${declared.drop.place}\`, which is no placement of this specification; it creates at the drop point.`);
+    const other = declared.drop?.place === undefined ? declared.drop?.targets?.find((target) => target.operation === undefined) : undefined;
+    if (other) report(`The tool \`${declared.id}\` drops a \`${other.kind}\` onto ${other.on.join(', ')}, which this add-on does not support; only a target that runs an operation is run.`);
+    if (declared.drop?.elsewhere === 'menu') report(`The tool \`${declared.id}\` opens the canvas's menu where it lands on nothing, which this add-on does not support; it changes nothing there.`);
+    if (declared.drop?.place !== undefined && !Object.hasOwn(placements, declared.drop.place)) report(`The tool \`${declared.id}\` places what it creates by \`${declared.drop.place}\`, which is no placement of this specification; it creates at the drop point.`);
     const initial: Record<string, Value | CelValue> = {};
     for (const [name, value] of Object.entries(declared.initial ?? {})) initial[name] = isCel(value) ? value : (value as Value);
     const made: Tool = {

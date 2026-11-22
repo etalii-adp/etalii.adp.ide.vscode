@@ -18,7 +18,7 @@ import { interpretCoordinates, rulerRows } from '../disl/coordinates';
 import { createExpressions, type Scope } from '../disl/expressions';
 import { createTexts, formFor, interpretForms, type FormItem, type Subject } from '../disl/forms';
 import { interpretLayout } from '../disl/layout';
-import { defaultOf, derivedRelations, interpretMetamodel, isRelation, linkKind, type DerivedRelation } from '../disl/metamodel';
+import { defaultOf, derivedRelations, interpretMetamodel, isA, isRelation, linkKind, type DerivedRelation } from '../disl/metamodel';
 import { emptyModel, type Finding as Found, type Model, type Value } from '../disl/model';
 import { edgeNotation, interpretNotation, nodeNotation, styleOf, type GestureRefusals, type Notation, type Paint } from '../disl/notation';
 import { entryOf, foldsOf, interpretPersistence, momentAttributes, naturalId, newId, readModel, viewEntryIds, type StoredView } from '../disl/persistence';
@@ -563,10 +563,19 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       case 'drop': {
         // A tool that runs an operation runs it on the element the point is on, the topmost there. Where the
         // operation needs an element and there is none, nothing happens: a host rule, see docs/disl-support.md.
+        // A tool with `drop.targets` is resolved by what it lands on, so the core is told that too (DISL 7.2).
         const entry = wire.toolOf(request.entry);
-        const operation = Object.hasOwn(toolbox.value.tools, entry) ? toolbox.value.tools[entry].operation : undefined;
-        const under = operation === undefined ? undefined : [...sceneOf(open, options).nodes].reverse().find((node) => request.x >= node.box.x && request.x <= node.box.x + node.box.width && request.y >= node.box.y && request.y <= node.box.y + node.box.height)?.id;
-        if (operation !== undefined && under === undefined && !intents.availability(model, operation, [], situation).offered) return { kind: 'applied', splices: [] };
+        const used = Object.hasOwn(toolbox.value.tools, entry) ? toolbox.value.tools[entry] : undefined;
+        const operation = used?.operation;
+        const targeted = used?.drop?.place === undefined && (used?.drop?.targets?.length ?? 0) > 0;
+        const under = operation === undefined && !targeted ? undefined : [...sceneOf(open, options).nodes].reverse().find((node) => request.x >= node.box.x && request.x <= node.box.x + node.box.width && request.y >= node.box.y && request.y <= node.box.y + node.box.height)?.id;
+        // A target that runs an operation on what it lands on is that operation's entry there, its form and its refusals included.
+        const landed = targeted && under !== undefined ? elementOf(model, under) : undefined;
+        const target = landed && used?.drop?.targets?.find((candidate) => candidate.on.some((type) => isA(metamodel.value, landed.type, type)));
+        if (target?.operation !== undefined) {
+          return edit(source, { kind: 'action', action: target.operation, id: under, x: request.x, y: request.y, ...(request.params === undefined ? {} : { params: request.params }), ...(request.check === undefined ? {} : { check: request.check }) }, options, confirmed);
+        }
+        if (operation !== undefined && !targeted && under === undefined && !intents.availability(model, operation, [], situation).offered) return { kind: 'applied', splices: [] };
         return done(intents.create(model, entry, inBase({ x: request.x, y: request.y }), situation, under));
       }
       case 'move': {
