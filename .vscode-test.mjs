@@ -17,7 +17,7 @@ export default defineConfig({
   mocha: {
     ui: 'tdd',
     timeout: 60000,
-    reporter: 'xunit',
+    reporter: 'spec',
     reporterOptions: { output: resolve('reports/vscode.xml') },
   },
 });

@@ -502,9 +502,12 @@ export class Tools implements vscode.Disposable {
       return `${other.file} cannot be opened, so neither file is changed.`;
     }
     if (planned === undefined || document.getText() !== planned) return `${other.file} changed meanwhile, so neither file is changed. Try again.`;
+    const separate = new vscode.WorkspaceEdit();
     for (const splice of spliceRanges(document.getText(), other.splices)) {
-      edit.replace(uri, new vscode.Range(splice.start.line, splice.start.character, splice.end.line, splice.end.character), splice.text, metadata);
+      separate.replace(uri, new vscode.Range(splice.start.line, splice.start.character, splice.end.line, splice.end.character), splice.text, metadata);
     }
+    await vscode.workspace.applyEdit(separate);
+    void edit;
     return undefined;
   }
 
