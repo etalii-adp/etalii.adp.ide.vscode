@@ -2,7 +2,7 @@
 // binding, how ids are made, and `typeMap`, which says what the binding's types and attributes are
 // in the metamodel. Reading a body is the FBL library's; this module types what it read.
 
-import { allRules, findRule, type FblBinding, type FblDocument, type Slot } from '../fbl/documents/types';
+import { allRules, findRule, type FblBinding, type FblDocument, type ReferenceBinding, type Slot } from '../fbl/documents/types';
 import { findingCodes } from '../fbl/finding';
 import type { FblElement, FblModel, IdRequest } from '../fbl/model';
 import { attributesOf, formatYearMonth, isRelation, parseYearMonth, valueKind, type Metamodel } from './metamodel';
@@ -77,10 +77,10 @@ export function interpretPersistence(specification: Specification, metamodel: Me
   }
 
   const ids: InterpretedPersistence['ids'] = { strategy: 'uuid-v7', encoding: 'hex', stable: true, pattern: '^[A-Za-z0-9_.:#-]{1,128}$', missing: 'assign', compare: 'exact', ...declared.ids };
-  // A derived id is its expression's value (DISL 11.5.2); any other strategy is read as `uuid-v4`.
+  // A derived id is its expression's value (DISL 11.5.2), a natural id its key (11.5.1); any other strategy is read as `uuid-v4`.
   const derived = ids.strategy === 'derived' && (typeof ids.expression === 'string' || isCel(ids.expression));
   if (ids.strategy === 'derived' && !derived) problem('The ids are derived, and `ids.expression` does not say from what.');
-  else if (ids.strategy !== 'uuid-v4' && !derived) findings.push(finding('disl.persistence', 'warning', `New elements get an id by the strategy \`uuid-v4\`, not by \`${ids.strategy}\`, which this add-on does not support.`));
+  else if (ids.strategy !== 'uuid-v4' && ids.strategy !== 'natural' && !derived) findings.push(finding('disl.persistence', 'warning', `New elements get an id by the strategy \`uuid-v4\`, not by \`${ids.strategy}\`, which this add-on does not support.`));
   if (ids.types) findings.push(finding('disl.persistence', 'warning', 'The id rules for single types are not supported; every type follows the one rule.'));
 
   const store = declared.view?.store ?? [];
@@ -173,6 +173,30 @@ export function newId(persistence: InterpretedPersistence, type: string): string
 }
 
 /**
+ * The `natural` id of an element of `type` (DISL 11.5.1): the type's prefix and the string forms of
+ * its `key` attributes, in declaration order, joined by `|`. Nothing when the strategy is another,
+ * or the type has no key attribute.
+ */
+export function naturalId(persistence: InterpretedPersistence, metamodel: Metamodel, type: string, attributes: Readonly<Record<string, Value | undefined>>): string | undefined {
+  if (persistence.ids.strategy !== 'natural') return undefined;
+  const keys = Object.entries(attributesOf(metamodel, type)).filter(([, attribute]) => attribute.key === true).map(([name]) => name);
+  if (keys.length === 0) return undefined;
+  const { prefix } = persistence.ids;
+  const text = (value: Value | undefined): string => (value === undefined || value === null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value));
+  return (typeof prefix === 'string' ? prefix : prefix?.[type] ?? '') + keys.map((name) => text(attributes[name])).join('|');
+}
+
+/** `id`, or the first of `id` with `suffix` (default `-{n}`) for n from 2 that is not `taken` (DISL 11.5.1). */
+export function uniqueId(persistence: InterpretedPersistence, id: string, taken: (candidate: string) => boolean): string {
+  if (!taken(id)) return id;
+  const suffix = typeof persistence.ids.suffix === 'string' && persistence.ids.suffix.includes('{n}') ? persistence.ids.suffix : '-{n}';
+  for (let n = 2; ; n++) {
+    const candidate = id + suffix.replace('{n}', String(n));
+    if (!taken(candidate)) return candidate;
+  }
+}
+
+/**
  * A model with the ids its `derived` strategy computes (DISL 11.5.2): each node's id is the value
  * of `ids.expression` for it, ancestors before descendants, and whatever names a node by its id
  * (a parent, an end of a relation) follows. `renamed` holds each id that changed, by what it was.
@@ -255,14 +279,23 @@ export function readModel(reading: Pick<FblModel, 'elements' | 'findings' | 'unr
   });
 
   const diagram: Record<string, Value> = {};
+  const naturals = new Set<string>();
   const elements: ModelElement[] = [];
   const relations: ModelRelation[] = [];
   const inModel = new Map<FblElement, string>();
+  // The values read through a reference of the binding, by the model's name they went to: each names
+  // an entry by its key, and becomes that entry's id in the model once every id is known (FBL 5.7).
+  const referenced = new Map<ModelElement, Map<string, ReferenceBinding>>();
+  let references = new Map<string, ReferenceBinding>();
   const read = (entry: FblElement, entryMap: TypeMapEntry, type: string, into: Record<string, Value>, host?: Record<string, unknown>): Partial<Record<'id' | 'source' | 'target', string>> => {
     const named: Partial<Record<'id' | 'source' | 'target', string>> = {};
     const attributes = attributesOf(metamodel, type);
+    const rule = findRule(binding, entry.rule);
+    references = new Map();
     for (const [name, stored] of Object.entries(entry.attributes)) {
       const target = mapped(entryMap, name);
+      const reference = rule?.attributes.find(([candidate]) => candidate === name)?.[1].reference;
+      if (target !== null && reference && reference.by !== '') references.set(target, reference);
       if (entryMap.hostAttributes?.includes(name)) { if (host) host[name] = stored; }
       else if (target === null || stored === null || stored === undefined) continue;
       else if (target === 'id' || target === 'source' || target === 'target') named[target] = String(stored);
@@ -293,16 +326,62 @@ export function readModel(reading: Pick<FblModel, 'elements' | 'findings' | 'unr
       const attributes: Record<string, Value> = {};
       const host: Record<string, unknown> = {};
       const named = read(entry, entryMap, entryMap.as, attributes, host);
-      // An attribute mapped to `id` is the element's id only where the library found none in the body.
+      // An attribute mapped to `id` is the element's id only where the library found none in the body;
+      // a `natural` id is the element's key (DISL 11.5.1). An entry whose key an earlier one has is that
+      // element written again: the first is the element, and what names the key names it.
+      const natural = entry.idIsStored || named.id !== undefined ? undefined : naturalId(persistence, metamodel, entryMap.as, attributes);
+      if (natural !== undefined && naturals.has(natural)) {
+        inModel.set(entry, natural);
+        continue;
+      }
       const element: ModelElement = {
-        id: entry.idIsStored ? entry.id : named.id ?? entry.id, type: entryMap.as, attributes, host, parent: entry.parentId, ephemeral: !entry.idIsStored && named.id === undefined && persistence.ids.strategy !== 'derived', line: entry.line,
+        id: entry.idIsStored ? entry.id : named.id ?? natural ?? entry.id,
+        type: entryMap.as, attributes, host, parent: entry.parentId,
+        ephemeral: !entry.idIsStored && named.id === undefined && natural === undefined && persistence.ids.strategy !== 'derived', line: entry.line,
         ...(entry.parentSlot === undefined ? {} : { slot: entry.parentSlot }),
       };
+      if (natural !== undefined) naturals.add(element.id);
       inModel.set(entry, element.id);
-      if (isRelation(metamodel.types[entryMap.as])) relations.push({ ...element, source: named.source ?? entry.source, target: named.target ?? entry.target });
+      const relation = isRelation(metamodel.types[entryMap.as]) ? { ...element, source: named.source ?? entry.source, target: named.target ?? entry.target } : undefined;
+      if (references.size > 0) referenced.set(relation ?? element, references);
+      if (relation) relations.push(relation);
       else elements.push(element);
     }
   }
+
+  // A key a reference read, as the id of the first entry in document order it names: the key itself
+  // where it names none, which is then reported as `std.references` below.
+  const keyed = new Map<ReferenceBinding, Map<string, string>>();
+  const idOf = (reference: ReferenceBinding, key: string): string => {
+    let index = keyed.get(reference);
+    if (!index) {
+      index = new Map();
+      for (const entry of reading.elements) {
+        const id = inModel.get(entry);
+        if (id === undefined || !reference.to.includes(entry.rule)) continue;
+        const named = reference.by === 'id' ? entry.id : entry.attributes[reference.by];
+        if (named !== undefined && named !== null && !index.has(String(named))) index.set(String(named), id);
+      }
+      keyed.set(reference, index);
+    }
+    return index.get(key) ?? key;
+  };
+  const followed = <T extends ModelElement>(element: T): T => {
+    const byName = referenced.get(element);
+    if (!byName) return element;
+    const attributes: Record<string, Value> = { ...element.attributes };
+    const ends: Partial<Record<'source' | 'target', string>> = {};
+    for (const [name, reference] of byName) {
+      if (name === 'source' || name === 'target') {
+        const end = (element as unknown as ModelRelation)[name];
+        if (end !== undefined) ends[name] = idOf(reference, end);
+      } else if (typeof attributes[name] === 'string') attributes[name] = idOf(reference, attributes[name]);
+      else if (Array.isArray(attributes[name])) attributes[name] = attributes[name].map((item) => (typeof item === 'string' ? idOf(reference, item) : item));
+    }
+    return { ...element, attributes, ...ends };
+  };
+  elements.splice(0, elements.length, ...elements.map(followed));
+  relations.splice(0, relations.length, ...relations.map(followed));
 
   // The entry a line lies in: the last one that begins at or before it.
   const owner = (line: number): FblElement | undefined => [...reading.elements].reverse().find((entry) => entry.line <= line);

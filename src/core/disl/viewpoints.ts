@@ -76,8 +76,9 @@ export function interpretViewpoints(specification: Specification, metamodel: Met
   const report = (message: string): void => void findings.push(finding('disl.viewpoints', 'warning', message));
   const declared = specification.viewpoints ?? {};
   const names = Object.keys(declared).filter((name) => isObject(declared[name]));
-  // A layout that runs always, or whenever the model changes, places every viewpoint that names no layout of its own (DISL 10).
-  const byItself = parts.layout.trigger === 'always' || parts.layout.trigger === 'onChange';
+  // A layout that runs always, whenever the model changes, or on opening for what has no kept position,
+  // places every viewpoint that names no layout of its own (DISL 10); a kept position wins over it.
+  const byItself = parts.layout.trigger === 'always' || parts.layout.trigger === 'onChange' || parts.layout.trigger === 'onLoadIfMissing';
   const always = byItself && parts.layout.default !== undefined ? parts.layout.algorithms[parts.layout.default] : undefined;
   const { respect } = parts.layout;
   if (names.length === 0) {

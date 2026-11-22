@@ -3,6 +3,7 @@
 // states. The algorithms work on plain items; the scene gives them the elements' places. The `force`
 // layout in tiers (10.4) is read here and run by `forceLayout.ts`, and `tidyTree` (10.3) by `tidyTree.ts`.
 
+import { readCircular, type CircularLayout } from './circularLayout';
 import type { GeomExpr } from './notation';
 import { finding, type Finding, type Loaded, type Model } from './model';
 import { isObject, type Doc, type Expression, type Section, type Specification } from './specification';
@@ -44,6 +45,8 @@ export interface LayoutConfig {
   readonly rowPacked?: RowPacked;
   readonly rows?: RowsLayout;
   readonly force?: ForceLayout;
+  /** `circular` (DISL 10), with the `adp.ring.*` options that say its order and its radius. */
+  readonly circular?: CircularLayout;
   /** `$defs/TidyTree` (DISL 10.3) with its defaults filled in, and the spacing the tree is packed with. */
   readonly tidyTree?: TidyTree;
   /** The id of the plugin that is the algorithm, for one named `plugin:<id>` (DISL 13.1). */
@@ -87,7 +90,7 @@ export interface Layout {
 }
 
 /** The algorithms this add-on runs; a configuration of another one is kept and reported. */
-export const standardAlgorithms: readonly string[] = ['none', 'rowPacked', 'rows', 'force', 'tidyTree'];
+export const standardAlgorithms: readonly string[] = ['none', 'rowPacked', 'rows', 'force', 'tidyTree', 'circular'];
 
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T => (allowed.includes(value as T) ? (value as T) : fallback);
 
@@ -132,6 +135,7 @@ export function readLayoutConfig(name: string, declared: Section, report: (messa
       swapPasses: number(rows.swapPasses, 0),
     },
     force: force && { tiers, gap: number(force.gap, 24) },
+    circular: algorithm === 'circular' ? readCircular(isObject(declared.options) ? declared.options : {}) : undefined,
     tidyTree: tree && {
       parentAlign: oneOf(tree.parentAlign, ['firstLastCentre', 'childrenCentre'], 'firstLastCentre'),
       origin: oneOf(tree.origin, ['leftmostAtZero', 'rootAtZero'], 'leftmostAtZero'),

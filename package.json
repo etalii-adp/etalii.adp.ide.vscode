@@ -86,6 +86,16 @@
         "priority": "option"
       },
       {
+        "viewType": "etalii.adp.systems.causal-loop-diagram",
+        "displayName": "Causal loop diagram",
+        "selector": [
+          {
+            "filenamePattern": "*.cld"
+          }
+        ],
+        "priority": "default"
+      },
+      {
         "viewType": "etalii.adp.gartner.hypecycle-graph",
         "displayName": "Gartner hype cycle graph",
         "selector": [
@@ -231,6 +241,11 @@
         "category": "ADP"
       },
       {
+        "command": "etalii.adp.new.systems.causal-loop-diagram",
+        "title": "New Causal loop diagram",
+        "category": "ADP"
+      },
+      {
         "command": "etalii.adp.new.gartner.hypecycle-graph",
         "title": "New Gartner hype cycle graph",
         "category": "ADP"
@@ -290,6 +305,9 @@
         },
         {
           "command": "etalii.adp.new.etalii.agent-behavior-modelling"
+        },
+        {
+          "command": "etalii.adp.new.systems.causal-loop-diagram"
         },
         {
           "command": "etalii.adp.new.gartner.hypecycle-graph"

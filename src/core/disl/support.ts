@@ -19,7 +19,9 @@ export const supportedFeatures: readonly string[] = [
   'shape.composite',
   'edge.bezier',
   'label.parse',
+  'label.editText',
   'persistence.fbl',
+  'persist.typeMap',
   'view.viewer',
 ];
 

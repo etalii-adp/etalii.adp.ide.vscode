@@ -1,0 +1,186 @@
+causal-loop 1
+title "Why mental health at work stays out of sight"
+
+# Why mental health at work stays out of sight: the structure of a wicked problem.
+#
+# Written for this repository, from a Dutch set of notes on mental health in
+# working life. The labels are in English, like the other examples beside this
+# one; where the notes quote a phrase, the Dutch original is kept in a link's
+# note or in a comment. No person in the notes is named here.
+#
+# This diagram offers no solutions. It shows only the structure: three core
+# variables - experienced self-direction, emotion suppression and experienced
+# meaning - the loops that run through them, the cultural norm and the outside
+# constraints that press on them, and the loops that keep the whole problem
+# invisible. Nothing is simulated.
+
+# ---- variables ---------------------------------------------------------------
+
+# The three core variables.
+variable selfDirection "Experienced self-direction"
+variable emotionSuppression "Emotion suppression (downplaying as coping)"
+variable meaning "Experienced meaning and perspective"
+
+# Goal orientation, the bridge between self-direction and suppression.
+variable goalOrientation "Goal orientation"
+variable goalsAchieved "Goals achieved"
+variable satisfaction "Satisfaction"
+variable bigPicture "Sight of the bigger picture"
+
+# Meaning and sacrifice, the bridge between self-direction and the bigger picture.
+variable sacrifice "Willingness to sacrifice"
+variable progress "Progress"
+variable confidence "Confidence"
+
+# The short-term coping loop and where it ends.
+variable shortTermFunctioning "Functioning in the short term"
+variable copingConfirmation "Confirmation of the coping strategy"
+variable exhaustion "Exhaustion"
+variable dropout "Mental health dropout"
+
+# The cultural norm.
+variable toughNorm "Norm: don't make a fuss" start=0.8
+variable emotionExpression "Expression of emotion"
+
+# The constraints of the system, outside every loop.
+variable legalFrame "Legal limits on discussing mental health" start=0.8
+variable insurerDependence "Dependence on insurers and premiums" start=0.7
+variable ageing "Ageing population" start=0.7
+
+# Invisibility.
+variable conversationalSafety "Safety to talk"
+variable openness "Openness and vulnerability"
+variable visibleComplaints "Visible mental health complaints"
+variable preventionUrgency "Perceived need for prevention"
+variable systemChange "System change"
+
+# The economics of prevention.
+variable preventionInvestment "Investment in prevention"
+variable premiumPressure "Costs and premium pressure"
+
+# Labels handed down.
+variable generationalLabels "Limiting stories and labels of older generations"
+variable youthSelfImage "Self-image of young people"
+variable withdrawal "Withdrawal and behaviour"
+variable vulnerability "Showing vulnerability"
+
+# ---- short-term coping -------------------------------------------------------
+# Downplaying works, for now: whoever does not feel it keeps functioning, and
+# functioning confirms that downplaying works. Nothing in this path is
+# negative, so it compounds.
+
+link emotionSuppression -> shortTermFunctioning + "relativeren als coping"
+link shortTermFunctioning -> copingConfirmation +
+link copingConfirmation -> emotionSuppression +
+
+loop R1 "Coping that confirms itself" emotionSuppression shortTermFunctioning copingConfirmation
+
+# The price comes later. Keeping up an untrue story is tiring, and exhaustion
+# eventually costs the very functioning that confirmed the strategy. One
+# negative link: balancing, and delayed, which is why the strategy looks sound
+# for so long.
+
+link emotionSuppression -> exhaustion + delayed "keeping up an untrue story is tiring"
+link exhaustion -> shortTermFunctioning - delayed
+link exhaustion -> dropout + delayed "uitval"
+
+loop B1 "An untrue story wears out" emotionSuppression exhaustion shortTermFunctioning copingConfirmation
+
+# ---- meaning and perspective -------------------------------------------------
+# A clear perspective - "waar doe ik het voor" - makes sacrifice bearable, a
+# clear way out. Sacrifice buys progress, progress builds confidence and
+# self-direction, and self-direction keeps the perspective in view.
+
+link meaning -> sacrifice + "a clear way out"
+link sacrifice -> progress +
+link progress -> confidence +
+link confidence -> selfDirection +
+link selfDirection -> meaning + "back to the perspective"
+
+loop R2 "Perspective carries the cost" meaning sacrifice progress confidence selfDirection
+
+# ---- goal orientation --------------------------------------------------------
+# Self-direction shows itself as goal orientation, and goal orientation is the
+# bridge to suppression: a goal is also a place to flee to, away from what is
+# felt. Goals achieved bring satisfaction, and satisfaction sharpens the focus
+# on the next goal. And the closer the next target, the smaller the bigger
+# picture.
+
+link selfDirection -> goalOrientation + "the bridge to suppression"
+link goalOrientation -> emotionSuppression + "flight into goals"
+link goalOrientation -> goalsAchieved +
+link goalsAchieved -> satisfaction +
+link satisfaction -> goalOrientation +
+link goalOrientation -> bigPicture - "eyes on the next target"
+
+loop R3 "Goals feed goals" goalOrientation goalsAchieved satisfaction
+
+# The two bridges meet. Self-direction drives goal orientation, which narrows
+# the bigger picture that meaning is drawn from. One negative link: balancing.
+
+link bigPicture -> meaning + "the bridge to the bigger picture"
+
+loop B2 "Goals narrow the view" selfDirection goalOrientation bigPicture meaning sacrifice progress confidence
+
+# ---- the norm ----------------------------------------------------------------
+# "Niet aanstellen, niet zeiken." The norm holds back the expression of
+# emotion, and it keeps complaints out of sight even where they exist. It sits
+# outside every loop, and presses on them all.
+
+link toughNorm -> emotionExpression - "niet aanstellen, niet zeiken"
+link toughNorm -> visibleComplaints -
+link emotionSuppression -> emotionExpression -
+link emotionExpression -> visibleComplaints +
+
+# ---- constraints of the system -----------------------------------------------
+# Employers may not discuss mental health complaints; employers and employees
+# depend on insurers and their premiums; the population is ageing. None of
+# these is moved by anything in this diagram, and each of them lowers the
+# safety to talk or the self-direction a person experiences.
+
+link legalFrame -> conversationalSafety - "employers may not discuss complaints"
+link insurerDependence -> selfDirection -
+link insurerDependence -> conversationalSafety -
+link ageing -> selfDirection -
+
+# ---- invisibility ------------------------------------------------------------
+# Where it is not safe to talk, nobody opens up; complaints nobody voices are
+# not seen; what is not seen creates no need for prevention; and without that
+# need the system does not change, so talking stays unsafe. No negative link:
+# reinforcing, in whichever direction it runs.
+
+link conversationalSafety -> openness +
+link openness -> visibleComplaints +
+link visibleComplaints -> preventionUrgency +
+link preventionUrgency -> systemChange +
+link systemChange -> conversationalSafety + delayed
+
+loop R4 "What is not seen does not change" conversationalSafety openness visibleComplaints preventionUrgency systemChange
+
+# ---- the economics of prevention ---------------------------------------------
+# Investing in prevention means less dropout, less dropout means lower costs
+# and premium pressure, and lower pressure leaves room to invest. Two negative
+# links: reinforcing, as a virtuous circle or a vicious one.
+
+link preventionUrgency -> preventionInvestment +
+link preventionInvestment -> dropout - delayed
+link dropout -> premiumPressure +
+link premiumPressure -> preventionInvestment - "no room left for prevention"
+
+loop R5 "Prevention pays for prevention" preventionInvestment dropout premiumPressure
+
+# ---- labels handed down ------------------------------------------------------
+# Limiting stories and labels from older generations shape how young people
+# see themselves; a poorer self-image shows as withdrawal; and withdrawal reads
+# as proof that the label was right. Two negative links: reinforcing.
+#
+# Showing vulnerability works against the labels. It is a counterforce in the
+# structure, not a remedy this diagram proposes.
+
+link generationalLabels -> youthSelfImage -
+link youthSelfImage -> withdrawal -
+link withdrawal -> generationalLabels + "the label confirmed"
+link openness -> vulnerability +
+link vulnerability -> generationalLabels - "kwetsbaarheid inzetten"
+
+loop R6 "Labels that confirm themselves" generationalLabels youthSelfImage withdrawal

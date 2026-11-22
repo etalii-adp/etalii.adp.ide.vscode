@@ -4,12 +4,13 @@
 // and to be hit; it holds nothing of the page it is drawn on.
 
 import {
-  boxOutline, centreOf, cubicBetween, cubicPath, distance, leaving, movedPath, normalAt, normalOf, pathOutline, pointIn, pointOn, sideAt, sides, union,
+  boxOutline, centreOf, cubicBetween, cubicPath, distance, leaving, movedPath, normalAt, normalOf, pathOutline, pointIn, pointOn, pointsOf, sideAt, sides, union,
   type Box, type Cubic, type Outline, type PathCommand, type Point, type Side,
 } from './geometry';
 import { anchorOf, scalesOf, type Coordinates, type PlacementSource } from '../disl/coordinates';
 import type { Expressions, Scope } from '../disl/expressions';
 import { forceLayout, type ForceNode } from '../disl/forceLayout';
+import { ringPlaces } from '../disl/circularLayout';
 import { assignRows, packAlongRows, type LayoutConfig, type LayoutPlugin, type PackedItem, type RowItem } from '../disl/layout';
 import { allowsEnd, attributesOf, defaultOf, derivedRelations, isA, isRelation, valueKind, type Metamodel } from '../disl/metamodel';
 import { finding, type Finding, type Model, type ModelElement, type ModelRelation, type Value } from '../disl/model';
@@ -52,6 +53,8 @@ export interface SceneOptions {
    * registration's layout and not a part of the document (FBL 8.3): a pin by another name.
    */
   readonly corners?: Readonly<Record<string, Point>>;
+  /** The kept points of `corners` are each the point the node's placement anchor names, not its top-left corner. */
+  readonly cornersAnchored?: boolean;
   /** Where the centre of each node was on screen before the document last changed: a layout that runs by itself starts from there (DISL 10.4). */
   readonly placed?: Readonly<Record<string, Point>>;
   /** The host's measure of a text, for a specification whose text metric is `host`. */
@@ -129,6 +132,14 @@ export interface SceneCompartment {
   readonly rows: readonly SceneRow[];
 }
 
+/** A node's icon (DISL 6.9): `flip` mirrors it, `none`, `horizontal`, `vertical` or `both`. */
+export interface SceneIcon {
+  readonly icon: string;
+  readonly box: Box;
+  readonly color?: Value;
+  readonly flip: 'none' | 'horizontal' | 'vertical' | 'both';
+}
+
 /** A small indicator at a corner of a node (DISL 6.9): an icon by the name the definition gives it. */
 export interface SceneBadge {
   readonly id: string;
@@ -158,6 +169,8 @@ export interface SceneNode {
   /** The compartments that hold a line, from the top down. */
   readonly compartments: readonly SceneCompartment[];
   readonly badges: readonly SceneBadge[];
+  /** The node's icon (DISL 6.9, NodeIcon): its name, where it is drawn, its paint and how it is mirrored. */
+  readonly icon?: SceneIcon;
   /** The node is pinned: a layout that runs by itself leaves it where it is kept (DISL 10.4). */
   readonly pinned: boolean;
   readonly tooltip?: string;
@@ -205,6 +218,19 @@ export interface SceneEdge {
   readonly stroke: Stroke;
   readonly sourceMarker: string;
   readonly targetMarker: string;
+  /** The labels along the line (DISL 6.12), each held at its point: none where every one is empty. */
+  readonly labels?: readonly SceneLabel[];
+  /** The decorations along the line that are drawn (DISL 6.10), each at its point and turned to the line there. */
+  readonly midMarkers?: readonly SceneMidMarker[];
+}
+
+/** A decoration along an edge: a marker's name and parameters, its point, and the line's angle there in degrees. */
+export interface SceneMidMarker {
+  readonly marker: string;
+  readonly params: Readonly<Record<string, Value>>;
+  readonly x: number;
+  readonly y: number;
+  readonly angle: number;
 }
 
 export interface Scene {
@@ -392,8 +418,8 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
   const notation = viewpoint.notation;
   const views = new Map<string, Scope>();
   // `self.view` (DISL 12.2): where the element is drawn, once that is known, and whether this viewer folded it.
-  const pins = viewpoint.respect === 'pinned' ? options.view?.pinned ?? {} : {};
-  const corners = viewpoint.respect === 'pinned' ? options.corners ?? {} : {};
+  const pins = viewpoint.respect !== 'none' ? options.view?.pinned ?? {} : {};
+  const corners = viewpoint.respect !== 'none' ? options.corners ?? {} : {};
   const isPinned = (id: string): boolean => Object.hasOwn(pins, id) || Object.hasOwn(corners, id);
   const world = expressions.over(model, { env: { viewpoint: viewpoint.name, ...options.env }, view: (id) => ({ ...views.get(id), collapsed: options.collapsed?.[id] === true, pinned: isPinned(id) }) });
   const locale = typeof options.env?.locale === 'string' ? options.env.locale : undefined;
@@ -401,8 +427,10 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
 
   // One finding for each expression that fails, however many elements it fails for (DISL 2.5).
   const found = new Map<string, Finding>();
+  // While the nodes are first placed, before the layout has placed the others, what a placement reads of them is not known yet: a failure then is not reported.
+  let placing = false;
   const report = (key: string, message: string, element?: string): void => {
-    if (!found.has(key)) found.set(key, finding('disl.scene', 'warning', message, element === undefined ? {} : { element }));
+    if (!placing && !found.has(key)) found.set(key, finding('disl.scene', 'warning', message, element === undefined ? {} : { element }));
   };
 
   // ---- values ----
@@ -639,7 +667,9 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     }
     return result;
   };
+  placing = true;
   const places = placedIn(viewpoint);
+  placing = false;
 
   // ---- filters (DISL 6.13.1) ----
 
@@ -682,9 +712,9 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
   // Where a node is kept, as its top-left corner: the corner a registration keeps, else its pin, which is the point its placement names.
   const keptAt = (place: Placed): Point | undefined => {
     const { id } = place.element;
-    if (Object.hasOwn(corners, id)) return corners[id];
-    if (!Object.hasOwn(pins, id)) return undefined;
     const [fx, fy] = anchorOf(place.notation.placement.anchor);
+    if (Object.hasOwn(corners, id)) return options.cornersAnchored ? { x: corners[id].x - fx * place.box.width, y: corners[id].y - fy * place.box.height } : corners[id];
+    if (!Object.hasOwn(pins, id)) return undefined;
     return { x: pins[id].x - fx * place.box.width, y: pins[id].y - fy * place.box.height };
   };
   let tree: SceneTree | undefined;
@@ -719,6 +749,15 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
       const centre = centres.get(place.element.id)!;
       place.box = { ...place.box, x: hundredth(centre.x - place.box.width / 2), y: hundredth(centre.y - place.box.height / 2) };
     }
+  }
+  else if (config?.circular && !plugin) {
+    // Every node no attribute places goes around the ring (DISL 10), in the order of the model; a kept one stays where it is kept.
+    const unplaced = (source: PlacementSource | undefined): boolean => source === undefined || source === 'free' || (isObject(source) && 'layout' in source);
+    const free = [...places.values()].filter((place) => unplaced(place.notation.placement.x) && unplaced(place.notation.placement.y));
+    const among = new Set(free.map((place) => place.element.id));
+    const links = model.relations.flatMap((relation) => (relation.source !== undefined && relation.target !== undefined && among.has(relation.source) && among.has(relation.target) ? [[relation.source, relation.target] as const] : []));
+    const ring = ringPlaces(free.map((place) => ({ id: place.element.id, width: place.box.width, height: place.box.height })), links, config.circular);
+    for (const place of free) place.box = { ...place.box, ...(keptAt(place) ?? ring.get(place.element.id)!) };
   }
   else if (plugin && config) {
     // The plugin is given what is drawn and nothing of a fold: it places, and may size, the nodes it names.
@@ -757,9 +796,31 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     for (const place of packed) place.box = { ...place.box, x: positions.get(place.element.id) ?? 0 };
   }
 
-  for (const place of places.values()) {
+  const viewOf = (place: Placed): void => {
     const { x, y, width, height } = place.box;
     views.set(place.element.id, { bounds: { x, y, width, height, x2: x + width, y2: y + height }, selected: false });
+  };
+  for (const place of places.values()) viewOf(place);
+  // A node whose placement is computed is placed again now that the layout has placed the others, since
+  // its expression may read where they are (`self.members.map(m, m.view.bounds.center()[0])`, DISL 12.2).
+  // One that could not be placed at all before is placed now, in the order of the model.
+  let recomputed = false;
+  for (const element of model.elements) {
+    if (!member(element, viewpoint) || isItem(element, viewpoint)) continue;
+    const before = places.get(element.id);
+    const own = before?.notation ?? varied(nodeNotation(notation, metamodel, element.type), element.id);
+    if (!isCel(own.placement.x) && !isCel(own.placement.y)) continue;
+    const again = placed(element, own, viewpoint.coordinateSystem);
+    if (!again) continue;
+    if (before) before.box = again.box;
+    else recomputed = true;
+    viewOf(before ?? again);
+    if (!before) places.set(element.id, again);
+  }
+  if (recomputed) {
+    const ordered = model.elements.flatMap((element) => (places.has(element.id) ? [[element.id, places.get(element.id)!] as const] : []));
+    places.clear();
+    for (const [id, place] of ordered) places.set(id, place);
   }
 
   // ---- nodes: what each one draws ----
@@ -929,6 +990,27 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
       }];
     });
 
+    // The icon, where its `visible` holds: in the box, at its position, `size` across (DISL 6.9).
+    const declaredIcon = isObject(own.icon) ? own.icon as { readonly icon?: unknown; readonly position?: unknown; readonly size?: unknown; readonly color?: unknown; readonly flip?: unknown; readonly visible?: unknown } : undefined;
+    const iconName = declaredIcon ? bound(declaredIcon.icon, self) : undefined;
+    let icon: SceneIcon | undefined;
+    if (declaredIcon && typeof iconName === 'string' && iconName !== '' && (declaredIcon.visible === undefined || bound(declaredIcon.visible, self) === true)) {
+      const size = typeof declaredIcon.size === 'number' ? declaredIcon.size : 16;
+      const words = typeof declaredIcon.position === 'string' ? declaredIcon.position.split('-') : ['center'];
+      const flip = bound(declaredIcon.flip, self);
+      const color = bound(declaredIcon.color, self);
+      icon = {
+        icon: iconName,
+        box: {
+          x: words.includes('left') ? box.x : words.includes('right') ? box.x + box.width - size : box.x + (box.width - size) / 2,
+          y: words.includes('top') ? box.y : words.includes('bottom') ? box.y + box.height - size : box.y + (box.height - size) / 2,
+          width: size, height: size,
+        },
+        ...(color === undefined || color === null ? {} : { color }),
+        flip: flip === 'horizontal' || flip === 'vertical' || flip === 'both' ? flip : 'none',
+      };
+    }
+
     const movable = own.placement.movable ?? true;
     const resizable = own.placement.resizable ?? true;
     const sizable = own.size.fixed ? false : own.size.resizable ?? true;
@@ -946,7 +1028,7 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
       declared: (custom?.parts ?? []).map((part, index) => part.id ?? String(index)),
       notation: own,
       node: {
-        id: self, type: element.type, box, system: place.system, shape, outline, style, params, parts, handles, labels, compartments, badges,
+        id: self, type: element.type, box, system: place.system, shape, outline, style, params, parts, handles, labels, compartments, badges, ...(icon ? { icon } : {}),
         pinned: isPinned(self),
         tooltip: message(own.tooltip, self),
         movable: { x: free('x', movable) || dragged('x', movable), y: free('y', movable) || dragged('y', movable) },
@@ -1165,6 +1247,33 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     }
     if (toAnchor.mode !== 'part') to = towards(toAnchor, target, from);
 
+    if (relation.source === relation.target && isObject(own.selfLoop)) {
+      // A self loop is drawn on the side of its node `selfLoop` names, as a bow `size` across (DISL 6.10).
+      const loop = own.selfLoop as { readonly shape?: string; readonly size?: number; readonly side?: string };
+      const size = typeof loop.size === 'number' ? loop.size : 30;
+      const box = source.node.box;
+      const side: Side = loop.side === 'right' || loop.side === 'bottom' || loop.side === 'left' ? loop.side : 'top';
+      const centre = pointOn(box, side, 0.5);
+      const normal = normalOf(side);
+      const across = { x: -normal.y, y: normal.x };
+      const at = (along: number, out: number): Point => ({ x: centre.x + across.x * along + normal.x * out, y: centre.y + across.y * along + normal.y * out });
+      const [start, end, c1, c2] = [at(-size / 2, 0), at(size / 2, 0), at(-size, size * 1.5), at(size, size * 1.5)];
+      const ends = { node: source.node.id, side, normal };
+      edges.push({ ...common, from: { ...ends, ...start }, to: { ...ends, ...end }, path: [{ op: 'M', ...start }, { op: 'C', c1x: c1.x, c1y: c1.y, c2x: c2.x, c2y: c2.y, ...end }] });
+      continue;
+    }
+    if (routing === 'curved') {
+      // One quadratic curve whose control point lies `curvature` × the chord from the chord's middle,
+      // to the left of the direction of travel for a positive one (DISL 6.10); the ends face that point.
+      const [a, b] = [centreOf(source.node.box), centreOf(target.node.box)];
+      const length = distance(a, b);
+      const bow = (typeof own.line.curvature === 'number' ? own.line.curvature : 0) * length;
+      const control = length === 0 ? a : { x: (a.x + b.x) / 2 + ((b.y - a.y) / length) * bow, y: (a.y + b.y) / 2 - ((b.x - a.x) / length) * bow };
+      const start = fromAnchor.mode === 'part' ? from : towards(fromAnchor, source, control);
+      const end = toAnchor.mode === 'part' ? to : towards(toAnchor, target, control);
+      edges.push({ ...common, from: start, to: end, path: [{ op: 'M', x: start.x, y: start.y }, { op: 'Q', cx: control.x, cy: control.y, x: end.x, y: end.y }] });
+      continue;
+    }
     if (routing === 'orthogonal') {
       // At right angles, as the end it leaves faces: away to halfway, across, and on into the other end.
       const down = from.normal.x === 0;
@@ -1188,6 +1297,35 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     edges.push({ ...common, from, to, curve, path: cubicPath(curve) });
   }
 
+  // What lies along each drawn line: its labels and its mid markers (DISL 6.10, 6.12).
+  for (const [index, edge] of edges.entries()) {
+    if (edge.hidden !== undefined || edge.path.length === 0) continue;
+    const own: EdgeNotation = varied(edgeNotation(notation, metamodel, edge.type), edge.id);
+    const along = alongPath(pointsOf(edge.path));
+    const edgeStyle = settled(styleOf(notation, own.style), edge.id);
+    const labels = own.labels.flatMap((label, position): SceneLabel[] => {
+      const at = along(fractionOf(label.at));
+      const distance = typeof label.distance === 'number' ? label.distance : undefined;
+      const made = labelOf({ ...label, position: { anchor: [0.5, 0.5] } }, position, { x: at.x, y: at.y, width: 0, height: 0 }, edgeStyle, edge.id);
+      if (!made || made.text === '') return [];
+      const away = distance ?? 4 + made.box.height / 2;
+      const side = label.side;
+      // Left and right are of the direction of travel, as the screen shows it; above and below are of the screen.
+      const [dx, dy] = side === 'left' ? [at.dy * away, -at.dx * away] : side === 'right' ? [-at.dy * away, at.dx * away]
+        : side === 'above' ? [0, -away] : side === 'below' ? [0, away] : [0, 0];
+      return [{ ...made, position: 'outside', align: 'center', editable: label.editable === undefined ? false : made.editable, box: { ...made.box, x: made.box.x + dx, y: made.box.y + dy } }];
+    });
+    const declared = Array.isArray(own.midMarkers) ? own.midMarkers as readonly MidMarkerSpec[] : [];
+    const midMarkers = declared.flatMap((mid): SceneMidMarker[] => {
+      if (mid.visible !== undefined && bound(mid.visible, edge.id) !== true) return [];
+      const marker = typeof mid.marker === 'string' ? { type: mid.marker } : isObject(mid.marker) ? mid.marker as { type?: string; params?: Record<string, Value> } : {};
+      const at = along(fractionOf(mid.at));
+      const turn = typeof mid.orient === 'number' ? mid.orient : mid.orient === 'auto-reverse' ? 180 : 0;
+      return [{ marker: marker.type ?? 'bar', params: marker.params ?? {}, x: at.x, y: at.y, angle: (Math.atan2(at.dy, at.dx) * 180) / Math.PI + turn }];
+    });
+    edges[index] = { ...edge, ...(labels.length === 0 ? {} : { labels }), ...(midMarkers.length === 0 ? {} : { midMarkers }) };
+  }
+
   const nodes = [...drawn.values()].map((entry) => entry.node);
   return {
     viewpoint: viewpoint.name,
@@ -1197,6 +1335,37 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     bounds: nodes.length === 0 ? undefined : nodes.map((node) => node.box).reduce(union),
     findings: [...found.values()],
     ...(tree ? { tree } : {}),
+  };
+}
+
+/** `$defs/MidMarker` (DISL 6.10) as a definition writes it. */
+interface MidMarkerSpec {
+  readonly marker?: unknown;
+  readonly at?: unknown;
+  readonly orient?: unknown;
+  readonly visible?: unknown;
+}
+
+/** A position along a path as a fraction of its length: `start`, `middle` (the default) and `end`, or a number. */
+const fractionOf = (at: unknown): number => (typeof at === 'number' ? Math.min(1, Math.max(0, at)) : at === 'start' ? 0 : at === 'end' ? 1 : 0.5);
+
+/** The point at a fraction of the length of a run of points, with the unit direction of the run there. */
+function alongPath(points: readonly Point[]): (fraction: number) => Point & { readonly dx: number; readonly dy: number } {
+  const lengths = points.slice(1).map((point, index) => distance(points[index], point));
+  const total = lengths.reduce((sum, length) => sum + length, 0);
+  return (fraction) => {
+    let left = fraction * total;
+    for (const [index, length] of lengths.entries()) {
+      if (length === 0) continue;
+      if (left <= length || index === lengths.length - 1) {
+        const [a, b] = [points[index], points[index + 1]];
+        const t = Math.min(1, left / length);
+        return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, dx: (b.x - a.x) / length, dy: (b.y - a.y) / length };
+      }
+      left -= length;
+    }
+    const only = points[0] ?? { x: 0, y: 0 };
+    return { ...only, dx: 1, dy: 0 };
   };
 }
 

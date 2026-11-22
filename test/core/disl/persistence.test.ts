@@ -62,8 +62,8 @@ describe('the persistence of another tool type', () => {
     };
     expect(interpret({}).findings.map((finding) => finding.severity)).toEqual(['error', 'warning']);
     expect(interpret({ format: 'fbl', binding: 'no-fragment.fbl', ids: { strategy: 'uuid-v4' } }).findings).toMatchObject([{ code: 'disl.persistence', severity: 'error' }]);
-    const mapped = interpret({ format: 'fbl', binding: 'a.fbl#a', ids: { strategy: 'natural', types: {} }, typeMap: { Thing: { as: 'Gone' } } });
-    expect(mapped.findings.map((finding) => finding.message)).toEqual([expect.stringContaining('`Gone`'), expect.stringContaining('`natural`'), expect.stringContaining('single types')]);
+    const mapped = interpret({ format: 'fbl', binding: 'a.fbl#a', ids: { strategy: 'ulid', types: {} }, typeMap: { Thing: { as: 'Gone' } } });
+    expect(mapped.findings.map((finding) => finding.message)).toEqual([expect.stringContaining('`Gone`'), expect.stringContaining('`ulid`'), expect.stringContaining('single types')]);
     expect(mapped.value.binding).toEqual({ document: 'a.fbl', file: 'a.fbl', name: 'a' });
   });
 });

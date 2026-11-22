@@ -296,6 +296,8 @@ export interface NodeNotation {
   readonly labels: readonly Label[];
   readonly compartments: readonly Compartment[];
   readonly badges: readonly Badge[];
+  /** `$defs/NodeIcon` (DISL 6.9), as written: the scene reads it. */
+  readonly icon?: unknown;
   /** The styles laid over the node's own where their `when` holds, in their order (DISL 6.6). */
   readonly conditions: readonly { readonly when: Expression; readonly style: Style }[];
   readonly anchors: AnchorSpec;
@@ -317,6 +319,9 @@ export interface EdgeNotation {
   readonly targetMarker: Bindable<string>;
   readonly anchoring: { readonly source?: EndAnchor; readonly target?: EndAnchor };
   readonly labels: readonly Label[];
+  /** `$defs/MidMarker`[] and `$defs/SelfLoopSpec` (DISL 6.10), as written: the scene reads them. */
+  readonly midMarkers?: readonly unknown[];
+  readonly selfLoop?: unknown;
   readonly variants: readonly EdgeVariant[];
   readonly tooltip?: Message;
   readonly selectable: Bindable<boolean>;
