@@ -377,7 +377,7 @@ The causal loop diagram is read from its definition, held to standalone's record
 | What | The definition, followed here | The standalone module and its transcript | Issue |
 | --- | --- | --- | --- |
 | Tooltips | Drawn as the definition states them, on variables, links and loops | None | None: the one deliberate difference, Peter's choice of 2026-11-22 |
-| Where a stored position is | For now the point the variable's placement anchor names, its centre, as the standalone host keeps it, where the binding stores only `bounds`; FBL 8.3 says a `layout:` entry is the element's top-left corner | The centre of the variable's pill | None yet: waiting on Peter's choice of 2026-11-22 |
+| Where a stored position is | The point the variable's placement anchor names, its centre, because the binding says `registration.layoutPoint: "anchor"` (FBL 0.20 §8.3); a binding that says nothing keeps the top-left corner | The centre of the variable's pill | None: settled by FBL 0.20, Peter's choice of 2026-11-22 (etalii.adp #750) |
 | Findings, cycles and loops' polarity | The transcript's findings of all seventeen documents, in its order, with its codes, sentences and lines; the unlabelled loops in the order of the tool's cycle finder (`net.etalii.adp.systems.cldCycles`) | The same | None |
 | A disagreeing loop's underline and a weight's text | Wavy, and in .NET's form, by this host's code for the tool type ("Code for one tool type") | The same | None: companion gap 4 and its difference in numbers |
 | Gestures, menus, dialogs, properties and Arrange diagram | Not yet: spec 081's third and fourth pull requests | Offered | None |
