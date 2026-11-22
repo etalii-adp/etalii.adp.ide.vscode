@@ -127,9 +127,12 @@ function drawLabel(label: SceneLabel, paints: Paints, node: SceneNode | undefine
     ...(label.wrap === 'none' ? ['white-space: pre'] : label.wrap === 'char' ? ['overflow-wrap: anywhere'] : []),
     ...(label.overflow === 'visible' ? ['overflow: visible'] : []), ...lettering,
   ];
+  // A text of one line that may overflow runs past its box on both sides of where it is held, as wide as it is (DISL 6.12).
+  const runsOver = label.overflow === 'visible' && label.wrap === 'none';
+  if (runsOver) look.push(`align-items: ${label.align === 'start' ? 'flex-start' : label.align === 'end' ? 'flex-end' : 'center'}`);
   const oneLine = label.overflow === 'ellipsis' && label.maxLines === 1;
   // A label with a tooltip is what the pointer rests on to read it: the text in full.
-  return svg('foreignObject', { class: label.tooltip === undefined ? 'adp-scene-label' : 'adp-scene-label adp-hover', 'data-label': label.id, x: box.x, y: box.y, width: box.width, height: box.height },
+  return svg('foreignObject', { class: label.tooltip === undefined ? 'adp-scene-label' : 'adp-scene-label adp-hover', 'data-label': label.id, x: box.x, y: box.y, width: box.width, height: box.height, ...(runsOver ? { style: 'overflow: visible' } : {}) },
     label.tooltip === undefined ? undefined : svg('title', {}, label.tooltip),
     html('div', { class: oneLine ? 'adp-scene-text adp-ellipsis' : 'adp-scene-text', style: look.join('; ') }, oneLine ? html('span', {}, label.text) : label.text));
 }
@@ -189,8 +192,13 @@ function drawCompartment(compartment: SceneCompartment, node: SceneNode, paints:
   return svg('g', { class: 'adp-compartment', 'data-compartment': compartment.id }, line, ...rows);
 }
 
+// The highlight of a selected element, where its notation states one: a property the canvas's highlight rules read.
+const selectedLook = (paint: SceneNode['selected'], paints: Paints): Record<string, string> =>
+  (paint === undefined ? {} : { style: `--adp-selected: ${paints.colour(paint, 'line')}` });
+
 function drawNode(node: SceneNode, paints: Paints): SVGGElement {
-  const group = svg('g', { class: ['adp-element', ...(node.dimmed ? ['adp-dimmed'] : []), ...(node.pinned ? ['adp-pinned'] : [])].join(' '), 'data-id': node.id, 'data-type': node.type },
+  // The notation's own colour of a selected element stands in for the host's highlight (DISL 6.5, `states.selected`).
+  const group = svg('g', { class: ['adp-element', ...(node.dimmed ? ['adp-dimmed'] : []), ...(node.pinned ? ['adp-pinned'] : [])].join(' '), 'data-id': node.id, 'data-type': node.type, ...selectedLook(node.selected, paints) },
     node.tooltip ? svg('title', {}, node.tooltip) : undefined);
   const own = drawShape(node.shape, node.style, paints);
   own?.setAttribute('pointer-events', 'all');
@@ -257,7 +265,7 @@ function edgeGroup(edge: SceneEdge, paints: Paints): SVGGElement | undefined {
   const width = number(edge.stroke.width) ?? 1;
   const colour = paints.colour(edge.stroke.color, 'line');
   const points = pointsAlong(edge.path);
-  return svg('g', { class: 'adp-relation', 'data-id': edge.id, 'data-type': edge.type },
+  return svg('g', { class: 'adp-relation', 'data-id': edge.id, 'data-type': edge.type, ...selectedLook(edge.selected, paints) },
     svg('path', { class: 'adp-relation-hit', d }),
     svg('path', { class: 'adp-line', d, fill: 'none', style: `stroke: ${colour}`, 'stroke-width': width, 'stroke-dasharray': Array.isArray(edge.stroke.dash) ? edge.stroke.dash.join(' ') : undefined }),
     drawMarker(edge.sourceMarker, 'source', [...points].reverse(), colour, width),

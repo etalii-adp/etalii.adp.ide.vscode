@@ -78,7 +78,7 @@ body {
 }
 
 .adp-relation.adp-selected .adp-relation-line {
-  stroke: var(--adp-highlight);
+  stroke: var(--adp-selected, var(--adp-highlight));
   stroke-width: 3;
 }
 
@@ -116,7 +116,7 @@ body {
 .adp-mark {
   display: none;
   fill: none;
-  stroke: var(--adp-highlight);
+  stroke: var(--adp-selected, var(--adp-highlight));
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
   pointer-events: none;
@@ -133,12 +133,12 @@ body {
 
 /* A shape states its colours in its own style, which only an important rule goes over. */
 .adp-relation.adp-selected .adp-line {
-  stroke: var(--adp-highlight) !important;
+  stroke: var(--adp-selected, var(--adp-highlight)) !important;
   stroke-width: 3;
 }
 
 .adp-relation.adp-selected [data-marker] {
-  stroke: var(--adp-highlight) !important;
+  stroke: var(--adp-selected, var(--adp-highlight)) !important;
 }
 
 /* The node a dragged node would go under. */
@@ -175,6 +175,18 @@ body {
 }
 
 /* A notice over the canvas: why a diagram is empty or read-only. */
+/* The empty canvas's message: plain text in the middle of the surface, which the toolbox and the canvas's gestures stay usable around. */
+.adp-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 80%;
+  text-align: center;
+  pointer-events: none;
+  z-index: 2;
+}
+
 .adp-notice {
   position: absolute;
   top: 8px;
@@ -372,6 +384,7 @@ body {
 }
 
 .adp-status[hidden],
+.adp-empty[hidden],
 .adp-notice[hidden],
 .adp-menu[hidden],
 .adp-ruler[hidden] {

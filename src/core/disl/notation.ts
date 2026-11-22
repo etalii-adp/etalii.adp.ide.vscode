@@ -289,6 +289,8 @@ export interface Legend {
 export type NodeVariant = Partial<Omit<NodeNotation, 'placement' | 'variants'>> & { readonly when: Expression };
 
 export interface NodeNotation {
+  /** The styles of the interaction states (DISL 6.5), as written: the scene reads `selected`. */
+  readonly states?: Readonly<Record<string, Style>>;
   readonly shape: ShapeRef;
   /** The notation's own style, its `extends` worked out. */
   readonly style: Style;
@@ -318,6 +320,8 @@ export interface NodeNotation {
 export type EdgeVariant = Partial<Omit<EdgeNotation, 'variants'>> & { readonly when: Expression };
 
 export interface EdgeNotation {
+  /** As a node's. */
+  readonly states?: Readonly<Record<string, Style>>;
   readonly line: LineSpec;
   readonly style: Style;
   readonly sourceMarker: Bindable<string>;

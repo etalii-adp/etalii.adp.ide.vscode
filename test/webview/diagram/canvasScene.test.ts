@@ -97,6 +97,14 @@ describe('the canvas, sent a scene', () => {
     expect([notice.hidden, notice.textContent]).toEqual([false, 'This file is opened read-only.']);
   });
 
+  it('shows the empty canvas\'s message as plain text in its own size and colour, apart from the notice', () => {
+    const empty = document.querySelector('.adp-empty') as HTMLElement;
+    expect(empty.hidden).toBe(true);
+    canvas.receive(viewMessage({ ...scene, empty: { text: 'Nothing here yet.', fontSize: 14, colour: '#64748B' } }));
+    expect([empty.hidden, empty.textContent, empty.getAttribute('style')]).toEqual([false, 'Nothing here yet.', 'color: #64748B; font-size: 14px']);
+    expect((document.querySelector('.adp-notice') as HTMLElement).hidden).toBe(true);
+  });
+
   it('adds an ADP Toolbox entry dropped on it where it was dropped, and one activated in its view at the centre', () => {
     const drop = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent;
     Object.assign(drop, { clientX: 120, clientY: 64, dataTransfer: { getData: (kind: string) => (kind === 'application/x-adp-toolbox' ? 'trend' : '') } });

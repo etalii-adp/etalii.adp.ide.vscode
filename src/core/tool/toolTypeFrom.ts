@@ -322,17 +322,24 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   function view(source: Source, options: ViewOptions): Scene {
     const open = opened(source);
     const scene = sceneOf(open, options);
-    const notice = open.notice ?? emptyNotice(open, scene.viewpoint);
-    return { ...scene, readOnly: open.refusal !== undefined, ...(notice === undefined ? {} : { notice }), tokens: tokensOf(scene.viewpoint), chrome: chromeOf(open, scene, options) };
+    const empty = open.notice === undefined ? emptyMessage(open, scene.viewpoint) : undefined;
+    return {
+      ...scene, readOnly: open.refusal !== undefined, ...(open.notice === undefined ? {} : { notice: open.notice }), ...(empty === undefined ? {} : { empty }),
+      tokens: tokensOf(scene.viewpoint), chrome: chromeOf(open, scene, options),
+    };
   }
 
-  // What the canvas says while it has nothing to show (DISL 6.13, `canvas.empty`): its text, where its `when` holds.
-  function emptyNotice(open: Open, viewpoint: string): string | undefined {
-    const empty = viewpoints.value.all[viewpoint].notation.canvas.declared.empty;
+  // What the canvas says while it has nothing to show (DISL 6.13, `canvas.empty`): its text, where its `when` holds, in its style.
+  function emptyMessage(open: Open, viewpoint: string): Scene['empty'] {
+    const notation = viewpoints.value.all[viewpoint].notation;
+    const empty = notation.canvas.declared.empty;
     if (!isObject(empty)) return undefined;
     const scope = texts.world(open.model).scope(undefined);
     const holds = empty.when === undefined ? open.model.elements.length === 0 : texts.holds(empty.when, scope, false);
-    return holds ? texts.worded(empty.text as Parameters<typeof texts.worded>[0], scope, '') || undefined : undefined;
+    const text = holds ? texts.worded(empty.text as Parameters<typeof texts.worded>[0], scope, '') : '';
+    if (text === '') return undefined;
+    const font = styleOf(notation, empty.style as Parameters<typeof styleOf>[1]).font;
+    return { text, ...(typeof font?.size === 'number' ? { fontSize: font.size } : {}), ...(font?.color === undefined ? {} : { colour: font.color }) };
   }
 
   // ---- the panels ----

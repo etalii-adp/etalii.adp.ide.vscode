@@ -154,6 +154,8 @@ export interface SceneBadge {
 
 export interface SceneNode {
   readonly id: string;
+  /** The colour the notation's `states.selected` strokes the node in while it is selected, where it states one; else the host's highlight. */
+  readonly selected?: Paint;
   readonly type: string;
   readonly box: Box;
   /** The coordinate system the node is placed in. */
@@ -208,6 +210,8 @@ export interface SceneEnd {
 
 export interface SceneEdge {
   readonly id: string;
+  /** As a node's. */
+  readonly selected?: Paint;
   readonly type: string;
   readonly source: string;
   readonly target: string;
@@ -256,6 +260,8 @@ export interface Scene {
   readonly readOnly?: boolean;
   /** Why the diagram is read-only or empty, when there is something to say. */
   readonly notice?: string;
+  /** The canvas's message while it has nothing to show (DISL 6.13, `canvas.empty`), drawn centred on the surface in its style. */
+  readonly empty?: { readonly text: string; readonly fontSize?: number; readonly colour?: Paint };
   /**
    * Every token of the theme, with its value in each of the two modes (DISL 6.2). A paint
    * `{ token }` in a style is looked up here, in the mode of the page that draws. A mode that is
@@ -1035,6 +1041,7 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
         id: self, type: element.type, box, system: place.system, shape, outline, style, params, parts, handles, labels, compartments, badges, ...(icon ? { icon } : {}),
         pinned: isPinned(self),
         tooltip: message(own.tooltip, self),
+        ...(own.states?.selected?.stroke?.color === undefined ? {} : { selected: own.states.selected.stroke.color }),
         movable: { x: free('x', movable) || dragged('x', movable), y: free('y', movable) || dragged('y', movable) },
         ...(own.refusals?.move !== undefined && own.refusals.move.length > 0 ? { refusesMove: true as const } : {}),
         resizable: { x: free('x', resizable) && sizable !== false && sizable !== 'vertical', y: free('y', resizable) && sizable !== false && sizable !== 'horizontal' },
@@ -1235,6 +1242,7 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
       id: relation.id, type: relation.type, source: relation.source, target: relation.target, routing,
       stroke: settled(merged(styleOf(notation, own.style).stroke ?? {}, own.line.stroke), relation.id),
       sourceMarker: marker(own.sourceMarker, 'none'), targetMarker: marker(own.targetMarker, 'none'),
+      ...(own.states?.selected?.stroke?.color === undefined ? {} : { selected: own.states.selected.stroke.color }),
     };
     if (hiddenByFilter || !source || !target) {
       edges.push({ ...common, hidden: 'filter', path: [] });
@@ -1308,7 +1316,8 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
   for (const [index, edge] of edges.entries()) {
     if (edge.hidden !== undefined || edge.path.length === 0) continue;
     const own: EdgeNotation = varied(edgeNotation(notation, metamodel, edge.type), edge.id);
-    const along = alongPath(pointsOf(edge.path));
+    const quadratic = alongQuadratic(edge.path);
+    const along = quadratic ?? alongPath(pointsOf(edge.path));
     const edgeStyle = settled(styleOf(notation, own.style), edge.id);
     const labels = own.labels.flatMap((label, position): SceneLabel[] => {
       const at = along(fractionOf(label.at));
@@ -1326,7 +1335,8 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     const midMarkers = declared.flatMap((mid): SceneMidMarker[] => {
       if (mid.visible !== undefined && bound(mid.visible, edge.id) !== true) return [];
       const marker = typeof mid.marker === 'string' ? { type: mid.marker } : isObject(mid.marker) ? mid.marker as { type?: string; params?: Record<string, Value> } : {};
-      const at = along(fractionOf(mid.at));
+      // Across a curve, every mark is turned as the curve is at its middle, so the strokes of one mark stay parallel.
+      const at = { ...along(fractionOf(mid.at)), ...(quadratic ? { dx: along(0.5).dx, dy: along(0.5).dy } : {}) };
       const turn = typeof mid.orient === 'number' ? mid.orient : mid.orient === 'auto-reverse' ? 180 : 0;
       return [{ marker: marker.type ?? 'bar', params: marker.params ?? {}, x: at.x, y: at.y, angle: (Math.atan2(at.dy, at.dx) * 180) / Math.PI + turn }];
     });
@@ -1357,6 +1367,24 @@ interface MidMarkerSpec {
 const fractionOf = (at: unknown): number => (typeof at === 'number' ? Math.min(1, Math.max(0, at)) : at === 'start' ? 0 : at === 'end' ? 1 : 0.5);
 
 /** The point at a fraction of the length of a run of points, with the unit direction of the run there. */
+/**
+ * A point at a fraction of one quadratic curve, the fraction being the curve's own parameter, as the standalone host
+ * places a mark along a bowed line, with the curve's direction there. Nothing for a path of any other shape.
+ */
+function alongQuadratic(path: readonly PathCommand[]): ((fraction: number) => Point & { readonly dx: number; readonly dy: number }) | undefined {
+  const [start, curve] = path;
+  if (path.length !== 2 || start?.op !== 'M' || curve?.op !== 'Q') return undefined;
+  return (t) => {
+    const tangent = { x: 2 * (1 - t) * (curve.cx - start.x) + 2 * t * (curve.x - curve.cx), y: 2 * (1 - t) * (curve.cy - start.y) + 2 * t * (curve.y - curve.cy) };
+    const length = Math.hypot(tangent.x, tangent.y);
+    return {
+      x: (1 - t) ** 2 * start.x + 2 * (1 - t) * t * curve.cx + t ** 2 * curve.x,
+      y: (1 - t) ** 2 * start.y + 2 * (1 - t) * t * curve.cy + t ** 2 * curve.y,
+      dx: length === 0 ? 1 : tangent.x / length, dy: length === 0 ? 0 : tangent.y / length,
+    };
+  };
+}
+
 function alongPath(points: readonly Point[]): (fraction: number) => Point & { readonly dx: number; readonly dy: number } {
   const lengths = points.slice(1).map((point, index) => distance(points[index], point));
   const total = lengths.reduce((sum, length) => sum + length, 0);
