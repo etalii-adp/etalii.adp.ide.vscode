@@ -68,7 +68,8 @@ suite('Undo in a behavior model', () => {
     await until('the layout to be forgotten', () => !onDisk(registration).includes('layout:'));
     await vscode.commands.executeCommand('etalii.adp.undoLayout');
     await until('the layout to be back', () => onDisk(registration) === dragged);
-    assert.strictEqual(await yOf('1.1'), node.y + 30);
+    // The registration is written before the webview is sent the view it gives, so the row is waited for, not read at once.
+    await until('the row to be where it was dragged', async () => (await yOf('1.1')) === node.y + 30);
   });
 
   test('keeps its turn among edits of the Markdown: the last thing done is the first undone', async () => {
