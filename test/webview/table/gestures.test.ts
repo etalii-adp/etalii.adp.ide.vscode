@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { FromCanvas, ToCanvas } from '../../../src/core/frame/protocol';
 import type { TableGestures, TableProperty, TableRequest, TableView } from '../../../src/core/tool/tableView';
@@ -356,6 +357,22 @@ describe('the rows and groups of a table with gestures', () => {
     ]);
     press(one('.adp-table-selection [data-control="clear"]'));
     expect(one('.adp-table-selection').hidden).toBe(true);
+  });
+
+  it('keeps the sort and filter items beside the bar of the rows selected, as the standalone host does', () => {
+    const style = document.createElement('style');
+    style.textContent = readFileSync('src/webview/table/table.css', 'utf8');
+    document.head.append(style);
+    try {
+      surface.receive(message({ ...shown, groups: undefined }));
+      tick(one<HTMLInputElement>('tbody tr[data-id="r1"] .adp-table-check'));
+      expect(one('.adp-table-selection').hidden).toBe(false);
+      expect(one('.adp-table-settings').textContent).toContain('size');
+      expect(getComputedStyle(one('.adp-table-settings')).display).not.toBe('none');
+      expect(getComputedStyle(one('.adp-table-find')).display).not.toBe('none');
+    } finally {
+      style.remove();
+    }
   });
 
   it('says how many rows a row\'s menu deletes', () => {

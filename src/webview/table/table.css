@@ -776,15 +776,12 @@ thead .adp-table-lead .adp-table-check,
   visibility: visible;
 }
 
+/* The bar of the rows selected takes a line of its own under the sort and filter items, which stay, as in the standalone host. */
 .adp-table-selection {
   display: flex;
   align-items: center;
   gap: 6px;
   width: 100%;
-}
-
-.adp-table-picking .adp-table-toolbar > :not(.adp-table-selection, .adp-table-action) {
-  display: none;
 }
 
 .adp-table-selection-count {
