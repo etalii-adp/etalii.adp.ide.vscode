@@ -128,9 +128,8 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   const wire = wireIdsOf(definition.specification);
   // Pins that no entry of the document holds are kept beside it: the layout of its registration, by the top-left corner of each element (DISL 11.6, FBL 8.3).
   const keptBeside = (persistence.value.view.store.includes('pinned') || persistence.value.view.store.includes('bounds')) && persistence.value.view.bind.pinned === undefined;
-  // simplified: where only `bounds` is stored, a registration's entry is read and written as the point the node's placement
-  // anchor names, as the standalone host keeps a causal loop diagram's; FBL 8.3 says a top-left corner (etalii.adp spec 081).
-  const keptAnchored = keptBeside && !persistence.value.view.store.includes('pinned');
+  // An entry is the point the node's placement anchor names where the binding says so (FBL 0.20 §8.3, `registration.layoutPoint`), else its top-left corner.
+  const keptAnchored = (binding: FblBinding): boolean => keptBeside && binding.registration.layoutPoint === 'anchor';
 
   // What reading the definition found, and each required plugin that is missing: findings of every document.
   const ofDefinition: Finding[] = [
@@ -212,7 +211,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       filters: options.filters as SceneOptions['filters'],
       collapsed: Object.fromEntries(open.model.elements.map((element) => [element.id, folded(element.id)])),
       view: open.view,
-      ...(keptBeside ? { corners: open.corners, cornersAnchored: keptAnchored } : {}),
+      ...(keptBeside ? { corners: open.corners, cornersAnchored: keptAnchored(open.binding) } : {}),
       ...(options.placed === undefined ? {} : { placed: options.placed }),
       ...(open.refusal === undefined ? {} : { env: { readOnly: true } }),
     };
@@ -443,7 +442,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
         if (change.kind !== 'pin') continue;
         const node = drawn.find((candidate) => candidate.id === (was.get(change.element) ?? change.element));
         const [fx, fy] = node ? anchorOf(nodeNotation(viewpoints.value.all[viewpoint].notation, metamodel.value, node.type).placement.anchor) : [0, 0];
-        corners[change.element] = keptAnchored ? { x: change.x, y: change.y } : { x: change.x - fx * (node?.box.width ?? 0), y: change.y - fy * (node?.box.height ?? 0) };
+        corners[change.element] = keptAnchored(open.binding) ? { x: change.x, y: change.y } : { x: change.x - fx * (node?.box.width ?? 0), y: change.y - fy * (node?.box.height ?? 0) };
       }
       // The registration is written when there is first something to keep in it.
       const text = source.registration ?? (Object.keys(corners).length > 0 ? newRegistration(origin) : undefined);

@@ -394,6 +394,7 @@ function readRegistration(json: JsonNode, pointer: string, problems: LoadProblem
     resourceCapture: str(memberOf(registration, 'resource'), 'capture'),
     legacyLayout: str(registration, 'legacyLayout'),
     legacyIdentities: str(registration, 'legacyIdentities'),
+    ...(str(registration, 'layoutPoint') === 'anchor' ? { layoutPoint: 'anchor' as const } : {}),
     blocks: readRegistrationBlocks(memberOf(registration, 'blocks'), `${pointer}/registration/blocks`, problems),
   };
 }

@@ -262,6 +262,8 @@ export interface RegistrationSettings {
   readonly resourceCapture?: string;
   readonly legacyLayout?: string;
   readonly legacyIdentities?: string;
+  /** Which point of an element its layout entry is (FBL 0.20 §8.3): its top-left corner, the default, or the point its placement anchor names. */
+  readonly layoutPoint?: 'corner' | 'anchor';
   /** The blocks the binding declares (FBL 0.7 §8.1), in the order it declares them, which is the order they are written in (§8.4). */
   readonly blocks: readonly RegistrationBlockDeclaration[];
 }
