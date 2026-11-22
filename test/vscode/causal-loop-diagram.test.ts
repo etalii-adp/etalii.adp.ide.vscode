@@ -11,7 +11,7 @@ const asked = (): Thenable<Asked[]> => vscode.commands.executeCommand('etalii.ad
 suite('A causal loop diagram in Visual Studio Code', () => {
   teardown(closeAll);
 
-  test('an operation with a form asks its value in an input box, refusing as it is typed what the operation refuses, and is one undo step', async () => {
+  test('an operation with a form asks its value in an input box, refusing as it is typed what the form refuses, and is one undo step', async () => {
     const uri = example('causal-loop-diagram', 'on-call', 'on-call.cld');
     await vscode.commands.executeCommand('vscode.openWith', uri, viewType);
     await drawn();
@@ -25,7 +25,8 @@ suite('A causal loop diagram in Visual Studio Code', () => {
     assert.strictEqual(more.length, 0, 'the form has one field, so one input box');
     assert.strictEqual(box.title, 'Add link');
     assert.strictEqual(box.prompt, 'To variable');
-    assert.strictEqual(box.tried.nobody, 'No variable of that name is in this diagram, so there is nothing to change.');
+    // The form's own validation words it, as standalone's dialog does.
+    assert.strictEqual(box.tried.nobody, '\'nobody\' is not a variable in this diagram.');
     assert.strictEqual(box.tried.mistakes, undefined);
     await until('the link to be written', () => document.getText().includes('link toil -> mistakes +'));
 
