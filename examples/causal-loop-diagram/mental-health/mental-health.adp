@@ -16,9 +16,9 @@ layout:
   variable:legalFrame: 1250 0
   variable:meaning: 400 -150
   variable:openness: 1550 300
+  variable:premiumPressure: 700 1200
   variable:preventionInvestment: 1000 1000
   variable:preventionUrgency: 1450 800
-  variable:premiumPressure: 700 1200
   variable:progress: 800 100
   variable:sacrifice: 800 -150
   variable:satisfaction: -800 300

@@ -8888,7 +8888,7 @@
     {
       "document": "diagrams/causal-loop-diagram/examples/mental-health/mental-health.cld",
       "sha256": "047f1d21ef62fa14bd28c94d457cbbb6de6438c5bde59b21f73ded315fdf152a",
-      "registration": "mental-health.adp, sha256 5a33260d6ecb4e78330f18c1be256c52be04cb23dca59dd1e094c35cbe1d4272",
+      "registration": "mental-health.adp, sha256 193354eb900fb32e32bbba3081748b679fdcd270667954f9da6bd0943d459305",
       "menus": [
         [
           "g1 causal-loop.add-link | Add link from here… | mdi-arrow-right-thin | - | on",
@@ -10338,8 +10338,6 @@
           "sha256": "878c3a3ba7454a9d6d2a93718100ddb3556be7793d9c948139d55883c6a15a72",
           "registration": {
             "hunks": [
-              "@19 -0 +\"  variable:premiumPressure: 700 1200\\r\\n\"",
-              "@21 -1 +\"\"",
               "@29 -0 +\"  variable:variable1: 240 160\\r\\n\""
             ],
             "sha256": "2bb615ef425e68c1e6a0f129f86f77064e7b4a199f66d7e2f8ff4338039499ff"
@@ -10444,17 +10442,7 @@
           "sha256": "39737c67d4299dc7482ce427ab565f8d5e88303e7b7689d7db34fb425308c3d9"
         }
       ],
-      "undoAll": "28 undone; the original text is NOT back",
-      "undoAllLeaves": {
-        "unchanged": true
-      },
-      "undoAllLeavesRegistration": {
-        "hunks": [
-          "@19 -0 +\"  variable:premiumPressure: 700 1200\\r\\n\"",
-          "@21 -1 +\"\""
-        ],
-        "sha256": "193354eb900fb32e32bbba3081748b679fdcd270667954f9da6bd0943d459305"
-      }
+      "undoAll": "28 undone; the original text is back"
     },
     {
       "document": "diagrams/causal-loop-diagram/examples/on-call/on-call.cld",
