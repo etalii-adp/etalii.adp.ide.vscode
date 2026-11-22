@@ -258,6 +258,8 @@ suite('The Knowledge designer in Visual Studio Code', () => {
     await vscode.window.showTextDocument(document);
     await vscode.commands.executeCommand('workbench.action.files.revert');
     fs.rmSync(moved.fsPath, { force: true });
+    // provinces.yaml is put back: a later test's file relates to it, and would be found to name a missing file once the folder is read again.
+    fs.writeFileSync(provinces.fsPath, exampleText('provinces.yaml'));
   });
 
   test('a refusal shows the definition\'s sentence and writes nothing', async () => {
