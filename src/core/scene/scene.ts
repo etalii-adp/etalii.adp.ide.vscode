@@ -1387,6 +1387,28 @@ export const placesOf = (scene: Scene): Record<string, Point> => Object.fromEntr
  * scene is best one of the whole model: the default viewpoint without a filter. A node whose
  * extent cannot be worked out takes no part, and has no row here.
  */
+/**
+ * Where a plugin layout places the nodes of a scene, each as the point its placement anchor names: the plugin is given
+ * the drawn model and the sizes the scene drew, and a node it names no place for is left out.
+ */
+export function arrangedPlaces(tool: SceneTool, model: Model, scene: Scene, config: LayoutConfig): Map<string, { x: number; y: number }> {
+  const plugin = config.plugin === undefined ? undefined : tool.layouts?.(config.plugin);
+  if (!plugin) return new Map();
+  const drawn = new Map(scene.nodes.map((node) => [node.id, node]));
+  const at = plugin.place({
+    model: { diagram: model.diagram, elements: model.elements.filter((element) => drawn.has(element.id)), relations: model.relations.filter((relation) => relation.source !== undefined && relation.target !== undefined && drawn.has(relation.source) && drawn.has(relation.target)) },
+    sizes: Object.fromEntries([...drawn].map(([id, node]) => [id, { width: node.box.width, height: node.box.height }])),
+    spacing: config.spacing, options: config.options,
+  });
+  const places = new Map<string, { x: number; y: number }>();
+  for (const [id, node] of drawn) {
+    if (!Object.hasOwn(at, id)) continue;
+    const [fx, fy] = anchorOf(nodeNotation(tool.viewpoints.all[scene.viewpoint].notation, tool.metamodel, node.type).placement.anchor);
+    places.set(id, { x: at[id].x + fx * (at[id].width ?? node.box.width), y: at[id].y + fy * (at[id].height ?? node.box.height) });
+  }
+  return places;
+}
+
 export function arrangedRows(tool: SceneTool, model: Model, scene: Scene, config: LayoutConfig): Map<string, number> {
   const options = config.rows;
   if (!options) return new Map();

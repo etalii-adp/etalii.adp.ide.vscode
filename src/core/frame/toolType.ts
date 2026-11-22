@@ -57,7 +57,7 @@ export interface ToolboxEntry {
   readonly description: string;
 }
 
-export type Control = 'text' | 'multiline' | 'number' | 'choice' | 'slider' | 'tags';
+export type Control = 'text' | 'multiline' | 'number' | 'choice' | 'slider' | 'tags' | 'toggle';
 
 /** One row of ADP Properties. */
 export interface Field {

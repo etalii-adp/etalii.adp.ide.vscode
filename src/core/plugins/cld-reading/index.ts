@@ -40,6 +40,41 @@ export function noteOf(statement: string): string {
   return candidates.at(-1)?.text ?? '';
 }
 
+const POLARITY: Readonly<Record<string, string>> = { '+': '+', s: '+', S: '+', '-': '-', o: '-', O: '-' };
+const RESTATED = new Set(['polarity', 'delayed', 'flipped', 'weight', 'note']);
+
+/** A word as the statement writes it: quoted where it was. */
+const spelt = (word: Word): string => (word.quoted ? `"${word.text}"` : word.text);
+
+/**
+ * A link statement with more than one quoted note, written again with the changes in the tool's own spelling: its
+ * polarity, flags and weight in their places, then the other quoted words as they were, then the note, the last
+ * of them, as the standalone module writes it (`CausalLoopNote`). Nothing for any other statement or change,
+ * which the binding writes word by word.
+ */
+export function restated(statement: string, changes: Readonly<Record<string, unknown>>): string | undefined {
+  if (Object.keys(changes).some((name) => !RESTATED.has(name))) return undefined;
+  const words = wordsOf(statement);
+  if (words[0]?.text !== 'link' || words[2]?.text !== '->' || words.length < 4) return undefined;
+  const tail = words.slice(4);
+  const candidates = tail.filter((word) => word.quoted || (!flags.has(word.text) && !word.text.startsWith('weight=')));
+  if (tail.filter((word) => word.quoted).length < 2) return undefined;
+  const has = (name: string): boolean => Object.hasOwn(changes, name);
+  const stated = tail.find((word) => !word.quoted && POLARITY[word.text] !== undefined);
+  const polarity = has('polarity') ? (changes.polarity === 'positive' ? '+' : changes.polarity === 'negative' ? '-' : undefined) : stated && POLARITY[stated.text];
+  const flag = (name: string): boolean => (has(name) ? changes[name] === true : tail.some((word) => !word.quoted && word.text === name));
+  const written = tail.find((word) => !word.quoted && word.text.startsWith('weight='))?.text.slice('weight='.length);
+  const weight = has('weight') ? (changes.weight === null || changes.weight === undefined || changes.weight === '' ? undefined : String(changes.weight)) : written;
+  const last = candidates.at(-1)!;
+  const note = has('note') ? (typeof changes.note === 'string' && changes.note !== '' ? changes.note : undefined) : last.text;
+  const others = candidates.slice(0, -1).filter((word) => word.quoted).map(spelt);
+  const indent = /^\s*/.exec(statement)![0];
+  return indent + [
+    'link', spelt(words[1]), '->', spelt(words[3]), polarity, flag('delayed') ? 'delayed' : undefined, flag('flipped') ? 'flipped' : undefined,
+    weight === undefined ? undefined : `weight=${weight}`, ...others, note === undefined ? undefined : `"${note}"`,
+  ].filter((part) => part !== undefined).join(' ');
+}
+
 /** Whether a text reads as a number as .NET's `double.TryParse` with `NumberStyles.Float` reads it. */
 const readsAsNumber = (text: string): boolean => /^\s*[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?\s*$/.test(text) || /^\s*[+-]?(Infinity|∞)\s*$/.test(text) || /^\s*NaN\s*$/.test(text);
 
@@ -80,6 +115,7 @@ export const cldReading: ReadingLogic = {
     else attributes.note = note;
     return { ...element, attributes };
   }),
+  restate: (statement, changes) => restated(statement, changes),
   unreadable: unreadableSentence,
   numberText: dotnetNumber,
   // A loop whose label disagrees with its arrows is underlined wavy, as the owner ruled for the standalone host on 2026-10-14 (companion, gap 4).

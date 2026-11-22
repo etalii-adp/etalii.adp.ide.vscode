@@ -48,8 +48,8 @@ export class PropertiesView implements vscode.WebviewViewProvider {
       return;
     }
     const active = this.tools.active;
-    // The edit is for the element the rows were shown for; if the selection moved on, it is dropped.
-    if (!active || active.selection.length !== 1 || active.selection[0] !== message.target) return;
+    // The edit is for the element the rows were shown for, or for the diagram (''); if the selection moved on, it is dropped.
+    if (!active || (message.target === '' ? active.selection.length !== 0 : active.selection.length !== 1 || active.selection[0] !== message.target)) return;
     const performed = await this.tools.perform(active, { kind: 'setField', id: message.target, field: message.field, value: message.value });
     this.post({ v: 2, type: 'fieldOutcome', field: message.field, ...(performed.result === 'refused' ? { refused: performed.sentence ?? '' } : {}) });
     if (performed.result !== 'applied') this.show();
@@ -59,8 +59,9 @@ export class PropertiesView implements vscode.WebviewViewProvider {
 /** The rows for a diagram's selection, or the sentence that says why there are none. */
 export function describe(active: OpenTool | undefined): ToProperties {
   if (!active) return { v: 2, type: 'fields', fields: [], empty: nothingOpen };
-  if (active.selection.length === 0) return { v: 2, type: 'fields', fields: [], empty: nothingSelected };
   if (active.selection.length > 1) return { v: 2, type: 'fields', fields: [], empty: severalSelected };
   const fields = active.fields().map((field) => (active.readOnly && field.readOnly === undefined ? { ...field, readOnly: 'This file is read-only.' } : field));
+  // With nothing selected, the diagram's own form where its definition declares one, edited under the id ''.
+  if (active.selection.length === 0) return fields.length === 0 ? { v: 2, type: 'fields', fields: [], empty: nothingSelected } : { v: 2, type: 'fields', fields, target: '' };
   return { v: 2, type: 'fields', fields, target: active.selection[0] };
 }

@@ -48,6 +48,8 @@ export interface ReadingLogic {
   readonly id: string;
   /** The entries the library read of a body, read again where the tool type reads them otherwise: `text` is the text of a span of the body. */
   reread?(elements: readonly FblElement[], text: (span: Span) => string): readonly FblElement[];
+  /** An entry's statement written again with a set of its attributes, where the tool type writes it otherwise than the binding would; nothing to leave it to the binding. */
+  restate?(statement: string, changes: Readonly<Record<string, unknown>>): string | undefined;
   /** The sentence for an entry no rule of the binding reads, from its text; nothing for the definition's own. */
   unreadable?(entry: string): string | undefined;
   /** A number as the tool type shows it in a form. */

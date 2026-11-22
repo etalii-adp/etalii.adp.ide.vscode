@@ -17,7 +17,8 @@ const type = diagramOf(definitionOf('causal-loop-diagram'), registry);
 
 interface Changed { readonly hunks: readonly string[] }
 interface Step { readonly do: string; readonly answer: string; readonly hunks?: readonly string[]; readonly unchanged?: boolean; readonly registration?: Changed }
-interface Recorded { readonly document: string; readonly edits: readonly Step[]; readonly menus: readonly (readonly string[])[]; readonly targets: readonly string[] }
+interface Rows { readonly target: string; readonly rows: readonly string[]; readonly rowsReadOnly: readonly string[] }
+interface Recorded { readonly document: string; readonly edits: readonly Step[]; readonly menus: readonly (readonly string[])[]; readonly targets: readonly string[]; readonly rows: readonly Rows[]; readonly choices: readonly (readonly string[])[] }
 const transcript = JSON.parse(readFileSync('fixtures/tools/causal-loop-diagram/causal-loop.transcript.json', 'utf8')) as { readonly toolbox: readonly string[]; readonly documents: readonly Recorded[] };
 
 const examples = 'examples/causal-loop-diagram';
@@ -115,24 +116,12 @@ const differences: readonly { readonly when: (step: Step, source: Source) => boo
     difference: { reason: 'A link moved in a document without a registration: refused with the link\'s own `refusals.move`, which DISL checks first (DISL 6.9), where standalone first says there is no registration.', answers: refusedWith(/Only a variable can be moved/) },
   },
   {
-    when: (step) => /without a registration/.test(step.answer) && !step.do.includes('causal-loop.arrange'),
+    when: (step) => /without a registration/.test(step.answer),
     difference: { reason: 'A place kept in a registration the binding does not let be created: refused in FBL\'s words (FBL 8.4), where standalone has a sentence of its own.', answers: refusedWith(/has no registration, and its tool type keeps its view data only in one/) },
   },
   {
     when: (step, source) => source.fileName === 'spellings-kept.cld' && /^(execute causal-loop\.flip-curvature|set link:a\|b causal-loop\.link-label) /.test(step.do),
     difference: { reason: 'A statement written in a spelling of its own: this host changes only the words the edit touches (FBL 6.3), so its spacing and a word no slot reads stay, where standalone writes the whole statement again in its own spelling and drops that word.', answers: (outcome) => (outcome.kind === 'applied' ? undefined : `The outcome is ${JSON.stringify(outcome)}, not applied.`) },
-  },
-  {
-    when: (step, source) => source.fileName === 'two-notes.cld' && /^(set link:a\|b causal-loop\.link-(label|weight|polarity)|execute causal-loop\.make-(positive|negative) on link:a\|b|set variable:a causal-loop\.variable-id)(\s|$)/.test(step.do),
-    difference: { reason: 'A link with two notes: its note is written over the first of them here and its other words are lost when its line is written again, where standalone keeps both and writes over the last, which it reads as the note. To be fixed with pull request E (task T024).', answers: () => undefined },
-  },
-  {
-    when: (step) => /^describe link:/.test(step.do),
-    difference: { reason: 'A link\'s Delayed row, a switch in standalone, which lands with the property rows of pull request E (tasks T037 to T040).', answers: () => undefined },
-  },
-  {
-    when: (step) => step.do.includes('causal-loop.arrange'),
-    difference: { reason: 'Arrange diagram, which lands with pull request E (task T041).', answers: () => undefined },
   },
 ];
 
@@ -196,7 +185,7 @@ function answered(step: Step, outcome: EditOutcome, check: boolean): string | un
 }
 
 // The control of a row, as standalone names it.
-const controls: Readonly<Record<string, string>> = { text: 'Line', multiline: 'Text', number: 'Number', choice: 'Choice', slider: 'Slider', tags: 'Tags' };
+const controls: Readonly<Record<string, string>> = { text: 'Line', multiline: 'Text', number: 'Number', choice: 'Choice', slider: 'Slider', tags: 'Tags', toggle: 'Toggle' };
 
 /** The rows of ADP Properties for an element, as the transcript writes them. */
 const rowsOf = (source: Source, id: string): string =>
@@ -269,6 +258,14 @@ describe.each(documents)('$name', { timeout: 60_000 }, ({ source, recorded }) =>
       const expected = recorded.menus[Number(menu)].map((entry) => entry.replace(/ \| on \(.*\)$/, ' | on'));
       const offered = type.actions(source, selection).map((action) => `g1 ${action.id} | ${action.label} | ${action.icon ?? '-'} | ${action.shortcut ?? '-'} | ${action.enabled ? 'on' : `off (${action.disabledReason})`}`);
       expect(offered, target).toEqual(expected);
+    }
+  });
+
+  it('shows the rows the transcript records, for every element it names', () => {
+    for (const { target, rows } of recorded.rows) {
+      // A row's choices are written as their place in the document's list of choices.
+      const shown = rowsOf(source, target).split(' || ').map((row) => row.replace(/ \| choices (\[.*\])$/, (_, list: string) => ` | choices #${recorded.choices.findIndex((choices) => JSON.stringify(choices) === JSON.stringify(JSON.parse(list)))}`));
+      expect(shown, target).toEqual(rows);
     }
   });
 
