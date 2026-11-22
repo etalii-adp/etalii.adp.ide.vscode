@@ -24,6 +24,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repository = resolve(here, '../..');
 const viewport = { width: 1600, height: 900, deviceScaleFactor: 1 };
 const port = 9333;
+/** Quick Open's modifier: Cmd+P on macOS, Ctrl+P elsewhere. */
+const quickOpen = process.platform === 'darwin' ? 'Meta' : 'Control';
 
 /**
  * Every image: the document it opens, under examples/, its theme and the element it selects:
@@ -121,9 +123,9 @@ async function capture(executable, image) {
 
     // Opened once the window is up: a file named on the command line of a fresh profile can open
     // before the extension's editors are known, as text.
-    await page.keyboard.down('Control');
+    await page.keyboard.down(quickOpen);
     await page.keyboard.press('KeyP');
-    await page.keyboard.up('Control');
+    await page.keyboard.up(quickOpen);
     await page.waitForSelector('.quick-input-widget input', { visible: true });
     await page.keyboard.type(image.document.split('/').pop());
     await sleep(1000);

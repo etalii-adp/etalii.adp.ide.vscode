@@ -154,6 +154,19 @@ describe('a table with gestures', () => {
     expect(all<HTMLInputElement>('tbody .adp-table-check').map((box) => box.checked)).toEqual([false, false]);
   });
 
+  it('selects a row by a press on its checkbox, which focuses the checkbox before it changes', () => {
+    const box = one<HTMLInputElement>('tbody tr[data-id="r1"] .adp-table-check');
+    // A press with the pointer focuses the checkbox first; that focus selects nothing of its own.
+    box.focus();
+    tick(box);
+    expect(box.checked).toBe(true);
+    expect(one<HTMLInputElement>('.adp-table-all').checked).toBe(false);
+    const other = one<HTMLInputElement>('tbody tr[data-id="r2"] .adp-table-check');
+    other.focus();
+    tick(other);
+    expect([box.checked, other.checked, one<HTMLInputElement>('.adp-table-all').checked]).toEqual([true, true, true]);
+  });
+
   it('draws the surface it drew before for a table without gestures', () => {
     surface.receive(message({ ...view, gestures: undefined }));
     expect(all('tbody [role="rowheader"]').map((cell) => cell.textContent)).toEqual(['1', '2']);
@@ -182,7 +195,7 @@ describe('the settings control and the panels of a table with gestures', () => {
         id: 'c1',
         properties: [{ id: 'size', label: 'size', checked: true }],
         operators: [{ id: 'equals', label: '=', checked: true }, { id: 'greater-than', label: '>', request: op('setCondition', ['c1'], { operator: 'greater-than' }) }],
-        value: { control: 'number', value: '3', request: { kind: 'steps', steps: [op('removeCondition', ['c1']), op('addCondition', ['va'], { property: 'size', operator: 'equals', number: '$typed' })] } },
+        value: { control: 'number', value: '3', request: { kind: 'steps', steps: [op('addCondition', ['va'], { property: 'size', operator: 'equals', number: '$typed' }), op('removeCondition', ['c1'])] } },
         remove: op('removeCondition', ['c1']),
       }],
       groups: [],
@@ -248,7 +261,7 @@ describe('the settings control and the panels of a table with gestures', () => {
     press(all('.adp-table-item-text')[1]);
     change(one<HTMLSelectElement>('.adp-table-condition select[aria-label="Comparison"]'), 'greater-than');
     change(one<HTMLInputElement>('.adp-table-condition input[aria-label="Value"]'), '5');
-    expect(edits()).toEqual([op('setCondition', ['c1'], { operator: 'greater-than' }), { kind: 'steps', steps: [op('removeCondition', ['c1']), op('addCondition', ['va'], { property: 'size', operator: 'equals', number: 5 })] }]);
+    expect(edits()).toEqual([op('setCondition', ['c1'], { operator: 'greater-than' }), { kind: 'steps', steps: [op('addCondition', ['va'], { property: 'size', operator: 'equals', number: 5 }), op('removeCondition', ['c1'])] }]);
   });
 
   it('adds a filter and a sort from their lists, and hides a group by its eye', () => {

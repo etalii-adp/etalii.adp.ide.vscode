@@ -56,9 +56,16 @@ export function controlOf(param: TableParam): Control {
   return input;
 }
 
-/** What a control was given, as its parameter's kind of value; undefined for one left empty. */
+/**
+ * What a control was given, as its parameter's kind of value; undefined for one left empty. An
+ * optional checkbox with no default that is left unticked gives nothing either, as the standalone
+ * host gives nothing for a value it did not ask.
+ */
 export function given(param: TableParam, control: Control): TableValue | undefined {
-  if (param.control === 'checkbox') return control instanceof HTMLInputElement && control.checked;
+  if (param.control === 'checkbox') {
+    const checked = control instanceof HTMLInputElement && control.checked;
+    return checked || param.required || param.value !== undefined ? checked : undefined;
+  }
   if (control.value === '') return undefined;
   return param.control === 'number' ? Number(control.value) : control.value;
 }

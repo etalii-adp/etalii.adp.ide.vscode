@@ -112,3 +112,19 @@ describe('a column\'s menu', () => {
     expect(document.querySelector('.adp-table-rename')).toBeNull();
   });
 });
+
+describe('a column renamed from its menu after the table was drawn again', () => {
+  it('asks the name in the header as it is drawn now, and never sends a rename without one', () => {
+    press(header('p2'));
+    // Pressing a header selects its column, and the view that comes back draws the headers anew.
+    const view = type.view(source, {}) as TableView;
+    surface.receive({ v: 2, type: 'view', origin: 'etalii/knowledge', kind: 'designer', view, actions: [], version: 2 });
+    press(entry('rename'));
+    expect(edits()).toEqual([]);
+    const input = one<HTMLInputElement>('[role="columnheader"][data-id="p2"] .adp-table-rename');
+    expect(document.activeElement).toBe(input);
+    input.value = 'Land';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    expect(edits()).toEqual([{ kind: 'operation', operation: 'renameProperty', on: ['p2'], args: { name: 'Land' } }]);
+  });
+});
