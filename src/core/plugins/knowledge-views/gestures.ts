@@ -6,11 +6,13 @@
 // form for a parameter an entry's request leaves out.
 
 import type { ModelElement, Value } from '../../disl/model';
-import { ROW, TYPED, type TableBarItem, type TableData, type TableEntry, type TableField, type TableGestures, type TableGroup, type TableMenu, type TableMoves, type TableNest, type TableProperty, type TableRequest, type ThemedColour } from '../../tool/tableView';
+import { ROW, TYPED, type TableBarItem, type TableData, type TableEntry, type TableField, type TableGestures, type TableGroup, type TableMenu, type TableMoves, type TableNest, type TableOperation, type TableProperty, type TableRequest, type ThemedColour } from '../../tool/tableView';
 import { calculationsFor, movesOf, optionsOf, settingsOf, type Group } from './settings';
 import { SET_LIMIT, SET_OTHER_SIDE } from './relations';
 
 const operation = (name: string, on: readonly string[] = [], args: Readonly<Record<string, string | number | boolean>> = {}): TableRequest => ({ kind: 'operation', operation: name, on, args });
+/** What making a relation two-way asks first, as the standalone host's relation editor does: the name its other side is shown by. */
+const OTHER_SIDE: TableOperation = { id: SET_OTHER_SIDE, label: 'Make two-way', params: [{ name: 'counterpartName', label: 'Name in the other table', control: 'text', required: false }] };
 const text = (value: Value | undefined): string => (value === undefined || value === null ? '' : String(value));
 const icon = (name: unknown): { readonly icon?: string } => (typeof name !== 'string' ? {} : { icon: name.replace(/^mdi-/, '') });
 
@@ -259,7 +261,8 @@ function editRelation(property: string, element: ModelElement): TableEntry {
       { id: 'target', label: `Related to ${target === '.' ? 'this table' : target}`, disabled: 'The file a relation relates to is chosen when it is made.' },
       { id: 'limitNone', label: 'No limit', checked: !one, request: operation(SET_LIMIT, [property], { limit: 'none' }) },
       { id: 'limitOne', label: '1 row', checked: one, request: operation(SET_LIMIT, [property], { limit: 'one' }) },
-      { id: 'twoWay', label: 'Two-way relation', checked: twoWay, request: operation(SET_OTHER_SIDE, [property], { twoWay: !twoWay }) },
+      // Made two-way, the other side's name is asked first; left empty, it is this table's (spec 080, FR-011).
+      { id: 'twoWay', label: 'Two-way relation', checked: twoWay, request: operation(SET_OTHER_SIDE, [property], { twoWay: !twoWay }), ...(twoWay ? {} : { asks: OTHER_SIDE }) },
     ],
   };
 }
