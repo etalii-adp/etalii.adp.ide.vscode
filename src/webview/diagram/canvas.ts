@@ -652,8 +652,10 @@ export class Canvas {
       group?.removeAttribute('transform');
       group?.classList.remove('adp-ghost');
     };
+    let moved = { x: 0, y: 0 };
     this.track(event, {
       move: (point, delta) => {
+        moved = delta;
         // simplified: the node alone follows the pointer, without the nodes under it and the lines to it, and any other node is marked as one it could go under; the tool type refuses the ones the definition forbids, and the scene is drawn again when the edit is applied.
         group?.setAttribute('transform', `translate(${snapTo(delta.x, 0)} ${snapTo(delta.y, 0)})`);
         group?.classList.add('adp-ghost');
@@ -665,6 +667,8 @@ export class Canvas {
         settle();
         this.select([node.id]);
         if (onto) this.request({ kind: 'reparent', id: node.id, parent: onto.id });
+        // Dropped on nothing, one whose notation says why it is not moved is asked to move, so that the tool type says why in those words (DISL 6.9, `refusals.move`).
+        else if (node.refusesMove === true) this.request({ kind: 'move', id: node.id, x: node.box.x + moved.x, y: node.box.y + moved.y });
       },
       cancel: settle,
     });

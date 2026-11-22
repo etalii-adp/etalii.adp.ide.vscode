@@ -177,6 +177,8 @@ export interface SceneNode {
   readonly pinned: boolean;
   readonly tooltip?: string;
   readonly movable: { readonly x: boolean; readonly y: boolean };
+  /** True when the notation says why the node is not moved (DISL 6.9, `refusals.move`): a drag of it that goes nowhere is asked, to be refused in those words. */
+  readonly refusesMove?: true;
   readonly resizable: { readonly x: boolean; readonly y: boolean };
   readonly connectable: boolean;
   readonly selectable: boolean;
@@ -1034,6 +1036,7 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
         pinned: isPinned(self),
         tooltip: message(own.tooltip, self),
         movable: { x: free('x', movable) || dragged('x', movable), y: free('y', movable) || dragged('y', movable) },
+        ...(own.refusals?.move !== undefined && own.refusals.move.length > 0 ? { refusesMove: true as const } : {}),
         resizable: { x: free('x', resizable) && sizable !== false && sizable !== 'vertical', y: free('y', resizable) && sizable !== false && sizable !== 'horizontal' },
         connectable: flag(own.connectable, self, true),
         selectable: flag(own.selectable, self, true),

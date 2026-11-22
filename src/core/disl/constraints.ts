@@ -13,7 +13,7 @@
 import type { Expressions, Scope, World } from './expressions';
 import { attributesOf, isA, isRelation, type Metamodel } from './metamodel';
 import { finding, type Finding, type Loaded, type Model, type ModelElement, type ModelRelation, type Value } from './model';
-import { isCel, isObject, localized, type CelValue, type Doc, type Expression, type LocalizedText, type Message, type Specification } from './specification';
+import { isCel, isObject, localized, type Attribute, type CelValue, type Doc, type Expression, type LocalizedText, type Message, type Specification } from './specification';
 
 type Severity = 'error' | 'warning' | 'info' | 'hint';
 
@@ -121,6 +121,30 @@ export interface Constraints {
 }
 
 const endpoints = 'std.endpoints';
+
+/**
+ * The facet of DISL 4.2 a value breaks, read from the attribute itself and from its `facets`; none
+ * for a value that keeps them all, and for no value. A list is held to them item by item.
+ */
+function brokenFacet(attribute: Attribute, value: Value | undefined): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  const facets: Readonly<Record<string, unknown>> = { ...(isObject(attribute.facets) ? attribute.facets : {}), ...attribute };
+  for (const item of Array.isArray(value) ? value : [value]) {
+    if (typeof item === 'string') {
+      if (typeof facets.pattern === 'string') {
+        let pattern: RegExp | undefined;
+        try { pattern = new RegExp(facets.pattern, 'u'); } catch { pattern = undefined; }
+        if (pattern && !pattern.test(item)) return 'pattern';
+      }
+      if (typeof facets.minLength === 'number' && [...item].length < facets.minLength) return 'minLength';
+      if (typeof facets.maxLength === 'number' && [...item].length > facets.maxLength) return 'maxLength';
+    } else if (typeof item === 'number' || typeof item === 'bigint') {
+      if (typeof facets.min === 'number' && Number(item) < facets.min) return 'min';
+      if (typeof facets.max === 'number' && Number(item) > facets.max) return 'max';
+    }
+  }
+  return undefined;
+}
 // The built-ins that are not the reader's, in the order of the table of DISL 8.7.
 const table = ['std.required', 'std.facets', 'std.unique', 'std.multiplicity', endpoints, 'std.containment', 'std.acyclic', 'std.references', 'std.axisBounds', 'std.typeExists'];
 // What the reader raises about an element, not while reading a file: ordered by line (DISL 8.6).
@@ -436,6 +460,18 @@ export function interpretConstraints(specification: Specification, metamodel: Me
       if (rule.kind !== gesture.kind || (rule.enforcement ?? 'prevent') === 'report') continue;
       const names = scopeNames(rule);
       if (names.includes('diagram') || (self && inScope(names, self))) refused.push(...judge(rule, context, self, scope).map((item) => item.finding));
+    }
+
+    // A value outside its attribute's facets is refused with `std.facets`'s refusal (DISL 4.2, 8.7), after the rules the definition declares for the gesture.
+    const facetsSetting = Object.hasOwn(settings, 'std.facets') ? settings['std.facets'] : {};
+    if (gesture.kind === 'change' && attribute && facetsSetting.enabled !== false) {
+      const broken = brokenFacet(attribute, gesture.values?.newValue as Value | undefined);
+      if (broken !== undefined) {
+        refused.push({
+          code: 'std.facets', constraint: 'std.facets', severity: rated(facetsSetting.severity ?? 'error'), location: at(context, self), ...(self ? { element: self.id } : {}),
+          message: worded(facetsSetting.refusal, { ...scope, violation: { rule: 'std.facets', attribute: values.attribute, facet: broken } }, `This value is not one \`${String(values.attribute)}\` can hold.`),
+        });
+      }
     }
 
     // An invariant that prevents rejects what would make it false where it holds now (DISL 8.2):

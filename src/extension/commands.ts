@@ -141,6 +141,25 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
       const active = tools.active;
       if (active) tools.setOptions(active, options as ViewOptions);
     });
+    // An operation's input boxes, answered in order from a script: each says what it asked, and what its
+    // validation said of every value the script tries before the answer it gives (undefined cancels).
+    const asked: { title?: string; prompt?: string; value?: string; tried: Record<string, string | undefined> }[] = [];
+    register('etalii.adp.test.inputBoxes', (script: unknown) => {
+      const answers = [...(script as { try?: string[]; answer?: string }[])];
+      asked.length = 0;
+      tools.inputBox = async (options) => {
+        const next = answers.shift();
+        const tried: Record<string, string | undefined> = {};
+        for (const value of next?.try ?? []) {
+          const said = await options.validateInput?.(value);
+          tried[value] = typeof said === 'string' ? said : undefined;
+        }
+        asked.push({ title: options.title, prompt: options.prompt, value: options.value, tried });
+        return next?.answer;
+      };
+      return asked;
+    });
+    register('etalii.adp.test.inputBoxesAsked', () => asked);
     register('etalii.adp.test.layoutSteps', () => ({ undo: tools.layoutStepNext('undo'), redo: tools.layoutStepNext('redo') }));
     register('etalii.adp.test.select', (ids: unknown) => {
       const active = tools.active;

@@ -5,7 +5,7 @@
 import type { Placement, Snapping } from './coordinates';
 import { isRelation, type Metamodel } from './metamodel';
 import { finding, type Finding, type Loaded, type Value } from './model';
-import { isObject, type Bindable, type CelValue, type Doc, type Expression, type LocalizedText, type Message, type Section, type Specification, type TextMetric } from './specification';
+import { isObject, type Bindable, type CelValue, type Doc, type Expression, type LocalizedText, type Message, type Reason, type Section, type Specification, type TextMetric } from './specification';
 
 // ---- as the schema has them ----
 
@@ -106,6 +106,9 @@ export interface ShapePart {
   readonly tooltip?: Message;
 }
 
+/** `$defs/GestureRefusals` (DISL 6.9): the reasons a gesture a notation switches off is refused with, by gesture. */
+export type GestureRefusals = Readonly<Partial<Record<'move' | 'resize' | 'reparent' | 'delete' | 'connect' | 'reconnect' | 'copy' | 'editLabel', readonly Reason[]>>>;
+
 /** `$defs/Handle` (DISL 6.8): a point on a shape that edits one of its parameters. */
 export interface Handle {
   readonly param: string;
@@ -159,7 +162,7 @@ export interface Label {
   readonly id?: string;
   readonly text?: Bindable<string>;
   readonly editable?: false | 'inline' | 'multiline' | 'form';
-  readonly parse?: { readonly cel?: string; readonly write?: readonly unknown[] };
+  readonly parse?: { readonly cel?: string; readonly write?: readonly unknown[]; readonly accepts?: string; readonly refusal?: unknown };
   readonly editText?: Message | { readonly attribute: string };
   readonly position?: Position;
   readonly distance?: number;
@@ -308,6 +311,8 @@ export interface NodeNotation {
   readonly connectable: Bindable<boolean>;
   readonly selectable: Bindable<boolean>;
   readonly deletable: Bindable<boolean>;
+  /** Why a gesture this notation switches off is refused, per gesture (DISL 6.9, GestureRefusals). */
+  readonly refusals?: GestureRefusals;
 }
 
 export type EdgeVariant = Partial<Omit<EdgeNotation, 'variants'>> & { readonly when: Expression };
@@ -327,6 +332,8 @@ export interface EdgeNotation {
   readonly selectable: Bindable<boolean>;
   readonly deletable: Bindable<boolean>;
   readonly reconnectable: Bindable<boolean>;
+  /** As a node's (DISL 6.10). */
+  readonly refusals?: GestureRefusals;
 }
 
 export interface Theme {

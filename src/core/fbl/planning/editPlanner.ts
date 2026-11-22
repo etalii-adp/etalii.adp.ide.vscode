@@ -174,6 +174,15 @@ function planSet(plan: Plan, reading: BodyReading, set: ModelChange & { kind: 's
   }
   if (changes.length > 0) reading.family.write(plan, element, changes);
   if (newKey !== undefined) rewriteReferences(plan, reading, element, newKey);
+  // A value other rules reference the element by, which is not its key, carries their references with it too (FBL 5.7).
+  for (const change of changes) {
+    if (change.isEmpty || change.attribute === element.keyAttribute) continue;
+    const before = element.attributes.get(change.attribute);
+    if (before === undefined || before === null || Array.isArray(before) || plain(before) === plain(change.value)) continue;
+    if (allRules(reading.binding).some((rule) => rule.attributes.some(([, binding]) => binding.reference?.by === change.attribute && binding.reference.to.includes(element.rule.name)))) {
+      rewriteReferencesBy(plan, reading, element, change.attribute, plain(before), plain(change.value));
+    }
+  }
   if (element.rule.snapshotUndo) plan.snapshot = true;
 }
 
@@ -218,6 +227,29 @@ function rewriteReferences(plan: Plan, reading: BodyReading, renamed: ReadElemen
     for (const [name, binding] of other.rule.attributes) {
       if (!binding.reference || !binding.reference.to.includes(renamed.rule.name)) continue;
       if (other === renamed && name === renamed.keyAttribute) continue;
+      const read = other.slots.get(name);
+      if (!read?.present) continue;
+      const words = read.words ?? [];
+      if (words.length > 1 || (words.length === 1 && Array.isArray(other.attributes.get(name)))) {
+        for (const word of words) {
+          if (word.text !== oldKey) continue;
+          rewrite(plan, reading, { value: word.text, span: word.span, present: true, writable: true, quote: word.quoted ? '"' : undefined }, oldKey, newKey);
+        }
+        continue;
+      }
+      rewrite(plan, reading, read, oldKey, newKey);
+    }
+  }
+}
+
+/**
+ * The references that name an element by one of its attributes, `by`, rewritten from the value it
+ * had to the one it is given: each `rewrite-reference`, word by word inside a group (FBL 5.7).
+ */
+function rewriteReferencesBy(plan: Plan, reading: BodyReading, renamed: ReadElement, by: string, oldKey: string, newKey: string): void {
+  for (const other of reading.elements) {
+    for (const [name, binding] of other.rule.attributes) {
+      if (binding.reference?.by !== by || !binding.reference.to.includes(renamed.rule.name) || (other === renamed && name === by)) continue;
       const read = other.slots.get(name);
       if (!read?.present) continue;
       const words = read.words ?? [];
@@ -404,8 +436,12 @@ function references(other: ReadElement, element: ReadElement): boolean {
   if (other.isRelation && (other.sourceElement === element || other.targetElement === element)) return true;
   for (const [name, binding] of other.rule.attributes) {
     if (!binding.reference || !binding.reference.to.includes(element.rule.name) || other === element) continue;
+    // A reference by an attribute (FBL 5.7) names the element by that attribute's value, not by its key.
+    const by = binding.reference.by;
+    const key = by === undefined || by === 'id' ? element.key : plain(element.attributes.get(by));
+    if (key === undefined || key === '') continue;
     const value = other.attributes.get(name);
-    if (Array.isArray(value) ? value.some((item) => plain(item) === element.key) : plain(value) === element.key) return true;
+    if (Array.isArray(value) ? value.some((item) => plain(item) === key) : plain(value) === key) return true;
   }
   return false;
 }

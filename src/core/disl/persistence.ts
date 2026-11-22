@@ -51,6 +51,12 @@ export interface Read extends Loaded<Model> {
    * a key an earlier entry has. They are ignored and not reported, and go with the next write (DISL 11.6).
    */
   readonly stale: readonly string[];
+  /**
+   * The entry of the body each element of the model is read from, by the element's id, where the two
+   * differ: an element whose id is natural (DISL 11.5.1) is read from an entry the library gave
+   * another id. A change is written to the entry, never to the model's id.
+   */
+  readonly entries?: ReadonlyMap<string, string>;
 }
 
 const outside = ['diagram', 'header', 'unreadable'];
@@ -453,7 +459,9 @@ export function readModel(
   }
 
   // In reading order (DISL 8.6); within a line, what this reading found comes before the library's.
-  return { value: model, findings: findings.sort((a, b) => a.location.line - b.location.line), view: { pinned, groups, filters }, stale };
+  const entries = new Map<string, string>();
+  for (const [entry, id] of inModel) if (entry.id !== id && !entries.has(id)) entries.set(id, entry.id);
+  return { value: model, findings: findings.sort((a, b) => a.location.line - b.location.line), view: { pinned, groups, filters }, stale, ...(entries.size > 0 ? { entries } : {}) };
 }
 
 /**

@@ -559,6 +559,9 @@ export class Tools implements vscode.Disposable {
     return edit;
   }
 
+  /** How an operation's form asks a value: Visual Studio Code's input box, which a test answers in its place. */
+  inputBox: (options: vscode.InputBoxOptions) => Thenable<string | undefined> = (options) => vscode.window.showInputBox(options);
+
   /** The row each document opened by a link selects once its page is ready, by the document's address. */
   readonly selecting = new Map<string, string>();
 
@@ -591,6 +594,25 @@ export class Tools implements vscode.Disposable {
         return { result: 'applied' };
       case 'confirm':
         return { result: 'cancelled' };
+      case 'ask': {
+        // The operation's form, one input box a value, each checked as it is typed against the form's own validation.
+        if (request.kind !== 'action') return { result: 'cancelled' };
+        const params: Record<string, string> = {};
+        for (const [index, field] of outcome.fields.entries()) {
+          const answer = await this.inputBox({
+            title: outcome.fields.length > 1 ? `${outcome.title} (${index + 1}/${outcome.fields.length})` : outcome.title,
+            prompt: field.label, value: field.initial, valueSelection: [0, field.initial.length],
+            validateInput: (value) => {
+              const checked = diagram.type.edit(diagram.source, { ...request, params: { ...params, [field.param]: value }, check: true }, diagram.options, false);
+              return checked.kind === 'refused' ? checked.sentence : undefined;
+            },
+          });
+          if (answer === undefined) return { result: 'cancelled' };
+          params[field.param] = answer;
+        }
+        if (version !== undefined && version !== diagram.document.version) return { result: 'cancelled' };
+        return this.perform(diagram, { ...request, params });
+      }
       case 'pickPath': {
         // The user picks a file or a folder, and the answer is an edit like any other: one undo step.
         const picked = await pickLink(diagram.document.uri);

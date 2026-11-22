@@ -32,6 +32,7 @@ const exempt: readonly Exempt[] = [
   { name: 'all', use: 'disl', reason: 'a value of BudgetWithhold.edits' },
   { name: 'any', use: 'disl', reason: 'a value of Filter.match.default' },
   { name: 'ascending', use: 'disl', reason: 'a value of Compartment.itemOrder.direction' },
+  { name: 'ask', use: 'disl', reason: 'a value of Tool.createTarget; here the outcome of an edit that asks the values of an operation\'s form first (DISL 9.4, `paramsForm`)' },
   { name: 'at', use: 'disl', reason: 'a property of SnapRuleObject' },
   { name: 'average', use: 'disl', reason: 'a value of TextMetric.kind' },
   { name: 'bottom', use: 'disl', reason: 'a value of Budget.position' },

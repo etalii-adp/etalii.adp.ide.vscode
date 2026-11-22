@@ -98,6 +98,34 @@ const reason = (error: unknown): string => {
 
 const number = (value: unknown): number => Number(value);
 
+// The parts of the library's macro protocol `sortBy` uses: the checker and evaluator are its own, typed here as far as they are read.
+interface MacroChecker { check(node: unknown, ctx: MacroContext): { readonly kind: string; readonly valueType?: unknown } }
+interface MacroContext { forkWithVariable(name: string, type: unknown): MacroContext; reuse(ctx: MacroContext): MacroContext; setIterValue(value: unknown, evaluator: MacroEvaluator): MacroContext }
+interface MacroEvaluator { run(node: unknown, ctx: MacroContext): unknown }
+interface SortBy { readonly receiver: unknown; readonly bound: string; readonly key: unknown; keyCtx?: MacroContext; readonly typeCheck: typeof sortByCheck; readonly evaluate: typeof sortByEvaluate }
+
+const compareKeys = (a: unknown, b: unknown): number =>
+  typeof a === 'string' && typeof b === 'string' ? (a < b ? -1 : a > b ? 1 : 0) : Number(a) - Number(b);
+
+function sortByCheck(checker: MacroChecker, macro: SortBy, ctx: MacroContext): unknown {
+  const listType = checker.check(macro.receiver, ctx);
+  macro.keyCtx = ctx.forkWithVariable(macro.bound, listType.kind === 'list' ? listType.valueType : listType);
+  checker.check(macro.key, macro.keyCtx);
+  return listType;
+}
+
+function sortByEvaluate(evaluator: MacroEvaluator, macro: SortBy, ctx: MacroContext): unknown {
+  const items = evaluator.run(macro.receiver, ctx);
+  if (!Array.isArray(items)) throw new Error('sortBy() needs a list.');
+  const keyed = items.map((item: unknown, index) => ({ item, index, key: evaluator.run(macro.key, macro.keyCtx!.reuse(ctx).setIterValue(item, evaluator)) }));
+  return keyed.sort((a, b) => compareKeys(a.key, b.key) || a.index - b.index).map(entry => entry.item);
+}
+
+function sortByMacro({ args, receiver }: { readonly args: readonly { readonly op: string; readonly args: unknown }[]; readonly receiver: unknown }): SortBy {
+  if (args[0].op !== 'id') throw new Error('sortBy(x, key) needs a name to bind each item to as its first argument.');
+  return { receiver, bound: args[0].args as string, key: args[1], typeCheck: sortByCheck, evaluate: sortByEvaluate };
+}
+
 /** Creates the environment of one specification. It is made once and kept: making it is the expensive part. */
 export function createExpressions(specification: Specification, metamodel: Metamodel, options: ExpressionOptions = {}): Expressions {
   const locale = options.locale ?? specification.language.defaultLocale ?? 'en';
@@ -204,7 +232,12 @@ export function createExpressions(specification: Specification, metamodel: Metam
   register('list.flatten(): list<dyn>', (items: unknown[]) => items.flat());
   register('list.distinct(): list<dyn>', (items: unknown[]) => [...new Set(items)]);
   // Strings by code point, numbers by value; stable (DISL 12.1).
-  register('list.sort(): list<dyn>', (items: unknown[]) => [...items].sort((a, b) => (typeof a === 'string' && typeof b === 'string' ? (a < b ? -1 : a > b ? 1 : 0) : Number(a) - Number(b))));
+  // CEL's list extension: the first and the last item, none of an empty list.
+  register('list.first(): optional<dyn>', (items: unknown[]) => (items.length > 0 ? Optional.of(items[0]) : Optional.none()));
+  register('list.last(): optional<dyn>', (items: unknown[]) => (items.length > 0 ? Optional.of(items[items.length - 1]) : Optional.none()));
+  // CEL's list extension: the macro `sortBy(x, key)`, a stable sort by the key each item gives, strings by code point.
+  void environment.registerFunction('list.sortBy(ast, ast): list<dyn>', sortByMacro as never);
+  register('list.sort(): list<dyn>', (items: unknown[]) => [...items].sort(compareKeys));
   register('list.indexOf(dyn): int', (items: unknown[], item: unknown) => BigInt(items.indexOf(item)));
   // The numeric aggregates of DISL 12.4: an empty list has no average, minimum or maximum, which fails the expression.
   const numbers = (items: unknown[], name: string): number[] => {
