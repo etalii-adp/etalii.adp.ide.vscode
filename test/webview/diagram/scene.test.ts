@@ -77,6 +77,21 @@ describe('a scene', () => {
     expect(group(root, 'i-12').querySelector('[data-label="polarity"]')?.textContent).toBe('+');
   });
 
+  it('gives a selected element the colour its notation\'s `states.selected` states, and leaves the others to the host\'s highlight', () => {
+    const root = drawn(withEdge({ ...edge('i-12'), selected: '#7C3AED' }));
+    expect(group(root, 'i-12').getAttribute('style')).toBe('--adp-selected: #7C3AED');
+    expect(group(root, 'i-13').getAttribute('style')).toBeNull();
+  });
+
+  it('lets a label of one line that may overflow run past its box, held where it is aligned', () => {
+    const own = node('radio');
+    const label = { ...own.labels[0], wrap: 'none', overflow: 'visible', position: 'bottom', align: 'center' } as const;
+    const root = drawn(withNode({ ...own, labels: [label] }));
+    const object = group(root, 'radio').querySelector('foreignObject[data-label]')!;
+    expect(object.getAttribute('style')).toBe('overflow: visible');
+    expect(object.firstElementChild!.getAttribute('style')).toContain('align-items: center');
+  });
+
   it('marks a node a filter dims', () => {
     const root = drawn(withNode({ ...node('radio'), dimmed: true }));
     expect(group(root, 'radio').classList.contains('adp-dimmed')).toBe(true);

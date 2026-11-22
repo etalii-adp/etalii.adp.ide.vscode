@@ -161,8 +161,9 @@ describe('a causal loop diagram written here', () => {
   });
 
   it('says that a diagram without variables states none yet', () => {
-    expect(viewOf(source('')).notice).toBe('This causal loop diagram states no variables yet.');
-    expect(viewOf(source('variable a\r\n')).notice).toBeUndefined();
+    expect(viewOf(source('')).empty).toEqual({ text: 'This causal loop diagram states no variables yet.', fontSize: 14, colour: { token: 'color.text.muted' } });
+    expect(viewOf(source('')).notice).toBeUndefined();
+    expect(viewOf(source('variable a\r\n')).empty).toBeUndefined();
   });
 });
 

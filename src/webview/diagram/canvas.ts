@@ -78,6 +78,7 @@ export class Canvas {
   readonly surface: Surface;
   private readonly stage: HTMLElement;
   private readonly notice = html('div', { class: 'adp-notice', role: 'status' });
+  private readonly empty = html('div', { class: 'adp-empty', role: 'status' });
   private readonly status = html('div', { class: 'adp-status', role: 'alert' });
   private readonly panel: Panel;
   private readonly ruler: Ruler;
@@ -114,8 +115,9 @@ export class Canvas {
         svg('path', { d: 'M 0 0 L 10 5 L 0 10 z' })));
     }
     this.notice.hidden = true;
+    this.empty.hidden = true;
     this.status.hidden = true;
-    this.stage.append(this.notice, this.status);
+    this.stage.append(this.notice, this.empty, this.status);
     this.panel = new Panel(this.stage, (options) => {
       // A scene's filter is asked for by its id, and its toggle by the viewpoint it turns on.
       const chrome = this.scene?.chrome;
@@ -267,6 +269,12 @@ export class Canvas {
 
     this.notice.hidden = scene.notice === undefined;
     this.notice.textContent = scene.notice ?? '';
+    // The empty canvas's message is plain text centred on the surface, in the size and colour its style states (DISL 6.13).
+    this.empty.hidden = scene.empty === undefined;
+    this.empty.textContent = scene.empty?.text ?? '';
+    this.empty.setAttribute('style', scene.empty === undefined ? '' : [
+      `color: ${colourOf(scene.tokens, themeKind(), scene.empty.colour, 'text')}`, ...(scene.empty.fontSize === undefined ? [] : [`font-size: ${scene.empty.fontSize}px`]),
+    ].join('; '));
     this.surface.placeOnce(scene.bounds);
     this.drawRuler();
   }
