@@ -470,7 +470,8 @@ export class Table {
     if (!cell || target.closest('.adp-table-editor')) return;
     this.place = placeOf(cell);
     this.rove();
-    if (this.silent) return;
+    // A row's checkbox selects by its change, which a selection made on its focus would undo.
+    if (this.silent || target.closest('.adp-table-check')) return;
     this.anchor = cell.closest('tr')?.dataset.id;
     this.select(this.idsOf(cell));
   }
@@ -807,10 +808,27 @@ export class Table {
 
   /** An entry of a menu chosen: renamed in place, a panel opened, or its request made. */
   private chosen(entry: TableEntry): void {
-    if (entry.named && entry.entries && this.menuAt?.isConnected) this.newProperty(this.menuAt, entry.entries);
-    else if (entry.inPlace && entry.request && this.menuAt?.isConnected) this.rename(this.menuAt, entry.request);
-    else if (entry.opens) this.openPanel(entry.opens);
+    const anchor = this.anchorOfMenu();
+    if (entry.named && entry.entries) {
+      if (anchor) this.newProperty(anchor, entry.entries);
+    } else if (entry.inPlace && entry.request) {
+      // Without its tab or header there is no field to type the name in, and nothing is sent.
+      if (anchor) this.rename(anchor, entry.request);
+    } else if (entry.opens) this.openPanel(entry.opens);
     else if (entry.request) this.make(entry.request);
+  }
+
+  /**
+   * The tab or header a menu was opened from, as it is drawn now: pressing a header selects its
+   * column and draws the table again, so the element the menu was opened from may be gone.
+   */
+  private anchorOfMenu(): HTMLElement | undefined {
+    const at = this.menuAt;
+    if (!at || at.isConnected) return at;
+    const { view, id } = at.dataset;
+    if (view !== undefined) return [...this.tabs.querySelectorAll<HTMLElement>('[role="tab"]')].find((tab) => tab.dataset.view === view);
+    if (id !== undefined) return [...this.grid.querySelectorAll<HTMLElement>('[role="columnheader"][data-id]')].find((header) => header.dataset.id === id);
+    return undefined;
   }
 
   /** Opens an editor of the settings control, or a column's options, in place of the one that was open. */

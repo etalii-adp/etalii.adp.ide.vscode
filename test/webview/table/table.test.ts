@@ -552,7 +552,7 @@ describe('the actions', () => {
     type(controls[0], 'Titel');
     type(controls[4], 'b');
     submit.click();
-    expect(edits()).toEqual([{ kind: 'operation', operation: 'rename', on: ['title'], args: { name: 'Titel', width: 120, wrap: false, kind: 'b' } }]);
+    expect(edits()).toEqual([{ kind: 'operation', operation: 'rename', on: ['title'], args: { name: 'Titel', width: 120, kind: 'b' } }]);
     expect(document.querySelector('.adp-table-params')).toBeNull();
   });
 

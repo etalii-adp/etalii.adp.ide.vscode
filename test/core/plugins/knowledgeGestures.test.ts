@@ -49,6 +49,18 @@ describe('the gestures of a Knowledge table', () => {
     expect(gestures.newProperty?.[1].request).toMatchObject({ operation: 'addProperty', args: { valueType: 'number', after: 'p9' } });
   });
 
+  it('changes the value of a condition where the file has its filter, as the standalone host does', () => {
+    const value = gestures.settings!.filter.conditions[0].value.request!;
+    const written = textOf(source, JSON.parse(JSON.stringify(value).replace('"$typed"', '"o2"')) as TableRequest);
+    expect(written).toBe(source.text.replace(/( {4}filter:\r?\n {6}- property: p2\r?\n {8}operator: is\r?\n {8}option: )o1/, '$1o2'));
+  });
+
+  it('starts a condition on text with the first comparison `knowledge.md` gives text, is', () => {
+    const add = gestures.settings!.filter.add.find((entry) => entry.id === 'p1')!.request!;
+    expect(add).toMatchObject({ operation: 'addCondition', args: { property: 'p1', operator: 'is' } });
+    expect(gestures.settings!.filter.conditions[0].properties.find((entry) => entry.id === 'p1')!.request).toMatchObject({ steps: [{ operation: 'addCondition', args: { property: 'p1', operator: 'is' } }, { operation: 'removeCondition' }] });
+  });
+
   it('says the sorts and filters in words, each with what removes it', () => {
     expect(gestures.items?.map((item) => [item.kind, item.text, item.descending ?? false])).toEqual([['sort', 'Population', true], ['filter', 'Country is Netherlands', false]]);
     const removed = textOf(source, gestures.items![0].remove!);
@@ -91,7 +103,7 @@ describe('the settings control, the options panel and the calculation line of a 
     const not = textOf(source, condition.operators.find((entry) => entry.id === 'is-not')!.request!);
     expect(viewOf(not).gestures?.items?.map((item) => item.text)).toContain('Country is not Netherlands');
     const byName = textOf(source, condition.properties.find((entry) => entry.id === 'p1')!.request!);
-    expect(viewOf(byName).gestures?.settings?.filter.conditions[0].operators.find((entry) => entry.checked)?.id).toBe('contains');
+    expect(viewOf(byName).gestures?.settings?.filter.conditions[0].operators.find((entry) => entry.checked)?.id).toBe('is');
   });
 
   it('nests filter groups as deep as the definition allows, and says so past it', () => {

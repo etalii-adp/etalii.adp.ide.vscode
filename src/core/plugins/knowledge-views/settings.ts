@@ -11,9 +11,9 @@ const operation = (name: string, on: readonly string[] = [], args: Readonly<Reco
 const steps = (list: readonly TableRequest[]): TableRequest => (list.length === 1 ? list[0] : { kind: 'steps', steps: list });
 const text = (value: Value | undefined): string => (value === undefined || value === null ? '' : String(value));
 
-/** The comparisons of each value type, the first the one a new condition starts with; every type also has the two of emptiness. */
+/** The comparisons of each value type in the order of `knowledge.md`, the first the one a new condition starts with; every type also has the two of emptiness. */
 const comparisons: Readonly<Record<string, readonly string[]>> = {
-  text: ['contains', 'does-not-contain', 'is', 'is-not', 'starts-with', 'ends-with'],
+  text: ['is', 'is-not', 'contains', 'does-not-contain', 'starts-with', 'ends-with'],
   number: ['equals', 'does-not-equal', 'greater-than', 'less-than', 'at-least', 'at-most'],
   checkbox: ['is-checked', 'is-not-checked'],
   date: ['is', 'is-before', 'is-after', 'is-on-or-before', 'is-on-or-after'],
@@ -69,7 +69,10 @@ export function settingsOf(table: TableData, view: ModelElement, columns: readon
     if (!property) return undefined;
     const operator = text(condition.attributes.operator);
     const key = keyOf(property.valueType);
-    const replaced = (args: Readonly<Record<string, string | number | boolean>>): TableRequest => steps([operation('removeCondition', [condition.id]), operation('addCondition', [parent], args)]);
+    // The new condition is added before the old one goes, so that a filter of one condition is
+    // never empty in between and its block stays where the file has it, as the standalone host's
+    // change in place leaves it.
+    const replaced = (args: Readonly<Record<string, string | number | boolean>>): TableRequest => steps([operation('addCondition', [parent], args), operation('removeCondition', [condition.id])]);
     const empty = operator === 'is-empty' || operator === 'is-not-empty' || property.valueType === 'checkbox' || key === undefined;
     const choice = property.valueType === 'selection' || property.valueType === 'multipleSelection';
     const value: TableField = empty
