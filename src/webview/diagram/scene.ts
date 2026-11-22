@@ -90,7 +90,7 @@ const textInset = 8;
 
 // A label outside its node, or at a point of it, is its text, held where its alignment says; one
 // inside is laid out in its box by the browser.
-function drawLabel(label: SceneLabel, paints: Paints, node: SceneNode): SVGElement {
+function drawLabel(label: SceneLabel, paints: Paints, node: SceneNode | undefined): SVGElement {
   const { box, style } = label;
   const colour = paints.colour(style.font?.color, 'text');
   const weight = style.font?.weight;
@@ -104,8 +104,9 @@ function drawLabel(label: SceneLabel, paints: Paints, node: SceneNode): SVGEleme
   ];
   const words = typeof label.position === 'string' ? label.position.split('-') : ['outside'];
   // A text at a point of its node that is one line and may not run on is kept within the node, cut off with an ellipsis where the label asks for one.
-  const room = node.box.width - 2 * textInset;
-  if (typeof label.position !== 'string' && label.wrap === 'none' && (label.overflow === 'ellipsis' || label.overflow === 'clip') && box.width > room && room > 0) {
+  // An edge's label has no node to keep it within.
+  const room = node === undefined ? 0 : node.box.width - 2 * textInset;
+  if (node !== undefined && typeof label.position !== 'string' && label.wrap === 'none' && (label.overflow === 'ellipsis' || label.overflow === 'clip') && box.width > room && room > 0) {
     const look = ['text-align: center', `font-size: ${label.fontSize}px`, `color: ${colour}`, 'justify-content: center', ...(weight === undefined ? [] : [`font-weight: ${weight}`]), ...lettering];
     return svg('foreignObject', { class: label.tooltip === undefined ? 'adp-scene-label' : 'adp-scene-label adp-hover', 'data-label': label.id, x: node.box.x + textInset, y: box.y, width: room, height: box.height },
       label.tooltip === undefined ? undefined : svg('title', {}, label.tooltip),
@@ -263,7 +264,7 @@ function edgeGroup(edge: SceneEdge, paints: Paints): SVGGElement | undefined {
     drawMarker(edge.targetMarker, 'target', points, colour, width),
     ...(edge.midMarkers ?? []).map((mid) => drawMidMarker(mid, colour, width)),
     // A label of an edge is held at its point, outside any node: the node a label of a node is drawn in is not asked for.
-    ...(edge.labels ?? []).map((label) => drawLabel(label, paints, undefined as unknown as SceneNode)));
+    ...(edge.labels ?? []).map((label) => drawLabel(label, paints, undefined)));
 }
 
 // A decoration along a line (DISL 6.10), turned to the line: a `bar` is a stroke across it `width` long;

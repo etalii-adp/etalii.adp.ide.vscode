@@ -71,6 +71,12 @@ describe('a scene', () => {
     expect(groups.map((one) => one.getAttribute('data-type'))).toEqual(['Influence', 'Influence', 'Trend', 'Trend', 'Trigger', 'Note', 'Note']);
   });
 
+  it('draws an edge\'s label, which has no node to keep it within, beside the line', () => {
+    const label = { id: 'polarity', text: '+', editText: '+', box: { x: 10, y: 20, width: 8, height: 15 }, position: 'outside', align: 'center', fontSize: 15, style: {}, editable: false, wrap: 'none', overflow: 'ellipsis' } as const;
+    const root = drawn(withEdge({ ...edge('i-12'), labels: [label] }));
+    expect(group(root, 'i-12').querySelector('[data-label="polarity"]')?.textContent).toBe('+');
+  });
+
   it('marks a node a filter dims', () => {
     const root = drawn(withNode({ ...node('radio'), dimmed: true }));
     expect(group(root, 'radio').classList.contains('adp-dimmed')).toBe(true);
