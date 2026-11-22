@@ -814,6 +814,9 @@ export class Table {
     } else if (entry.inPlace && entry.request) {
       // Without its tab or header there is no field to type the name in, and nothing is sent.
       if (anchor) this.rename(anchor, entry.request);
+    } else if (entry.asks && entry.request?.kind === 'operation') {
+      const request = entry.request;
+      this.ask(entry.asks, request.on ?? [], {}, (args) => ({ ...request, args: { ...request.args, ...args } }));
     } else if (entry.opens) this.openPanel(entry.opens);
     else if (entry.request) this.make(entry.request);
   }

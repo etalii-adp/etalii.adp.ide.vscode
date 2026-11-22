@@ -225,6 +225,26 @@ suite('The Knowledge designer in Visual Studio Code', () => {
     await vscode.commands.executeCommand('workbench.action.files.revert');
   });
 
+  test('one Undo after a two-way relation is made restores both files\' bytes, and one Redo makes it in both again', async () => {
+    const provinces = example('knowledge-test', 'provinces.yaml');
+    fs.writeFileSync(provinces.fsPath, exampleText('provinces.yaml'));
+    const { document, original } = await open();
+    await until('the province by its title', async () => (await provinceOf('r1')) === 'Noord-Holland');
+    const other = await vscode.workspace.openTextDocument(provinces);
+    const otherOriginal = other.getText();
+    const request = { kind: 'operation', operation: 'createRelation', on: [], args: { name: 'Seat of', targetFile: 'provinces.yaml', limit: 'none', counterpartName: 'Seats' } };
+    assert.deepStrictEqual(await edit(request), { result: 'applied' });
+    const made = [document.getText(), other.getText()];
+    assert.ok(made[0] !== original && made[1] !== otherOriginal, 'both files are changed');
+    await vscode.commands.executeCommand('undo');
+    await until('both files as they were', () => document.getText() === original && other.getText() === otherOriginal);
+    await vscode.commands.executeCommand('redo');
+    await until('both files made again', () => document.getText() === made[0] && other.getText() === made[1]);
+    // The other file's change is taken back, so that closing every editor asks nothing.
+    await vscode.window.showTextDocument(other);
+    await vscode.commands.executeCommand('workbench.action.files.revert');
+  });
+
   test('renaming provinces.yaml rewrites the relation\'s target in a file that names it, in one step with the rename', async () => {
     const provinces = example('knowledge-test', 'provinces.yaml');
     fs.writeFileSync(provinces.fsPath, exampleText('provinces.yaml'));
