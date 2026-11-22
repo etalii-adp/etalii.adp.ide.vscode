@@ -1,0 +1,184 @@
+causal-loop 1
+title "Growth or decline of a life insurance company"
+
+# Growth or decline of a life insurance company.
+#
+# Redrawn from the figure "Causal Loop Diagram of a Model Examining the Growth
+# or Decline of a Life Insurance Company" by Robert A. Taylor, U.S. Department
+# of Energy (2008), from the Department's Introduction to System Dynamics, as
+# shown in the Wikipedia article "Causal loop diagram". The figure is in the
+# public domain; LICENSE.md beside this file quotes its statement.
+#
+# Every variable, arrow and delay mark of the figure is here, with the figure's
+# own words as labels. The figure prints a polarity on only some of its arrows;
+# those are marked "printed" below. The others carry the polarity the arrow
+# plainly means, so that the loops can be counted; nothing else is added.
+#
+# The figure marks four loops with a circling arrow and no letter. They are the
+# first four loops below, labelled R or B by their arithmetic. The arrows make
+# thirty-four more cycles, which the figure leaves unmarked; they are named
+# after them, so that the diagram opens with no finding. Nothing here is
+# simulated; the arrangement follows the figure's own.
+
+# ---- variables ---------------------------------------------------------------
+
+# The sales force.
+variable attrition "Attrition"
+variable recruits "Recruits"
+variable salesPeople "Sales people"
+variable managementTime "Management time"
+variable coachingQuality "Training and coaching quality"
+variable recruitQuality "Recruit quality"
+variable salespersonSkills "Salesperson skills"
+variable managementSkill "Management skill"
+variable companyAttractiveness "Company attractiveness"
+variable individualCompensation "Individual compensation"
+variable motivation "Motivation"
+variable salesProductivity "Sales productivity"
+variable sellingTime "Salesperson's time available for selling vs. administration"
+
+# The policies.
+variable orphanedPolicies "Orphaned policies"
+variable lapses "Lapses"
+variable clawback "Clawback"
+variable policyAppropriateness "Policy appropriateness for customer"
+variable surrenderValue "Ability to offer high surrender value early on"
+variable highNetWorth "Ability to target high net worth individuals"
+variable caseSize "Average case size"
+
+# The company.
+variable sales "Sales"
+variable lowerCommissions "Lower commissions as compensation increases"
+variable salesforceCosts "Salesforce costs"
+variable profits "Profits"
+variable investmentPerformance "Investment performance"
+variable portfolioMismatch "Portfolio mismatch"
+variable capital "Capital available"
+variable solvencyMargin "Solvency margin"
+variable financialReturns "Financial returns to policyholders"
+variable reputation "Reputation"
+variable adminExpenses "Administrative expenses"
+variable expenseRatio "Expense ratio"
+variable backOfficeCapacity "Back office capacity"
+variable backOfficeLoading "Back office loading"
+
+# ---- the sales force ---------------------------------------------------------
+# People leave, and are replaced by recruits who take management time away from
+# training and coaching. Skills follow, slowly, and with them productivity and
+# pay.
+
+link individualCompensation -> attrition - delayed "printed"
+link attrition -> recruits + "printed"
+link attrition -> salesPeople - "printed"
+link recruits -> salesPeople + "printed"
+link recruits -> managementTime - "printed"
+link managementTime -> coachingQuality + "printed"
+link attrition -> salespersonSkills - delayed
+link coachingQuality -> salespersonSkills +
+link recruitQuality -> salespersonSkills +
+link salespersonSkills -> managementSkill +
+link managementSkill -> coachingQuality +
+link managementSkill -> recruitQuality +
+link individualCompensation -> companyAttractiveness +
+link companyAttractiveness -> recruitQuality +
+link individualCompensation -> motivation +
+link motivation -> salesProductivity +
+link salespersonSkills -> salesProductivity +
+link salesProductivity -> individualCompensation +
+
+# ---- the policies ------------------------------------------------------------
+# A policy whose salesperson has left is orphaned, and orphaned policies lapse.
+# A lapse claws back commission. Skilled salespeople sell policies that suit
+# the customer, and reach customers with larger cases.
+
+link attrition -> orphanedPolicies +
+link orphanedPolicies -> lapses + delayed
+link lapses -> clawback +
+link clawback -> individualCompensation -
+link salespersonSkills -> policyAppropriateness +
+link policyAppropriateness -> lapses -
+link lapses -> surrenderValue -
+link surrenderValue -> salesProductivity +
+link salespersonSkills -> highNetWorth +
+link highNetWorth -> caseSize +
+link caseSize -> salesProductivity +
+link caseSize -> expenseRatio -
+
+# ---- the company -------------------------------------------------------------
+# Sales make profits, but writing new business consumes capital, and the
+# solvency margin limits how much more can be sold. The back office and the
+# expenses decide how much of a salesperson's time is left for selling, and
+# how the company's returns and reputation look from outside.
+
+link salesPeople -> sales + "printed"
+link salesProductivity -> sales + "printed"
+link individualCompensation -> lowerCommissions +
+link lowerCommissions -> salesforceCosts -
+link salesPeople -> salesforceCosts + "printed"
+link salesforceCosts -> profits -
+link sales -> profits + "printed"
+link sales -> capital - "printed: new business consumes capital"
+link profits -> capital +
+link capital -> solvencyMargin +
+link solvencyMargin -> sales +
+link solvencyMargin -> portfolioMismatch + "printed"
+link portfolioMismatch -> investmentPerformance + delayed "printed"
+link investmentPerformance -> profits +
+link profits -> financialReturns +
+link financialReturns -> reputation + delayed
+link reputation -> salesProductivity +
+link sales -> backOfficeLoading + "printed"
+link backOfficeCapacity -> backOfficeLoading - "printed"
+link backOfficeLoading -> sellingTime - "printed"
+link sellingTime -> salesProductivity + "printed"
+link backOfficeCapacity -> adminExpenses + "printed"
+link adminExpenses -> profits - "printed"
+link adminExpenses -> expenseRatio + "printed"
+link expenseRatio -> reputation - delayed
+
+# ---- the four loops the figure marks -----------------------------------------
+
+loop R1 "Orphaned policies claw back pay" attrition orphanedPolicies lapses clawback individualCompensation
+loop R2 "Recruits dilute coaching" attrition recruits managementTime coachingQuality salespersonSkills salesProductivity individualCompensation
+loop B1 "New business strains capital" sales capital solvencyMargin
+loop B2 "Administration crowds out selling" sales backOfficeLoading sellingTime salesProductivity
+
+# ---- the other cycles the arrows make -----------------------------------------
+# Named here, though the figure leaves them unmarked, so that every cycle is
+# claimed with the label its arithmetic gives and the diagram opens with no
+# finding.
+
+loop R3 "Orphaned lapses cost the surrender offer" attrition orphanedPolicies lapses surrenderValue salesProductivity individualCompensation
+loop B3 "Recruiting costs slow sales and free selling time" attrition recruits salesPeople salesforceCosts profits capital solvencyMargin sales backOfficeLoading sellingTime salesProductivity individualCompensation
+loop R4 "Recruiting costs dent the reputation" attrition recruits salesPeople salesforceCosts profits financialReturns reputation salesProductivity individualCompensation
+loop B4 "Recruits' sales lift the reputation" attrition recruits salesPeople sales profits financialReturns reputation salesProductivity individualCompensation
+loop R5 "Recruits' sales strain the portfolio" attrition recruits salesPeople sales capital solvencyMargin portfolioMismatch investmentPerformance profits financialReturns reputation salesProductivity individualCompensation
+loop R6 "Recruits' sales load the back office" attrition recruits salesPeople sales backOfficeLoading sellingTime salesProductivity individualCompensation
+loop R7 "Thin coaching sells lapsing policies" attrition recruits managementTime coachingQuality salespersonSkills policyAppropriateness lapses clawback individualCompensation
+loop R8 "Thin coaching costs the surrender offer" attrition recruits managementTime coachingQuality salespersonSkills policyAppropriateness lapses surrenderValue salesProductivity individualCompensation
+loop R9 "Thin coaching shrinks the cases" attrition recruits managementTime coachingQuality salespersonSkills highNetWorth caseSize salesProductivity individualCompensation
+loop R10 "Thin coaching raises the expense ratio" attrition recruits managementTime coachingQuality salespersonSkills highNetWorth caseSize expenseRatio reputation salesProductivity individualCompensation
+loop R11 "Leavers cut costs and selling time" attrition salesPeople salesforceCosts profits capital solvencyMargin sales backOfficeLoading sellingTime salesProductivity individualCompensation
+loop B5 "Leavers cut costs and lift returns" attrition salesPeople salesforceCosts profits financialReturns reputation salesProductivity individualCompensation
+loop R12 "Leavers cut sales and returns" attrition salesPeople sales profits financialReturns reputation salesProductivity individualCompensation
+loop B6 "Leavers ease the portfolio" attrition salesPeople sales capital solvencyMargin portfolioMismatch investmentPerformance profits financialReturns reputation salesProductivity individualCompensation
+loop B7 "Leavers ease the back office" attrition salesPeople sales backOfficeLoading sellingTime salesProductivity individualCompensation
+loop R13 "Lost skills sell lapsing policies" attrition salespersonSkills policyAppropriateness lapses clawback individualCompensation
+loop R14 "Lost skills cost the surrender offer" attrition salespersonSkills policyAppropriateness lapses surrenderValue salesProductivity individualCompensation
+loop R15 "Skills leave with the people" attrition salespersonSkills salesProductivity individualCompensation
+loop R16 "Lost skills shrink the cases" attrition salespersonSkills highNetWorth caseSize salesProductivity individualCompensation
+loop R17 "Lost skills raise the expense ratio" attrition salespersonSkills highNetWorth caseSize expenseRatio reputation salesProductivity individualCompensation
+loop B8 "Commissions fall as pay rises" backOfficeLoading sellingTime salesProductivity individualCompensation lowerCommissions salesforceCosts profits capital solvencyMargin sales
+loop R18 "Profitable sales build capital" capital solvencyMargin sales profits
+loop R19 "Mismatch earns on capital" capital solvencyMargin portfolioMismatch investmentPerformance profits
+loop B9 "Returns sell policies" capital solvencyMargin portfolioMismatch investmentPerformance profits financialReturns reputation salesProductivity sales
+loop R20 "Large cases attract good recruits" caseSize salesProductivity individualCompensation companyAttractiveness recruitQuality salespersonSkills highNetWorth
+loop R21 "Large cases keep expenses low" caseSize expenseRatio reputation salesProductivity individualCompensation companyAttractiveness recruitQuality salespersonSkills highNetWorth
+loop R22 "Clawback deters good recruits" clawback individualCompensation companyAttractiveness recruitQuality salespersonSkills policyAppropriateness lapses
+loop R23 "Skilled managers coach" coachingQuality salespersonSkills managementSkill
+loop R24 "Good recruits keep policies in force" companyAttractiveness recruitQuality salespersonSkills policyAppropriateness lapses surrenderValue salesProductivity individualCompensation
+loop R25 "Pay attracts good recruits" companyAttractiveness recruitQuality salespersonSkills salesProductivity individualCompensation
+loop R26 "Lower commissions fund returns" financialReturns reputation salesProductivity individualCompensation lowerCommissions salesforceCosts profits
+loop R27 "Reputation sells" financialReturns reputation salesProductivity sales profits
+loop R28 "Pay motivates" individualCompensation motivation salesProductivity
+loop R29 "Skilled managers recruit well" managementSkill recruitQuality salespersonSkills

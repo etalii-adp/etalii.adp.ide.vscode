@@ -125,7 +125,10 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   const wire = wireIdsOf(definition.specification);
   const origin = typeof specification.language.origin === 'string' ? specification.language.origin : specification.language.id;
   // Pins that no entry of the document holds are kept beside it: the layout of its registration, by the top-left corner of each element (DISL 11.6, FBL 8.3).
-  const keptBeside = persistence.value.view.store.includes('pinned') && persistence.value.view.bind.pinned === undefined;
+  const keptBeside = (persistence.value.view.store.includes('pinned') || persistence.value.view.store.includes('bounds')) && persistence.value.view.bind.pinned === undefined;
+  // simplified: where only `bounds` is stored, a registration's entry is read and written as the point the node's placement
+  // anchor names, as the standalone host keeps a causal loop diagram's; FBL 8.3 says a top-left corner (etalii.adp spec 081).
+  const keptAnchored = keptBeside && !persistence.value.view.store.includes('pinned');
 
   // What reading the definition found, and each required plugin that is missing: findings of every document.
   const ofDefinition: Finding[] = [
@@ -204,7 +207,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       filters: options.filters as SceneOptions['filters'],
       collapsed: Object.fromEntries(open.model.elements.map((element) => [element.id, folded(element.id)])),
       view: open.view,
-      ...(keptBeside ? { corners: open.corners } : {}),
+      ...(keptBeside ? { corners: open.corners, cornersAnchored: keptAnchored } : {}),
       ...(options.placed === undefined ? {} : { placed: options.placed }),
       ...(open.refusal === undefined ? {} : { env: { readOnly: true } }),
     };
@@ -305,7 +308,17 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   function view(source: Source, options: ViewOptions): Scene {
     const open = opened(source);
     const scene = sceneOf(open, options);
-    return { ...scene, readOnly: open.refusal !== undefined, ...(open.notice === undefined ? {} : { notice: open.notice }), tokens: tokensOf(scene.viewpoint), chrome: chromeOf(open, scene, options) };
+    const notice = open.notice ?? emptyNotice(open, scene.viewpoint);
+    return { ...scene, readOnly: open.refusal !== undefined, ...(notice === undefined ? {} : { notice }), tokens: tokensOf(scene.viewpoint), chrome: chromeOf(open, scene, options) };
+  }
+
+  // What the canvas says while it has nothing to show (DISL 6.13, `canvas.empty`): its text, where its `when` holds.
+  function emptyNotice(open: Open, viewpoint: string): string | undefined {
+    const empty = viewpoints.value.all[viewpoint].notation.canvas.declared.empty;
+    if (!isObject(empty)) return undefined;
+    const scope = texts.world(open.model).scope(undefined);
+    const holds = empty.when === undefined ? open.model.elements.length === 0 : texts.holds(empty.when, scope, false);
+    return holds ? texts.worded(empty.text as Parameters<typeof texts.worded>[0], scope, '') || undefined : undefined;
   }
 
   // ---- the panels ----
@@ -425,7 +438,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
         if (change.kind !== 'pin') continue;
         const node = drawn.find((candidate) => candidate.id === (was.get(change.element) ?? change.element));
         const [fx, fy] = node ? anchorOf(nodeNotation(viewpoints.value.all[viewpoint].notation, metamodel.value, node.type).placement.anchor) : [0, 0];
-        corners[change.element] = { x: change.x - fx * (node?.box.width ?? 0), y: change.y - fy * (node?.box.height ?? 0) };
+        corners[change.element] = keptAnchored ? { x: change.x, y: change.y } : { x: change.x - fx * (node?.box.width ?? 0), y: change.y - fy * (node?.box.height ?? 0) };
       }
       // The registration is written when there is first something to keep in it.
       const text = source.registration ?? (Object.keys(corners).length > 0 ? newRegistration(origin) : undefined);

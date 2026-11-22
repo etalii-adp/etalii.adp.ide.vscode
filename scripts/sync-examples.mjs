@@ -31,6 +31,7 @@ const provenance = 'examples/PROVENANCE.md';
 // under the name its folder has in definitions/, and what only the tests read is under fixtures/tools/.
 const mindmap = 'src/diagrams/mindmap/';
 const activity = 'src/diagrams/agent-activity-diagram/';
+const causalLoop = 'src/diagrams/causal-loop-diagram/';
 const copies = [
   [standaloneName, 'src/diagrams/gartner-hype-cycle-graph/examples/', 'examples/gartner-hypecycle-graph/'],
   [standaloneName, 'src/diagrams/agent-behavior-modelling/examples/', 'examples/agent-behavior-modelling/'],
@@ -42,6 +43,10 @@ const copies = [
   [standaloneName, `${mindmap}backend/EtAlii.Adp.Diagram.Mindmap.Tests/Parity/mindmap.transcript.json`, 'fixtures/tools/mindmap/mindmap.transcript.json'],
   [standaloneName, `${activity}examples/`, 'examples/agent-activity-diagram/'],
   [standaloneName, `${activity}backend/EtAlii.Adp.Diagram.AgentActivityDiagram.Tests/Fixtures/`, 'fixtures/tools/agent-activity-diagram/'],
+  // etalii.adp spec 081: the causal loop diagram's six examples, the fixtures its transcript was recorded over, and the transcript.
+  [standaloneName, `${causalLoop}examples/`, 'examples/causal-loop-diagram/'],
+  [standaloneName, `${causalLoop}backend/EtAlii.Adp.Diagram.CausalLoopDiagram.Tests/Fixtures/`, 'fixtures/tools/causal-loop-diagram/'],
+  [standaloneName, `${causalLoop}backend/EtAlii.Adp.Diagram.CausalLoopDiagram.Tests/Parity/causal-loop.transcript.json`, 'fixtures/tools/causal-loop-diagram/causal-loop.transcript.json'],
   [standaloneName, 'src/designers/knowledge/examples/', 'examples/knowledge/'],
   // The Hierarchical Requirement Designer's example document and its registration, beside its definition in etalii.adp.
   ...['web-shop.md', 'web-shop.adp'].map((name) => [adpName, `definitions/designers/examples/${name}`, `examples/hierarchical-requirement/${name}`]),

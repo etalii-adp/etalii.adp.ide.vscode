@@ -1,0 +1,252 @@
+causal-loop 1
+title "What impacts the cod population in the UK"
+
+# What impacts the cod population in the UK.
+#
+# Redrawn from "Diagram 7: CLD telling the story of what impacts cod population
+# in the UK" in: Avanthika Kamath, Freya Ivy Palmer, Imali Manikarachchige and
+# Craig Hutton (2024). Causal Loop Diagram. National Centre for Research
+# Methods online learning resource, University of Southampton.
+# https://repository.ncrm.ac.uk/resources/online/all/causal_loop-diagram
+# (accessed 31 October 2026). The figure is © the authors and the National
+# Centre for Research Methods; no licence is stated, and it is redrawn here as
+# a cited academic source. SOURCE.md beside this file says more.
+#
+# The figure is handwritten. Its labels are transcribed in its own words, and
+# where the handwriting is unclear they are read against the page's own text,
+# Diagrams 3 to 6 (the four parts Diagram 7 joins) and the transcripts of the
+# two videos. A variable the figure writes twice, once in grey as a reminder
+# (consumer demand, the hospitality sector and the recruitment rate), is one
+# variable here.
+#
+# The figure prints a polarity on nearly every arrow. The few it leaves bare
+# stay bare, except where the arrow plainly means one: those carry it and the
+# note "not printed". Carrying capacity, the tipping point, is joined by double
+# arrows with delay marks and no polarity; the page says it behaves one way
+# until a threshold is reached and another after it, so no fixed polarity is
+# added, and every loop through it is undecidable. Nothing is simulated.
+#
+# The figure marks twelve loops with R or B. Nine are named first below with
+# the figure's own letter, and four of those letters disagree with the arrows'
+# arithmetic: ADP reports them and changes nothing, as it should. The other
+# three marks (an R beside legal fishing grounds, an R between employment and
+# the processing industry, and a B below consumer price) cannot be tied to one
+# cycle with confidence and are not assigned. Every other cycle the arrows make
+# is named after them, labelled by its arithmetic.
+
+# ---- variables ---------------------------------------------------------------
+
+# Environment.
+variable temperature "Temperature"
+variable salinity "Salinity"
+variable habitat "Habitat"
+variable season "Season"
+variable spawning "Spawning"
+variable birthRate "Birth rate"
+variable juvenileCod "Juvenile cod fish population"
+variable recruitmentRate "Recruitment rate"
+variable adultCod "Adult cod population"
+variable crustaceans "Crustacean population"
+variable juvenileMortality "Mortality rate"
+variable otherMortalityFactor "Other mortality factor"
+variable otherMortalityRate "Other mortality rate"
+variable fishingMortality "Fishing mortality rate"
+variable predationMortality "Predation mortality rate"
+variable dogfish "Dog fish population"
+variable marineMammals "Marine mammal population"
+variable sharks "Shark population"
+
+# Tipping point.
+variable carryingCapacity "Carrying capacity"
+
+# Social.
+variable tourism "Tourism"
+variable fishingVillages "Fishing villages"
+variable fishingActivity "Fishing activity"
+variable employment "Employment"
+variable processingIndustry "Processing industry"
+variable supplyChain "Supply chain"
+variable hospitalitySector "Hospitality sector"
+variable consumerDemand "Consumer demand"
+variable healthNutrition "Health & nutrition"
+variable domesticConsumption "Domestic consumption"
+
+# Economic.
+variable localEconomy "Local economy"
+variable localInfrastructure "Local infrastructure"
+variable supply "Supply"
+variable marketPrice "Market price"
+variable worldPrice "World price"
+variable localPrice "Local price"
+variable priceGap "Price gap"
+variable exports "Exports"
+variable imports "Imports"
+variable consumerPrice "Consumer price"
+variable tradeGap "Trade gap"
+variable profit "Profit"
+variable cost "Cost"
+variable income "Income"
+
+# Regulation.
+variable hpmaMpa "HPMA/MPA"
+variable legalFishingGrounds "Legal fishing grounds"
+variable closureZones "Closure zones/times"
+variable gearRestrictions "Gear restrictions"
+variable surveyResults "Population survey results"
+variable quotaTac "Quota/TAC"
+
+# ---- environment -------------------------------------------------------------
+# Spawning conditions set the birth rate; juveniles are recruited into the adult
+# population, which spawns. Both eat crustaceans, adults eat juveniles, and
+# predators, fishing and other causes take adults.
+
+link temperature -> spawning
+link salinity -> spawning
+link habitat -> spawning + "not printed"
+link season -> spawning
+link spawning -> birthRate +
+link birthRate -> juvenileCod +
+link juvenileCod -> recruitmentRate +
+link recruitmentRate -> adultCod +
+link adultCod -> spawning +
+link juvenileCod -> crustaceans -
+link adultCod -> crustaceans -
+link crustaceans -> recruitmentRate +
+link adultCod -> juvenileMortality + "adult cod eat juvenile cod"
+link juvenileMortality -> juvenileCod - "not drawn: the first video's transcript states it"
+link otherMortalityFactor -> juvenileMortality +
+link otherMortalityFactor -> otherMortalityRate +
+link otherMortalityRate -> adultCod -
+link fishingMortality -> adultCod -
+link predationMortality -> adultCod -
+link dogfish -> predationMortality +
+link marineMammals -> predationMortality +
+link sharks -> predationMortality +
+
+# ---- tipping point -----------------------------------------------------------
+# Drawn with delay marks and no polarity: a threshold, not a direction.
+
+link spawning -> carryingCapacity delayed
+link carryingCapacity -> spawning delayed
+link crustaceans -> carryingCapacity delayed
+link adultCod -> carryingCapacity delayed
+link carryingCapacity -> adultCod delayed
+
+# ---- social ------------------------------------------------------------------
+# Seals, sharks and fishing villages draw tourists. Fishing activity employs
+# people and feeds the processing industry, the supply chain, the hospitality
+# sector and domestic consumption, which return as consumer demand.
+
+link marineMammals -> tourism +
+link sharks -> tourism +
+link fishingVillages -> tourism +
+link fishingActivity -> fishingVillages +
+link fishingActivity -> fishingMortality +
+link fishingActivity -> employment +
+link fishingActivity -> processingIndustry +
+link processingIndustry -> employment +
+link processingIndustry -> supplyChain +
+link supplyChain -> processingIndustry +
+link supplyChain -> hospitalitySector +
+link supplyChain -> domesticConsumption +
+link hospitalitySector -> consumerDemand +
+link healthNutrition -> hospitalitySector +
+link healthNutrition -> domesticConsumption +
+link domesticConsumption -> consumerDemand +
+link consumerDemand -> fishingActivity +
+
+# ---- economic ----------------------------------------------------------------
+# Tourism builds the local economy and its infrastructure. The catch and
+# consumer demand make the supply; supply lowers the market price, which sets
+# the world and local prices, the profit and, through the consumer price, the
+# demand again.
+
+link tourism -> localEconomy +
+link localEconomy -> localInfrastructure +
+link localInfrastructure -> hospitalitySector +
+link localInfrastructure -> fishingVillages +
+link localInfrastructure -> employment +
+link employment -> income +
+link profit -> income +
+link profit -> fishingActivity +
+link cost -> profit -
+link marketPrice -> profit +
+link fishingActivity -> supply +
+link consumerDemand -> supply +
+link supply -> marketPrice -
+link marketPrice -> worldPrice +
+link marketPrice -> localPrice +
+link worldPrice -> localPrice + "not printed: a double arrow"
+link localPrice -> worldPrice + "not printed: a double arrow"
+link worldPrice -> priceGap
+link localPrice -> priceGap
+link worldPrice -> exports -
+link localPrice -> imports +
+link localPrice -> consumerPrice +
+link consumerPrice -> consumerDemand -
+link exports -> tradeGap
+link imports -> tradeGap
+
+# ---- regulation --------------------------------------------------------------
+# Protected areas, closures and gear restrictions limit the legal fishing
+# grounds; surveys of the adult population set the quota, the total allowable
+# catch.
+
+link hpmaMpa -> habitat +
+link hpmaMpa -> legalFishingGrounds -
+link closureZones -> legalFishingGrounds -
+link gearRestrictions -> legalFishingGrounds -
+link closureZones -> recruitmentRate +
+link gearRestrictions -> recruitmentRate +
+link legalFishingGrounds -> habitat -
+link legalFishingGrounds -> fishingActivity +
+link fishingMortality -> legalFishingGrounds + "read as drawn: the arrow leaves the fishing mortality rate"
+link adultCod -> surveyResults +
+link surveyResults -> quotaTac +
+link quotaTac -> fishingActivity +
+
+# ---- the loops the figure marks ----------------------------------------------
+# With the figure's own letter. R2, R3, B2 and B3 disagree with their arrows:
+# the figure, and for R2 the first video's transcript, call them what the
+# letter says, and ADP reports the difference rather than choosing a side.
+
+loop R1 "Cod spawn cod" spawning birthRate juvenileCod recruitmentRate adultCod
+loop B1 "Adults eat their own food" adultCod crustaceans recruitmentRate
+loop R2 "Adults eat the young" adultCod juvenileMortality juvenileCod recruitmentRate
+loop R3 "Surveys set the quota" adultCod surveyResults quotaTac fishingActivity fishingMortality
+loop B2 "Fishing and the legal grounds" legalFishingGrounds fishingActivity fishingMortality
+loop B3 "Price balances supply and demand" consumerDemand supply marketPrice localPrice consumerPrice
+loop R4 "Tourism builds the coast" tourism localEconomy localInfrastructure fishingVillages
+loop R5 "Demand drives the catch" consumerDemand fishingActivity processingIndustry supplyChain hospitalitySector
+loop R6 "Processing and supply feed each other" processingIndustry supplyChain
+
+# ---- the other cycles the arrows make -----------------------------------------
+# Named so that every cycle is claimed, labelled by its arithmetic. The T loops
+# run through carrying capacity, claim no polarity and are undecidable.
+
+loop R7 "World and local prices move together" worldPrice localPrice
+loop R8 "Fewer young leave more food" crustaceans recruitmentRate adultCod juvenileMortality juvenileCod
+loop R9 "World price feeds the consumer price" marketPrice worldPrice localPrice consumerPrice consumerDemand supply
+loop R10 "Dear fish, less fishing" marketPrice localPrice consumerPrice consumerDemand fishingActivity supply
+loop R11 "Infrastructure feeds demand" tourism localEconomy localInfrastructure hospitalitySector consumerDemand fishingActivity fishingVillages
+loop R12 "World price and the catch" marketPrice worldPrice localPrice consumerPrice consumerDemand fishingActivity supply
+loop R13 "Domestic consumption drives the catch" supplyChain domesticConsumption consumerDemand fishingActivity processingIndustry
+loop R14 "Quota, grounds, habitat and food" surveyResults quotaTac fishingActivity fishingMortality legalFishingGrounds habitat spawning birthRate juvenileCod crustaceans recruitmentRate adultCod
+loop B4 "The catch lowers its own price" marketPrice profit fishingActivity supply
+loop B5 "Young cod eat the adults' food" spawning birthRate juvenileCod crustaceans recruitmentRate adultCod
+loop B6 "Profit, hospitality and demand" marketPrice profit fishingActivity processingIndustry supplyChain hospitalitySector consumerDemand supply
+loop B7 "Profit, consumption and demand" marketPrice profit fishingActivity processingIndustry supplyChain domesticConsumption consumerDemand supply
+loop B8 "Profit, tourism and demand" tourism localEconomy localInfrastructure hospitalitySector consumerDemand supply marketPrice profit fishingActivity fishingVillages
+loop B9 "Quota, grounds and spawning habitat" surveyResults quotaTac fishingActivity fishingMortality legalFishingGrounds habitat spawning birthRate juvenileCod recruitmentRate adultCod
+loop T1 "Spawning and carrying capacity" spawning carryingCapacity
+loop T2 "Adult cod and carrying capacity" carryingCapacity adultCod
+loop T3 "Adults, carrying capacity and spawning" spawning carryingCapacity adultCod
+loop T4 "Food and carrying capacity" crustaceans carryingCapacity adultCod
+loop T5 "Young cod, food and carrying capacity" spawning birthRate juvenileCod crustaceans carryingCapacity
+loop T6 "Eaten young, food and carrying capacity" crustaceans carryingCapacity adultCod juvenileMortality juvenileCod
+loop T7 "Recruitment and carrying capacity" spawning birthRate juvenileCod recruitmentRate adultCod carryingCapacity
+loop T8 "Young cod's food and carrying capacity" spawning birthRate juvenileCod crustaceans carryingCapacity adultCod
+loop T9 "Adults' food and carrying capacity" spawning birthRate juvenileCod recruitmentRate adultCod crustaceans carryingCapacity
+loop T10 "Food, recruitment and carrying capacity" spawning birthRate juvenileCod crustaceans recruitmentRate adultCod carryingCapacity
+loop T11 "Quota, habitat and carrying capacity" surveyResults quotaTac fishingActivity fishingMortality legalFishingGrounds habitat spawning carryingCapacity adultCod
+loop T12 "Quota, food and carrying capacity" surveyResults quotaTac fishingActivity fishingMortality legalFishingGrounds habitat spawning birthRate juvenileCod crustaceans carryingCapacity adultCod

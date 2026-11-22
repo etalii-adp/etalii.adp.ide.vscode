@@ -175,6 +175,17 @@ export function createExpressions(specification: Specification, metamodel: Metam
   register('list.flatten(): list<dyn>', (items: unknown[]) => items.flat());
   register('list.distinct(): list<dyn>', (items: unknown[]) => [...new Set(items)]);
   register('list.indexOf(dyn): int', (items: unknown[], item: unknown) => BigInt(items.indexOf(item)));
+  // The numeric aggregates of DISL 12.4: an empty list has no average, minimum or maximum, which fails the expression.
+  const numbers = (items: unknown[], name: string): number[] => {
+    if (items.length === 0 && name !== 'sum') throw new Error(`${name}() of an empty list`);
+    return items.map(number);
+  };
+  register('list.sum(): double', (items: unknown[]) => numbers(items, 'sum').reduce((sum, item) => sum + item, 0));
+  register('list.avg(): double', (items: unknown[]) => numbers(items, 'avg').reduce((sum, item) => sum + item, 0) / items.length);
+  register('list.min(): double', (items: unknown[]) => Math.min(...numbers(items, 'min')));
+  register('list.max(): double', (items: unknown[]) => Math.max(...numbers(items, 'max')));
+  // simplified: a theme token is resolved by the page that draws, in its mode, so `token()` gives the paint `{token}` that names it (DISL 6.2).
+  register('token(string): dyn', (name: string) => new Map([['token', name]]));
 
   register('yearMonth(dyn, dyn): int', (year: unknown, month: unknown) => BigInt(number(year) * 12 + number(month) - 1));
   register('int.year(): int', (index: bigint) => BigInt(yearMonthOf(Number(index)).year));
@@ -324,9 +335,26 @@ export function createExpressions(specification: Specification, metamodel: Metam
           default: return undefined;
         }
       };
-      const created = entity(
+      // A derived attribute is its expression's value for this element, computed when it is read (DISL 4.3); one
+      // that reads itself, directly or not, or fails, reads as its default or its zero value.
+      const derivedValues = new Map<string, unknown>();
+      const derivedOf = (name: string): unknown => {
+        const declared = attributesOf(metamodel, element.type)[name];
+        if (derivedValues.has(name)) return derivedValues.get(name);
+        const fallback = toCel(undefined, declared);
+        derivedValues.set(name, fallback);
+        const result = compile(declared.derived!).evaluate({ diagram, document: diagram, env, self: created });
+        const value = result.ok ? result.raw : fallback;
+        derivedValues.set(name, value);
+        return value;
+      };
+      const isDerived = (name: string): boolean => {
+        const attributes = attributesOf(metamodel, element.type);
+        return Object.hasOwn(attributes, name) && attributes[name].derived !== undefined;
+      };
+      const created: Entity = entity(
         { id: element.id, type: element.type, stored: (name) => Object.hasOwn(element.attributes, name) || (built(name) ?? null) !== null },
-        (name) => { const value = built(name); return value === undefined ? attribute(element.type, element.attributes, name) : value; },
+        (name) => { const value = built(name); return value !== undefined ? value : isDerived(name) ? derivedOf(name) : attribute(element.type, element.attributes, name); },
       );
       entities.set(element.id, created);
       return created;

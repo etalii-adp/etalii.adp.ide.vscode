@@ -210,6 +210,34 @@
       "file": "src/diagrams/timeline/backend/EtAlii.Adp.Diagram.Timeline.Tests/Fixtures/findings/unparseable.tml",
       "observed": "offset 48: The body is not well-formed YAML: Nested mappings are not allowed in compact mappings",
       "reason": "The fixture is one of the timeline module's findings corpus, written not to be YAML on purpose, so the module's not-a-timeline finding has a file to report on. FBL refuses to read the body, which is the right answer for it."
+    },
+    {
+      "property": "registration-layout",
+      "binding": "cld",
+      "file": "examples/causal-loop-diagram/business-philosophy/business-philosophy.adp",
+      "observed": "18 layout entries name no element: variable:applicability, variable:communicationRange, variable:coreValues, variable:creativeExpression, variable:expertDiversity, …",
+      "reason": "The same as for the copies under src/examples: the binding reads a variable's id as its place in the body, and the registration keys a position by the variable's natural id, `variable:<name>`, which the definition's `persistence.ids` (DISL 11.5.1) gives it. The causal loop diagram reads its positions through the definition, which resolves them (etalii.adp spec 081); the FBL library alone does not."
+    },
+    {
+      "property": "registration-layout",
+      "binding": "cld",
+      "file": "examples/causal-loop-diagram/life-insurance/life-insurance.adp",
+      "observed": "34 layout entries name no element: variable:adminExpenses, variable:attrition, variable:backOfficeCapacity, variable:backOfficeLoading, variable:capital, …",
+      "reason": "The same as for the copies under src/examples: the binding reads a variable's id as its place in the body, and the registration keys a position by the variable's natural id, `variable:<name>`, which the definition's `persistence.ids` (DISL 11.5.1) gives it. The causal loop diagram reads its positions through the definition, which resolves them (etalii.adp spec 081); the FBL library alone does not."
+    },
+    {
+      "property": "registration-layout",
+      "binding": "cld",
+      "file": "examples/causal-loop-diagram/mental-health/mental-health.adp",
+      "observed": "30 layout entries name no element: variable:ageing, variable:bigPicture, variable:confidence, variable:conversationalSafety, variable:copingConfirmation, …",
+      "reason": "The same as for the copies under src/examples: the binding reads a variable's id as its place in the body, and the registration keys a position by the variable's natural id, `variable:<name>`, which the definition's `persistence.ids` (DISL 11.5.1) gives it. The causal loop diagram reads its positions through the definition, which resolves them (etalii.adp spec 081); the FBL library alone does not."
+    },
+    {
+      "property": "registration-layout",
+      "binding": "cld",
+      "file": "examples/causal-loop-diagram/uk-cod-population/uk-cod-population.adp",
+      "observed": "49 layout entries name no element: variable:adultCod, variable:birthRate, variable:carryingCapacity, variable:closureZones, variable:consumerDemand, …",
+      "reason": "The same as for the copies under src/examples: the binding reads a variable's id as its place in the body, and the registration keys a position by the variable's natural id, `variable:<name>`, which the definition's `persistence.ids` (DISL 11.5.1) gives it. The causal loop diagram reads its positions through the definition, which resolves them (etalii.adp spec 081); the FBL library alone does not."
     }
   ]
 }

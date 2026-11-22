@@ -1,0 +1,250 @@
+{
+  "$schema": "https://etalii.net/adp/fbl/schema/0.1/fbl.schema.json#/$defs/Document",
+  "fbl": "0.2",
+  "doc": "The causal loop diagram's .cld body (definitions/diagrams/causal-loop-diagram.dis, causal-loop-diagram.md): the lines family, as the standalone module reads it. One statement per line. The header is read as an entry of its own, so a missing or repeated one raises nothing. A link is an element whose ends are reference attributes, so a link with an end that names nothing is kept and reported rather than dropped; its cause and effect names are read again as read-only value slots, which the definition keys the link by. A word after a link's arrow is a quoted run, a weight written as a number, or a bare word without '='; a link with any other word, such as weight=heavy, is not a link. A name may be quoted, and a quoted name may hold spaces. A variable's label is the first word after its name that is quoted or holds no '=', so that its start= and push= words are never read as its label. The title and flow statements hold the values an exported flow page starts from (specs/074-desktop-cld-flow-export); the definition maps them onto the diagram. A flow statement with a word the rule does not read is not a flow statement: the last rule keeps it and reports it. The last rule takes every statement no other rule reads, so it is kept byte for byte and reported on its line. Removing a variable removes the links and loops that name it.",
+  "bindings": {
+    "cld": {
+      "title": "Causal loop diagram",
+      "claims": {
+        "extensions": [
+          ".cld"
+        ],
+        "origins": [
+          "systems/causal-loop-diagram"
+        ]
+      },
+      "body": {
+        "kind": "file",
+        "family": "lines"
+      },
+      "reader": "declared",
+      "text": {
+        "newline": "crlf",
+        "finalNewline": true
+      },
+      "comment": "^\\s*#",
+      "unmatched": "report",
+      "elements": [
+        {
+          "name": "header",
+          "type": "Header",
+          "line": "^\\s*causal-loop(\\s.*)?$"
+        },
+        {
+          "name": "title",
+          "type": "Title",
+          "line": "^\\s*title\\s+(?<title>\"[^\"\\r\\n]*\")\\s*$",
+          "attributes": {
+            "title": {
+              "group": "title",
+              "word": "^.+$",
+              "empty": "keep"
+            }
+          },
+          "insert": {
+            "place": "start",
+            "emit": "title \"{title}\""
+          },
+          "remove": {}
+        },
+        {
+          "name": "flow",
+          "type": "Flow",
+          "line": "^\\s*flow(?<tail>(?:\\s+(?:(?:strength|delay|inertia|speed|density)=[+-]?(?:[0-9]+\\.?[0-9]*|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?|heatmap=(?:backlog|pressure|throughput|level)))*)\\s*$",
+          "attributes": {
+            "strength": {
+              "group": "tail",
+              "word": "^strength=(?<value>[+-]?(?:[0-9]+\\.?[0-9]*|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$",
+              "number": "shortest",
+              "empty": "remove"
+            },
+            "delayLength": {
+              "group": "tail",
+              "word": "^delay=(?<value>[+-]?(?:[0-9]+\\.?[0-9]*|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$",
+              "number": "shortest",
+              "empty": "remove"
+            },
+            "inertia": {
+              "group": "tail",
+              "word": "^inertia=(?<value>[+-]?(?:[0-9]+\\.?[0-9]*|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$",
+              "number": "shortest",
+              "empty": "remove"
+            },
+            "speed": {
+              "group": "tail",
+              "word": "^speed=(?<value>[+-]?(?:[0-9]+\\.?[0-9]*|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$",
+              "number": "shortest",
+              "empty": "remove"
+            },
+            "density": {
+              "group": "tail",
+              "word": "^density=(?<value>[+-]?(?:[0-9]+\\.?[0-9]*|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$",
+              "number": "shortest",
+              "empty": "remove"
+            },
+            "heatmap": {
+              "group": "tail",
+              "word": "^heatmap=(?<value>backlog|pressure|throughput|level)$",
+              "empty": "remove"
+            }
+          },
+          "insert": {
+            "place": "start",
+            "emit": "flow[ strength={strength}][ delay={delayLength}][ inertia={inertia}][ speed={speed}][ density={density}][ heatmap={heatmap}]"
+          },
+          "remove": {}
+        },
+        {
+          "name": "variable",
+          "type": "Variable",
+          "line": "^\\s*variable\\s+(?<name>\"[^\"]+\"|[^\\s\"]+)(?<tail>.*)$",
+          "attributes": {
+            "name": {
+              "group": "name",
+              "word": "^.+$",
+              "empty": "refuse"
+            },
+            "label": {
+              "group": "tail",
+              "word": "^(?:\"[^\"]*\"|[^\"=]+)$",
+              "empty": "remove"
+            },
+            "start": {
+              "group": "tail",
+              "word": "^start=(?<value>[+-]?(?:[0-9]+\\.?[0-9]*|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$",
+              "number": "shortest",
+              "empty": "remove"
+            },
+            "push": {
+              "group": "tail",
+              "word": "^push=(?<value>[+-]?(?:[0-9]+\\.?[0-9]*|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$",
+              "number": "shortest",
+              "empty": "remove"
+            }
+          },
+          "insert": {
+            "place": "after-last",
+            "emit": "variable {name}[ \"{label}\"]"
+          },
+          "remove": {
+            "cascade": [
+              "link",
+              "loop"
+            ]
+          }
+        },
+        {
+          "name": "link",
+          "type": "Link",
+          "line": "^\\s*link\\s+(?<from>\"[^\"]+\"|[^\\s\"]+)\\s+->\\s+(?<to>\"[^\"]+\"|[^\\s\"]+)(?<tail>(?:\\s+(?:\"[^\"]*\"|weight=[+-]?(?:[0-9]+\\.?[0-9]*|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?|[^\\s\"=]+))*)\\s*$",
+          "attributes": {
+            "from": {
+              "group": "from",
+              "word": "^.+$",
+              "reference": {
+                "to": [
+                  "variable"
+                ],
+                "by": "name"
+              }
+            },
+            "to": {
+              "group": "to",
+              "word": "^.+$",
+              "reference": {
+                "to": [
+                  "variable"
+                ],
+                "by": "name"
+              }
+            },
+            "causeName": {
+              "value": "groups.from.replace('\"', '')"
+            },
+            "effectName": {
+              "value": "groups.to.replace('\"', '')"
+            },
+            "polarity": {
+              "group": "tail",
+              "word": "^[+\\-sSoO]$",
+              "map": {
+                "+": "positive",
+                "s": "positive",
+                "S": "positive",
+                "-": "negative",
+                "o": "negative",
+                "O": "negative"
+              },
+              "empty": "remove"
+            },
+            "delayed": {
+              "group": "tail",
+              "word": "^delayed$",
+              "flag": true
+            },
+            "flipped": {
+              "group": "tail",
+              "word": "^flipped$",
+              "flag": true
+            },
+            "weight": {
+              "group": "tail",
+              "word": "^weight=(?<value>.+)$",
+              "number": "shortest",
+              "empty": "remove"
+            },
+            "note": {
+              "group": "tail",
+              "word": "^\".*\"$",
+              "empty": "remove"
+            }
+          },
+          "insert": {
+            "place": "after-last",
+            "emit": "link {from} -> {to}[ {polarity}][ {delayed}][ {flipped}][ weight={weight}][ \"{note}\"]"
+          },
+          "remove": {}
+        },
+        {
+          "name": "loop",
+          "type": "Loop",
+          "line": "^\\s*loop\\s+(?<identifier>[^\\s\"]+)\\s+(?<title>\"[^\"]*\"|[^\\s\"]+)(?<members>(?:\\s+[^\\s\"]+)+)\\s*$",
+          "attributes": {
+            "identifier": {
+              "group": "identifier",
+              "empty": "refuse"
+            },
+            "title": {
+              "group": "title",
+              "word": "^.+$",
+              "empty": "keep"
+            },
+            "members": {
+              "group": "members",
+              "reference": {
+                "to": [
+                  "variable"
+                ],
+                "by": "name"
+              }
+            }
+          },
+          "insert": {
+            "place": "after-last",
+            "emit": "loop {identifier} \"{title}\" {members}"
+          },
+          "remove": {}
+        },
+        {
+          "name": "unreadable",
+          "type": "Unreadable",
+          "line": "^.*\\S.*$",
+          "readOnly": true
+        }
+      ],
+      "template": {
+        "text": "causal-loop 1\r\n\r\nvariable population \"Population\"\r\nvariable births \"Births\"\r\n\r\nlink population -> births +\r\nlink births -> population +\r\n\r\nloop R1 \"Births beget births\" population births\r\n"
+      }
+    }
+  }
+}

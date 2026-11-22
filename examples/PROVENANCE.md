@@ -15,6 +15,9 @@ The files under `examples/` and `fixtures/` are copied unchanged, byte for byte,
 | `fixtures/tools/mindmap/mindmap.transcript.json` | `etalii.adp.ide.standalone` | `src/diagrams/mindmap/backend/EtAlii.Adp.Diagram.Mindmap.Tests/Parity/mindmap.transcript.json` | `5756a07edf339f2d0f8d118bd8922848032b6058` |
 | `examples/agent-activity-diagram/` | `etalii.adp.ide.standalone` | `src/diagrams/agent-activity-diagram/examples/` | `5756a07edf339f2d0f8d118bd8922848032b6058` |
 | `fixtures/tools/agent-activity-diagram/` | `etalii.adp.ide.standalone` | `src/diagrams/agent-activity-diagram/backend/EtAlii.Adp.Diagram.AgentActivityDiagram.Tests/Fixtures/` | `5756a07edf339f2d0f8d118bd8922848032b6058` |
+| `examples/causal-loop-diagram/` | `etalii.adp.ide.standalone` | `src/diagrams/causal-loop-diagram/examples/` | `d04b9c99a27d7343f22eb49e7e53f8b3cdbc0701` |
+| `fixtures/tools/causal-loop-diagram/` | `etalii.adp.ide.standalone` | `src/diagrams/causal-loop-diagram/backend/EtAlii.Adp.Diagram.CausalLoopDiagram.Tests/Fixtures/` | `d04b9c99a27d7343f22eb49e7e53f8b3cdbc0701` |
+| `fixtures/tools/causal-loop-diagram/causal-loop.transcript.json` | `etalii.adp.ide.standalone` | `src/diagrams/causal-loop-diagram/backend/EtAlii.Adp.Diagram.CausalLoopDiagram.Tests/Parity/causal-loop.transcript.json` | `d04b9c99a27d7343f22eb49e7e53f8b3cdbc0701` |
 | `examples/knowledge/` | `etalii.adp.ide.standalone` | `src/designers/knowledge/examples/` | `5756a07edf339f2d0f8d118bd8922848032b6058` |
 | `examples/hierarchical-requirement/web-shop.md` | `etalii.adp` | `definitions/designers/examples/web-shop.md` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
 | `examples/hierarchical-requirement/web-shop.adp` | `etalii.adp` | `definitions/designers/examples/web-shop.adp` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |

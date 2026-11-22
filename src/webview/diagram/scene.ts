@@ -1,5 +1,5 @@
 import { pathData, type PathCommand, type Point } from '../../core/scene/geometry';
-import type { Scene, SceneBadge, SceneCompartment, SceneEdge, SceneLabel, SceneNode, ScenePart, SceneShape } from '../../core/scene/scene';
+import type { Scene, SceneBadge, SceneCompartment, SceneEdge, SceneIcon, SceneLabel, SceneMidMarker, SceneNode, ScenePart, SceneShape } from '../../core/scene/scene';
 import { html, svg } from './dom';
 import { iconPath } from './icons';
 
@@ -96,7 +96,12 @@ function drawLabel(label: SceneLabel, paints: Paints, node: SceneNode): SVGEleme
   const weight = style.font?.weight;
   // What a font says beside its size and weight: the space between its letters, in canvas units, and its case (DISL 6.6).
   const spacing = number(style.font?.letterSpacing);
-  const lettering = [...(spacing === undefined ? [] : [`letter-spacing: ${spacing}px`]), ...(typeof style.font?.transform === 'string' ? [`text-transform: ${style.font.transform}`] : [])];
+  // A line under, over or through the text (DISL 6.6), in the style a host may give it.
+  const decoration = typeof style.font?.decoration === 'string' && style.font.decoration !== 'none' ? style.font.decoration : undefined;
+  const lettering = [
+    ...(spacing === undefined ? [] : [`letter-spacing: ${spacing}px`]), ...(typeof style.font?.transform === 'string' ? [`text-transform: ${style.font.transform}`] : []),
+    ...(decoration === undefined ? [] : [`text-decoration: ${decoration}${typeof style.font?.decorationStyle === 'string' ? ` ${style.font.decorationStyle}` : ''}`]),
+  ];
   const words = typeof label.position === 'string' ? label.position.split('-') : ['outside'];
   // A text at a point of its node that is one line and may not run on is kept within the node, cut off with an ellipsis where the label asks for one.
   const room = node.box.width - 2 * textInset;
@@ -134,6 +139,15 @@ function drawIcon(name: string, x: number, y: number, size: number, colour: stri
     tooltip === undefined ? undefined : svg('title', {}, tooltip),
     svg('rect', { class: 'adp-hit', width: size, height: size }),
     svg('path', { d: iconPath(name), transform: `scale(${size / 24})`, style: `fill: ${colour}` }));
+}
+
+// A node's icon in its box, mirrored about its own middle where `flip` says so (DISL 6.9).
+function drawNodeIcon(icon: SceneIcon, colour: string): SVGGElement {
+  const { x, y, width } = icon.box;
+  const [sx, sy] = [icon.flip === 'horizontal' || icon.flip === 'both' ? -1 : 1, icon.flip === 'vertical' || icon.flip === 'both' ? -1 : 1];
+  const mirror = sx === 1 && sy === 1 ? '' : ` translate(${sx === -1 ? width : 0} ${sy === -1 ? width : 0}) scale(${sx} ${sy})`;
+  return svg('g', { class: 'adp-node-icon', 'data-flip': icon.flip, transform: `translate(${x} ${y})${mirror}` },
+    svg('path', { d: iconPath(icon.icon), transform: `scale(${width / 24})`, style: `fill: ${colour}` }));
 }
 
 // A badge at its corner of the node; one that runs an operation is a button (DISL 6.9).
@@ -183,6 +197,7 @@ function drawNode(node: SceneNode, paints: Paints): SVGGElement {
   group.append(...[
     own, ...node.parts.map((part) => drawPart(part, paints)), ...node.labels.map((label) => drawLabel(label, paints, node)),
     ...node.compartments.map((compartment) => drawCompartment(compartment, node, paints)), ...node.badges.map((badge) => drawBadge(badge, text)),
+    node.icon === undefined ? undefined : drawNodeIcon(node.icon, paints.colour(node.icon.color, 'text')),
   ].filter((drawn) => drawn !== undefined));
   // What a selection shows: a composite shape has no outline of its own to take the highlight.
   group.append(svg('rect', { class: 'adp-mark', x: node.box.x - 3, y: node.box.y - 3, width: node.box.width + 6, height: node.box.height + 6, rx: 3 }));
@@ -245,7 +260,20 @@ function edgeGroup(edge: SceneEdge, paints: Paints): SVGGElement | undefined {
     svg('path', { class: 'adp-relation-hit', d }),
     svg('path', { class: 'adp-line', d, fill: 'none', style: `stroke: ${colour}`, 'stroke-width': width, 'stroke-dasharray': Array.isArray(edge.stroke.dash) ? edge.stroke.dash.join(' ') : undefined }),
     drawMarker(edge.sourceMarker, 'source', [...points].reverse(), colour, width),
-    drawMarker(edge.targetMarker, 'target', points, colour, width));
+    drawMarker(edge.targetMarker, 'target', points, colour, width),
+    ...(edge.midMarkers ?? []).map((mid) => drawMidMarker(mid, colour, width)),
+    // A label of an edge is held at its point, outside any node: the node a label of a node is drawn in is not asked for.
+    ...(edge.labels ?? []).map((label) => drawLabel(label, paints, undefined as unknown as SceneNode)));
+}
+
+// A decoration along a line (DISL 6.10), turned to the line: a `bar` is a stroke across it `width` long;
+// any other is drawn as a bar too.
+function drawMidMarker(mid: SceneMidMarker, colour: string, width: number): SVGElement {
+  const length = typeof mid.params.width === 'number' ? mid.params.width : 12;
+  return svg('line', {
+    'data-marker': mid.marker, x1: mid.x, y1: mid.y - length / 2, x2: mid.x, y2: mid.y + length / 2,
+    transform: `rotate(${mid.angle} ${mid.x} ${mid.y})`, style: `stroke: ${colour}`, 'stroke-width': width,
+  });
 }
 
 /** A scene as the groups of the canvas's content: one for each drawn edge, then one for each node, so a node lies over the lines that reach it. */
