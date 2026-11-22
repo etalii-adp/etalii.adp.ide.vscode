@@ -68,7 +68,18 @@ function frameWith(page, selector) {
   });
 }
 
+/**
+ * Gives the keyboard back to the workbench: a command such as "ADP: Focus on ADP Toolbox" leaves the
+ * focus in a webview, which keeps F1 and Quick Open's keys from reaching Visual Studio Code. A press
+ * on the empty middle of the status bar takes the focus out of it and changes nothing else.
+ */
+async function focusWorkbench(page) {
+  await page.mouse.click(viewport.width / 2, viewport.height - 15);
+  await sleep(200);
+}
+
 async function command(page, title) {
+  await focusWorkbench(page);
   await page.keyboard.press('F1');
   await page.waitForSelector('.quick-input-widget input', { visible: true });
   await page.keyboard.type(title);
@@ -123,6 +134,7 @@ async function capture(executable, image) {
 
     // Opened once the window is up: a file named on the command line of a fresh profile can open
     // before the extension's editors are known, as text.
+    await focusWorkbench(page);
     await page.keyboard.down(quickOpen);
     await page.keyboard.press('KeyP');
     await page.keyboard.up(quickOpen);
