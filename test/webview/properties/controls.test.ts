@@ -55,4 +55,17 @@ describe('ADP Properties', () => {
     const [line] = gridOf([], 'Select an element or a relation in the diagram to see its properties.', () => undefined);
     expect(line.textContent).toBe('Select an element or a relation in the diagram to see its properties.');
   });
+
+  it('shows a switch as a toggle that commits true or false', () => {
+    const loops = diagram('causal-loop-diagram');
+    const cld = { fileName: 'on-call.cld', text: read('examples/causal-loop-diagram/on-call/on-call.cld') };
+    const commits: [string, string][] = [];
+    const root = document.createElement('div');
+    root.append(...gridOf(loops.fields(cld, ['link:fatigue|attrition']), undefined, (field, value) => commits.push([field, value])));
+    const toggle = root.querySelector('[id="causal-loop.link-delayed"]') as HTMLInputElement;
+    expect([toggle.tagName, toggle.type, toggle.getAttribute('role'), toggle.checked]).toEqual(['INPUT', 'checkbox', 'switch', true]);
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event('change'));
+    expect(commits).toEqual([['causal-loop.link-delayed', 'false']]);
+  });
 });

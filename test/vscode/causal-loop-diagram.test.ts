@@ -47,4 +47,19 @@ suite('A causal loop diagram in Visual Studio Code', () => {
     assert.strictEqual(document.getText(), original);
     assert.strictEqual(document.isDirty, false);
   });
+
+  test('with nothing selected, ADP Properties shows the diagram\'s own form, and a row of it writes the document', async () => {
+    const uri = example('causal-loop-diagram', 'on-call', 'on-call.cld');
+    await vscode.commands.executeCommand('vscode.openWith', uri, viewType);
+    const current = await drawn();
+    const document = await vscode.workspace.openTextDocument(uri);
+    const original = document.getText();
+    assert.deepStrictEqual(current.selection, []);
+    const title = current.fields.find((field) => field.label === 'Title');
+    assert.ok(title, 'the diagram\'s Title row is shown');
+    assert.deepStrictEqual(await edit({ kind: 'setField', id: '', field: title.id, value: 'Why on-call gets worse' }), { result: 'applied' });
+    await until('the title to be written', () => document.getText().includes('title "Why on-call gets worse"'));
+    await vscode.commands.executeCommand('undo');
+    await until('the undo', () => document.getText() === original);
+  });
 });

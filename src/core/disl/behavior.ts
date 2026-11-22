@@ -365,6 +365,8 @@ export interface BehaviorParts {
   readonly viewpoints?: Viewpoints;
   /** The row a `rows` layout gives each element (DISL 10.2), which needs where the elements are drawn: the canvas brings it. */
   rows?(config: LayoutConfig, model: Model): ReadonlyMap<string, number>;
+  /** Where a plugin layout (DISL 13.1) places each node it names, in the coordinates of its placement: the host runs the plugin it carries. */
+  placed?(config: LayoutConfig, model: Model): ReadonlyMap<string, Point>;
   /** The id of a new element of a type; the persistence's when absent. */
   newId?(type: string): string;
 }
@@ -973,6 +975,13 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     const laidOut = (action: Readonly<Record<string, unknown>>, scope: Scope): void => {
       const config = typeof action.algorithm === 'string' && Object.hasOwn(parts.layout.algorithms, action.algorithm) ? parts.layout.algorithms[action.algorithm] : undefined;
       const refusals = isObject(action.refusals) ? action.refusals : {};
+      // A plugin's arrangement is kept where positions are kept: every node it places is pinned there, as a drag pins it (DISL 10.4, 11.6).
+      if (config?.plugin !== undefined && parts.placed) {
+        const placed = parts.placed(config, working);
+        if (placed.size === 0) return refuse(worded(refusals.nothingDrawn as Message | undefined, scope, 'There is nothing to lay out.'));
+        for (const [id, at] of placed) pin(id, at);
+        return;
+      }
       // Another algorithm places what is drawn and writes nothing to the model.
       if (!config?.rows) return;
       const rows = parts.rows?.(config, working) ?? new Map<string, number>();

@@ -27,6 +27,15 @@ export function controlFor(field: Field, commit: (value: string) => void): HTMLE
     return select;
   }
 
+  if (field.control === 'toggle') {
+    // A switch: on is the value true, off false, each its own edit.
+    const toggle = html('input', { ...common, type: 'checkbox', role: 'switch' });
+    toggle.checked = field.value === 'true';
+    toggle.disabled = locked;
+    toggle.addEventListener('change', () => commit(toggle.checked ? 'true' : 'false'));
+    return toggle;
+  }
+
   if (field.control === 'multiline') {
     const area = html('textarea', { ...common, rows: Math.min(8, Math.max(2, field.value.split('\n').length)) });
     area.value = field.value;

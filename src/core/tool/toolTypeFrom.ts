@@ -40,7 +40,7 @@ import { produceTemplate } from '../fbl/routing/templateWriter';
 import type { Edit } from '../fbl/splice';
 import { decode, encode } from '../fbl/text/utf8';
 import type { Action, Control, DesignerToolType, DiagramToolType, EditOutcome, EditRequest, Field, Finding, Severity, Source, TextSplice, ToolboxEntry, ViewOptions } from '../frame/toolType';
-import { anchorOf, arrangedRows, createScene, type Scene, type SceneChrome, type SceneOptions, type SceneRuler, type SceneTool, type SceneToken } from '../scene/scene';
+import { anchorOf, arrangedPlaces, arrangedRows, createScene, type Scene, type SceneChrome, type SceneOptions, type SceneRuler, type SceneTool, type SceneToken } from '../scene/scene';
 import { widthOfText } from '../text/textMetric';
 import { claimingBinding, claimsOf, suggests } from './claims';
 import { readDefinitionFolder, type Definition } from './definitionFolder';
@@ -62,7 +62,7 @@ const NO_PLACE = 'An end is put on a part of what it is on, on a side of that pa
 
 const severities: Readonly<Record<string, Severity>> = { error: 'error', warning: 'warning', info: 'information', hint: 'hint' };
 const controls: Readonly<Record<string, Control>> = {
-  textarea: 'multiline', tags: 'tags', slider: 'slider', number: 'number', select: 'choice', segmented: 'choice', combobox: 'choice', checkbox: 'choice',
+  textarea: 'multiline', tags: 'tags', slider: 'slider', number: 'number', select: 'choice', segmented: 'choice', combobox: 'choice', checkbox: 'choice', switch: 'toggle',
 };
 
 /** A finding of the interpreter or the library as the frame's: its line counted from zero. */
@@ -123,6 +123,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     constraints: constraints.value, layout: layout.value, coordinates: coordinates.value, persistence: persistence.value, toolbox: toolbox.value,
     notation: notation.value, viewpoints: viewpoints.value,
     rows: (config, model) => arrangedRows(sceneTool, model, createScene(sceneTool, model, measured), config),
+    placed: (config, model) => arrangedPlaces(sceneTool, model, createScene(sceneTool, model, measured), config),
   });
   const texts = createTexts(specification, expressions);
   const wire = wireIdsOf(definition.specification);
@@ -348,7 +349,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   }
 
   /** The rows of the form of an element, each with the label of the container it is in. */
-  function rowsOf(on: Subject, type: string): { readonly item: FormItem; readonly group: string }[] {
+  function rowsOf(on: Subject, type: string | undefined): { readonly item: FormItem; readonly group: string }[] {
     const rows = (items: readonly FormItem[], group: string): { readonly item: FormItem; readonly group: string }[] => items.flatMap((item) => {
       if (!item.visible(on)) return [];
       if (item.kind === 'field' || item.kind === 'computed' || item.kind === 'type') return [{ item, group }];
@@ -359,10 +360,11 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
 
   function fields(source: Source, selection: readonly string[]): Field[] {
     const open = opened(source);
+    // With nothing selected, the diagram's own form where the definition declares one (DISL 7.5, `for: "diagram"`), its rows edited under the id ''.
     const element = selection.length === 1 ? elementOf(open.model, selection[0]) : undefined;
-    if (!element) return [];
-    const on: Subject = { model: open.model, element: element.id, env: situationOf(open, {}).env };
-    return rowsOf(on, element.type).map(({ item, group }): Field => {
+    if (!element && (selection.length > 0 || formFor(forms.value, undefined).generated)) return [];
+    const on: Subject = { model: open.model, ...(element ? { element: element.id } : {}), env: situationOf(open, {}).env };
+    return rowsOf(on, element?.type).map(({ item, group }): Field => {
       const marks = item.widget === 'slider' && Array.isArray(item.widgetOptions.marks) ? (item.widgetOptions.marks as unknown[]).flatMap((mark) => (isObject(mark) && typeof mark.label === 'string' ? [mark.label] : [])) : [];
       const options = marks.length > 0 ? marks : item.options(on).map((option) => option.label);
       const locked = item.readOnly(on);
@@ -419,6 +421,20 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     return row && wire.property(row.item.rowId(on));
   };
 
+  /**
+   * A set of an entry's attributes that the tool type's reading logic writes itself, as the statement written
+   * again over the entry's own span (`restate`): planned against the body as it was read, so for a request that
+   * writes that one entry, or several entries each once.
+   */
+  function restatedStep(source: Source, open: Open, step: ModelChange): Edit['splices'][number] | undefined {
+    if (step.kind !== 'set' || readingLogic?.restate === undefined) return undefined;
+    const entry = open.read.elements.find((element) => element.id === step.id);
+    if (!entry) return undefined;
+    const bytes = encode(source.text);
+    const text = readingLogic.restate(decode(bytes.subarray(entry.ownSpan.start, entry.ownSpan.end)), step.attributes);
+    return text === undefined ? undefined : { operation: 're-emit-line', start: entry.ownSpan.start, end: entry.ownSpan.end, text };
+  }
+
   /** What an intent came to, as the outcome of the request: its changes planned by the library as splices of the text. */
   function carriedOut(source: Source, open: Open, outcome: Outcome, viewpoint: string, options: ViewOptions): EditOutcome {
     if (outcome.refused !== undefined) return { kind: 'refused', sentence: outcome.refused };
@@ -470,16 +486,21 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     // Values set on entries that are each named once touch no byte of one another: they are planned against the one body,
     // which is read once and not once for every step, and are one edit.
     const apart = steps.length > 1 && steps.every((step) => step.kind === 'set') && new Set(steps.map((step) => (step.kind === 'set' ? step.id : ''))).size === steps.length;
-    if (apart) {
+    if (apart || (steps.length === 1 && restatedStep(source, open, steps[0]) !== undefined)) {
       const splices: Edit['splices'][number][] = [];
       for (const step of steps) {
+        const own = restatedStep(source, open, step);
+        if (own) {
+          splices.push(own);
+          continue;
+        }
         const planned = body!.plan(step);
         if ('refused' in planned) return { kind: 'refused', sentence: planned.refused };
         splices.push(...planned.planned.splices);
       }
       edits.push({ splices: splices.map((splice, index) => ({ splice, index })).sort((one, other) => one.splice.start - other.splice.start || one.index - other.index).map((entry) => entry.splice) });
     }
-    for (const step of apart ? [] : steps) {
+    for (const step of edits.length > 0 ? [] : steps) {
       const planned = body!.change(step);
       if ('refused' in planned) return { kind: 'refused', sentence: planned.refused };
       edits.push(planned.planned);
@@ -602,6 +623,12 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       case 'rename':
         return done(intents.editLabel(model, request.id, request.text, situation));
       case 'setField': {
+        // A row of the diagram's own form is named under the id ''.
+        if (request.id === '') {
+          const on: Subject = { model, env: situation.env };
+          const row = rowsOf(on, undefined).find(({ item }) => wire.property(item.rowId(on)) === request.field || item.rowId(on) === request.field);
+          return row ? done(intents.edit(model, undefined, row.item, request.value, situation)) : refused(NO_ROW);
+        }
         const element = elementOf(model, request.id);
         if (!element) return refused(GONE);
         const on: Subject = { model, element: element.id, env: situation.env };
