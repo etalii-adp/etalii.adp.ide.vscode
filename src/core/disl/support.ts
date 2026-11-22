@@ -23,6 +23,10 @@ export const supportedFeatures: readonly string[] = [
   'persistence.fbl',
   'persist.typeMap',
   'view.viewer',
+  'canvas.chrome',
+  'form.parse',
+  'form.rowId',
+  'constraints.order',
 ];
 
 /**

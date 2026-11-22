@@ -34,6 +34,21 @@ suite('A causal loop diagram in Visual Studio Code', () => {
     await until('the undo', () => document.getText() === original);
   });
 
+  test('a link dropped onto a variable asks where it goes in an input box, and one dropped elsewhere is refused in the definition\'s words', async () => {
+    const uri = example('causal-loop-diagram', 'on-call', 'on-call.cld');
+    await vscode.commands.executeCommand('vscode.openWith', uri, viewType);
+    const current = await drawn();
+    const document = await vscode.workspace.openTextDocument(uri);
+    const toil = current.view?.elements.find((element) => element.id === 'variable:toil');
+    assert.ok(toil, 'the variable toil is drawn');
+
+    assert.deepStrictEqual(await edit({ kind: 'drop', entry: 'causal-loop.add-link', x: toil.x - 400, y: toil.y - 400 }), { result: 'refused', sentence: 'Drop a link or a loop onto a variable.' });
+    await inputBoxes([{ answer: 'mistakes' }]);
+    assert.deepStrictEqual(await edit({ kind: 'drop', entry: 'causal-loop.add-link', x: toil.x + toil.width / 2, y: toil.y + 10 }), { result: 'applied' });
+    assert.strictEqual((await asked())[0]?.title, 'Add link');
+    await until('the link to be written', () => document.getText().includes('link toil -> mistakes +'));
+  });
+
   test('an input box cancelled changes nothing', async () => {
     const uri = example('causal-loop-diagram', 'on-call', 'on-call.cld');
     await vscode.commands.executeCommand('vscode.openWith', uri, viewType);

@@ -74,6 +74,17 @@ Its differences from the definition and from the standalone host are listed in [
 | A step that writes two files, such as a two-way relation made, is one entry of Visual Studio Code's undo, taken back by one Undo in the table. On 2026-11-22, in Visual Studio Code 1.147.0 on macOS with the dialogs drawn by the workbench, one Undo after "Neighbours" was made two-way between `countries.yaml` and `regions.yaml` returned both files to their bytes before the step and showed no "Undo in all files" dialog; `countries.yaml` was the one file open in an editor. No picture was taken, since no dialog appeared. Whether the dialog appears while `regions.yaml` is open in an editor too was not seen (etalii.adp spec 080, T022). | The step is one workspace edit over both files, which Visual Studio Code keeps as one undo element; whether it asks first is the platform's, not the plug-in's. |
 | A knowledge file renamed in the explorer asks first, in Visual Studio Code's own words: "Extension 'ADP: A Different Perspective' wants to make refactoring changes with this file move", with Show Preview, Skip Changes and OK. | The `target` of the other files is rewritten as a participant of the move, which the platform confirms; the standalone host renames without asking. |
 
+## Causal loop diagram
+
+The diagram is read from its definition and held to the standalone host's recorded transcript (etalii.adp spec 081). Where the definition and the standalone host differ, the row is in [docs/disl-support.md](disl-support.md), "Causal loop diagram"; what follows is what this host does in its own way.
+
+| Difference | Why |
+|---|---|
+| Variables, links and loops show the tooltips the definition states. | The standalone host shows none; the definition is the reference, and Peter chose on 2026-11-22 to show them. |
+| An operation that asks a value, such as "Add link from here…" or a link or a loop dropped onto a variable, asks it in an input box, one value at a time, checked as it is typed against the form's own validation. | Visual Studio Code's input box is its dialog for one line; the standalone host opens a dialog of its own. |
+| A request no canvas, menu or row here can make, a row shown and not edited, and a menu entry shown off are refused in this host's words, or in the row's or the entry's reason. | The standalone host's transcript records its own sentence for them; the outcome is the same. |
+| A link's curvature or label changed in a statement written in a spelling of its own changes only the words the edit touches. | FBL 6.3: the rest of the line stays as it was spelt, where the standalone host writes the whole statement again. |
+
 ## Native dialogs, seen in a real window
 
 A test in a real Visual Studio Code cannot answer a native dialog, so each one the three new tool types raise is looked at once by a person (etalii.adp spec 027, FR-015). Peter Vrenken saw them on 2026-10-13 in Visual Studio Code 1.141.0 on Windows, with the Development build of the plug-in at `9849baf`. Each appeared and read as its definition states.

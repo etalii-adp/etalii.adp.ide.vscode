@@ -596,7 +596,7 @@ export class Tools implements vscode.Disposable {
         return { result: 'cancelled' };
       case 'ask': {
         // The operation's form, one input box a value, each checked as it is typed against the form's own validation.
-        if (request.kind !== 'action') return { result: 'cancelled' };
+        if (request.kind !== 'action' && request.kind !== 'drop') return { result: 'cancelled' };
         const params: Record<string, string> = {};
         for (const [index, field] of outcome.fields.entries()) {
           const answer = await this.inputBox({

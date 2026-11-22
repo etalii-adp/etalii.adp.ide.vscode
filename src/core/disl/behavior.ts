@@ -1454,6 +1454,22 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
 
   const create: Behavior['create'] = (model, id, at, situation, on) => {
     const tool = Object.hasOwn(toolbox.tools, id) ? toolbox.tools[id] : undefined;
+    // A drop with `targets` runs the first whose `on` takes the type of what it lands on, and with none applies `elsewhere` (DISL 7.2).
+    // A drop with `place` consults neither.
+    const targets = tool?.drop?.place === undefined ? tool?.drop?.targets ?? [] : [];
+    if (tool && targets.length > 0) {
+      const landed = on === undefined ? undefined : find(model, on);
+      const target = landed && targets.find((candidate) => candidate.on.some((type) => isA(metamodel, landed.type, type)));
+      // simplified: a target that runs an operation is run; give a target of another kind its own branch when a definition has one.
+      if (target?.operation !== undefined) return operate(model, target.operation, [landed!.id], situation, at);
+      if (!target) {
+        const elsewhere = tool.drop?.elsewhere ?? 'create';
+        const scope = texts.scope({ model, env: situation?.env }, { tool: id });
+        if (elsewhere === 'refuse') return { refused: (tool.drop?.refusal === undefined ? undefined : applicable([tool.drop.refusal], scope)) ?? 'This cannot be dropped here.' };
+        // simplified: `menu` opens no menu at the drop point, it changes nothing, as `ignore` does; give it the empty canvas's menu when a host can open one there.
+        if (elsewhere !== 'create') return open(model, situation, 'create').finish();
+      }
+    }
     if (tool?.operation !== undefined) return operate(model, tool.operation, on === undefined ? [] : [on], situation, at);
     if (!tool?.creates || tool.relation) return { refused: 'This tool places nothing where it is dropped.' };
     const run = open(model, situation, 'create');
