@@ -7,7 +7,8 @@
 import { Environment, Optional, serialize, type ASTNode } from '@marcbachmann/cel-js';
 import { attributesOf, defaultOf, isA, ordinal, parseYearMonth, valueKind, yearMonthOf, zeroOf, type Metamodel } from './metamodel';
 import { finding, type Attributes, type Finding, type Model, type ModelElement, type ModelRelation, type Value } from './model';
-import { celOf, type Attribute, type Expression, type Specification } from './specification';
+import { elementaryCycles, type Cycles } from './cycles';
+import { celOf, isObject, type Attribute, type Expression, type Specification } from './specification';
 
 /** The variables of one evaluation, by name (DISL 12.3). An integer among them is a `bigint`. */
 export type Scope = Readonly<Record<string, unknown>>;
@@ -63,7 +64,15 @@ export interface ExpressionOptions {
   textWidth?(text: string, fontSize: number): number;
   /** Functions of the language the specification is written in that DISL does not have, each registered by its signature. */
   library?(register: (signature: string, handler: (...args: never[]) => unknown) => void): void;
+  /** The host's implementation of a plugin function a specification declares (DISL 13.1.1), by the plugin's id and the function's name. */
+  pluginFunction?(plugin: string, name: string): PluginFunction | undefined;
 }
+
+/**
+ * A plugin function as a host carries it (DISL 13.1.1): its arguments as CEL holds them, and `read`, which reads a
+ * member of an element as an expression would. What it gives back is held by CEL as it is: elements, lists, strings.
+ */
+export type PluginFunction = (args: readonly unknown[], read: (target: unknown, name: string) => unknown) => unknown;
 
 // The library tells a value of a type of its own by its constructor, so an element is an object of
 // this class, and reads its members through a proxy. What CEL may not see of it is kept beside it.
@@ -147,6 +156,26 @@ export function createExpressions(specification: Specification, metamodel: Metam
     const side = (name: string): number => number(member(box, name) ?? 0);
     return [side('x') + side('width') / 2, side('y') + side('height') / 2];
   });
+  // The elementary cycles over relations of a type, each starting at its member first in model order, ordered by their
+  // first member, then lexicographically by member order: a depth-first walk of the successors in model order (DISL 12.4).
+  const cyclesOver = (entity: Entity, type: string, max: bigint): Cycles => {
+    const nodes = list(entity, 'nodes');
+    const order = nodes.map((node) => factsOf(node)!.id);
+    const position = new Map(order.map((id, index) => [id, index]));
+    const successors = new Map<string, string[]>();
+    for (const relation of list(entity, 'relations').filter(typed(type))) {
+      const [from, to] = [factsOf(member(relation, 'source'))?.id, factsOf(member(relation, 'target'))?.id];
+      if (from === undefined || to === undefined) continue;
+      (successors.get(from) ?? successors.set(from, []).get(from)!).push(to);
+    }
+    for (const list of successors.values()) list.sort((a, b) => (position.get(a) ?? Infinity) - (position.get(b) ?? Infinity));
+    return elementaryCycles(order, successors, Number(max));
+  };
+  register('Entity.cycles(string, int): list<dyn>', (entity: Entity, type: string, max: bigint) => {
+    const byId = new Map(list(entity, 'nodes').map((node) => [factsOf(node)!.id, node]));
+    return cyclesOver(entity, type, max).cycles.map((cycle) => cycle.map((id) => byId.get(id)));
+  });
+  register('Entity.cyclesTruncated(string, int): bool', (entity: Entity, type: string, max: bigint) => cyclesOver(entity, type, max).truncated);
   options.library?.(register);
   register('Entity.label(): string', (entity: Entity) => String(member(entity, metamodel.types[factsOf(entity)?.type ?? '']?.labelAttribute ?? '') ?? ''));
 
@@ -174,6 +203,8 @@ export function createExpressions(specification: Specification, metamodel: Metam
   register('upper(string): string', (text: string) => text.toUpperCase());
   register('list.flatten(): list<dyn>', (items: unknown[]) => items.flat());
   register('list.distinct(): list<dyn>', (items: unknown[]) => [...new Set(items)]);
+  // Strings by code point, numbers by value; stable (DISL 12.1).
+  register('list.sort(): list<dyn>', (items: unknown[]) => [...items].sort((a, b) => (typeof a === 'string' && typeof b === 'string' ? (a < b ? -1 : a > b ? 1 : 0) : Number(a) - Number(b))));
   register('list.indexOf(dyn): int', (items: unknown[], item: unknown) => BigInt(items.indexOf(item)));
   // The numeric aggregates of DISL 12.4: an empty list has no average, minimum or maximum, which fails the expression.
   const numbers = (items: unknown[], name: string): number[] => {
@@ -261,6 +292,31 @@ export function createExpressions(specification: Specification, metamodel: Metam
       });
     } catch (failure) {
       findings.push(finding('disl.function', 'error', `The function \`${name}\` of the specification cannot be used: ${reason(failure)}`));
+    }
+  }
+  // ---- the plugin functions a specification declares (DISL 13.1.1) ----
+
+  // The host's implementation where it carries the plugin; else the declared fallback over the named parameters;
+  // else an evaluation error, so that a constraint reports it could not be evaluated.
+  for (const [plugin, declared] of Object.entries(isObject(specification.plugins) ? specification.plugins : {})) {
+    for (const declaration of isObject(declared) && Array.isArray(declared.celFunctions) ? declared.celFunctions : []) {
+      if (!isObject(declaration) || typeof declaration.name !== 'string') continue;
+      const name = declaration.name;
+      const params = (Array.isArray(declaration.params) ? declaration.params : []).map((param: unknown) => (isObject(param) && typeof param.name === 'string' ? param.name : ''));
+      const uses = (Array.isArray(declaration.uses) ? declaration.uses : []).filter((used): used is string => typeof used === 'string');
+      const carried = options.pluginFunction?.(plugin, name);
+      const fallback = typeof declaration.fallback === 'string' ? declaration.fallback : undefined;
+      try {
+        register(`${name}(${params.map(() => 'dyn').join(', ')}): dyn`, (...values: unknown[]) => {
+          if (carried) return carried(values, member);
+          if (fallback === undefined) throw new Error(`the plugin ${plugin}, which carries ${name}(), is not present`);
+          const scope: Record<string, unknown> = Object.fromEntries(params.map((param, index) => [param, values[index]]));
+          for (const used of uses) scope[used] = active[used];
+          return body(fallback)(scope);
+        });
+      } catch (failure) {
+        findings.push(finding('disl.function', 'error', `The plugin function \`${name}\` of the specification cannot be used: ${reason(failure)}`));
+      }
     }
   }
   // Parsed only now, when every function is known, so that the order of declaration does not matter here.

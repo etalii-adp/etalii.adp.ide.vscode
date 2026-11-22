@@ -1,8 +1,9 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { Source } from '../../../../src/core/frame/toolType';
-import { plugins as registry } from '../../../../src/core/plugins/index';
+import { carried, plugins as registry } from '../../../../src/core/plugins/index';
 import type { Scene, SceneEdge, SceneNode } from '../../../../src/core/scene/scene';
+import { pluginRegistry } from '../../../../src/core/tool/pluginRegistry';
 import { definitionOf, diagramOf } from '../../tool/support';
 
 // The causal loop diagram opened and drawn from its definition (etalii.adp spec 081, tasks T003 to
@@ -12,7 +13,7 @@ import { definitionOf, diagramOf } from '../../tool/support';
 
 const type = diagramOf(definitionOf('causal-loop-diagram'), registry);
 
-interface Recorded { readonly document: string; readonly payloads: readonly string[] }
+interface Recorded { readonly document: string; readonly payloads: readonly string[]; readonly findings: readonly string[] }
 const transcript = JSON.parse(readFileSync('fixtures/tools/causal-loop-diagram/causal-loop.transcript.json', 'utf8')) as { readonly documents: readonly Recorded[] };
 
 const examples = 'examples/causal-loop-diagram';
@@ -78,6 +79,13 @@ describe('the causal loop diagram, drawn from its definition', () => {
         return same ? [] : [`${payload.id}: drawn at ${at.x}, ${at.y} (${node.box.width} × ${node.box.height}), recorded at ${payload.x}, ${payload.y} (${payload.width} × ${payload.height})`];
       });
       expect(wrong).toEqual([]);
+    });
+
+    it('finds what the transcript found, in its order, with its codes, sentences and lines', () => {
+      // A finding of this host counts its lines from zero, and words a severity in full; the transcript, from one and `Info`.
+      const found = type.findings(source).filter((finding) => !finding.rule.startsWith('disl.'))
+        .map((finding) => `${finding.line > 0 ? `line ${finding.line + 1}` : 'nowhere'} | ${finding.severity === 'information' ? 'Info' : finding.severity[0].toUpperCase() + finding.severity.slice(1)} | ${finding.rule} | ${finding.message}`);
+      expect(found).toEqual(recorded.findings);
     });
 
     it('draws a link between the two variables the transcript joins', () => {
@@ -146,8 +154,58 @@ describe('a causal loop diagram written here', () => {
     expect(reinforcing.nodes.find((node) => node.type === 'Loop')?.icon?.flip).toBe('none');
   });
 
+  it('underlines a loop whose label disagrees with its arrows wavy, and one that agrees not at all', () => {
+    const scene = viewOf(source('variable a\r\nvariable b\r\nlink a -> b +\r\nlink b -> a +\r\nloop B1 \"T\" a b\r\nloop R1 \"T\" a b\r\n'));
+    const fonts = scene.nodes.filter((node) => node.type === 'Loop').map((node) => node.labels[0]?.style.font);
+    expect(fonts.map((font) => [font?.decoration, font?.decorationStyle])).toEqual([['underline', 'wavy'], [undefined, undefined]]);
+  });
+
   it('says that a diagram without variables states none yet', () => {
     expect(viewOf(source('')).notice).toBe('This causal loop diagram states no variables yet.');
     expect(viewOf(source('variable a\r\n')).notice).toBeUndefined();
+  });
+});
+
+describe('the causal loop diagram\'s findings, written here', () => {
+  const source = (body: string): Source => ({ fileName: 'written.cld', text: `causal-loop 1\r\n${body}` });
+  const unlabelled = (scene: ReturnType<typeof type.findings>): string[] => scene.filter((finding) => finding.rule === 'causal-loop.unlabelled-loop').map((finding) => finding.message);
+  const square = 'variable a\r\nvariable b\r\nvariable c\r\nvariable d\r\nlink a -> d +\r\nlink a -> b +\r\nlink b -> a +\r\nlink d -> a +\r\n';
+
+  it('names the unlabelled loops in the order of the tool\'s cycle finder, the order of the links', () => {
+    expect(unlabelled(type.findings(source(square)))).toEqual([
+      'The links form a feedback loop through a → d that no loop statement names. It is reinforcing.',
+      'The links form a feedback loop through a → b that no loop statement names. It is reinforcing.',
+    ]);
+  });
+
+  it('names them in DISL\'s order, by member order, where the cycle finder is not carried', () => {
+    const without = diagramOf(definitionOf('causal-loop-diagram'), pluginRegistry({ ...carried, celFunctions: [] }));
+    expect(unlabelled(without.findings(source(square)))).toEqual([
+      'The links form a feedback loop through a → b that no loop statement names. It is reinforcing.',
+      'The links form a feedback loop through a → d that no loop statement names. It is reinforcing.',
+    ]);
+  });
+
+  it('says why a statement cannot be read, in the tool\'s four sentences', () => {
+    const found = type.findings(source('bogus\r\nlink a b\r\nlink a -> b weight=heavy\r\nvariable ""\r\n')).filter((finding) => finding.rule === 'causal-loop.unreadable-line');
+    expect(found.map((finding) => [finding.line + 1, finding.message])).toEqual([
+      [2, "'bogus' is not a statement this reading knows."],
+      [3, "A link reads 'link <from> -> <to>', optionally followed by a polarity, 'delayed', 'flipped', a weight and a label."],
+      [4, "'weight=heavy' does not read as a weight."],
+      [5, 'A variable needs an id of at least one character.'],
+    ]);
+  });
+
+  it('reads a link\'s note as the last word that is nothing else, quoted or not', () => {
+    const text = source('variable a\r\nvariable b\r\nlink a -> b + "first" "second"\r\nlink b -> a - bare delayed\r\n');
+    const note = (id: string): string | undefined => type.fields(text, [id]).find((field) => field.id === 'causal-loop.link-label')?.value;
+    expect([note('link:a|b'), note('link:b|a')]).toEqual(['second', 'bare']);
+  });
+
+  it('reads a weight with a sign or without a leading digit, and shows one with an exponent as .NET does', () => {
+    const text = source('variable a\r\nvariable b\r\nvariable c\r\nlink a -> b + weight=+2\r\nlink b -> c + weight=.5\r\nlink c -> a + weight=1e21\r\nlink b -> a + weight=0.000001\r\n');
+    const weight = (id: string): string | undefined => type.fields(text, [id]).find((field) => field.id === 'causal-loop.link-weight')?.value;
+    expect(['link:a|b', 'link:b|c', 'link:c|a', 'link:b|a'].map(weight)).toEqual(['2', '0.5', '1E+21', '1E-06']);
+    expect(type.findings(text).filter((finding) => finding.rule === 'causal-loop.unreadable-line')).toEqual([]);
   });
 });

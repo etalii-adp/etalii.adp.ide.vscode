@@ -264,7 +264,11 @@ export const mapped = (entry: TypeMapEntry, name: string): string | null =>
  *   `std.references`, with `detail.missingId` and `detail.end`; that finding replaces the library's own.
  * - `std.duplicateId` gains `detail.id` and `detail.count`.
  */
-export function readModel(reading: Pick<FblModel, 'elements' | 'findings' | 'unreadable'>, binding: FblBinding, metamodel: Metamodel, persistence: InterpretedPersistence): Read {
+export function readModel(
+  reading: Pick<FblModel, 'elements' | 'findings' | 'unreadable'>, binding: FblBinding, metamodel: Metamodel, persistence: InterpretedPersistence,
+  /** The tool type's own sentence for an entry read `as: "unreadable"`, where it has one. */
+  reason?: (entry: FblElement) => string | undefined,
+): Read {
   if (reading.unreadable) return { value: emptyModel, findings: reading.findings, view: nothingStored, stale: [] };
   const { bind } = persistence.view;
   // The entries of bound view data: they are no elements, and are read once the elements are known.
@@ -319,7 +323,7 @@ export function readModel(reading: Pick<FblModel, 'elements' | 'findings' | 'unr
     }
     const entryMap = entryOf(persistence, entry.type);
     if (entryMap.as === 'header') continue;
-    if (entryMap.as === 'unreadable') unreadable(entry, findRule(binding, entry.rule)?.readOnly || 'This entry cannot be read, so it is kept as it is.');
+    if (entryMap.as === 'unreadable') unreadable(entry, reason?.(entry) ?? (findRule(binding, entry.rule)?.readOnly || 'This entry cannot be read, so it is kept as it is.'));
     else if (entryMap.as === 'diagram') read(entry, entryMap, 'diagram', diagram);
     else if (!(entryMap.as in metamodel.types)) unreadable(entry, `This entry is read as \`${entryMap.as}\`, which is not a type of this tool, so it is kept as it is.`);
     else {
@@ -491,7 +495,7 @@ export function fromStored(stored: unknown, attribute: Attribute, metamodel: Met
     switch (kind.primitive) {
       // A family whose values are all text, as xml's attributes are, gives a number and a boolean as they are written.
       case 'int': return typeof value === 'bigint' || (typeof value === 'number' && Number.isInteger(value)) || (typeof value === 'string' && /^-?(0|[1-9]\d*)$/.test(value)) ? Number(value) : undefined;
-      case 'number': return typeof value === 'bigint' || (typeof value === 'number' && Number.isFinite(value)) || (typeof value === 'string' && /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?$/.test(value)) ? Number(value) : undefined;
+      case 'number': return typeof value === 'bigint' || (typeof value === 'number' && Number.isFinite(value)) || (typeof value === 'string' && /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(value)) ? Number(value) : undefined;
       case 'bool': return typeof value === 'boolean' ? value : value === 'true' ? true : value === 'false' ? false : undefined;
       case 'yearMonth': return typeof value === 'string' ? parseYearMonth(value) : undefined;
       case 'json': case 'binary': return plain(value);
