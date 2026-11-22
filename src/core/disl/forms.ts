@@ -233,7 +233,12 @@ const widgets: Readonly<Record<string, string>> = {
 };
 
 /** Interprets `forms`. Its findings are the expressions that cannot be read; an item with one is kept. */
-export function interpretForms(specification: Specification, metamodel: Metamodel, expressions: Expressions): Loaded<Forms> {
+export interface FormOptions {
+  /** A number as the tool type shows it, where it shows one otherwise than its shortest text. */
+  numberText?(value: number): string;
+}
+
+export function interpretForms(specification: Specification, metamodel: Metamodel, expressions: Expressions, options: FormOptions = {}): Loaded<Forms> {
   const declared = (specification.forms ?? {}) as unknown as Readonly<Record<string, FormDeclaration>>;
   const findings: Finding[] = [];
   const texts = createTexts(specification, expressions);
@@ -272,6 +277,7 @@ export function interpretForms(specification: Specification, metamodel: Metamode
     const kind = attribute && valueKind(metamodel, attribute.type);
     if (kind?.kind === 'primitive' && kind.primitive === 'yearMonth' && typeof value === 'number') return formatYearMonth(value);
     if (kind?.kind === 'enum') return kind.enum.values.find((entry) => entry.key === value)?.label ?? String(value);
+    if (typeof value === 'number' && options.numberText) return options.numberText(value);
     return typeof value === 'object' ? JSON.stringify(value) : String(value);
   };
 

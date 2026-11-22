@@ -55,6 +55,8 @@ export interface SceneOptions {
   readonly corners?: Readonly<Record<string, Point>>;
   /** The kept points of `corners` are each the point the node's placement anchor names, not its top-left corner. */
   readonly cornersAnchored?: boolean;
+  /** The style of a line under a text that no style states, where the tool type draws one otherwise than straight (DISL 6.6 states only `underline`). */
+  readonly underlineStyle?: string;
   /** Where the centre of each node was on screen before the document last changed: a layout that runs by itself starts from there (DISL 10.4). */
   readonly placed?: Readonly<Record<string, Point>>;
   /** The host's measure of a text, for a specification whose text metric is `host`. */
@@ -1097,7 +1099,9 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     const edit = label.editText ?? (isObject(label.text) && 'attribute' in label.text ? label.text : undefined);
     const editText = isObject(edit) && 'attribute' in edit ? String(bound(edit, self) ?? '') : message(edit, self) ?? text;
     // What a condition that holds says of the text lies over the label's own style, as it lies over the node's (DISL 6.1).
-    const style = settled(styleOf(notation, { font: nodeStyle.font, padding: nodeStyle.padding }, label.style, conditional.font ? { font: conditional.font } : undefined), self);
+    const stated = settled(styleOf(notation, { font: nodeStyle.font, padding: nodeStyle.padding }, label.style, conditional.font ? { font: conditional.font } : undefined), self);
+    const style = options.underlineStyle !== undefined && stated.font?.decoration === 'underline' && stated.font.decorationStyle === undefined
+      ? { ...stated, font: { ...stated.font, decorationStyle: options.underlineStyle } } : stated;
     const tooltip = message(label.tooltip, self);
     const fontSize = number(style.font?.size) ?? defaultFontSize;
     const lines = text.split('\n');

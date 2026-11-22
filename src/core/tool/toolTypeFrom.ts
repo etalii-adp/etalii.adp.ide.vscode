@@ -103,19 +103,22 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
 
   const loaded = loadSpecification(withFallbacks(definition.specification, fallbacks));
   const specification = loaded.value;
+  const origin = typeof specification.language.origin === 'string' ? specification.language.origin : specification.language.id;
+  // What the binding cannot state of how this tool type reads its documents (`docs/disl-support.md`, "Code for one tool type").
+  const readingLogic = plugins.reading(origin);
   const metamodel = interpretMetamodel(specification);
   const persistence = interpretPersistence(specification, metamodel.value);
-  const expressions = createExpressions(specification, metamodel.value);
+  const expressions = createExpressions(specification, metamodel.value, { pluginFunction: (plugin, name) => plugins.celFunctions(plugin)?.functions[name] });
   const coordinates = interpretCoordinates(specification, metamodel.value);
   const notation = interpretNotation(specification, metamodel.value);
   const layout = interpretLayout(specification);
   const viewpoints = interpretViewpoints(specification, metamodel.value, { notation: notation.value, coordinates: coordinates.value, layout: layout.value });
   const constraints = interpretConstraints(specification, metamodel.value, expressions);
-  const forms = interpretForms(specification, metamodel.value, expressions);
+  const forms = interpretForms(specification, metamodel.value, expressions, { numberText: readingLogic?.numberText });
   const toolbox = interpretToolbox(specification, metamodel.value);
   const sceneTool: SceneTool = { metamodel: metamodel.value, expressions, coordinates: coordinates.value, viewpoints: viewpoints.value, layouts: (id) => plugins.layout(id) };
   // The core has no browser to measure a text with: for a definition whose text metric is the host's, it is the estimate every ADP host shares.
-  const measured: SceneOptions = { textWidth: widthOfText };
+  const measured: SceneOptions = { textWidth: widthOfText, ...(readingLogic?.underlineStyle === undefined ? {} : { underlineStyle: readingLogic.underlineStyle }) };
   const behavior = interpretBehavior(specification, metamodel.value, expressions, {
     constraints: constraints.value, layout: layout.value, coordinates: coordinates.value, persistence: persistence.value, toolbox: toolbox.value,
     notation: notation.value, viewpoints: viewpoints.value,
@@ -123,7 +126,6 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   });
   const texts = createTexts(specification, expressions);
   const wire = wireIdsOf(definition.specification);
-  const origin = typeof specification.language.origin === 'string' ? specification.language.origin : specification.language.id;
   // Pins that no entry of the document holds are kept beside it: the layout of its registration, by the top-left corner of each element (DISL 11.6, FBL 8.3).
   const keptBeside = (persistence.value.view.store.includes('pinned') || persistence.value.view.store.includes('bounds')) && persistence.value.view.bind.pinned === undefined;
   // simplified: where only `bounds` is stored, a registration's entry is read and written as the point the node's placement
@@ -172,8 +174,11 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     if (last && last.source.text === source.text && last.source.fileName === source.fileName && last.source.registration === source.registration) return last.open;
     const binding = claimingBinding(bindings, source.fileName, source.text) ?? bindings[0];
     const body = bodyOf(binding, source);
+    const bytes = encode(source.text);
+    const entryText = (span: { readonly start: number; readonly end: number }): string => decode(bytes.subarray(span.start, span.end)).replace(/[\r\n]+$/, '');
     const read = body.model;
-    const typed = readModel(read, binding, metamodel.value, persistence.value);
+    const reread = readingLogic?.reread ? { elements: readingLogic.reread(read.elements, entryText), findings: read.findings, unreadable: read.unreadable } : read;
+    const typed = readModel(reread, binding, metamodel.value, persistence.value, readingLogic?.unreadable ? (entry) => readingLogic.unreadable!(entryText(entry.ownSpan)) : undefined);
     const model = read.unreadable ? emptyModel : typed.value;
     const derived = derivedRelations(metamodel.value, expressions, model);
     // The reader of a binding says itself that its plugin is missing; it is said once, with the others.
