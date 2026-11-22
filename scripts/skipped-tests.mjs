@@ -23,10 +23,12 @@ if (existsSync('reports')) {
     const xml = readFileSync(`reports/${file}`, 'utf8');
     const cases = xml.matchAll(/<testcase\b([^>]*?)(?:\/>|>([\s\S]*?)<\/testcase>)/g);
     for (const [, attributes, body] of cases) {
-      const failure = body && /<(?:failure|error)\b([^>]*)>/.exec(body);
+      const failure = body && /<(?:failure|error)\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:failure|error)>)/.exec(body);
       if (failure) {
         const name = /\bname="([^"]*)"/.exec(attributes)?.[1] ?? '(unnamed)';
-        const message = /\bmessage="([^"]*)"/.exec(failure[1])?.[1] ?? '';
+        // JUnit reports put the message in an attribute; Mocha's xunit report, which the real Visual
+        // Studio Code run writes, puts the message and the stack in the element's text instead.
+        const message = /\bmessage="([^"]*)"/.exec(failure[1])?.[1] || (failure[2] ?? '').replace(/^<!\[CDATA\[|\]\]>$/g, '').trim();
         failed.push(`${unescaped(name)}: ${unescaped(message).slice(0, 2000)}`);
         continue;
       }

@@ -1,8 +1,8 @@
 # etalii.adp.ide.vscode
 
-[![Build](https://github.com/etalii-adp/etalii.adp.ide.vscode/actions/workflows/build.yml/badge.svg?branch=develop)](https://github.com/etalii-adp/etalii.adp.ide.vscode/actions/workflows/build.yml?query=branch%3Adevelop)
+[![Build](https://github.com/etalii-adp/etalii.adp.ide.vscode/actions/workflows/build.yml/badge.svg?branch=develop)](https://github.com/etalii-adp/etalii.adp.ide.vscode/actions/workflows/build.yml?query=branch%3Adevelop) [![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/etalii.adp?label=Marketplace)](https://marketplace.visualstudio.com/items?itemName=etalii.adp)
 
-The ADP tools as a Visual Studio Code extension, "ADP: A Different Perspective".
+The ADP tools as a Visual Studio Code extension, "ADP: A Different Perspective". **Install it from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=etalii.adp)**, or search for `etalii.adp` in the Extensions view.
 
 ADP, A Different Perspective, is a range of task-focused tools: diagrams, designers and editors (see the [ADP terminology](https://github.com/etalii-adp/etalii.adp/blob/develop/docs/terminology.md)). The site is at <https://etalii.net/adp/>.
 
@@ -23,7 +23,7 @@ Each tool is an editor on the file's own text: every change is one step in Visua
 
 ## Install from the Marketplace
 
-Search for **ADP: A Different Perspective** in the Extensions view, or install `etalii.adp` from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=etalii.adp), once its first release is published (see [Release](#release)).
+Search for **ADP: A Different Perspective** in the Extensions view, or install `etalii.adp` from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=etalii.adp). Every release (see [Release](#release)) is published there.
 
 ## Install from a file
 
