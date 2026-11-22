@@ -646,7 +646,9 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     (actions ?? []).length > 0 && (actions ?? []).every((action) => isObject(action) && viewing.some((kind) => kind in action) && !edits(action.view));
   // Whether a layout that runs by itself leaves a pinned node where it is, so that a drag and a drop pin (DISL 10.4).
   // In a tidy tree a place is stored only by a drag, and as its row (DISL 10.3).
-  const pins = (parts.layout.trigger === 'always' || parts.layout.trigger === 'onChange') && parts.layout.respect === 'pinned' && stores('pinned') && !tree;
+  // Where the bounds are stored and no layout runs by itself, a node is where the user put it: a drag and a drop keep its place as well (DISL 10.4, 11.6).
+  const laidOutByItself = parts.layout.trigger === 'always' || parts.layout.trigger === 'onChange';
+  const pins = !tree && ((laidOutByItself && parts.layout.respect === 'pinned' && stores('pinned')) || (!laidOutByItself && stores('bounds')));
 
   // The relations the model's relation types derive (DISL 4.11.3): no part of the model, and found again for each model.
   const derivedOf = new WeakMap<Model, readonly DerivedRelation[]>();
@@ -791,13 +793,14 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       const element = find(working, id);
       const kept = situation?.view?.pinned[id];
       if (!element || 'source' in element || isRelation(metamodel.types[element.type])) return refuse('That is no longer in this diagram.');
-      if (!stores('pinned')) return refuse(NOT_KEPT);
+      // A place is kept as a pin, or as the bounds the view stores of every node (DISL 11.6).
+      if (!stores('pinned') && !stores('bounds')) return refuse(NOT_KEPT);
       if (element.ephemeral) return refuse('Its id is not kept in the document, so its position cannot be locked.');
       if (!at) return refuse('Where it is drawn is not known here, so its position cannot be locked.');
       if (!(pinnedNow(id) && kept?.x === at.x && kept.y === at.y)) viewChanges.push({ kind: 'pin', element: id, x: at.x, y: at.y });
     };
     const unpin = (id: string): void => {
-      if (!stores('pinned')) return refuse(NOT_KEPT);
+      if (!stores('pinned') && !stores('bounds')) return refuse(NOT_KEPT);
       if (!pinnedNow(id)) return refuse(NOT_PINNED);
       viewChanges.push({ kind: 'unpin', element: id });
     };
@@ -1095,7 +1098,12 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
             continue;
           }
           const { position, placed } = dropped(type, point);
-          if (check({ kind: 'create', values: { elementType: type, position, parent: null, dropTarget: null, tool: null } })) kept(action.as, add(type, { ...placed, ...values }, undefined, typeof parent === 'string' && parent !== '' ? parent : undefined, next, typeof slot === 'string' && slot !== '' ? slot : undefined));
+          if (check({ kind: 'create', values: { elementType: type, position, parent: null, dropTarget: null, tool: null } })) {
+            const made = add(type, { ...placed, ...values }, undefined, typeof parent === 'string' && parent !== '' ? parent : undefined, next, typeof slot === 'string' && slot !== '' ? slot : undefined);
+            kept(action.as, made);
+            // Created at a point no attribute places, it is kept there as a drop from the toolbox is (DISL 10.4).
+            if (made !== undefined && position && pins && Object.keys(placed).length === 0) pin(made, position);
+          }
         } else if (isObject(action.connect)) {
           const type = one(action.connect.type)?.value;
           const from = one(action.connect.source)?.value;
@@ -1547,7 +1555,11 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     const attributeOf = (label: Label): string | undefined => attributeIn(label.editText) ?? attributeIn(label.text);
     const label = labels.find((candidate) => (name === undefined ? candidate.editable !== false && (candidate.parse?.write !== undefined || attributeOf(candidate) !== undefined) : candidate.id === name));
     const attribute = label && attributeOf(label);
+    // What the label's parse does not accept is refused with its own sentence, before anything is written (DISL 6.12).
+    const scope = run.scopeOf(element, { value: text });
+    const accepted = label?.parse?.accepts === undefined ? undefined : expressions.evaluate(label.parse.accepts, scope);
     if (!label || label.editable === false || (label.parse?.write === undefined && attribute === undefined)) run.refuse('This text cannot be changed here.');
+    else if (accepted !== undefined && !(accepted.ok && accepted.value === true)) run.refuse(worded(label.parse?.refusal as Message | undefined, scope, `'${text}' is not accepted here.`));
     else if (label.parse?.write !== undefined) run.act(label.parse.write, element, { value: text }, 'user');
     else run.write(element, { [attribute!]: text }, 'user');
     return run.finish();

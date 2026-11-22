@@ -310,6 +310,14 @@ describe('a scene of nodes that hold nodes', () => {
     expect(group('note-2').getAttribute('transform')).toBeNull();
   });
 
+  it('asks to move a node whose notation says why it is not moved, when it is let go over empty canvas, for the tool type to refuse in those words', () => {
+    canvas.receive(viewMessage({ ...tree, nodes: tree.nodes.map((one) => (one.id === 'note-2' ? { ...one, refusesMove: true as const } : one)) }));
+    drag(group('note-2').querySelector('.adp-shape')!, [250, 290], [20, 400]);
+    const note = tree.nodes.find((one) => one.id === 'note-2')!;
+    expect(requests()).toEqual([{ kind: 'move', id: 'note-2', x: note.box.x - 230, y: note.box.y + 110 }]);
+    expect(group('note-2').getAttribute('transform')).toBeNull();
+  });
+
   it('moves a node that is movable where it is let go, also over another node', () => {
     canvas.receive(viewMessage(scene));
     drag(group('note-2').querySelector('.adp-shape')!, [250, 290], [230, 70]);

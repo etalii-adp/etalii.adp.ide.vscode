@@ -101,8 +101,12 @@ export type EditRequest =
   | { readonly kind: 'rename'; readonly id: string; readonly text: string }
   /** A property edited in ADP Properties. */
   | { readonly kind: 'setField'; readonly id: string; readonly field: string; readonly value: string }
-  /** An action invoked on an element or relation, or on the diagram when there is no id. */
-  | { readonly kind: 'action'; readonly action: string; readonly id?: string; readonly x?: number; readonly y?: number }
+  /**
+   * An action invoked on an element or relation, or on the diagram when there is no id. `params`
+   * answers the form an `ask` showed, by parameter; with `check`, they are only validated: the
+   * outcome is the refusal of the first that is not accepted, else an applied outcome of no splice.
+   */
+  | { readonly kind: 'action'; readonly action: string; readonly id?: string; readonly x?: number; readonly y?: number; readonly params?: Readonly<Record<string, string>>; readonly check?: boolean }
   /** A node dragged onto another node, to become its child, at a position among its children when given. */
   | { readonly kind: 'reparent'; readonly id: string; readonly parent: string; readonly index?: number }
   /** The children of a node hidden or shown; with `group`, the items of one group of the node's, by the group's key. */
@@ -121,6 +125,13 @@ export interface TextSplice {
   readonly text: string;
 }
 
+/** One value an `ask` asks for: the parameter it answers, its label and the value it starts from. */
+export interface AskedField {
+  readonly param: string;
+  readonly label: string;
+  readonly initial: string;
+}
+
 /** What an edit request came to. */
 export type EditOutcome =
   /** The splices of the gesture, and the registration's new text when the edit changed it (null removes it). */
@@ -135,6 +146,8 @@ export type EditOutcome =
   | { readonly kind: 'refused'; readonly sentence: string }
   /** Ask first; when confirmed, the same request is made again with `confirmed`. */
   | { readonly kind: 'confirm'; readonly title: string; readonly message: string; readonly confirmLabel: string; readonly danger: boolean }
+  /** The request asks for values first, in the form of its operation: answered, the same request is made again with `params`. */
+  | { readonly kind: 'ask'; readonly title: string; readonly icon?: string; readonly confirmLabel: string; readonly fields: readonly AskedField[] }
   /** The request asks for text edited in place before anything is written. */
   | { readonly kind: 'editInPlace'; readonly id: string; readonly multiline: boolean }
   /** The request is answered in ADP Properties: the named field is where the user goes on. */

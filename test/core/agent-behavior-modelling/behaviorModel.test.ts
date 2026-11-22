@@ -315,11 +315,14 @@ describe('dragging a node', () => {
     expect(layout['1.2.1']?.y).toBe(160 + nodeHeight + verticalGap);
   });
 
-  it('creates the registration with its origin when the first row is dragged, and refuses a drop that changes nothing', () => {
+  it('keeps the first dragged row in a registration with only its origin, refuses one without a registration, and refuses a drop that changes nothing', () => {
     const plain = boxOf('1.1', bare);
-    const outcome = done({ kind: 'move', id: '1.1', x: plain.x, y: plain.y + 30 }, bare);
+    const registered = markdown(research, 'etalii/agent-behavior-modelling\n');
+    const outcome = done({ kind: 'move', id: '1.1', x: plain.x, y: plain.y + 30 }, registered);
     expect((outcome.registration as string).startsWith('etalii/agent-behavior-modelling\nlayout:\n  1.1: ')).toBe(true);
     expect(layoutAfter(outcome)['1.1']).toEqual({ x: plain.x, y: plain.y + 30 });
+    // The binding does not let a registration be created (FBL 8.4, createOnFirstPlacement); a behavior model is one only when it is registered anyway.
+    expect(sentenceOf({ kind: 'move', id: '1.1', x: plain.x, y: plain.y + 30 }, bare)).toMatch(/has no registration, and its tool type keeps its view data only in one/);
     // The definition's sentence, for every tool type alike: the hand-coded diagram said "That node is already there."
     expect(sentenceOf({ kind: 'move', id: '1.1', x: boxOf('1.1').x, y: boxOf('1.1').y })).toBe('That is already there.');
   });

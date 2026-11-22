@@ -15,13 +15,13 @@ import { interpretSurface } from '../desl/surface';
 import { applyChanges, baseCoordinate, interpretBehavior, type Change, type EndPlace, type OfferedEntry, type Outcome, type Point, type Situation, type ViewChange } from '../disl/behavior';
 import { interpretConstraints } from '../disl/constraints';
 import { interpretCoordinates, rulerRows } from '../disl/coordinates';
-import { createExpressions } from '../disl/expressions';
+import { createExpressions, type Scope } from '../disl/expressions';
 import { createTexts, formFor, interpretForms, type FormItem, type Subject } from '../disl/forms';
 import { interpretLayout } from '../disl/layout';
 import { defaultOf, derivedRelations, interpretMetamodel, isRelation, linkKind, type DerivedRelation } from '../disl/metamodel';
 import { emptyModel, type Finding as Found, type Model, type Value } from '../disl/model';
-import { edgeNotation, interpretNotation, nodeNotation, styleOf, type Paint } from '../disl/notation';
-import { entryOf, foldsOf, interpretPersistence, momentAttributes, newId, readModel, viewEntryIds, type StoredView } from '../disl/persistence';
+import { edgeNotation, interpretNotation, nodeNotation, styleOf, type GestureRefusals, type Notation, type Paint } from '../disl/notation';
+import { entryOf, foldsOf, interpretPersistence, momentAttributes, naturalId, newId, readModel, viewEntryIds, type StoredView } from '../disl/persistence';
 import { isCel, isObject, loadSpecification, localized, type LocalizedText } from '../disl/specification';
 import { groupsIn, interpretToolbox, type ToolGroup } from '../disl/toolbox';
 import { interpretViewpoints } from '../disl/viewpoints';
@@ -145,6 +145,8 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     /** What the library read; the model the metamodel types is made of it. */
     readonly read: FblModel;
     readonly model: Model;
+    /** The entry each element is read from, where its id is another (`Read.entries`). */
+    readonly entries?: ReadonlyMap<string, string>;
     readonly findings: readonly Finding[];
     /** Why nothing may be edited: absent for a document that is editable. */
     readonly refusal?: string;
@@ -186,7 +188,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       ...derived.findings,
     ].map(framed);
     const gate = needed.length > 0 ? messages.pluginMissing(needed[0].id) : body.isReadOnly && !read.unreadable ? binding.readOnly || messages.readOnlyFile : undefined;
-    const kept = { view: typed.view, stale: typed.stale, derived: derived.value, corners: keptBeside ? layoutOf(source.registration) : {} };
+    const kept = { view: typed.view, stale: typed.stale, ...(typed.entries ? { entries: typed.entries } : {}), derived: derived.value, corners: keptBeside ? layoutOf(source.registration) : {} };
     // What is said of a document that cannot be read is the definition's sentence for one that cannot be edited, else the reader's finding.
     const unread = behavior.value.message('std.readOnly', emptyModel) ?? found[0]?.message ?? UNREADABLE;
     const open: Open = read.unreadable
@@ -237,6 +239,13 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     };
   };
   const elementOf = (model: Model, id: string) => [...model.elements, ...model.relations].find((element) => element.id === id);
+  /** The sentence of the first of an element's `refusals` for a gesture its notation switches off that applies (DISL 6.9); none where none is declared. */
+  const gestureRefusal = (model: Model, id: string, gesture: keyof GestureRefusals, env: Scope | undefined, drawn: Notation): string | undefined => {
+    const element = elementOf(model, id);
+    if (!element) return undefined;
+    const reasons = (isRelation(metamodel.value.types[element.type]) ? edgeNotation(drawn, metamodel.value, element.type) : nodeNotation(drawn, metamodel.value, element.type)).refusals?.[gesture];
+    return reasons === undefined ? undefined : texts.applicable(reasons, texts.scope({ model, element: id, ...(env === undefined ? {} : { env }) }));
+  };
 
   // ---- what a scene carries beside its nodes and edges ----
 
@@ -415,7 +424,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     if (outcome.refused !== undefined) return { kind: 'refused', sentence: outcome.refused };
     const link = outcome.effects.find((effect) => effect.kind === 'open' && effect.message !== undefined);
     if (link && outcome.changes.length === 0) return { kind: 'open', path: link.message! };
-    const modelSteps = modelChangesOf(outcome.changes, { binding: open.binding, metamodel: metamodel.value, persistence: persistence.value, read: open.read }, open.model);
+    const modelSteps = modelChangesOf(outcome.changes, { binding: open.binding, metamodel: metamodel.value, persistence: persistence.value, read: open.read, ...(open.entries ? { entries: open.entries } : {}) }, open.model);
     if ('refused' in modelSteps) return { kind: 'refused', sentence: modelSteps.refused };
     const standard = (filter: string): Value | null => {
       const value = notation.value.canvas.filters[filter].default;
@@ -426,15 +435,14 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     const pinning = (change: ViewChange): boolean => keptBeside && (change.kind === 'pin' || change.kind === 'unpin');
     const viewSteps = viewStepsOf(outcome.view.filter((change) => !pinning(change)), persistence.value.view.bind, open.binding, open.read, standard);
     if ('refused' in viewSteps) return { kind: 'refused', sentence: viewSteps.refused };
-    // The corners after the request: each follows its element to the id that has afterwards, one of an element that is gone goes, and each pin is the corner of the box it is the placement's point of.
+    // The corners after the request: each follows its element to the id that has afterwards, one of an element that is gone stays as the registration has it, as the standalone host leaves it, and each pin is the corner of the box it is the placement's point of.
     let registration: string | undefined;
     if (keptBeside && (outcome.renamed.size > 0 || outcome.view.some(pinning))) {
       const was = new Map([...outcome.renamed].map(([before, after]) => [after, before]));
-      const there = new Set(outcome.after.elements.map((element) => element.id));
       const corners: Record<string, Corner> = {};
       for (const [id, corner] of Object.entries(open.corners)) {
         const now = outcome.renamed.get(id) ?? id;
-        if (there.has(now)) corners[now] = corner;
+        corners[now] = corner;
       }
       const drawn = sceneOf(open, options).nodes;
       for (const change of outcome.view) {
@@ -442,9 +450,13 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
         if (change.kind !== 'pin') continue;
         const node = drawn.find((candidate) => candidate.id === (was.get(change.element) ?? change.element));
         const [fx, fy] = node ? anchorOf(nodeNotation(viewpoints.value.all[viewpoint].notation, metamodel.value, node.type).placement.anchor) : [0, 0];
-        corners[change.element] = keptAnchored(open.binding) ? { x: change.x, y: change.y } : { x: change.x - fx * (node?.box.width ?? 0), y: change.y - fy * (node?.box.height ?? 0) };
+        // One created by this request is kept under the id it is read under once written: its natural id where it has one (DISL 11.5.1).
+        const made = outcome.created.includes(change.element) ? outcome.after.elements.find((element) => element.id === change.element) : undefined;
+        const kept = (made && naturalId(persistence.value, metamodel.value, made.type, made.attributes)) ?? change.element;
+        corners[kept] = keptAnchored(open.binding) ? { x: change.x, y: change.y } : { x: change.x - fx * (node?.box.width ?? 0), y: change.y - fy * (node?.box.height ?? 0) };
       }
-      // The registration is written when there is first something to keep in it.
+      // The registration is written when there is first something to keep in it, where the binding lets it be created, and the placement is refused otherwise (FBL 8.4).
+      if (source.registration === undefined && Object.keys(corners).length > 0 && !open.binding.registration.createOnFirstPlacement) return { kind: 'refused', sentence: messages.registrationNotCreated(nameOf(source.fileName)) };
       const text = source.registration ?? (Object.keys(corners).length > 0 ? newRegistration(origin) : undefined);
       const next = text === undefined ? undefined : withLayout(text, corners);
       if (next !== source.registration) registration = next;
@@ -538,6 +550,9 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       }
       case 'move': {
         const node = nodeOf(request.id);
+        // A move the notation switches off, of a node that does not move or of a relation, is refused with its `refusals.move`, first (DISL 6.9).
+        const declined = node && (node.movable.x || node.movable.y) ? undefined : gestureRefusal(model, request.id, 'move', situation.env, viewpoints.value.all[viewpoint].notation);
+        if (declined !== undefined) return refused(declined);
         return node ? done(intents.move(model, [request.id], { x: request.x - node.box.x, y: request.y - node.box.y }, situation)) : refused(GONE);
       }
       case 'resize': {
@@ -560,7 +575,11 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       case 'connect': {
         if (!elementOf(model, request.from) || !elementOf(model, request.to)) return refused(GONE);
         // simplified: the first relation the definition offers for the two; give the request the type when a definition offers several.
-        const offered = intents.menu(model, { source: request.from, target: request.to }, situation).groups.flat().find((entry) => entry.via !== undefined);
+        const connection = intents.menu(model, { source: request.from, target: request.to }, situation);
+        // A connection menu of one operation that `runSingle` runs at once is the gesture: it states the relation itself (DISL 7.3).
+        const only = connection.runSingle && connection.groups.flat().length === 1 ? connection.groups.flat()[0] : undefined;
+        if (only?.operation !== undefined) return only.enabled ? done(intents.operate(model, only.operation, [], situation, undefined, only.args)) : refused(only.reason ?? NOT_HERE);
+        const offered = connection.groups.flat().find((entry) => entry.via !== undefined);
         if (offered && !offered.enabled) return refused(offered.reason ?? NOT_HERE);
         // Where the definition offers none, the relation is the one whose ends allow the two: the first that takes both, else the first that takes
         // the one the line starts at, which then refuses the other end with the sentence of `std.endpoints` (DISL 8.7).
@@ -614,6 +633,29 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
             if (result.kind === 'pickPath') return { ...result, field: wire.property(result.field) };
             return result.kind === 'changes' ? done({ changes: result.changes, after: applyChanges(model, result.changes), created: [], effects: [], collapsed: {}, view: [], renamed: new Map() }) : result;
           }
+          // An operation that asks its parameters in a form of its own asks them first (DISL 9.4, `paramsForm`): the answers come back as `params`.
+          const declared = isObject(specification.behavior) && isObject(specification.behavior.operations) ? specification.behavior.operations[name] : undefined;
+          const paramsForm = isObject(declared) && typeof declared.paramsForm === 'string' ? forms.value.all[declared.paramsForm] : undefined;
+          // A form that asks a text of several lines is answered in ADP Properties, as an input box holds one line.
+          const oneLine = paramsForm !== undefined && paramsForm.items.every((item) => item.attribute === undefined || item.widget !== 'textarea');
+          if (paramsForm && oneLine && state.offered && state.available) {
+            const on: Subject = { model, ...(id === undefined ? {} : { element: id }), env: situation.env };
+            const asked = paramsForm.items.filter((item) => item.attribute !== undefined);
+            if (request.params === undefined) {
+              const fields = asked.map((item) => ({ param: item.attribute!, label: item.label(on), initial: askedText(item.initial(on)) }));
+              return { kind: 'ask', title: paramsForm.label(on) || name, ...(paramsForm.icon === undefined ? {} : { icon: paramsForm.icon }), confirmLabel: paramsForm.submitLabel(on) || 'OK', fields };
+            }
+            // A check is of the values given so far, as the form validates them; a commit runs the operation, whose own aborts speak, as the standalone host's does.
+            if (request.check === true) {
+              for (const item of asked) {
+                if (!Object.hasOwn(request.params, item.attribute!)) continue;
+                const invalid = item.validate(on, request.params[item.attribute!] ?? '');
+                if (invalid !== undefined) return refused(invalid);
+              }
+              return { kind: 'applied', splices: [] };
+            }
+            return done(intents.operate(model, name, selection, situation, undefined, { ...args, ...request.params }));
+          }
           // A request carries no parameters, and this host has no dialog to ask them in: the value is asked in ADP Properties, at the row of the attribute the operation sets.
           const field = state.offered && state.available && id !== undefined ? rowOf(open, situation, id, operation.asks) : undefined;
           if (field !== undefined) return { kind: 'showField', field };
@@ -642,8 +684,14 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
         }
         return refused(intents.message('std.notApplicable', model, situation) ?? 'This cannot be done with what is selected.');
       }
-      case 'reparent':
-        return done(intents.reparent(model, request.id, request.parent, request.index, situation));
+      case 'reparent': {
+        // A node that does not move is dragged only to go under another; where that is refused, the sentence is its type's for the gesture, `reparent`, else `move` (DISL 6.9).
+        const outcome = done(intents.reparent(model, request.id, request.parent, request.index, situation));
+        const node = nodeOf(request.id);
+        if (outcome.kind !== 'refused' || !node || node.movable.x || node.movable.y) return outcome;
+        const declined = gestureRefusal(model, request.id, 'reparent', situation.env, viewpoints.value.all[viewpoint].notation) ?? gestureRefusal(model, request.id, 'move', situation.env, viewpoints.value.all[viewpoint].notation);
+        return declined === undefined ? outcome : refused(declined);
+      }
       case 'fold': {
         if (!elementOf(model, request.id)) return refused(GONE);
         // The state of a group of a node's items is kept with the diagram: an edit (DISL 6.9).
@@ -1471,4 +1519,9 @@ export function movedName(document: string, moves: readonly { readonly from: str
     const named = relativePath(after, movedPath(normalPath(`${folder}/${file}`), moves));
     return named === file ? undefined : named;
   };
+}
+
+/** A value a form starts from, as the text of an input box. */
+function askedText(value: Value | undefined): string {
+  return value === undefined || value === null ? '' : typeof value === 'string' ? value : typeof value === 'object' ? JSON.stringify(value) : String(value);
 }

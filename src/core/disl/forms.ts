@@ -137,6 +137,8 @@ export interface FormItem {
   value(on: Subject): Value | undefined;
   /** The value as text, as the item shows it. */
   display(on: Subject): string;
+  /** The value a form that asks first shows the item with (`initial`), evaluated; none where the item states none. */
+  initial(on: Subject): Value | undefined;
   /** The sentence of the first validation of severity `error` that an entered value fails, at that moment. */
   validate(on: Subject, input: Value, timing?: 'input' | 'commit'): string | undefined;
   /** What committing an entered value does. It changes nothing: the behavior carries it out. */
@@ -152,7 +154,11 @@ export interface Form {
   /** Made from the type's attributes, because the specification declares no form for it (DISL 7.5). */
   readonly generated: boolean;
   readonly items: readonly FormItem[];
+  /** The icon the form is shown with, where it names one. */
+  readonly icon?: string;
   label(on: Subject): string;
+  /** The words of the button that submits the form; empty where it states none. */
+  submitLabel(on: Subject): string;
 }
 
 export interface Forms {
@@ -387,6 +393,17 @@ export function interpretForms(specification: Specification, metamodel: Metamode
       return { readOnly: locked || (own.parse === undefined && attribute === undefined && !typed) };
     };
 
+    const optionsOf = (on: Subject): readonly Option[] => {
+      if (typed) return offered(on).map((entry) => ({ value: entry, label: typeName(on, entry) }));
+      const kindOf = attributeOf(on) && valueKind(metamodel, attributeOf(on)!.type);
+      const named = isObject(own.options) && typeof own.options.enum === 'string' ? metamodel.enums[own.options.enum] : own.options === undefined && kindOf?.kind === 'enum' ? kindOf.enum : undefined;
+      if (named) return named.values.map((entry) => ({ value: entry.key, label: entry.label, icon: typeof entry.icon === 'string' ? entry.icon : undefined }));
+      const evaluated = isCel(own.options) ? expressions.evaluate(own.options, scope(on, { value: held(on) })) : undefined;
+      const list: readonly unknown[] = Array.isArray(own.options) ? own.options : evaluated?.ok && Array.isArray(evaluated.value) ? evaluated.value : [];
+      return list.map((entry): Option => (isObject(entry) && 'value' in entry
+        ? { value: entry.value as Value, label: localized(entry.label as LocalizedText | undefined, undefined, undefined) ?? String(entry.value), icon: typeof entry.icon === 'string' ? entry.icon : undefined }
+        : { value: entry as Value, label: String(entry) }));
+    };
     return {
       kind,
       attribute: name,
@@ -405,17 +422,7 @@ export function interpretForms(specification: Specification, metamodel: Metamode
       placeholder: (on) => worded(own.placeholder, scope(on), ''),
       visible: (on) => holds(own.visible, scope(on, { value: held(on) }), true),
       readOnly,
-      options: (on) => {
-        if (typed) return offered(on).map((entry) => ({ value: entry, label: typeName(on, entry) }));
-        const kindOf = attributeOf(on) && valueKind(metamodel, attributeOf(on)!.type);
-        const named = isObject(own.options) && typeof own.options.enum === 'string' ? metamodel.enums[own.options.enum] : own.options === undefined && kindOf?.kind === 'enum' ? kindOf.enum : undefined;
-        if (named) return named.values.map((entry) => ({ value: entry.key, label: entry.label, icon: typeof entry.icon === 'string' ? entry.icon : undefined }));
-        const evaluated = isCel(own.options) ? expressions.evaluate(own.options, scope(on, { value: held(on) })) : undefined;
-        const list: readonly unknown[] = Array.isArray(own.options) ? own.options : evaluated?.ok && Array.isArray(evaluated.value) ? evaluated.value : [];
-        return list.map((entry): Option => (isObject(entry) && 'value' in entry
-          ? { value: entry.value as Value, label: localized(entry.label as LocalizedText | undefined, undefined, undefined) ?? String(entry.value), icon: typeof entry.icon === 'string' ? entry.icon : undefined }
-          : { value: entry as Value, label: String(entry) }));
-      },
+      options: optionsOf,
       value,
       display: (on) => {
         if (typed) return typeName(on, subject(on).type);
@@ -425,6 +432,11 @@ export function interpretForms(specification: Specification, metamodel: Metamode
         if (present === undefined || present === null) return worded(own.absentText ?? attributeOf(on)?.absentText, bound, '');
         if (present === '') return worded(own.emptyText ?? attributeOf(on)?.emptyText, bound, '');
         return shown(present, attributeOf(on));
+      },
+      initial: (on) => {
+        if (own.initial === undefined) return undefined;
+        const evaluated = expressions.evaluate(own.initial as Expression, scope(on));
+        return evaluated.ok ? evaluated.value : undefined;
       },
       validate,
       parse: (on, input) => {
@@ -439,6 +451,9 @@ export function interpretForms(specification: Specification, metamodel: Metamode
           const meant = Object.values(metamodel.types).find((candidate) => candidate.kind === 'node' && !candidate.abstract && same(candidate.name));
           return { refused: (meant && applicable(own.refusals, scope(on, { newValue: meant.name }))) ?? `'${text}' is not one of the types this can become.` };
         }
+        // A choice among options an expression gives is named by its label: the value is the option's (DISL 7.5).
+        const listed = typeof input === 'string' && isCel(own.options) ? optionsOf(on).find((option) => option.label === input) : undefined;
+        if (listed !== undefined) input = listed.value;
         const invalid = validate(on, input);
         if (invalid !== undefined) return { refused: invalid };
         if (own.parse && typeof input === 'string') {
@@ -478,7 +493,9 @@ export function interpretForms(specification: Specification, metamodel: Metamode
       id, for: types, usage, generated,
       commit: own.commit ?? (usage.includes('inspector') ? 'immediate' : 'explicit'),
       items: (Array.isArray(own.items) ? own.items : []).map((child) => item(id, types[0] ?? '', child)),
+      ...(typeof own.icon === 'string' ? { icon: own.icon } : {}),
       label: (on) => worded(own.label, scope(on), ''),
+      submitLabel: (on) => worded(own.submitLabel, scope(on), ''),
     };
   };
 

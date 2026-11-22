@@ -354,14 +354,20 @@ export class LinesFamily extends FamilyReader {
 
   format(read: SlotRead, binding: AttributeBinding | undefined, value: unknown): string {
     const written = (binding ? wire(binding, value, read.wire, read.wireFoldsCase) : undefined) ?? plain(value, binding);
-    return read.quote !== undefined ? read.quote + written + read.quote : written;
+    if (read.quote !== undefined) return read.quote + written + read.quote;
+    // A bare word keeps its style only where the new value fits it, so that it reads back as the one word it was (FBL 6.3).
+    return isWord(read.node) && !fitsBare(written) ? `"${written}"` : written;
   }
 
   /** The written form of a value for an emit placeholder: a map's first key, a flag's word, a number by FBL 6.3. */
-  private emitted(binding: AttributeBinding | undefined, value: unknown): string {
+  private emitted(binding: AttributeBinding | undefined, value: unknown, quoted = false): string {
     if (!binding) return plain(value);
     if (binding.flag) return value === true ? flagWord(binding) : '';
-    return wire(binding, value, undefined) ?? plain(value, binding);
+    // A list is its items as words, one space apart, as a group of several references is read (FBL 5.7).
+    if (Array.isArray(value)) return value.map((item) => wire(binding, item, undefined) ?? plain(item, binding)).join(' ');
+    const written = wire(binding, value, undefined) ?? plain(value, binding);
+    // A word that would not read back as the one bare word it is, is written quoted where its slot reads a quoted word, unless the template quotes it (FBL 4.6, 6.2).
+    return binding.word !== undefined && !quoted && !fitsBare(written) && !written.includes('"') && new RegExp(binding.word, 'u').test(`"${written}"`) ? `"${written}"` : written;
   }
 
   write(plan: SplicePlan, element: ReadElement, changes: readonly SlotChange[]): void {
@@ -374,14 +380,15 @@ export class LinesFamily extends FamilyReader {
         pending.push({ operation: 'insert-key', span: { start: point.offset, end: point.offset }, text: point.text });
         return;
       }
-      // A word the emit does not place goes after the words of its group (FBL 0.7 6.3); one it places, with the line.
+      // A word goes after the words its group holds for the slots before it (FBL 0.7 6.3), a flag's as well, so that a word no slot reads stays;
+      // any other value the emit places, with the line.
       const word = change.binding.word;
-      if (word === undefined || change.binding.flag || change.binding.group === undefined || this.emitPlaces(element.rule, change.attribute)) {
+      if (word === undefined || change.binding.group === undefined || (!change.binding.flag && this.emitPlaces(element.rule, change.attribute))) {
         reEmit = true;
         return;
       }
       const offset = this.wordInsertPoint(element, change);
-      pending.push({ operation: 'insert-key', span: { start: offset, end: offset }, text: ` ${wordText(word, plain(change.value))}` });
+      pending.push({ operation: 'insert-key', span: { start: offset, end: offset }, text: ` ${change.binding.flag ? flagWord(change.binding) : wordText(word, plain(change.value))}` });
     };
     for (const change of changes) {
       const read = change.read;
@@ -451,7 +458,7 @@ export class LinesFamily extends FamilyReader {
     }
     const binding = attributeOf(rule, name);
     const value = values.has(name) ? values.get(name) : binding?.default ? scalarValue(binding.default) : undefined;
-    return value !== null && value !== undefined ? this.emitted(binding, value) : undefined;
+    return value !== null && value !== undefined ? this.emitted(binding, value, rule.insert?.emit?.includes(`"{${name}}"`) === true) : undefined;
   }
 
   /** Whether the rule's emit places the attribute, so that a value of it is written with the line. */
@@ -553,7 +560,7 @@ export class LinesFamily extends FamilyReader {
     const length = byteLength(between);
     if (between.length > 0 && offset + length <= this.text.length && this.text.text(offset, offset + length) === between) offset += length;
     const template = `[${parts.filter((part) => part.segment === segment).map((part) => part.literal ?? `{${part.placeholder}}`).join('')}]`;
-    const text = render(template, (name) => (name === change.attribute ? this.emitted(change.binding, change.value) : undefined));
+    const text = render(template, (name) => (name === change.attribute ? this.emitted(change.binding, change.value, template.includes(`"{${name}}"`)) : undefined));
     return text.length === 0 ? undefined : { offset, text };
   }
 
@@ -696,6 +703,9 @@ function commonSubsequence(held: readonly string[], wanted: readonly string[]): 
   }
   return pairs;
 }
+
+/** Whether a text is read back as the one bare word it is: not empty, with no whitespace and no double quote (FBL 4.6). */
+const fitsBare = (text: string): boolean => text !== '' && !/[\s"]/.test(text);
 
 /**
  * The word a word slot writes for `value`: its `word` expression with the group `value` replaced by

@@ -20,6 +20,8 @@ export interface ChangeContext {
   readonly metamodel: Metamodel;
   readonly persistence: InterpretedPersistence;
   readonly read: FblModel;
+  /** The entry each element of the model is read from, by the element's id, where the two differ (`Read.entries`). */
+  readonly entries?: ReadonlyMap<string, string>;
 }
 
 export interface Refused {
@@ -51,6 +53,7 @@ const takes = (value: unknown): boolean => scalar(value) || (Array.isArray(value
  */
 export function modelChangesOf(changes: readonly Change[], context: ChangeContext, model: Model): readonly ModelChange[] | Refused {
   const { binding, metamodel, persistence } = context;
+  const entryId = (id: string): string => context.entries?.get(id) ?? id;
   const rules = allRules(binding);
   const typeOf = (id: string): string | undefined => [...model.elements, ...model.relations].find((element) => element.id === id)?.type;
   const endsOf = (id: string): readonly (string | undefined)[] => {
@@ -100,11 +103,11 @@ export function modelChangesOf(changes: readonly Change[], context: ChangeContex
 
   // Whether a change only empties references to elements this request removes, in an entry the binding's cascade removes with one of them.
   const taken = (id: string, attributes: Readonly<Record<string, Value | null>>): boolean => {
-    const entry = context.read.find(id);
+    const entry = context.read.find(entryId(id));
     const held = [...model.elements, ...model.relations].find((element) => element.id === id)?.attributes ?? {};
     return entry !== undefined && Object.entries(attributes).some(([name, value]) => {
       const named = held[name];
-      const gone = value === null && typeof named === 'string' && removed.has(named) ? context.read.find(named) : undefined;
+      const gone = value === null && typeof named === 'string' && removed.has(named) ? context.read.find(entryId(named)) : undefined;
       return gone !== undefined && findRule(binding, gone.rule)?.remove?.cascade.includes(entry.rule) === true;
     });
   };
@@ -155,7 +158,37 @@ export function modelChangesOf(changes: readonly Change[], context: ChangeContex
     }
   }
   // The diagram's entry was added under no id: the binding gives it none.
-  return steps.map((step) => (step.kind === 'add' && step.id === '' ? { kind: 'add', type: step.type, attributes: step.attributes } : step));
+  return entriesOf(steps, context).map((step) => (step.kind === 'add' && step.id === '' ? { kind: 'add', type: step.type, attributes: step.attributes } : step));
+}
+
+/**
+ * The steps in the body's terms where the model names an element otherwise (`ChangeContext.entries`):
+ * each step names the entry it changes, and a reference names an element by the key the binding
+ * reads it by (FBL 5.7), the key an added element is given where the request adds it.
+ */
+function entriesOf(steps: readonly Step[], context: ChangeContext): readonly Step[] {
+  const { entries, read, binding } = context;
+  if (!entries) return steps;
+  const entryId = (id: string): string => entries.get(id) ?? id;
+  const keyOf = (id: string, by: string): unknown => {
+    const entry = read.find(entryId(id));
+    if (entry) return by === 'id' ? entry.id : entry.attributes[by];
+    const added = steps.find((step) => step.kind === 'add' && step.id === id);
+    return added?.kind === 'add' ? (by === 'id' ? id : added.attributes[by]) : undefined;
+  };
+  const keyed = (rules: readonly string[], attributes: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> => Object.fromEntries(Object.entries(attributes).map(([name, value]) => {
+    const reference = allRules(binding).filter((rule) => rules.includes(rule.type)).flatMap((rule) => rule.attributes).find(([candidate]) => candidate === name)?.[1].reference;
+    if (!reference || reference.by === '') return [name, value];
+    const one = (item: unknown): unknown => (typeof item === 'string' ? keyOf(item, reference.by) ?? item : item);
+    return [name, Array.isArray(value) ? value.map(one) : one(value)];
+  }));
+  return steps.map((step): Step => {
+    if (step.kind === 'remove') return { ...step, id: entryId(step.id) };
+    if (step.kind === 'move') return { ...step, id: entryId(step.id), ...(step.parent === undefined ? {} : { parent: entryId(step.parent) }) };
+    if (step.kind === 'add') return { ...step, attributes: keyed([step.type], step.attributes), ...(step.parent === undefined ? {} : { parent: entryId(step.parent) }) };
+    const type = read.find(entryId(step.id))?.type;
+    return { ...step, id: entryId(step.id), attributes: keyed(type === undefined ? [] : [type], step.attributes) };
+  });
 }
 
 /**
