@@ -58,6 +58,35 @@ export interface ReadingLogic {
   readonly underlineStyle?: string;
 }
 
+/** What an export of a document is given: its model, the name of its file without the extension, and where the canvas draws the centre of each node, by id. */
+export interface ExportRequest {
+  readonly model: Model;
+  readonly stem: string;
+  readonly centres: Readonly<Record<string, { readonly x: number; readonly y: number }>>;
+}
+
+/** A file a tool type writes of a document beside it, such as a page that shows it otherwise; the document itself is not changed. */
+export interface ToolExport {
+  /** The id its command and its menu entry are known by: `etalii.adp.export.<id>`. */
+  readonly id: string;
+  /** The label of its menu entry. */
+  readonly label: string;
+  /** The name of the file, for a document of that name without its extension, exported at a moment of local time. */
+  name(stem: string, moment: Date): string;
+  /** The text of the file. */
+  write(request: ExportRequest): string;
+}
+
+/**
+ * What a definition does not state of a tool type and the tool type exports, for the tool type of an origin: no plugin a
+ * definition names, and carried as one is (`docs/disl-support.md`, "Code for one tool type").
+ */
+export interface ExportLogic {
+  /** The origin of the tool type it is for. */
+  readonly id: string;
+  readonly exports: readonly ToolExport[];
+}
+
 export interface PluginRegistry {
   persistence(id: string): PersistencePlugin | undefined;
   layout(id: string): LayoutPlugin | undefined;
@@ -67,6 +96,8 @@ export interface PluginRegistry {
   views(origin: string): ViewLogic | undefined;
   /** How the tool type of an origin reads what its binding cannot state. */
   reading(origin: string): ReadingLogic | undefined;
+  /** What the tool type of an origin exports. */
+  exports(origin: string): ExportLogic | undefined;
 }
 
 /** The plugins a host carries, by what each provides. */
@@ -77,11 +108,12 @@ export interface Plugins {
   readonly celFunctions?: readonly CelFunctionsPlugin[];
   readonly views?: readonly ViewLogic[];
   readonly reading?: readonly ReadingLogic[];
+  readonly exports?: readonly ExportLogic[];
 }
 
 export function pluginRegistry(plugins: Plugins): PluginRegistry {
   const by = <T extends { readonly id: string }>(list: readonly T[]) => (id: string): T | undefined => list.find((plugin) => plugin.id === id);
-  return { persistence: by(plugins.persistence), layout: by(plugins.layout), action: by(plugins.action), celFunctions: by(plugins.celFunctions ?? []), views: by(plugins.views ?? []), reading: by(plugins.reading ?? []) };
+  return { persistence: by(plugins.persistence), layout: by(plugins.layout), action: by(plugins.action), celFunctions: by(plugins.celFunctions ?? []), views: by(plugins.views ?? []), reading: by(plugins.reading ?? []), exports: by(plugins.exports ?? []) };
 }
 
 type Provides = 'persistence' | 'layout' | 'action' | 'celFunctions';

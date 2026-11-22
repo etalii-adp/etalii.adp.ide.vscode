@@ -238,6 +238,13 @@
       "file": "examples/causal-loop-diagram/uk-cod-population/uk-cod-population.adp",
       "observed": "49 layout entries name no element: variable:adultCod, variable:birthRate, variable:carryingCapacity, variable:closureZones, variable:consumerDemand, …",
       "reason": "The same as for the copies under src/examples: the binding reads a variable's id as its place in the body, and the registration keys a position by the variable's natural id, `variable:<name>`, which the definition's `persistence.ids` (DISL 11.5.1) gives it. The causal loop diagram reads its positions through the definition, which resolves them (etalii.adp spec 081); the FBL library alone does not."
+    },
+    {
+      "property": "registration-layout",
+      "binding": "cld",
+      "file": "fixtures/tools/causal-loop-diagram/flow-page-sources/flow-properties/flow-properties.adp",
+      "observed": "4 layout entries name no element: variable:a, variable:b, variable:c, variable:outside",
+      "reason": "The same as for the examples: the registration keys a position by the variable's natural id, `variable:<name>`, which the definition's `persistence.ids` (DISL 11.5.1) gives it, and the FBL library alone reads a variable's id as its place in the body. The document is the one whose flow page sets every flow property (etalii.adp spec 082)."
     }
   ]
 }

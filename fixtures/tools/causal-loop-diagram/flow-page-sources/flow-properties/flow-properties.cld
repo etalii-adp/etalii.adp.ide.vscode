@@ -1,0 +1,15 @@
+causal-loop 1
+title "Markup <b>&</b> 'quotes'"
+flow strength=9 delay=0.5 inertia=2 speed=0.05 density=4 heatmap=pressure
+
+variable a "A </script><script>alert(1)</script>" start=1.4 push=-6
+variable b "B & C" start=0.25 push=2.5
+variable c
+variable outside "Outside" start=0.9
+
+link a -> b + weight=-7 "a note & <more>"
+link b -> c - delayed weight=0.000001
+link c -> a +
+link a -> c - weight=0
+link outside -> a +
+link a -> ghost +

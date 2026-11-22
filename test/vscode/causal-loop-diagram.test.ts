@@ -77,4 +77,51 @@ suite('A causal loop diagram in Visual Studio Code', () => {
     await vscode.commands.executeCommand('undo');
     await until('the undo', () => document.getText() === original);
   });
+
+  // etalii.adp spec 082: the flow page written beside the file, of the diagram as the editor holds it, and nothing of the document changed.
+  const exported = async (): Promise<vscode.Uri> => {
+    const last = await until('a page to be written', async () => (await vscode.commands.executeCommand<{ uri?: string }>('etalii.adp.test.lastExport'))?.uri);
+    return vscode.Uri.parse(last);
+  };
+
+  test('Export flow page on the diagram writes its page beside it, unsaved edits included, and leaves the document as it was', async () => {
+    const uri = example('causal-loop-diagram', 'on-call', 'on-call.cld');
+    await vscode.commands.executeCommand('vscode.openWith', uri, viewType);
+    await drawn();
+    const document = await vscode.workspace.openTextDocument(uri);
+    const unsaved = new vscode.WorkspaceEdit();
+    unsaved.insert(uri, new vscode.Position(document.lineCount, 0), '\nvariable sleep "Sleep"\n');
+    await vscode.workspace.applyEdit(unsaved);
+    const before = document.getText();
+    const version = document.version;
+
+    assert.deepStrictEqual(await edit({ kind: 'action', action: 'export:flowPage' }), { result: 'applied' });
+    const page = await exported();
+    try {
+      assert.match(page.path, /\/on-call \{\d{4}-\d{2}-\d{2} \d{2}\.\d{2}\}\.html$/);
+      const text = new TextDecoder().decode(await vscode.workspace.fs.readFile(page));
+      assert.ok(text.startsWith('<!doctype html>'));
+      assert.ok(text.includes('["sleep","Sleep",'), 'the unsaved variable is in the page');
+      assert.strictEqual(document.getText(), before);
+      assert.strictEqual(document.version, version, 'an export is no edit');
+      assert.ok(document.isDirty, 'the document is still unsaved');
+    } finally {
+      await vscode.workspace.fs.delete(page);
+    }
+  });
+
+  test('Export Flow Page from the Explorer writes the page of a file no editor holds', async () => {
+    const uri = example('causal-loop-diagram', 'reference', 'reference.cld');
+    await vscode.commands.executeCommand('etalii.adp.export.flowPage', uri);
+    const page = await until('the page of reference.cld', async () => {
+      const last = await vscode.commands.executeCommand<{ uri?: string }>('etalii.adp.test.lastExport');
+      return last?.uri?.includes('/reference%20%7B') || last?.uri?.includes('/reference {') ? vscode.Uri.parse(last.uri) : undefined;
+    });
+    try {
+      const text = new TextDecoder().decode(await vscode.workspace.fs.readFile(page));
+      assert.ok(text.includes('"o":[["R1","Births beget births"'), 'the page holds the file\'s loops');
+    } finally {
+      await vscode.workspace.fs.delete(page);
+    }
+  });
 });

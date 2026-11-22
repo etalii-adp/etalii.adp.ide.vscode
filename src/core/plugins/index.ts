@@ -6,6 +6,7 @@ import { pluginRegistry, type PluginRegistry, type Plugins } from '../tool/plugi
 import { abmArrange } from './abm-arrange/index';
 import { abmMarkdown } from './abm-markdown/index';
 import { cldCycles } from './cld-cycles/index';
+import { cldFlowPage } from './cld-flow-page/index';
 import { cldLayout } from './cld-layout/index';
 import { cldReading } from './cld-reading/index';
 import { freeplaneMm } from './freeplane-mm/index';
@@ -14,6 +15,6 @@ import { mindmapLayout } from './mindmap-layout/index';
 import { projectLinkPicker } from './project-link-picker/index';
 
 /** Every plugin this host carries. */
-export const carried: Plugins = { persistence: [freeplaneMm, abmMarkdown], layout: [mindmapLayout, cldLayout], action: [projectLinkPicker, abmArrange], celFunctions: [cldCycles], views: [knowledgeViews], reading: [cldReading] };
+export const carried: Plugins = { persistence: [freeplaneMm, abmMarkdown], layout: [mindmapLayout, cldLayout], action: [projectLinkPicker, abmArrange], celFunctions: [cldCycles], views: [knowledgeViews], reading: [cldReading], exports: [cldFlowPage] };
 
 export const plugins: PluginRegistry = pluginRegistry(carried);
