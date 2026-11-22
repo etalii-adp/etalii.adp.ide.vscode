@@ -171,6 +171,8 @@ export interface TableEntry {
   readonly inPlace?: boolean;
   /** Its entries are the types of something new, asked in the panel of a new property: its name first, then its type. */
   readonly named?: boolean;
+  /** Parameters of its request asked in a form before it is made, as an operation's are; its label names the form and its button. */
+  readonly asks?: TableOperation;
 }
 
 /** A panel the table surface opens under its bar or over a column. */

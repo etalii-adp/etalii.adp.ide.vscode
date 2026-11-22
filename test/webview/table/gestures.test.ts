@@ -277,6 +277,12 @@ describe('the settings control and the panels of a table with gestures', () => {
     expect(edits()).toEqual([op('addCondition', ['va'], { property: 'name', operator: 'contains' }), op('addSort', ['va'], { property: 'name', direction: 'ascending' }), op('setGroup', ['va'], { slot: 'hiddenGroups', key: 'big' })]);
   });
 
+  it('offers all or any from the first condition, as the standalone host does', () => {
+    press(all('.adp-table-item-text')[1]);
+    change(one<HTMLSelectElement>('.adp-table-filter select[aria-label="All or any"]'), 'any');
+    expect(edits()).toEqual([op('setMatch', ['va'], { match: 'any' })]);
+  });
+
   it('keeps what is typed in an editor when the same view comes again', () => {
     press(all('.adp-table-item-text')[1]);
     const value = one<HTMLInputElement>('.adp-table-condition input[aria-label="Value"]');

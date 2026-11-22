@@ -102,9 +102,8 @@ function field(label: string, given: TableField, make: Make): HTMLElement | unde
 }
 
 function filterOf(filter: TableFilter, make: Make, depth: number): HTMLElement {
-  const count = filter.conditions.length + filter.groups.length;
   return html('div', { class: depth === 0 ? 'adp-table-filter' : 'adp-table-filter adp-table-filter-group', 'data-id': filter.id },
-    count > 1 || depth > 0 ? html('div', { class: 'adp-table-panel-line' }, html('span', {}, 'Where'), choice('All or any', filter.match, make), html('span', {}, 'of these are true'), remover('filter group', filter.remove, make)) : undefined,
+    html('div', { class: 'adp-table-panel-line' }, html('span', {}, 'Where'), choice('All or any', filter.match, make), html('span', {}, 'of these are true'), remover('filter group', filter.remove, make)),
     ...filter.conditions.map((condition) => html('div', { class: 'adp-table-panel-line adp-table-condition', 'data-id': condition.id },
       choice('Property', condition.properties, make),
       choice('Comparison', condition.operators, make),
