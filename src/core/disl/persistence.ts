@@ -240,7 +240,7 @@ export function uniqueId(persistence: InterpretedPersistence, id: string, taken:
 
 /**
  * A model with the ids its `derived` strategy computes (DISL 11.5.2): each node's id is the value
- * of `ids.expression` for it, ancestors before descendants, and whatever names a node by its id
+ * of its type's own expression (`ids.types`), else of `ids.expression`, for it, ancestors before descendants, and whatever names a node by its id
  * (a parent, an end of a relation) follows. `renamed` holds each id that changed, by what it was.
  * A model whose ids are the derived ones already is given back as it is, and so is the model of a
  * specification with another strategy. An expression that fails for a node leaves its id as it was.
@@ -249,6 +249,11 @@ export function derivedIds(persistence: InterpretedPersistence, expressions: Exp
   const expression = persistence.ids.strategy === 'derived' ? persistence.ids.expression : undefined;
   if (typeof expression !== 'string' && !isCel(expression)) return { model, renamed: new Map() };
   // simplified: nodes are renamed, and a parent and an end of a relation follow; a reference attribute that names a node is not rewritten, until a definition with derived ids has one.
+  // A type with a derived rule of its own (`ids.types`) is named by its expression, the others by the one rule.
+  const own = new Map<string, Expression>();
+  for (const [type, rule] of Object.entries(persistence.ids.types ?? {})) {
+    if (rule.strategy === 'derived' && (typeof rule.expression === 'string' || isCel(rule.expression))) own.set(type, rule.expression);
+  }
   const depths = new Map<string, number>();
   const parents = new Map(model.elements.map((element) => [element.id, element.parent]));
   const depthOf = (id: string): number => {
@@ -268,7 +273,7 @@ export function derivedIds(persistence: InterpretedPersistence, expressions: Exp
     const next = new Map<string, string>();
     for (const node of nodes) {
       if (node.depth !== depth) continue;
-      const result = expressions.evaluate(expression, world.scope(node.element.id));
+      const result = expressions.evaluate(own.get(node.element.type) ?? expression, world.scope(node.element.id));
       if (result.ok && typeof result.value === 'string' && result.value !== '' && result.value !== node.element.id) next.set(node.element.id, result.value);
     }
     if (next.size === 0) continue;

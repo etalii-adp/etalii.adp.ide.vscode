@@ -133,12 +133,10 @@ export abstract class TreeFamily extends FamilyReader {
     return select(this.root, rule.at).map(({ entry, captures }) => ({ rule, entry, captures }));
   }
 
+  /** The entries around this one, nearest first, the root last: a rule whose `at` is `/` claims the root, as a file of a folder's does (FBL 10.2). */
   override enclosing(entry: Entry): Entry[] {
     const found: Entry[] = [];
-    for (let parent = entry.parent; parent; parent = parent.parent) {
-      if ((parent as TreeEntry).isRoot) break;
-      found.push(parent);
-    }
+    for (let parent = entry.parent; parent; parent = parent.parent) found.push(parent);
     return found;
   }
 

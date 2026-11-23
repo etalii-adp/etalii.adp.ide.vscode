@@ -92,6 +92,7 @@ export const messages = {
   bindingReader: 'A binding has a reader.',
   readerKind: 'The reader is "declared" or a plugin.',
   bodyKind: 'A body\'s kind is "file" or "folder".',
+  bodyStream: 'A body\'s stream is "first" or "documents", and only a body of the yaml family has one.',
   ruleNameTwice: (name: string) => `The rule name '${name}' is used twice.`,
   ruleName: (name: string) => `'${name}' is not a valid rule name.`,
   atOrLine: 'A rule has exactly one of \'at\' and \'line\'.',

@@ -342,14 +342,10 @@ export class BodyReading implements Reading {
     };
     const extra = this.family.celExtra(candidate);
     variables[extra.name] = extra.value;
-    // The nearest enclosing entry: as the rule that claimed it reads it, or as it stands.
-    const enclosing = this.family.enclosing(candidate.entry)[0];
-    const claimed = enclosing ? this.byEntry.get(enclosing) : undefined;
-    variables.parent = !enclosing
-      ? null
-      : claimed
-        ? this.parentValue(claimed, () => this.family.celValue(claimed.candidate))
-        : this.parentValue(enclosing, () => this.family.celValue({ entry: enclosing, captures: new Map() }));
+    // The nearest enclosing entry a rule matched, as that rule reads it (FBL 2.4), or null: entries are
+    // claimed in document order, so every enclosing entry has been claimed or passed over already.
+    const claimed = this.family.enclosing(candidate.entry).map((enclosing) => this.byEntry.get(enclosing)).find((element) => element !== undefined);
+    variables.parent = claimed ? this.parentValue(claimed, () => this.family.celValue(claimed.candidate)) : null;
     if (this.ruleContext === 'tree') {
       // The entry's written text and styles (FBL 2.4), made when an expression first asks for them.
       for (const view of ['text', 'style'] as const) {

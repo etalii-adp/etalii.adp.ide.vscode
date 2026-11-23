@@ -365,7 +365,7 @@ export interface Notation {
 }
 
 /** The shapes of DISL 6.7 this add-on draws; another one is drawn as a `rect` and reported. */
-export const builtInShapes: readonly string[] = ['rect', 'roundedRect', 'pill', 'ellipse', 'circle', 'folder', 'hexagon', 'chevron', 'parallelogram', 'superellipse', 'text', 'none'];
+export const builtInShapes: readonly string[] = ['rect', 'roundedRect', 'pill', 'ellipse', 'circle', 'folder', 'hexagon', 'chevron', 'parallelogram', 'superellipse', 'cylinder', 'text', 'none'];
 
 /** The default size of a node that states none (DISL B.1). */
 export const defaultSize: readonly [number, number] = [120, 60];

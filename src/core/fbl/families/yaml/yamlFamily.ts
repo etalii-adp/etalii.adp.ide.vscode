@@ -58,7 +58,7 @@ export class YamlFamily extends TreeFamily {
     }
     const parser = new YamlParser(this.text);
     try {
-      const value = parser.parseDocument();
+      const value = this.isStream ? parser.parseStream() : parser.parseDocument();
       this.root = new TreeEntry(value.span, undefined, 0, value, undefined, true);
       this.index(this.root);
     } catch (error) {
@@ -70,9 +70,20 @@ export class YamlFamily extends TreeFamily {
     for (const { name, span } of parser.duplicates) {
       this.report(findingCodes.duplicateKey, 'warning', messages.yamlDuplicateKey(name), span);
     }
+    const documents = new Set(this.isStream ? this.root!.value.entries : []);
     for (const entry of this.treeEntries) {
-      if (!entry.isRoot) entry.lineSpan = this.lineSpanOf(entry);
+      if (!entry.isRoot && !documents.has(entry)) entry.lineSpan = this.lineSpanOf(entry);
     }
+  }
+
+  /** Whether every document of the stream is bound, as the items of the root (FBL 0.22, 4.3). */
+  private get isStream(): boolean {
+    return this.binding.body.stream === 'documents';
+  }
+
+  /** Whether an entry is a document of a stream read with `stream: "documents"`. */
+  private isDocument(entry: TreeEntry): boolean {
+    return this.isStream && !entry.isRoot && this.root?.value.entries.includes(entry) === true;
   }
 
   /** The whole stream is read; a syntax error anywhere makes the body unreadable (FBL 4.3, 7.5). */
@@ -301,6 +312,10 @@ export class YamlFamily extends TreeFamily {
       return;
     }
     const value = container.value;
+    if (container.isRoot && this.isStream) {
+      this.insertDocument(plan, settings.place, keys);
+      return;
+    }
     if (value.kind === 'sequence') {
       const siblings = value.entries;
       const lastOf = (entries: readonly TreeEntry[]): TreeEntry | undefined => entries[entries.length - 1];
@@ -333,6 +348,18 @@ export class YamlFamily extends TreeFamily {
       return;
     }
     refuse(messages.yamlNotAList(selector, rule.type));
+  }
+
+  /**
+   * A new document of a stream (FBL 0.22, 6.2): after the last one, as one insert at the end of the
+   * body, a `---` line and then the keys at indentation 0; into an empty body without the `---` line.
+   * It cannot be placed before another document.
+   */
+  private insertDocument(plan: SplicePlan, place: string | undefined, keys: readonly string[]): void {
+    if (place === 'start' || place === 'next-sibling') refuse(messages.cannotPlace(this.familyName, place));
+    const offset = this.text.length;
+    const lines = this.root!.value.entries.length === 0 ? keys : ['---', ...keys];
+    plan.add('insert-entry', offset, offset, this.newLine(offset, lines));
   }
 
   /**
@@ -517,6 +544,7 @@ export class YamlFamily extends TreeFamily {
       }
       const value = this.wireValue(request, key);
       if (value !== undefined) lines.push(`${key}: ${value}`);
+      else lines.push(...this.childLines(request, key));
     }
     for (const [key, value] of constant) {
       if (!settings.keys.includes(key)) lines.push(`${key}: ${this.scalar(value, undefined, undefined, 0)}`);
@@ -530,6 +558,22 @@ export class YamlFamily extends TreeFamily {
       lines.push(...trimEndOf(rendered.replaceAll('\r\n', '\n'), '\n').split('\n'));
     }
     return lines;
+  }
+
+  /**
+   * A key of `insert.keys` that is the mapping the add's attributes reached through `child` live in
+   * (FBL 0.10, 6.2): the key, then each such attribute the add gives, in binding order, one step
+   * deeper; nothing when the add gives none of them.
+   */
+  private childLines(request: InsertRequest, key: string): string[] {
+    const lines: string[] = [];
+    for (const [name, binding] of request.rule.attributes) {
+      if (binding.child !== key || binding.key === undefined || isComputed(binding) || !request.values.has(name)) continue;
+      const value = request.values.get(name);
+      if (isEmpty(value) && !keepsEmpty(binding, value)) continue;
+      lines.push(`${' '.repeat(this.step)}${binding.key}: ${this.scalar(wire(binding, value, undefined) ?? value, undefined, binding, this.step)}`);
+    }
+    return lines.length === 0 ? [] : [`${key}:`, ...lines];
   }
 
   private wireValue(request: InsertRequest, key: string): string | undefined {
@@ -569,7 +613,8 @@ export class YamlFamily extends TreeFamily {
       // A sibling container goes too when this edit removes everything in it.
       this.removeEmptiedLevels(plan, entry, levels, (other) => all.has(other) || (other.value.entries.length > 0 && other.value.entries.every((inner) => gone.has(inner))));
     }
-    plan.addAt('remove-entry', this.withoutFinalNewline(range, removed), '');
+    // A document goes with its own span; the line ending before its `---` line stays (FBL 0.22, 6.2).
+    plan.addAt('remove-entry', this.isDocument(entry) ? range : this.withoutFinalNewline(range, removed), '');
   }
 
   /**

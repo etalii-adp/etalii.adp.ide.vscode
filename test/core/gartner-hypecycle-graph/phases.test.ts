@@ -49,7 +49,7 @@ describe('phase boundaries', () => {
     // The hand-coded diagram drew such a boundary at the end of the span, at 120.
     const outside = trend(0, 120, 2, [500]);
     expect(boundaries(outside)).toEqual([60]);
-    expect(type.findings(outside)).toEqual([{ rule: 'ghg.boundary-order', severity: 'warning', message: '`a`\'s `peak-end: 1941-09` is out of order or outside 1900-01 to 1910-01.', line: 2 }]);
+    expect(type.findings(outside)).toEqual([{ rule: 'ghg.boundary-order', severity: 'warning', message: '`a`\'s `peak-end: 1941-09` is out of order or outside 1900-01 to 1910-01.', line: 2, element: 'a' }]);
   });
 });
 

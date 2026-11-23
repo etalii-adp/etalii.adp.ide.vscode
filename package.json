@@ -159,6 +159,19 @@
         "priority": "default"
       },
       {
+        "viewType": "etalii.adp.openslo.slo",
+        "displayName": "SLO map",
+        "selector": [
+          {
+            "filenamePattern": "*.yaml"
+          },
+          {
+            "filenamePattern": "*.yml"
+          }
+        ],
+        "priority": "option"
+      },
+      {
         "viewType": "etalii.adp.etalii.post-incident-review",
         "displayName": "Post-incident review designer",
         "selector": [
@@ -322,6 +335,11 @@
         "category": "ADP"
       },
       {
+        "command": "etalii.adp.openAs.openslo.slo",
+        "title": "Open as SLO map",
+        "category": "ADP"
+      },
+      {
         "command": "etalii.adp.new.etalii.post-incident-review",
         "title": "New Post-incident review designer",
         "category": "ADP"
@@ -362,6 +380,11 @@
         {
           "command": "etalii.adp.openAs.etalii.knowledge",
           "when": "resourceExtname =~ /^\\.(yaml|yml|json|ded|xml)$/ && !activeCustomEditorId && resourcePath in etalii.adp.suggested",
+          "group": "navigation"
+        },
+        {
+          "command": "etalii.adp.openAs.openslo.slo",
+          "when": "resourceExtname =~ /^\\.(yaml|yml)$/ && !activeCustomEditorId && resourcePath in etalii.adp.suggested",
           "group": "navigation"
         },
         {
@@ -472,6 +495,10 @@
           "when": "resourceExtname =~ /^\\.(yaml|yml|json|ded|xml)$/"
         },
         {
+          "command": "etalii.adp.openAs.openslo.slo",
+          "when": "resourceExtname =~ /^\\.(yaml|yml)$/"
+        },
+        {
           "command": "etalii.adp.openAs.etalii.post-incident-review",
           "when": "resourceExtname =~ /^\\.(md)$/"
         }
@@ -495,6 +522,11 @@
         {
           "command": "etalii.adp.openAs.etalii.knowledge",
           "when": "resourceExtname =~ /^\\.(yaml|yml|json|ded|xml)$/ && resourcePath in etalii.adp.suggested",
+          "group": "navigation@90"
+        },
+        {
+          "command": "etalii.adp.openAs.openslo.slo",
+          "when": "resourceExtname =~ /^\\.(yaml|yml)$/ && resourcePath in etalii.adp.suggested",
           "group": "navigation@90"
         },
         {

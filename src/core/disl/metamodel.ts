@@ -367,6 +367,72 @@ export function derivedRelations(metamodel: Metamodel, expressions: Expressions,
   return { value: relations, findings };
 }
 
+// ---- derived nodes (DISL 4.11.2) ----
+
+/** What a derived node says when a gesture on it is refused and its type gives no `reason` (DISL 4.11.4). */
+export const DERIVED_REASON = 'This is computed from the model and cannot be edited here.';
+
+/**
+ * The model with the nodes its derived node types compute (DISL 4.11.2), in the order of the types,
+ * each type over the model with the nodes the types before it derived (4.11.5): one node for each
+ * item of `from`, or for each distinct `key`, named by `id` and given the `attributes` listed, the
+ * others their defaults, with its `sources` and its `reason`. A node whose id is taken is left out,
+ * and a type whose `from` fails derives none, said once (`std.derivedFailed`).
+ */
+export function withDerivedNodes(metamodel: Metamodel, expressions: Expressions, model: Model): Loaded<Model> {
+  // simplified: `parent`, `slot` and `edits` of a derived node are not read; every gesture on one is refused. Read them when a definition nests or edits a derived node.
+  const findings: Finding[] = [];
+  let current = model;
+  for (const type of Object.values(metamodel.types)) {
+    const rule = !isRelation(type) && isObject(type.declared.derived) ? type.declared.derived : undefined;
+    if (!rule || (typeof rule.from !== 'string' && !isCel(rule.from))) continue;
+    const world = expressions.over(current);
+    const items = expressions.evaluate(rule.from, world.scope());
+    if (!items.ok || !Array.isArray(items.raw)) {
+      findings.push(finding('std.derivedFailed', 'warning', `The nodes of the type \`${type.name}\` could not be derived, so none is drawn: ${items.ok ? '`from` did not give a list' : items.error}`));
+      continue;
+    }
+    // The items in groups of equal keys, in the order each key first appears.
+    const groups: unknown[][] = [];
+    const byKey = new Map<string, unknown[]>();
+    for (const item of items.raw as unknown[]) {
+      const key = typeof rule.key === 'string' || isCel(rule.key) ? expressions.evaluate(rule.key, world.scope(undefined, { item, group: [item], index: 0n })) : undefined;
+      const text = key?.ok ? JSON.stringify(key.value) : undefined;
+      const known = text === undefined ? undefined : byKey.get(text);
+      if (known) known.push(item);
+      else {
+        const group = [item];
+        groups.push(group);
+        if (text !== undefined) byKey.set(text, group);
+      }
+    }
+    const taken = new Set([...current.elements, ...current.relations].map((element) => element.id));
+    const lines = new Map(current.elements.map((element) => [element.id, element.line]));
+    const made: Model['elements'][number][] = [];
+    const reason = typeof rule.reason === 'string' && rule.reason !== '' ? rule.reason : DERIVED_REASON;
+    groups.forEach((group, index) => {
+      const scope = world.scope(undefined, { item: group[0], group, index: BigInt(index) });
+      const read = (expression: unknown): Value | undefined => {
+        const result = typeof expression === 'string' || isCel(expression) ? expressions.evaluate(expression, scope) : undefined;
+        return result?.ok ? result.value : undefined;
+      };
+      const id = read(rule.id);
+      if (typeof id !== 'string' || id === '' || taken.has(id)) return;
+      taken.add(id);
+      const attributes: Record<string, Value> = {};
+      for (const [name, expression] of Object.entries(isObject(rule.attributes) ? rule.attributes : {})) {
+        const value = read(expression);
+        if (value !== undefined && value !== null) attributes[name] = value;
+      }
+      const given = read(rule.sources);
+      const sources = (Array.isArray(given) ? given : [given]).filter((source): source is string => typeof source === 'string' && lines.has(source));
+      made.push({ id, type: type.name, attributes, host: {}, ephemeral: true, line: sources.length > 0 ? lines.get(sources[0])! : 0, derived: { sources, reason } });
+    });
+    if (made.length > 0) current = { ...current, elements: [...current.elements, ...made] };
+  }
+  return { value: current, findings };
+}
+
 // ---- year and month (DISL 4.2) ----
 
 /** The month index of `±YYYY-MM`, year × 12 + (month − 1), or nothing for a text not in that form. */

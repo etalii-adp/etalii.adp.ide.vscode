@@ -24,10 +24,10 @@ describe('the hype cycle rules', () => {
   });
 
   it('report each with the sentence that names what is wrong', () => {
-    expect(findingsIn('rule-stop-before-start')).toEqual([{ rule: 'ghg.stop-before-start', severity: 'warning', line: 2, message: '`a` stops at 1900-01, not after it starts at 1920-01; a trend is at least a month long.' }]);
-    expect(findingsIn('rule-phase-count')).toEqual([{ rule: 'ghg.phase-count', severity: 'warning', line: 2, message: '`a` shows 7 phases; a trend shows 1 to 4.' }]);
-    expect(findingsIn('rule-self-influence')).toEqual([{ rule: 'ghg.self-influence', severity: 'warning', line: 15, message: '`aa` has `a` influence itself; a trend cannot.' }]);
-    expect(findingsIn('rule-duplicate-id')).toEqual([{ rule: 'ghg.duplicate-id', severity: 'warning', line: 14, message: '`a` is declared 2 times; an id names one entry.' }]);
+    expect(findingsIn('rule-stop-before-start')).toEqual([{ rule: 'ghg.stop-before-start', severity: 'warning', line: 2, element: 'a', message: '`a` stops at 1900-01, not after it starts at 1920-01; a trend is at least a month long.' }]);
+    expect(findingsIn('rule-phase-count')).toEqual([{ rule: 'ghg.phase-count', severity: 'warning', line: 2, element: 'a', message: '`a` shows 7 phases; a trend shows 1 to 4.' }]);
+    expect(findingsIn('rule-self-influence')).toEqual([{ rule: 'ghg.self-influence', severity: 'warning', line: 15, element: 'aa', message: '`aa` has `a` influence itself; a trend cannot.' }]);
+    expect(findingsIn('rule-duplicate-id')).toEqual([{ rule: 'ghg.duplicate-id', severity: 'warning', line: 14, element: 'trend@15', message: '`a` is declared 2 times; an id names one entry.' }]);
   });
 
   it('report no ghg.unreadable-entry for a key the binding does not read, and one for a value that cannot be read', () => {
@@ -39,7 +39,7 @@ describe('the hype cycle rules', () => {
   it('count an influence a phase count hides: a second one in the same direction is still a duplicate', () => {
     const findings = findingsIn('rule-duplicate-hidden');
     expect(findings).toEqual([
-      { rule: 'ghg.duplicate-influence', severity: 'warning', line: 24, message: '`a` influences `b` 2 times; a trend influences another once in each direction.' },
+      { rule: 'ghg.duplicate-influence', severity: 'warning', line: 24, element: 'ab2', message: '`a` influences `b` 2 times; a trend influences another once in each direction.' },
     ]);
   });
 

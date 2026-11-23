@@ -62,6 +62,8 @@ const copies = [
   // etalii.adp spec 090: the post-incident review's two examples; the fixtures its definition declares a host must pass are under fixtures/tools/post-incident-review/.
   ...['checkout-latency.md', 'certificate-expiry.md'].map((name) => [adpName, `definitions/designers/examples/${name}`, `examples/post-incident-review/${name}`]),
   ...['read', 'edits'].map((kind) => [adpName, `specifications/fbl/fixtures/post-incident-review-${kind}/`, `fixtures/tools/post-incident-review/${kind}/`]),
+  // etalii.adp spec 090: the SLO map's examples, OpenSLO's own with their licence; the fixtures its definition declares a host must pass are under fixtures/fbl/conformance/.
+  [adpName, 'definitions/diagrams/vendored/openslo/', 'examples/openslo-slo/'],
   // DESL's smallest example and its binding: the tool type a test adds to a temporary definitions folder.
   [adpName, 'specifications/desl/minimal-table.des', 'fixtures/tools/desl/minimal-table.des'],
   [adpName, 'specifications/desl/minimal-table.fbl', 'fixtures/tools/desl/minimal-table.fbl'],

@@ -497,7 +497,7 @@ describe('the findings of a document', () => {
   it('are those of the definition\'s rules, each with the definition\'s code and severity, on the zero-based line of its cause', () => {
     const rule = array(at(specification, 'constraints', 'rules')).find((candidate) => at(candidate, 'id') === 'stopAfterStart');
     const found = type.findings(fixture('rule-stop-before-start'));
-    expect(found).toEqual([{ rule: at(rule, 'code'), severity: at(specification, 'constraints', 'defaults', 'severity'), message: '`a` stops at 1900-01, not after it starts at 1920-01; a trend is at least a month long.', line: 2 }]);
+    expect(found).toEqual([{ rule: at(rule, 'code'), severity: at(specification, 'constraints', 'defaults', 'severity'), message: '`a` stops at 1900-01, not after it starts at 1920-01; a trend is at least a month long.', line: 2, element: 'a' }]);
   });
 
   it('are those of the reader, as the definition words them', () => {

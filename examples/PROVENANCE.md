@@ -31,6 +31,7 @@ The files under `examples/` and `fixtures/` are copied unchanged, byte for byte,
 | `examples/post-incident-review/certificate-expiry.md` | `etalii.adp` | `definitions/designers/examples/certificate-expiry.md` | `eba610d55c0c343062a3c672fc135099254ba334` |
 | `fixtures/tools/post-incident-review/read/` | `etalii.adp` | `specifications/fbl/fixtures/post-incident-review-read/` | `eba610d55c0c343062a3c672fc135099254ba334` |
 | `fixtures/tools/post-incident-review/edits/` | `etalii.adp` | `specifications/fbl/fixtures/post-incident-review-edits/` | `eba610d55c0c343062a3c672fc135099254ba334` |
+| `examples/openslo-slo/` | `etalii.adp` | `definitions/diagrams/vendored/openslo/` | `88fc48e6aa339ca0efd4ac1a11094293c4cef18f` |
 | `fixtures/tools/desl/minimal-table.des` | `etalii.adp` | `specifications/desl/minimal-table.des` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
 | `fixtures/tools/desl/minimal-table.fbl` | `etalii.adp` | `specifications/desl/minimal-table.fbl` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
 | `fixtures/tools/desl/desl.schema.json` | `etalii.adp` | `specifications/desl/desl.schema.json` | `e598c604280fd31dcc66e382bd7788dd0a249a4a` |

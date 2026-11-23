@@ -57,7 +57,9 @@ export function select(from: Entry, selector: string, attributeEquals?: (entry: 
           walk(child, index + 1, new Map([...captures, [segment.name, child.name]]));
           break;
         case 'name':
-          if (child.name !== segment.name) break;
+          // A sequence item has no key: a segment of digits names it by its place, `/0` the first, as
+          // FBL 4.3 and the SLO map's binding (`spec/timeWindow/0`) use it (etalii.adp issue 823).
+          if (child.name === undefined ? !isPlace(segment.name, entry.children.indexOf(child)) : child.name !== segment.name) break;
           if (segment.attribute !== undefined && (!attributeEquals || !attributeEquals(child, segment.attribute, segment.value!))) break;
           walk(child, index + 1, captures);
           break;
@@ -71,3 +73,6 @@ export function select(from: Entry, selector: string, attributeEquals?: (entry: 
 
 /** The root a selector starts from: the document root for an absolute selector, else `relativeTo`. */
 export const selectorStart = (selector: string, root: Entry, relativeTo: Entry | undefined): Entry => (selector.startsWith('/') || !relativeTo ? root : relativeTo);
+
+/** Whether a segment is the place of a sequence item: a run of decimal digits equal to its zero-based index. */
+const isPlace = (segment: string, index: number): boolean => /^(0|[1-9][0-9]*)$/.test(segment) && Number(segment) === index;

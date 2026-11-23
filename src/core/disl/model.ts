@@ -26,6 +26,14 @@ export interface ModelElement {
   readonly ephemeral: boolean;
   /** The line of the document the element starts at. */
   readonly line: number;
+  /** *(DISL 4.11.2)* Of a derived node: the elements it is computed from, and why a gesture on it is refused. A stored element has none. */
+  readonly derived?: DerivedOf;
+}
+
+/** What a derived node is computed from (DISL 4.11.4): its sources, by id, and the sentence a refused gesture on it says. */
+export interface DerivedOf {
+  readonly sources: readonly string[];
+  readonly reason: string;
 }
 
 /** A relation: an element with two ends, each the id of an element, or absent when it names nothing. */

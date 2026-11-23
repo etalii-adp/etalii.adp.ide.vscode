@@ -3,6 +3,8 @@ import { behaviorTreeIds } from './behaviorTree';
 /** What an id derivation is asked: the library's `IdRequest`, as far as these derivations use it. */
 interface Request {
   readonly rule: string;
+  readonly type?: string;
+  readonly line?: number;
   readonly attributes: Readonly<Record<string, unknown>>;
   readonly source?: string;
   readonly target?: string;
@@ -42,9 +44,21 @@ export function naturalIds(binding: string): (request: Request) => string | unde
       case 'vsm/practice': return `practice:${attribute(request, 'name')}`;
       case 'vsm/currentFlow': case 'vsm/futureFlow': case 'vsm/currentAlternative': case 'vsm/futureAlternative': return `flow:${request.source ?? ''}->${request.target ?? ''}`;
       case 'vsm/currentRework': case 'vsm/futureRework': return `rework:${request.source ?? ''}->${request.target ?? ''}`;
-      default: return undefined;
+      default: return binding === 'openslo' || binding === 'folder' ? openSloId(request) : undefined;
     }
   };
+}
+
+/**
+ * The SLO map (definitions/diagrams/openslo-slo.dis, persistence.ids): a document's object by its kind
+ * and name, an inline object by its owner's id and its own, an objective by its owner's and its
+ * place, and a document of no kind the map draws by its line.
+ */
+function openSloId(request: Request): string | undefined {
+  if (request.rule === 'objective') return `${request.parentId ?? ''}/objective:${(request.positionInSlot ?? 0) + 1}`;
+  if (request.rule === 'other') return `document@${request.line ?? 0}`;
+  const own = `${request.type ?? ''}:${attribute(request, 'name')}`;
+  return request.rule.startsWith('inline') && request.parentId !== undefined ? `${request.parentId}/${own}` : own;
 }
 
 /**
