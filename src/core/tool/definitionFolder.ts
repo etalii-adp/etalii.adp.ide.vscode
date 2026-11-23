@@ -62,6 +62,13 @@ export function readDefinitionFolder(name: string, files: ReadonlyMap<string, Ui
     const binding = loaded.document.bindings.get(reference.slice(hash + 1));
     if (!binding) return { reason: `\`${copied}\` has no binding \`${reference.slice(hash + 1)}\`.` };
     bindings.push(binding);
+    // A folder subject of the tool type (FBL 10) is reached through a registration that names its
+    // origin, never through a file: the binding of its document that claims that origin and is
+    // read only so comes with the one the definition names.
+    const origin = isObject(specification.language) ? specification.language.origin : undefined;
+    for (const other of loaded.document.bindings.values()) {
+      if (other.body.isFolder && other.claims.registrationOnly && typeof origin === 'string' && other.claims.origins.includes(origin) && !bindings.includes(other)) bindings.push(other);
+    }
   }
   return { definition: { name, kind: file.endsWith('.des') ? 'designer' : 'diagram', specification, companion: decode(companion) }, bindings };
 }

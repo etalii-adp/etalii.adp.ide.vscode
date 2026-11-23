@@ -9,8 +9,8 @@ import { candidates, suggests as suggested } from '../fbl/routing/router';
 import { encode } from '../fbl/text/utf8';
 import type { Claim } from '../frame/toolType';
 
-/** One claim for each binding, the extensions without their dot. */
-export const claimsOf = (bindings: readonly FblBinding[]): Claim[] => bindings.map(({ claims }) => ({
+/** One claim for each binding of a file, the extensions without their dot: a folder subject's binding claims no file (FBL 10). */
+export const claimsOf = (bindings: readonly FblBinding[]): Claim[] => bindings.filter((binding) => !binding.body.isFolder).map(({ claims }) => ({
   extensions: claims.extensions.map((extension) => extension.replace(/^\./, '')),
   shared: claims.shared,
   marker: claims.marker !== undefined,

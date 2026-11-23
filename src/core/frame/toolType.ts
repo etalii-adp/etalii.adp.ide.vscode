@@ -202,6 +202,12 @@ export interface Source {
   readonly related?: Readonly<Record<string, RelatedFile | null>>;
   /** The other documents of the same tool type the host knows of, each as this document would name it. */
   readonly peers?: readonly string[];
+  /**
+   * For a registration that opens a folder subject (FBL 10): the texts of the files the tool type
+   * reads in its folder (`ToolType.folderFiles`), by their `/`-separated paths relative to it. The
+   * document is then the registration, and the diagram is drawn from these files, read-only.
+   */
+  readonly folder?: Readonly<Record<string, string>>;
 }
 
 /** A file a document names, as the host found it: open in an editor, unsaved changes and all, or on disk. */
@@ -238,6 +244,12 @@ export interface ToolType<View, Request> {
   claimed(fileName: string, text: string): boolean;
   /** The other files the document names whose text it needs, as it names them: given back in `Source.related`. */
   related?(source: Source): readonly string[];
+  /**
+   * For a tool type that reads a folder subject (FBL 10): of a folder's entries, each by its
+   * `/`-separated path relative to it and a folder's ending in `/`, the files it reads, in the order
+   * it reads them; empty when the folder is not one it recognises.
+   */
+  folderFiles?(paths: readonly string[]): readonly string[];
   /**
    * The splices that keep the names of other files a document writes true when files move: `moved`
    * gives a name's new form, undefined for one that stays. Empty when nothing changes, undefined
