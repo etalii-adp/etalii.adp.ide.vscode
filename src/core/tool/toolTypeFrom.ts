@@ -79,9 +79,25 @@ function endOf(text: string | undefined): EndPlace | undefined {
 
 /**
  * The specification with a layout that names a plugin the registry lacks given the algorithm the
- * plugin's `fallback` names (DISL 13.1).
+ * plugin's `fallback` names, and an edge routed by such a plugin the routing it names (DISL 13.1).
  */
-function withFallbacks(specification: Readonly<Record<string, unknown>>, fallbacks: ReadonlyMap<string, string>): Readonly<Record<string, unknown>> {
+function withFallbacks(specification: Readonly<Record<string, unknown>>, fallbacks: ReadonlyMap<string, string>, routings: ReadonlyMap<string, string> = new Map()): Readonly<Record<string, unknown>> {
+  return withRoutingFallbacks(withLayoutFallbacks(specification, fallbacks), routings);
+}
+
+function withRoutingFallbacks(specification: Readonly<Record<string, unknown>>, routings: ReadonlyMap<string, string>): Readonly<Record<string, unknown>> {
+  const notation = specification.notation;
+  if (routings.size === 0 || !isObject(notation) || !isObject(notation.edges)) return specification;
+  const edges = Object.fromEntries(Object.entries(notation.edges).map(([type, declared]) => {
+    const line = isObject(declared) ? declared.line : undefined;
+    const routing = isObject(line) ? line.routing : undefined;
+    const plugin = isObject(routing) && typeof routing.plugin === 'string' ? routing.plugin : undefined;
+    return [type, plugin !== undefined && routings.has(plugin) ? { ...(declared as object), line: { ...(line as object), routing: routings.get(plugin) } } : declared];
+  }));
+  return { ...specification, notation: { ...notation, edges } };
+}
+
+function withLayoutFallbacks(specification: Readonly<Record<string, unknown>>, fallbacks: ReadonlyMap<string, string>): Readonly<Record<string, unknown>> {
   const layout = specification.layout;
   if (fallbacks.size === 0 || !isObject(layout) || !isObject(layout.algorithms)) return specification;
   const algorithms = Object.fromEntries(Object.entries(layout.algorithms).map(([name, declared]) => {
@@ -103,7 +119,8 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   const needed = missing.filter((reference) => reference.required);
   const fallbacks = new Map(missing.flatMap((reference) => (!reference.required && reference.fallback.layout !== undefined ? [[reference.id, reference.fallback.layout] as const] : [])));
 
-  const loaded = loadSpecification(withFallbacks(definition.specification, fallbacks));
+  const routingFallbacks = new Map(missing.flatMap((reference) => (!reference.required && reference.fallback.routing !== undefined ? [[reference.id, reference.fallback.routing] as const] : [])));
+  const loaded = loadSpecification(withFallbacks(definition.specification, fallbacks, routingFallbacks));
   const specification = loaded.value;
   const origin = typeof specification.language.origin === 'string' ? specification.language.origin : specification.language.id;
   // What the binding cannot state of how this tool type reads its documents (`docs/disl-support.md`, "Code for one tool type").
@@ -121,7 +138,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   const constraints = interpretConstraints(specification, metamodel.value, expressions);
   const forms = interpretForms(specification, metamodel.value, expressions, { numberText: readingLogic?.numberText });
   const toolbox = interpretToolbox(specification, metamodel.value);
-  const sceneTool: SceneTool = { metamodel: metamodel.value, expressions, coordinates: coordinates.value, viewpoints: viewpoints.value, layouts: (id) => plugins.layout(id) };
+  const sceneTool: SceneTool = { metamodel: metamodel.value, expressions, coordinates: coordinates.value, viewpoints: viewpoints.value, layouts: (id) => plugins.layout(id), routings: (id) => plugins.routing(id) };
   // The core has no browser to measure a text with: for a definition whose text metric is the host's, it is the estimate every ADP host shares.
   const measured: SceneOptions = { textWidth: widthOfText, ...(readingLogic?.underlineStyle === undefined ? {} : { underlineStyle: readingLogic.underlineStyle }) };
   const behavior = interpretBehavior(specification, metamodel.value, expressions, {

@@ -35,6 +35,27 @@ export interface SceneTool {
   readonly viewpoints: Viewpoints;
   /** The layout plugin of an id, for a layout named `plugin:<id>` (DISL 13.1). */
   layouts?(id: string): LayoutPlugin | undefined;
+  /** The routing plugin of an id, for an edge whose `line.routing` names `{ plugin: <id> }` (DISL 6.10, 13.1). */
+  routings?(id: string): RoutingPlugin | undefined;
+}
+
+/** What a routing plugin is given: the boxes of the edge's two nodes, in canvas units. */
+export interface RouteRequest {
+  readonly source: Box;
+  readonly target: Box;
+}
+
+/** One end of a routed line: where it is, and the side of its node it sits on. */
+export interface RoutedEnd {
+  readonly x: number;
+  readonly y: number;
+  readonly side: Side;
+}
+
+/** A routing a definition names as a plugin (DISL 13.1): the line between two nodes, and where it starts and ends. */
+export interface RoutingPlugin {
+  readonly id: string;
+  route(request: RouteRequest): { readonly from: RoutedEnd; readonly to: RoutedEnd; readonly path: readonly PathCommand[] };
 }
 
 export interface SceneOptions {
@@ -1233,7 +1254,9 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     if (!hiddenByFilter && (!source || !target)) continue;
 
     const own: EdgeNotation = varied(edgeNotation(notation, metamodel, relation.type), relation.id);
-    const routing = typeof own.line.routing === 'string' ? own.line.routing : 'straight';
+    // A routing a plugin carries is named by the plugin; one it does not carry was given its fallback when the specification was read (DISL 13.1).
+    const routedBy = isObject(own.line.routing) && typeof own.line.routing.plugin === 'string' ? tool.routings?.(own.line.routing.plugin) : undefined;
+    const routing = routedBy ? routedBy.id : typeof own.line.routing === 'string' ? own.line.routing : 'straight';
     const marker = (value: unknown, fallback: string): string => {
       const name = bound(value, relation.id);
       return typeof name === 'string' ? name : fallback;
@@ -1275,6 +1298,12 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
       const [start, end, c1, c2] = [at(-size / 2, 0), at(size / 2, 0), at(-size, size * 1.5), at(size, size * 1.5)];
       const ends = { node: source.node.id, side, normal };
       edges.push({ ...common, from: { ...ends, ...start }, to: { ...ends, ...end }, path: [{ op: 'M', ...start }, { op: 'C', c1x: c1.x, c1y: c1.y, c2x: c2.x, c2y: c2.y, ...end }] });
+      continue;
+    }
+    if (routedBy) {
+      const routed = routedBy.route({ source: source.node.box, target: target.node.box });
+      const endOf = (node: string, end: RoutedEnd): SceneEnd => ({ node, x: end.x, y: end.y, side: end.side, normal: normalOf(end.side) });
+      edges.push({ ...common, from: endOf(source.node.id, routed.from), to: endOf(target.node.id, routed.to), path: [...routed.path] });
       continue;
     }
     if (routing === 'curved') {
