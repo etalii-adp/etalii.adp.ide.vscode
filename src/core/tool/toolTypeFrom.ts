@@ -8,7 +8,7 @@ import { counterRules, markSets, numbered, renumbering, type Unnumbered } from '
 import { dedEnvelope, dedFindings, dedRefusal } from '../desl/envelope';
 import { gesturesOf, withImplicitMembers } from '../desl/hierarchy';
 import { checkMentions, interpretMentions } from '../desl/mentions';
-import { interpretOperations, type RunStep } from '../desl/operations';
+import { interpretOperations, readingOf, type RunStep } from '../desl/operations';
 import { derivedIds, interpretSettings, settingSteps, withSettings, type SettingSteps, type StoredBlocks } from '../desl/settings';
 import { expressionsOf, loadDesigner } from '../desl/specification';
 import { interpretSurface } from '../desl/surface';
@@ -913,6 +913,8 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
   const tableSurface = surface.value?.kind === 'table' ? surface.value : undefined;
   const hierarchySurface = surface.value?.kind === 'hierarchy' ? surface.value : undefined;
   const operations = surface.value && interpretOperations(designer, surface.value, metamodel.value, expressions, constraints.value);
+  // A document is read as the specification says, also where its surface is one this host cannot show.
+  const readBy = readingOf(persistence, metamodel.value, expressions);
   const settings = interpretSettings(designer.settings, metamodel.value, persistence, bindings);
   const mentions = interpretMentions(metamodel.value);
   const derive = derivedIds(expressions, persistence);
@@ -957,7 +959,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
 
   const bodyOf = (binding: FblBinding, source: Source): OpenBody | PluginBody => {
     const bytes = encode(source.text);
-    return binding.plugin ? PluginBody.open(bytes, binding, plugins.persistence(binding.plugin.plugin), source.fileName) : OpenBody.open(bytes, binding, { fileName: nameOf(source.fileName), ...operations?.value.reading(binding) });
+    return binding.plugin ? PluginBody.open(bytes, binding, plugins.persistence(binding.plugin.plugin), source.fileName) : OpenBody.open(bytes, binding, { fileName: nameOf(source.fileName), ...readBy(binding) });
   };
 
   let last: { readonly source: Source; readonly open: Open } | undefined;

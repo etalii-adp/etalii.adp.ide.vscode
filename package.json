@@ -159,6 +159,16 @@
         "priority": "default"
       },
       {
+        "viewType": "etalii.adp.etalii.post-incident-review",
+        "displayName": "Post-incident review designer",
+        "selector": [
+          {
+            "filenamePattern": "*.md"
+          }
+        ],
+        "priority": "option"
+      },
+      {
         "viewType": "etalii.adp.generic.value-stream-map",
         "displayName": "Value stream map",
         "selector": [
@@ -312,6 +322,16 @@
         "category": "ADP"
       },
       {
+        "command": "etalii.adp.new.etalii.post-incident-review",
+        "title": "New Post-incident review designer",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.openAs.etalii.post-incident-review",
+        "title": "Open as Post-incident review designer",
+        "category": "ADP"
+      },
+      {
         "command": "etalii.adp.new.generic.value-stream-map",
         "title": "New Value stream map",
         "category": "ADP"
@@ -343,6 +363,11 @@
           "command": "etalii.adp.openAs.etalii.knowledge",
           "when": "resourceExtname =~ /^\\.(yaml|yml|json|ded|xml)$/ && !activeCustomEditorId && resourcePath in etalii.adp.suggested",
           "group": "navigation"
+        },
+        {
+          "command": "etalii.adp.openAs.etalii.post-incident-review",
+          "when": "resourceExtname =~ /^\\.(md)$/ && !activeCustomEditorId && resourcePath in etalii.adp.suggested",
+          "group": "navigation"
         }
       ],
       "file/newFile": [
@@ -369,6 +394,9 @@
         },
         {
           "command": "etalii.adp.new.freeplane.mindmap"
+        },
+        {
+          "command": "etalii.adp.new.etalii.post-incident-review"
         },
         {
           "command": "etalii.adp.new.generic.value-stream-map"
@@ -442,6 +470,10 @@
         {
           "command": "etalii.adp.openAs.etalii.knowledge",
           "when": "resourceExtname =~ /^\\.(yaml|yml|json|ded|xml)$/"
+        },
+        {
+          "command": "etalii.adp.openAs.etalii.post-incident-review",
+          "when": "resourceExtname =~ /^\\.(md)$/"
         }
       ],
       "explorer/context": [
@@ -463,6 +495,11 @@
         {
           "command": "etalii.adp.openAs.etalii.knowledge",
           "when": "resourceExtname =~ /^\\.(yaml|yml|json|ded|xml)$/ && resourcePath in etalii.adp.suggested",
+          "group": "navigation@90"
+        },
+        {
+          "command": "etalii.adp.openAs.etalii.post-incident-review",
+          "when": "resourceExtname =~ /^\\.(md)$/ && resourcePath in etalii.adp.suggested",
           "group": "navigation@90"
         }
       ],

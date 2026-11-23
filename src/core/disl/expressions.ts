@@ -420,6 +420,8 @@ export function createExpressions(specification: Specification, metamodel: Metam
         const integer = kind.kind === 'primitive' && (kind.primitive === 'int' || kind.primitive === 'yearMonth');
         // A duration is written in ISO 8601 and is a CEL duration (DISL 4.2), so it has `getSeconds()` and arithmetic.
         if (kind.kind === 'primitive' && kind.primitive === 'duration' && typeof item === 'string') return durationOf(item) ?? item;
+        // A date and a date and time are CEL timestamps (DESL 4.2), so two of them give the duration between them.
+        if (kind.kind === 'primitive' && (kind.primitive === 'datetime' || kind.primitive === 'date') && typeof item === 'string') return timestampOf(item) ?? item;
         return integer && typeof item === 'number' && Number.isInteger(item) ? BigInt(item) : item;
       };
       const present = value ?? defaultOf(attribute) ?? zeroOf(kind, attribute.many === true);
@@ -453,7 +455,8 @@ export function createExpressions(specification: Specification, metamodel: Metam
         switch (name) {
           case 'id': return worldOptions.writtenId === undefined ? element.id : writtenText(element.host[worldOptions.writtenId]);
           case 'type': return element.type;
-          case 'kind': return relation ? 'relation' : 'node';
+          // Whether it is a node or a relation, unless its type has an attribute of that name (DESL 9.2: every attribute is a field).
+          case 'kind': return Object.hasOwn(attributesOf(metamodel, element.type), 'kind') ? undefined : relation ? 'relation' : 'node';
           case 'view': return worldOptions.view?.(element.id) ?? null;
           case 'parent': return find(element.parent);
           case 'owner': return find(element.parent) ?? diagram;
@@ -567,7 +570,17 @@ export function durationOf(text: string): InstanceType<typeof Duration> | undefi
   return duration;
 }
 
-/** The text each duration read from a document was written as, so that a copy of it is written the same way. */
+/** An RFC 3339 date and time, or a date (`2026-10-14`, taken at midnight UTC), as a CEL timestamp; nothing for another text. */
+export function timestampOf(text: string): Date | undefined {
+  const trimmed = text.trim();
+  if (!/^\d{4}-\d{2}-\d{2}(?:[Tt ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:[Zz]|[+-]\d{2}:\d{2}))?$/.test(trimmed)) return undefined;
+  const time = new Date(trimmed.length === 10 ? `${trimmed}T00:00:00Z` : trimmed);
+  if (Number.isNaN(time.getTime())) return undefined;
+  written.set(time, text);
+  return time;
+}
+
+/** The text each duration and timestamp read from a document was written as, so that a copy of it is written the same way. */
 const written = new WeakMap<object, string>();
 
 /**
@@ -630,7 +643,8 @@ function plain(value: unknown): Value {
   if (value === null || value === undefined) return null;
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
   if (value instanceof Optional) return value.hasValue() ? plain(value.value()) : null;
-  if (value instanceof Date) return value.toISOString();
+  // A timestamp read from a document is stored as it was written, with its offset (DESL 4.2, `timezone: "preserve"`).
+  if (value instanceof Date) return written.get(value) ?? value.toISOString();
   // A duration is stored as it was written, and one worked out in ISO 8601 (DISL 4.2).
   if (value instanceof Duration) return written.get(value) ?? formatDuration(value, 'iso');
   if (Array.isArray(value) || value instanceof Set) return [...value].map(plain);

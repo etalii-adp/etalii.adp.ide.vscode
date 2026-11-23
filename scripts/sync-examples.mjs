@@ -59,6 +59,9 @@ const copies = [
   [standaloneName, 'src/examples/designers/hierarchical-requirement/nist-sp-800-53/', 'examples/hierarchical-requirement/nist-sp-800-53/'],
   // etalii.adp spec 090: the value stream map's two examples; the fixtures its definition declares a host must pass are under fixtures/fbl/.
   ...['request-fulfilment.vsm', 'restore-service.vsm'].map((name) => [adpName, `definitions/diagrams/examples/${name}`, `examples/value-stream-map/${name}`]),
+  // etalii.adp spec 090: the post-incident review's two examples; the fixtures its definition declares a host must pass are under fixtures/tools/post-incident-review/.
+  ...['checkout-latency.md', 'certificate-expiry.md'].map((name) => [adpName, `definitions/designers/examples/${name}`, `examples/post-incident-review/${name}`]),
+  ...['read', 'edits'].map((kind) => [adpName, `specifications/fbl/fixtures/post-incident-review-${kind}/`, `fixtures/tools/post-incident-review/${kind}/`]),
   // DESL's smallest example and its binding: the tool type a test adds to a temporary definitions folder.
   [adpName, 'specifications/desl/minimal-table.des', 'fixtures/tools/desl/minimal-table.des'],
   [adpName, 'specifications/desl/minimal-table.fbl', 'fixtures/tools/desl/minimal-table.fbl'],
