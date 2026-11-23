@@ -236,50 +236,7 @@ export function interpretOperations(designer: DesignerSpecification, surface: Su
     return result.ok && typeof result.value === 'string' && result.value !== '' ? result.value : undefined;
   };
 
-  /** The attribute of the metamodel a binding's attribute of a binding's type is read as, when there is one. */
-  const declaredOf = (type: string, attribute: string): Attribute | undefined => {
-    const entry = entryOf(persistence, type);
-    const named = mapped(entry, attribute);
-    const known = typesOf(entry.as);
-    return named !== null && Object.hasOwn(known, named) ? known[named] : undefined;
-  };
-  const unreadableTypes = new Set(Object.entries(persistence.typeMap).filter(([, entry]) => entry.as === 'unreadable').map(([type]) => type));
-  const reading: Operations['reading'] = (binding) => ({
-    timeAttributes: momentAttributes(binding, metamodel, persistence),
-    attributeType: (type, attribute) => declaredOf(type, attribute)?.type,
-    many: (type, attribute) => declaredOf(type, attribute)?.many === true,
-    unreadableTypes,
-    // The identity context (DESL 9.3) over what the reader knows when it asks: the element with its attributes, its
-    // parent, the siblings read before it in its slot, and what its references name.
-    // simplified: the siblings stand in as elements with their types and no attributes, and of its ancestors only the parent is there; read more of the body when a rule derives an id from more.
-    deriveId: (request: IdRequest): string | undefined => {
-      const entry = entryOf(persistence, request.type);
-      const rule = ruleOf(entry.as);
-      if (!rule) return undefined;
-      const stub = (id: string, type: string, more: Partial<ModelElement> = {}): ModelElement => ({ id, type, attributes: {}, host: {}, ephemeral: true, line: 0, ...more });
-      const attributes: Record<string, Value> = {};
-      const named: ModelElement[] = [];
-      for (const [name, stored] of Object.entries(request.attributes)) {
-        const target = mapped(entry, name);
-        const declared = target === null ? undefined : typesOf(entry.as)[target];
-        const value = declared && stored !== null && stored !== undefined ? fromStored(stored, declared, metamodel) : undefined;
-        if (!declared || value === undefined) continue;
-        attributes[target!] = value;
-        if (typeof value === 'string' && valueKind(metamodel, declared.type).kind === 'reference') named.push(stub(value, declared.type));
-      }
-      const parentRule = findRule(binding, findRule(binding, request.rule)?.parent?.rules[0] ?? '');
-      const place = { ...(request.parentId === undefined ? {} : { parent: request.parentId }), ...(request.parentSlot === undefined ? {} : { slot: request.parentSlot }) };
-      const self = '\u0000';
-      const elements = [
-        ...(request.parentId !== undefined && parentRule ? [stub(request.parentId, entryOf(persistence, parentRule.type).as)] : []),
-        ...named.filter((element, index) => element.id !== request.parentId && named.findIndex((other) => other.id === element.id) === index),
-        // The siblings read before it stand in for them, each of its own type where the library says it, else of this one's.
-        ...Array.from({ length: request.positionInSlot }, (_sibling, index) => stub(`${self}${index}`, request.earlierTypes?.[index] === undefined ? entry.as : entryOf(persistence, request.earlierTypes[index]).as, place)),
-        stub(self, entry.as, { attributes, ...place }),
-      ];
-      return derived({ diagram: {}, elements, relations: [] }, self, rule);
-    },
-  });
+  const reading = readingOf(persistence, metamodel, expressions);
 
   // ---- what a transaction comes to ----
 
@@ -503,4 +460,64 @@ export function interpretOperations(designer: DesignerSpecification, surface: Su
     },
     findings,
   };
+}
+
+/**
+ * What the FBL library asks of a designer's specification to read a body through a binding (DESL 5): the derived ids,
+ * the types of the attributes, which hold several values, and the types read as unreadable. It needs no surface, so a
+ * document is read as its specification says even where this host cannot show it.
+ */
+export function readingOf(persistence: DesignerSpecification['persistence'], metamodel: Metamodel, expressions: Expressions): Operations['reading'] {
+  const typesOf = (type: string): Readonly<Record<string, Attribute>> => attributesOf(metamodel, type);
+  const rules = persistence.ids.types ?? {};
+  const ruleOf = (type: string): IdRule | undefined => (Object.hasOwn(rules, type) && rules[type].strategy === 'derived' && rules[type].expression !== undefined ? rules[type] : undefined);
+  /** The id a rule derives for an element of a model, or nothing when its expression gives none. */
+  const derived = (model: Model, id: string, rule: IdRule): string | undefined => {
+    const result = expressions.evaluate(rule.expression!, expressions.over(model).scope(id));
+    return result.ok && typeof result.value === 'string' && result.value !== '' ? result.value : undefined;
+  };
+  /** The attribute of the metamodel a binding's attribute of a binding's type is read as, when there is one. */
+  const declaredOf = (type: string, attribute: string): Attribute | undefined => {
+    const entry = entryOf(persistence, type);
+    const named = mapped(entry, attribute);
+    const known = typesOf(entry.as);
+    return named !== null && Object.hasOwn(known, named) ? known[named] : undefined;
+  };
+  const unreadableTypes = new Set(Object.entries(persistence.typeMap).filter(([, entry]) => entry.as === 'unreadable').map(([type]) => type));
+  return (binding) => ({
+    timeAttributes: momentAttributes(binding, metamodel, persistence),
+    attributeType: (type, attribute) => declaredOf(type, attribute)?.type,
+    many: (type, attribute) => declaredOf(type, attribute)?.many === true,
+    unreadableTypes,
+    // The identity context (DESL 9.3) over what the reader knows when it asks: the element with its attributes, its
+    // parent, the siblings read before it in its slot, and what its references name.
+    // simplified: the siblings stand in as elements with their types and no attributes, and of its ancestors only the parent is there; read more of the body when a rule derives an id from more.
+    deriveId: (request: IdRequest): string | undefined => {
+      const entry = entryOf(persistence, request.type);
+      const rule = ruleOf(entry.as);
+      if (!rule) return undefined;
+      const stub = (id: string, type: string, more: Partial<ModelElement> = {}): ModelElement => ({ id, type, attributes: {}, host: {}, ephemeral: true, line: 0, ...more });
+      const attributes: Record<string, Value> = {};
+      const named: ModelElement[] = [];
+      for (const [name, stored] of Object.entries(request.attributes)) {
+        const target = mapped(entry, name);
+        const declared = target === null ? undefined : typesOf(entry.as)[target];
+        const value = declared && stored !== null && stored !== undefined ? fromStored(stored, declared, metamodel) : undefined;
+        if (!declared || value === undefined) continue;
+        attributes[target!] = value;
+        if (typeof value === 'string' && valueKind(metamodel, declared.type).kind === 'reference') named.push(stub(value, declared.type));
+      }
+      const parentRule = findRule(binding, findRule(binding, request.rule)?.parent?.rules[0] ?? '');
+      const place = { ...(request.parentId === undefined ? {} : { parent: request.parentId }), ...(request.parentSlot === undefined ? {} : { slot: request.parentSlot }) };
+      const self = '\u0000';
+      const elements = [
+        ...(request.parentId !== undefined && parentRule ? [stub(request.parentId, entryOf(persistence, parentRule.type).as)] : []),
+        ...named.filter((element, index) => element.id !== request.parentId && named.findIndex((other) => other.id === element.id) === index),
+        // The siblings read before it stand in for them, each of its own type where the library says it, else of this one's.
+        ...Array.from({ length: request.positionInSlot }, (_sibling, index) => stub(`${self}${index}`, request.earlierTypes?.[index] === undefined ? entry.as : entryOf(persistence, request.earlierTypes[index]).as, place)),
+        stub(self, entry.as, { attributes, ...place }),
+      ];
+      return derived({ diagram: {}, elements, relations: [] }, self, rule);
+    },
+  });
 }
