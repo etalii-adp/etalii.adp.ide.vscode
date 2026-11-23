@@ -70,6 +70,7 @@ describe('the support record', () => {
       ...carried.layout.map((plugin) => [plugin.id, 'layout']),
       ...carried.action.map((plugin) => [plugin.id, 'action']),
       ...(carried.celFunctions ?? []).map((plugin) => [plugin.id, 'celFunctions']),
+      ...(carried.routing ?? []).map((plugin) => [plugin.id, 'routing']),
     ].sort();
 
     it('are the plugins the registry holds, each a row with what it provides and each row a plugin', () => {

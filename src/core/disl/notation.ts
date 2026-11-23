@@ -338,6 +338,8 @@ export interface EdgeNotation {
   readonly reconnectable: Bindable<boolean>;
   /** As a node's (DISL 6.10). */
   readonly refusals?: GestureRefusals;
+  /** How a connect gesture draws this type (DISL 6.10): the end each anchor it leaves is, and the library tool it makes its other end with. */
+  readonly connect?: { readonly from?: Readonly<Record<string, 'source' | 'target'>>; readonly tool?: string };
 }
 
 export interface Theme {

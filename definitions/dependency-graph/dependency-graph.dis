@@ -3,7 +3,7 @@
   "disl": "0.10",
   "language": {
     "id": "net.etalii.adp.generic.dependencies",
-    "version": "1.1.2",
+    "version": "1.1.6",
     "origin": "generic/dependencies",
     "label": "Dependency graph",
     "doc": {
@@ -167,7 +167,8 @@
         "verticalAlign": "middle"
       },
       "dependency": {
-        "stroke": { "color": { "token": "color.text.muted" }, "width": 1.5 }
+        "stroke": { "color": { "token": "color.text.muted" }, "width": 1.5 },
+        "font": { "size": 11, "color": { "token": "color.text.muted" } }
       }
     },
     "nodes": {
@@ -351,16 +352,24 @@
         ] }
       ]
     },
+    "addNode": {
+      "label": "Add node",
+      "icon": "mdi-plus",
+      "usage": ["popover"],
+      "submitLabel": "Add",
+      "doc": "The label a node added with no point is asked for; left empty, the node is called \"New node\".",
+      "items": [ { "attribute": "label", "label": "Label", "widget": "text", "initial": "'New node'" } ]
+    },
     "dependency": {
       "for": "DependsOn",
       "usage": ["inspector"],
       "items": [
         { "kind": "section", "label": "Identity", "items": [
           { "attribute": "label", "label": "Label" },
-          { "kind": "computed", "id": "from", "label": "Depends on (from)", "value": { "cel": "self.source.id" },
+          { "kind": "computed", "id": "from", "label": "Depends on (from)", "value": { "cel": "writtenEnd(self, 'source')" },
             "readOnlyReasons": [ "Reconnecting is done on the canvas, by dragging the dependency's end to another node." ],
             "doc": "The dependent, by the id the file names, whether or not a node holds it." },
-          { "kind": "computed", "id": "to", "label": "Depended on (to)", "value": { "cel": "self.target.id" },
+          { "kind": "computed", "id": "to", "label": "Depended on (to)", "value": { "cel": "writtenEnd(self, 'target')" },
             "readOnlyReasons": [ "Reconnecting is done on the canvas, by dragging the dependency's end to another node." ],
             "doc": "The dependency, by the id the file names, whether or not a node holds it." }
         ] }
@@ -435,6 +444,15 @@
         "rule": "writtenEnd(self, 'source') != writtenEnd(self, 'target')",
         "message": { "cel": "'\\'' + writtenEnd(self, 'source') + '\\' is declared to depend on itself, which says nothing about what needs what.'" },
         "doc": "From `allowSelfLoops: false`: a dependency whose two ends name the same id, on the dependency, whether or not a node holds that id."
+      },
+      {
+        "id": "noSelfDependency",
+        "kind": "connect",
+        "enforcement": "prevent",
+        "when": "relationType == 'DependsOn'",
+        "rule": "source.id != target.id",
+        "message": "A node cannot depend on itself.",
+        "doc": "No gesture or operation writes a dependency from a node to itself; the edit is refused as a whole, as the standalone connect command refuses it."
       }
     ]
   },
@@ -462,6 +480,28 @@
         "actions": [
           { "create": { "type": "'Node'", "attributes": { "label": "'New node'", "x": "self.x", "row": "self.row + 1" } }, "as": "added" },
           { "connect": { "type": "'DependsOn'", "source": "self", "target": "added" } }
+        ]
+      },
+      "addNode": {
+        "label": "Add node",
+        "icon": "mdi-plus",
+        "for": "diagram",
+        "doc": "Adds a node with no point to place it at, as the Add node command does with nothing selected: the user is asked for its label, and it goes at 0 on row 0.",
+        "params": { "label": { "type": "string", "label": "Label" } },
+        "paramsForm": "addNode",
+        "actions": [
+          { "create": { "type": "'Node'", "attributes": { "label": "p.label.trim() != '' ? p.label : 'New node'", "x": "0.0", "row": "0" } } }
+        ]
+      },
+      "addNodeAfter": {
+        "label": "Add node",
+        "icon": "mdi-plus",
+        "for": ["Node"],
+        "doc": "Adds a node with no point to place it at, as the Add node command does with a node selected: the user is asked for its label, and it goes a fixed step to the right of that node on its row, with no dependency between them.",
+        "params": { "label": { "type": "string", "label": "Label" } },
+        "paramsForm": "addNode",
+        "actions": [
+          { "create": { "type": "'Node'", "attributes": { "label": "p.label.trim() != '' ? p.label : 'New node'", "x": "self.x + 240.0", "row": "self.row" } } }
         ]
       },
       "addNodeHere": {
@@ -554,6 +594,8 @@
       "DependsOn/delete": "dependencies.disconnect",
       "addRight": "dependencies.add-after",
       "addBelow": "dependencies.add-below",
+      "addNode": "dependencies.add-element",
+      "addNodeAfter": "dependencies.add-element",
       "addNodeHere": "dependencies.add-element",
       "connect": "dependencies.connect"
     },

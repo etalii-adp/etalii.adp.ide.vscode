@@ -35,6 +35,27 @@ export interface SceneTool {
   readonly viewpoints: Viewpoints;
   /** The layout plugin of an id, for a layout named `plugin:<id>` (DISL 13.1). */
   layouts?(id: string): LayoutPlugin | undefined;
+  /** The routing plugin of an id, for an edge whose `line.routing` names `{ plugin: <id> }` (DISL 6.10, 13.1). */
+  routings?(id: string): RoutingPlugin | undefined;
+}
+
+/** What a routing plugin is given: the boxes of the edge's two nodes, in canvas units. */
+export interface RouteRequest {
+  readonly source: Box;
+  readonly target: Box;
+}
+
+/** One end of a routed line: where it is, and the side of its node it sits on. */
+export interface RoutedEnd {
+  readonly x: number;
+  readonly y: number;
+  readonly side: Side;
+}
+
+/** A routing a definition names as a plugin (DISL 13.1): the line between two nodes, and where it starts and ends. */
+export interface RoutingPlugin {
+  readonly id: string;
+  route(request: RouteRequest): { readonly from: RoutedEnd; readonly to: RoutedEnd; readonly path: readonly PathCommand[] };
 }
 
 export interface SceneOptions {
@@ -183,6 +204,11 @@ export interface SceneNode {
   readonly refusesMove?: true;
   readonly resizable: { readonly x: boolean; readonly y: boolean };
   readonly connectable: boolean;
+  /**
+   * The anchors a line may be drawn out of, where the node's notation names them (DISL 6.9, `fixed` and `sides`), at their
+   * points on the canvas: a line drawn out of one is asked for with its id, which an edge's `connect.from` reads (DISL 6.10).
+   */
+  readonly anchors?: readonly { readonly id: string; readonly x: number; readonly y: number }[];
   readonly selectable: boolean;
   readonly deletable: boolean;
   /** A filter whose effect is `dim` filters the node out (DISL 6.13.1). */
@@ -1021,6 +1047,9 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
       };
     }
 
+    // The anchors the notation names, which a line may be drawn out of.
+    const named: readonly AnchorPoint[] = own.anchors.mode === 'fixed' ? own.anchors.points ?? []
+      : own.anchors.mode === 'sides' ? (own.anchors.sides ?? []).map((side) => ({ id: side, x: side === 'left' ? 0 : side === 'right' ? 1 : 0.5, y: side === 'top' ? 0 : side === 'bottom' ? 1 : 0.5 })) : [];
     const movable = own.placement.movable ?? true;
     const resizable = own.placement.resizable ?? true;
     const sizable = own.size.fixed ? false : own.size.resizable ?? true;
@@ -1046,6 +1075,7 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
         ...(own.refusals?.move !== undefined && own.refusals.move.length > 0 ? { refusesMove: true as const } : {}),
         resizable: { x: free('x', resizable) && sizable !== false && sizable !== 'vertical', y: free('y', resizable) && sizable !== false && sizable !== 'horizontal' },
         connectable: flag(own.connectable, self, true),
+        ...(named.length === 0 ? {} : { anchors: named.map((point) => ({ id: point.id, ...pointIn(box, point.x, point.y) })) }),
         selectable: flag(own.selectable, self, true),
         deletable: flag(own.deletable, self, true),
         dimmed: dimmed.has(self),
@@ -1233,7 +1263,9 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     if (!hiddenByFilter && (!source || !target)) continue;
 
     const own: EdgeNotation = varied(edgeNotation(notation, metamodel, relation.type), relation.id);
-    const routing = typeof own.line.routing === 'string' ? own.line.routing : 'straight';
+    // A routing a plugin carries is named by the plugin; one it does not carry was given its fallback when the specification was read (DISL 13.1).
+    const routedBy = isObject(own.line.routing) && typeof own.line.routing.plugin === 'string' ? tool.routings?.(own.line.routing.plugin) : undefined;
+    const routing = routedBy ? routedBy.id : typeof own.line.routing === 'string' ? own.line.routing : 'straight';
     const marker = (value: unknown, fallback: string): string => {
       const name = bound(value, relation.id);
       return typeof name === 'string' ? name : fallback;
@@ -1275,6 +1307,12 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
       const [start, end, c1, c2] = [at(-size / 2, 0), at(size / 2, 0), at(-size, size * 1.5), at(size, size * 1.5)];
       const ends = { node: source.node.id, side, normal };
       edges.push({ ...common, from: { ...ends, ...start }, to: { ...ends, ...end }, path: [{ op: 'M', ...start }, { op: 'C', c1x: c1.x, c1y: c1.y, c2x: c2.x, c2y: c2.y, ...end }] });
+      continue;
+    }
+    if (routedBy) {
+      const routed = routedBy.route({ source: source.node.box, target: target.node.box });
+      const endOf = (node: string, end: RoutedEnd): SceneEnd => ({ node, x: end.x, y: end.y, side: end.side, normal: normalOf(end.side) });
+      edges.push({ ...common, from: endOf(source.node.id, routed.from), to: endOf(target.node.id, routed.to), path: [...routed.path] });
       continue;
     }
     if (routing === 'curved') {

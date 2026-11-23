@@ -6,6 +6,7 @@ import type { Change } from '../disl/behavior';
 import type { ConstraintFinding } from '../disl/constraints';
 import type { PluginFunction } from '../disl/expressions';
 import type { LayoutPlugin } from '../disl/layout';
+import type { RoutingPlugin } from '../scene/scene';
 import type { Model } from '../disl/model';
 import { isObject } from '../disl/specification';
 import type { FblBinding } from '../fbl/documents/types';
@@ -17,6 +18,8 @@ import type { ViewLogic } from './tableView';
 
 // A layout plugin is called by the scene, which does not import this folder: its interface is the interpreter's.
 export type { LayoutPlugin, LayoutRequest } from '../disl/layout';
+// A routing plugin is called by the scene too: its interface is the scene's.
+export type { RouteRequest, RoutedEnd, RoutingPlugin } from '../scene/scene';
 export type { PluginFunction } from '../disl/expressions';
 
 export interface ActionRequest {
@@ -95,6 +98,8 @@ export interface PluginRegistry {
   layout(id: string): LayoutPlugin | undefined;
   action(id: string): ActionPlugin | undefined;
   celFunctions(id: string): CelFunctionsPlugin | undefined;
+  /** The routing plugin of an id, for an edge whose routing names it (DISL 6.10). */
+  routing(id: string): RoutingPlugin | undefined;
   /** What a definition cannot state of a view, for the tool type of an origin: no plugin a definition names, and carried as one is. */
   views(origin: string): ViewLogic | undefined;
   /** How the tool type of an origin reads what its binding cannot state. */
@@ -109,6 +114,7 @@ export interface Plugins {
   readonly layout: readonly LayoutPlugin[];
   readonly action: readonly ActionPlugin[];
   readonly celFunctions?: readonly CelFunctionsPlugin[];
+  readonly routing?: readonly RoutingPlugin[];
   readonly views?: readonly ViewLogic[];
   readonly reading?: readonly ReadingLogic[];
   readonly exports?: readonly ExportLogic[];
@@ -116,10 +122,10 @@ export interface Plugins {
 
 export function pluginRegistry(plugins: Plugins): PluginRegistry {
   const by = <T extends { readonly id: string }>(list: readonly T[]) => (id: string): T | undefined => list.find((plugin) => plugin.id === id);
-  return { persistence: by(plugins.persistence), layout: by(plugins.layout), action: by(plugins.action), celFunctions: by(plugins.celFunctions ?? []), views: by(plugins.views ?? []), reading: by(plugins.reading ?? []), exports: by(plugins.exports ?? []) };
+  return { persistence: by(plugins.persistence), layout: by(plugins.layout), action: by(plugins.action), celFunctions: by(plugins.celFunctions ?? []), routing: by(plugins.routing ?? []), views: by(plugins.views ?? []), reading: by(plugins.reading ?? []), exports: by(plugins.exports ?? []) };
 }
 
-type Provides = 'persistence' | 'layout' | 'action' | 'celFunctions';
+type Provides = 'persistence' | 'layout' | 'action' | 'celFunctions' | 'routing';
 
 /** A plugin as a definition or a binding names it. */
 export interface PluginReference {
@@ -131,7 +137,7 @@ export interface PluginReference {
   readonly fallback: Readonly<Record<string, string>>;
 }
 
-const provided: Readonly<Record<string, Provides>> = { persistenceFormat: 'persistence', layout: 'layout', action: 'action', celFunctions: 'celFunctions' };
+const provided: Readonly<Record<string, Provides>> = { persistenceFormat: 'persistence', layout: 'layout', action: 'action', celFunctions: 'celFunctions', routing: 'routing' };
 
 /** The plugins of a specification's `plugins`, in its order, then the reader of a binding it does not declare, which is required. */
 export function pluginReferences(specification: Readonly<Record<string, unknown>>, bindings: readonly FblBinding[]): PluginReference[] {

@@ -9,6 +9,7 @@ import { cldCycles } from './cld-cycles/index';
 import { cldFlowPage } from './cld-flow-page/index';
 import { cldLayout } from './cld-layout/index';
 import { cldReading } from './cld-reading/index';
+import { dependencyCurve } from './dependency-curve/index';
 import { dependencyEnds } from './dependency-ends/index';
 import { dependencyReading } from './dependency-reading/index';
 import { freeplaneMm } from './freeplane-mm/index';
@@ -17,6 +18,6 @@ import { mindmapLayout } from './mindmap-layout/index';
 import { projectLinkPicker } from './project-link-picker/index';
 
 /** Every plugin this host carries. */
-export const carried: Plugins = { persistence: [freeplaneMm, abmMarkdown], layout: [mindmapLayout, cldLayout], action: [projectLinkPicker, abmArrange], celFunctions: [cldCycles, dependencyEnds], views: [knowledgeViews], reading: [cldReading, dependencyReading], exports: [cldFlowPage] };
+export const carried: Plugins = { persistence: [freeplaneMm, abmMarkdown], layout: [mindmapLayout, cldLayout], action: [projectLinkPicker, abmArrange], celFunctions: [cldCycles, dependencyEnds], views: [knowledgeViews], reading: [cldReading, dependencyReading], exports: [cldFlowPage], routing: [dependencyCurve] };
 
 export const plugins: PluginRegistry = pluginRegistry(carried);

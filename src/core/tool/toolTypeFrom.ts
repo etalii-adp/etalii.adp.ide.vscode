@@ -79,9 +79,25 @@ function endOf(text: string | undefined): EndPlace | undefined {
 
 /**
  * The specification with a layout that names a plugin the registry lacks given the algorithm the
- * plugin's `fallback` names (DISL 13.1).
+ * plugin's `fallback` names, and an edge routed by such a plugin the routing it names (DISL 13.1).
  */
-function withFallbacks(specification: Readonly<Record<string, unknown>>, fallbacks: ReadonlyMap<string, string>): Readonly<Record<string, unknown>> {
+function withFallbacks(specification: Readonly<Record<string, unknown>>, fallbacks: ReadonlyMap<string, string>, routings: ReadonlyMap<string, string> = new Map()): Readonly<Record<string, unknown>> {
+  return withRoutingFallbacks(withLayoutFallbacks(specification, fallbacks), routings);
+}
+
+function withRoutingFallbacks(specification: Readonly<Record<string, unknown>>, routings: ReadonlyMap<string, string>): Readonly<Record<string, unknown>> {
+  const notation = specification.notation;
+  if (routings.size === 0 || !isObject(notation) || !isObject(notation.edges)) return specification;
+  const edges = Object.fromEntries(Object.entries(notation.edges).map(([type, declared]) => {
+    const line = isObject(declared) ? declared.line : undefined;
+    const routing = isObject(line) ? line.routing : undefined;
+    const plugin = isObject(routing) && typeof routing.plugin === 'string' ? routing.plugin : undefined;
+    return [type, plugin !== undefined && routings.has(plugin) ? { ...(declared as object), line: { ...(line as object), routing: routings.get(plugin) } } : declared];
+  }));
+  return { ...specification, notation: { ...notation, edges } };
+}
+
+function withLayoutFallbacks(specification: Readonly<Record<string, unknown>>, fallbacks: ReadonlyMap<string, string>): Readonly<Record<string, unknown>> {
   const layout = specification.layout;
   if (fallbacks.size === 0 || !isObject(layout) || !isObject(layout.algorithms)) return specification;
   const algorithms = Object.fromEntries(Object.entries(layout.algorithms).map(([name, declared]) => {
@@ -103,7 +119,8 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   const needed = missing.filter((reference) => reference.required);
   const fallbacks = new Map(missing.flatMap((reference) => (!reference.required && reference.fallback.layout !== undefined ? [[reference.id, reference.fallback.layout] as const] : [])));
 
-  const loaded = loadSpecification(withFallbacks(definition.specification, fallbacks));
+  const routingFallbacks = new Map(missing.flatMap((reference) => (!reference.required && reference.fallback.routing !== undefined ? [[reference.id, reference.fallback.routing] as const] : [])));
+  const loaded = loadSpecification(withFallbacks(definition.specification, fallbacks, routingFallbacks));
   const specification = loaded.value;
   const origin = typeof specification.language.origin === 'string' ? specification.language.origin : specification.language.id;
   // What the binding cannot state of how this tool type reads its documents (`docs/disl-support.md`, "Code for one tool type").
@@ -121,7 +138,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   const constraints = interpretConstraints(specification, metamodel.value, expressions);
   const forms = interpretForms(specification, metamodel.value, expressions, { numberText: readingLogic?.numberText });
   const toolbox = interpretToolbox(specification, metamodel.value);
-  const sceneTool: SceneTool = { metamodel: metamodel.value, expressions, coordinates: coordinates.value, viewpoints: viewpoints.value, layouts: (id) => plugins.layout(id) };
+  const sceneTool: SceneTool = { metamodel: metamodel.value, expressions, coordinates: coordinates.value, viewpoints: viewpoints.value, layouts: (id) => plugins.layout(id), routings: (id) => plugins.routing(id) };
   // The core has no browser to measure a text with: for a definition whose text metric is the host's, it is the estimate every ADP host shares.
   const measured: SceneOptions = { textWidth: widthOfText, ...(readingLogic?.underlineStyle === undefined ? {} : { underlineStyle: readingLogic.underlineStyle }) };
   const behavior = interpretBehavior(specification, metamodel.value, expressions, {
@@ -567,11 +584,19 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     const situation = situationOf(open, options);
     // What an action that is asked for is: the entry of the menu that has its id, with the arguments that entry gives; else what the id
     // stands for by the definition's own mapping, the first that applies to what is selected; else the operation or the kind of that name.
-    const meant = (action: string, target: string | undefined): { readonly name: string; readonly args?: Readonly<Record<string, Value>> } => {
-      const offer = offersOf(open, target, situation).find((candidate) => candidate.id === action);
+    const meant = (action: string, asked: string | undefined): { readonly name: string; readonly args?: Readonly<Record<string, Value>> } => {
+      // The diagram itself is asked on as no element, also where the id '' names it.
+      const target = asked === '' ? undefined : asked;
+      // Of several an id stands for, the one that runs on what it is asked on, and that reads a point only where one is given:
+      // an operation on the diagram is offered on any selection, so one on the element asked on goes first (a host rule, docs/disl-support.md).
+      const pointed = request.kind === 'action' && request.x !== undefined && request.y !== undefined;
+      const declared = (key: string) => intents.operations.find((operation) => operation.id === key);
+      const offer = offersOf(open, target, situation).find((candidate) => candidate.id === action && (declared(candidate.entry.operation ?? '')?.placed ?? pointed) === pointed);
       if (offer) return { name: offer.entry.operation ?? offer.entry.kind, ...(offer.entry.args ? { args: offer.entry.args } : {}) };
       const candidates = wire.actionsOf(action);
-      const applying = candidates.find((candidate) => intents.availability(model, candidate.key, target === undefined ? [] : [target], situation).offered) ?? candidates[0];
+      const fitting = (key: string) => (declared(key)?.placed ?? pointed) === pointed && (target === undefined) === (declared(key)?.for.includes('diagram') ?? target === undefined);
+      const offered = candidates.filter((candidate) => intents.availability(model, candidate.key, target === undefined ? [] : [target], situation).offered);
+      const applying = offered.find((candidate) => fitting(candidate.key)) ?? offered.find((candidate) => (declared(candidate.key)?.placed ?? pointed) === pointed) ?? offered[0] ?? candidates[0];
       return applying ? { name: applying.key, args: applying.args } : { name: action };
     };
     const acting = request.kind === 'action' ? meant(request.action, request.id) : undefined;
@@ -637,6 +662,20 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
         return done(intents.dragHandle(model, request.id, handle.param, share, situation));
       }
       case 'connect': {
+        // The anchor a line leaves decides its direction where the edge type maps it (`connect.from`, DISL 6.10):
+        // drawn out of an anchor mapped to `target`, the element it leaves is the target.
+        const drawnFrom = elementOf(model, request.from);
+        const reversed = drawnFrom !== undefined && request.fromAnchor !== undefined && Object.values(metamodel.value.types).filter(isRelation)
+          .some((type) => type.target.types.some((end) => isA(metamodel.value, drawnFrom.type, end)) && edgeNotation(viewpoints.value.all[viewpoint].notation, metamodel.value, type.name).connect?.from?.[request.fromAnchor!] === 'target');
+        if (request.toPoint !== undefined && request.to === '') {
+          if (!drawnFrom) return refused(GONE);
+          // Let go on empty canvas: the edge type's library tool (`connect.tool`) makes the other end there, as one edit (DISL 7.2).
+          const making = Object.values(metamodel.value.types).filter(isRelation).map((type) => edgeNotation(viewpoints.value.all[viewpoint].notation, metamodel.value, type.name).connect?.tool)
+            .find((tool): tool is string => tool !== undefined && Object.hasOwn(toolbox.value.tools, tool) && (reversed ? toolbox.value.tools[tool].createSource : toolbox.value.tools[tool].createTarget) !== undefined);
+          if (making === undefined) return refused(NOT_HERE);
+          return done(intents.connectNew(model, making, request.from, reversed ? 'source' : 'target', inBase(request.toPoint), situation));
+        }
+        if (reversed) return edit(source, { kind: 'connect', from: request.to, to: request.from, ...(request.toEnd === undefined ? {} : { fromEnd: request.toEnd }), ...(request.fromEnd === undefined ? {} : { toEnd: request.fromEnd }) }, options, confirmed);
         if (!elementOf(model, request.from) || !elementOf(model, request.to)) return refused(GONE);
         // simplified: the first relation the definition offers for the two; give the request the type when a definition offers several.
         const connection = intents.menu(model, { source: request.from, target: request.to }, situation);

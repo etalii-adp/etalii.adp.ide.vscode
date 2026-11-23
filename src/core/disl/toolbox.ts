@@ -141,6 +141,9 @@ export interface Tool {
   readonly visible?: Expression;
   readonly enabled?: Expression;
   readonly unavailable: readonly Reason[];
+  /** For a tool that draws a relation: the element made at the point a line is let go on empty canvas, as its source or its target (DISL 7.2). */
+  readonly createSource?: CreateEnd;
+  readonly createTarget?: CreateEnd;
 }
 
 export interface ToolGroup {
@@ -243,6 +246,8 @@ export function interpretToolbox(specification: Specification, metamodel: Metamo
       relation: relation && { type: relation.name, sources: relation.source.types, targets: relation.target.types },
       drop: declared.drop,
       keyboardDrop: 'view-centre',
+      ...(declared.createSource === undefined ? {} : { createSource: typeof declared.createSource === 'string' ? { type: declared.createSource } : declared.createSource }),
+      ...(declared.createTarget === undefined ? {} : { createTarget: typeof declared.createTarget === 'string' ? { type: declared.createTarget } : declared.createTarget }),
       visible: declared.visible,
       enabled: declared.enabled,
       unavailable: declared.unavailable ?? [],
