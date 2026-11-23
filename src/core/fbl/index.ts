@@ -41,6 +41,7 @@ export type { RegistrationCreationResult } from './registration/registrationCrea
 // ---- files ----
 export type { FblFiles } from './files/fblFiles';
 export { nodeFiles } from './files/nodeFiles';
+export { memoryFiles } from './files/memoryFiles';
 export { locateBody } from './registration/bodyLocator';
 export type { BodyLocation } from './registration/bodyLocator';
 export { LegacySidecar } from './registration/legacySidecar';

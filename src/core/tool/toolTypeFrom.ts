@@ -36,6 +36,9 @@ import { PluginBody } from '../fbl/plugins/pluginBody';
 import { OpenRegistration } from '../fbl/registration/openRegistration';
 import { createRegistration } from '../fbl/registration/registrationCreation';
 import { RegistrationDocument } from '../fbl/registration/registrationDocument';
+import { memoryFiles } from '../fbl/files/memoryFiles';
+import { readFolder } from '../fbl/routing/folderReading';
+import { folderFiles as selectedFiles, recogniseFolder } from '../fbl/routing/folderSubject';
 import { produceTemplate } from '../fbl/routing/templateWriter';
 import type { Edit } from '../fbl/splice';
 import { decode, encode } from '../fbl/text/utf8';
@@ -193,12 +196,19 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   const ownIds = typeIds(persistence.value, expressions);
   const deriveId = (request: IdRequest): string | undefined => viewIds(request) ?? ownIds(request);
   const reading = new Map(bindings.map((binding) => [binding, { deriveId, timeAttributes: momentAttributes(binding, metamodel.value, persistence.value) }]));
+  const optionsOf = (binding: FblBinding, named?: ReadonlyMap<string, string>) => {
+    const options = reading.get(binding);
+    return named === undefined ? options : { ...options, deriveId: (request: IdRequest) => named.get(`${request.rule}@${request.line}`) ?? deriveId(request) };
+  };
   const bodyOf = (binding: FblBinding, source: Source, named?: ReadonlyMap<string, string>): OpenBody | PluginBody => {
     const bytes = encode(source.text);
     if (binding.plugin) return PluginBody.open(bytes, binding, plugins.persistence(binding.plugin.plugin), source.fileName);
-    const options = reading.get(binding);
-    return OpenBody.open(bytes, binding, named === undefined ? options : { ...options, deriveId: (request: IdRequest) => named.get(`${request.rule}@${request.line}`) ?? deriveId(request) });
+    return OpenBody.open(bytes, binding, optionsOf(binding, named));
   };
+  // A folder subject (FBL 10) is read from the files the host read of it, file by file, and is never written (FBL 10.4 is not built).
+  const folderBinding = bindings.find((binding) => binding.body.isFolder);
+  const folderBodyOf = (binding: FblBinding, folder: Readonly<Record<string, string>>, named?: ReadonlyMap<string, string>): { readonly model: FblModel; readonly isReadOnly: boolean } =>
+    ({ model: readFolder(binding, '/', memoryFiles(Object.keys(folder), folder), optionsOf(binding, named)), isReadOnly: true });
   // A type's own derived rule (DISL 11.5.2, `ids.types`) may read what only the model has, such as its
   // parent and its place among its siblings: such ids are derived over the model read first, and the
   // document is read again with them, each by its entry's place, `<rule>@<line>` (FBL 5.3).
@@ -213,20 +223,22 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   // The frame asks several things of one text in a row: the last reading is kept.
   let last: { readonly source: Source; readonly open: Open } | undefined;
   function opened(source: Source): Open {
-    if (last && last.source.text === source.text && last.source.fileName === source.fileName && last.source.registration === source.registration) return last.open;
-    const binding = claimingBinding(bindings, source.fileName, source.text) ?? bindings[0];
+    if (last && last.source.text === source.text && last.source.fileName === source.fileName && last.source.registration === source.registration && last.source.folder === source.folder) return last.open;
+    const folder = folderBinding === undefined ? undefined : source.folder;
+    const binding = folder === undefined ? claimingBinding(bindings, source.fileName, source.text) ?? bindings[0] : folderBinding!;
+    const readBody = (named?: ReadonlyMap<string, string>) => (folder === undefined ? bodyOf(binding, source, named) : folderBodyOf(binding, folder, named));
     const bytes = encode(source.text);
     const entryText = (span: { readonly start: number; readonly end: number }): string => decode(bytes.subarray(span.start, span.end)).replace(/[\r\n]+$/, '');
     const typedOf = (from: FblModel) => {
       const reread = readingLogic?.reread ? { elements: readingLogic.reread(from.elements, entryText), findings: from.findings, unreadable: from.unreadable } : from;
       return readModel(reread, binding, metamodel.value, persistence.value, readingLogic?.unreadable ? (entry) => readingLogic.unreadable!(entryText(entry.ownSpan)) : undefined);
     };
-    let body = bodyOf(binding, source);
+    let body = readBody();
     let read = body.model;
     let typed = typedOf(read);
     const named = read.unreadable ? undefined : namedOver(read, typed.value);
     if (named !== undefined && named.size > 0) {
-      body = bodyOf(binding, source, named);
+      body = readBody(named);
       read = body.model;
       typed = typedOf(read);
     }
@@ -889,6 +901,12 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     claims: claimsOf(bindings),
     claimed: (fileName, text) => claimingBinding(bindings, fileName, text) !== undefined,
     suggests: (fileName, text) => suggests(bindings, fileName, text),
+    ...(folderBinding === undefined ? {} : {
+      folderFiles: (paths: readonly string[]) => {
+        const files = memoryFiles(paths);
+        return recogniseFolder(folderBinding, '/', files) ? selectedFiles(folderBinding, '/', files).map((file) => file.relativePath) : [];
+      },
+    }),
     findings: (source) => {
       const open = opened(source);
       return [...open.findings, ...(open.unreadable ? [] : createScene(sceneTool, open.model, measured).findings.map(framed)), ...ofDefinition, ...ofPlugins];

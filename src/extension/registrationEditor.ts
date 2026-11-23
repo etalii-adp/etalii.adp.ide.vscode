@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { viewTypeOf } from '../core/frame/toolType';
 import { RegistrationDocument } from '../core/fbl';
+import { folderTexts } from './folderSubject';
 import type { AnyToolType } from './toolTypes';
 
 /**
@@ -60,6 +61,8 @@ export class RegistrationEditorProvider implements vscode.CustomTextEditorProvid
     try {
       await vscode.workspace.fs.stat(body);
     } catch {
+      // A registration with no document of its own may open the folder it stands in (FBL 10): it is then drawn in the tool itself.
+      if (named === undefined && (await folderTexts(type, document.uri)) !== undefined) return { body: document.uri, type };
       return `This registration's document, ${named ?? `${base}.${type.claims[0].extensions[0]}`}, is not there.`;
     }
     return { body, type };

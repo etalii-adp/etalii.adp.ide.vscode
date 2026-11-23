@@ -13,6 +13,7 @@ import { UNSAVED, writeExport } from './exports';
 import { handBack } from './opening';
 import { pickLink } from './projectLinkPicker';
 import { movedName, relativePath } from '../core/tool/toolTypeFrom';
+import { folderTexts } from './folderSubject';
 import { RelatedFiles, relatedUri, textOf, ToolFiles } from './relatedFiles';
 import type { AnyToolType } from './toolTypes';
 import { webviewHtml } from './webviewHtml';
@@ -55,6 +56,8 @@ export class OpenTool {
   selectOnReady: string | undefined;
   /** The other documents of its tool type in the workspace, as this one names them; undefined until they are found. */
   peers: readonly string[] | undefined;
+  /** For a registration that opens a folder subject: the texts of the files the tool type reads in its folder. */
+  folder: Readonly<Record<string, string>> | undefined;
 
   constructor(readonly type: AnyToolType, readonly document: vscode.TextDocument, readonly panel: vscode.WebviewPanel) {
     this.registrationUri = registrationUriOf(document.uri);
@@ -66,6 +69,7 @@ export class OpenTool {
     return {
       ...source, ...(this.registration === undefined ? {} : { registration: this.registration }), ...(related === undefined ? {} : { related }),
       ...(this.peers === undefined ? {} : { peers: this.peers }),
+      ...(this.folder === undefined ? {} : { folder: this.folder }),
     };
   }
 
@@ -761,8 +765,10 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
   }
 
   async resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): Promise<void> {
+    // A registration that opens a folder subject (FBL 10) draws the files of its folder, read-only.
+    const folder = /\.adp$/i.test(document.uri.path) ? await folderTexts(this.type, document.uri) : undefined;
     // A file of the type's extension that its binding's marker does not match is not this tool's.
-    if (!this.type.claimed(document.fileName, document.getText())) {
+    if (folder === undefined && !this.type.claimed(document.fileName, document.getText())) {
       handBack(document.uri, viewTypeOf(this.type), panel);
       return;
     }
@@ -770,7 +776,8 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
     if (this.type.related) diagram.related = new RelatedFiles(document.uri, () => this.tools.refresh(diagram));
     diagram.selectOnReady = this.tools.selecting.get(document.uri.toString());
     this.tools.selecting.delete(document.uri.toString());
-    diagram.readOnly = await isReadOnly(document);
+    diagram.folder = folder;
+    diagram.readOnly = folder !== undefined || await isReadOnly(document);
     diagram.registration = await readText(diagram.registrationUri);
     panel.webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'dist')] };
     // A diagram is drawn on the canvas, a designer on its table, its page of boxes or its page of sections.

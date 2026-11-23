@@ -95,6 +95,29 @@ describe('the SLO map', () => {
   });
 });
 
+describe('a folder of OpenSLO files, opened through the registration in it', () => {
+  const root = `${fixtures}openslo-slo-folder/shop/`;
+  const paths = ['README.md', 'openslo.adp', 'services/', 'services/web-shop.yaml', 'slis/', 'slis/search-latency.yaml', 'slos/', 'slos/search-slo.yaml'];
+  const read = (selected: readonly string[]): Record<string, string> => Object.fromEntries(selected.map((path) => [path, readFileSync(`${root}${path}`, 'utf8')]));
+  const registration = readFileSync(`${root}openslo.adp`, 'utf8');
+
+  it('reads the files its binding\'s file rules select, in the order of their paths, and no other', () => {
+    expect(type.folderFiles?.(paths)).toEqual(['services/web-shop.yaml', 'slis/search-latency.yaml', 'slos/search-slo.yaml']);
+    expect(type.folderFiles?.(['README.md', 'notes/'])).toEqual([]);
+  });
+
+  it('draws every object of its files, a reference across two files in full, and is read-only', () => {
+    const source: Source = { fileName: 'openslo.adp', text: registration, folder: read(type.folderFiles?.(paths) ?? []) };
+    const scene = type.view(source, {});
+    const drawn = new Set(scene.nodes.map((node) => node.id));
+    for (const id of ['Service:web-shop', 'SLI:search-latency', 'SLO:search-slo', 'SLO:search-slo/objective:1', 'SLO:search-slo/objective:2']) expect(drawn).toContain(id);
+    expect(scene.edges.find((edge) => edge.type === 'OfService')?.target).toBe('Service:web-shop');
+    expect(scene.readOnly).toBe(true);
+    const sentence = 'A folder of OpenSLO files is drawn, not edited; open a file on its own to change it.';
+    expect(type.edit(source, { kind: 'rename', id: 'SLO:search-slo', text: 'other' }, {}, false)).toEqual({ kind: 'refused', sentence });
+  });
+});
+
 describe('the gestures of the SLO map, as the bytes of FBL\'s openslo-slo-edits', () => {
   interface Step { readonly expect?: string }
   const steps = (JSON.parse(readFileSync(`${fixtures}openslo-slo-edits/fixture.json`, 'utf8')) as { readonly steps: readonly Step[] }).steps;
