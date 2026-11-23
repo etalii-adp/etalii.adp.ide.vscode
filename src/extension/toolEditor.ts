@@ -280,16 +280,22 @@ export class Tools implements vscode.Disposable {
     }
   }
 
-  /** A registration file changed, appeared or went on disk. */
+  /**
+   * A registration file changed, appeared or went on disk. It is read in its turn among the registration's
+   * writes, as the watcher may tell of a change long after it was made: a read begun before a write and
+   * ended after it would otherwise give the diagram back the text the write replaced, and the next write
+   * would start from that. A read the registration changed under is no news either.
+   */
   async refreshRegistration(uri: vscode.Uri): Promise<void> {
-    for (const diagram of this.open) {
-      if (diagram.registrationUri.toString() !== uri.toString()) continue;
+    await Promise.all([...this.open].filter((diagram) => diagram.registrationUri.toString() === uri.toString()).map((diagram) => this.queued(diagram, async () => {
+      const held = diagram.registration;
       const text = await readText(uri);
+      if (diagram.registration !== held || !this.open.has(diagram)) return;
       // The file this editor saved is no change from outside.
       const cause = text === diagram.registration ? undefined : diagram.performing > 0 ? 'edit' : 'outside';
       diagram.registration = text;
       this.refresh(diagram, cause);
-    }
+    })));
   }
 
   /**
