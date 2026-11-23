@@ -8,6 +8,7 @@ import { entriesOf, ToolboxView } from './toolboxView';
 import type { OpenTool, Tools } from './toolEditor';
 import type { Scene } from '../core/scene/scene';
 import type { HierarchyRequest } from '../core/tool/hierarchyView';
+import type { SectionsRequest } from '../core/tool/sectionsView';
 import type { TableRequest } from '../core/tool/tableView';
 import type { AnyToolType } from './toolTypes';
 
@@ -170,7 +171,7 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
     // With a `seq`, a question the edit asks is asked in the page, as for a request the page made.
     register('etalii.adp.test.edit', async (request: unknown, seq: unknown) => {
       const active = tools.active;
-      return active ? tools.perform(active, request as EditRequest | TableRequest | HierarchyRequest, undefined, typeof seq === 'number' ? seq : undefined) : undefined;
+      return active ? tools.perform(active, request as EditRequest | TableRequest | HierarchyRequest | SectionsRequest, undefined, typeof seq === 'number' ? seq : undefined) : undefined;
     });
     register('etalii.adp.test.toolbox', () => entriesOf(tools.active));
     register('etalii.adp.test.lastExport', () => ({ uri: lastExport.uri?.toString(), opened: lastExport.opened }));

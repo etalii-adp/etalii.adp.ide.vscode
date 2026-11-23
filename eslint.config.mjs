@@ -21,8 +21,8 @@ const webview = [
     message: 'src/webview imports only src/core/frame and src/core/scene, so nothing that reads a definition.',
   },
   // geometry.ts is arithmetic on points and paths, and tidyTree.ts on the boxes of a tree: they read nothing, so the webview may call them.
-  { group: ['**/core/tool/*', '!**/core/tool/tableView', '!**/core/tool/hierarchyView'], message: 'Of src/core/tool a webview imports the types of tableView.ts and hierarchyView.ts only: what a table and a page of boxes draw and ask.' },
-  { group: ['**/core/frame/**', '**/core/scene/**', '**/core/tool/tableView', '**/core/tool/hierarchyView', '!**/core/scene/geometry', '!**/core/scene/tidyTree'], allowTypeImports: true, message: 'src/webview imports only types from src/core/frame and src/core/scene, and the functions of src/core/scene/geometry and tidyTree.' },
+  { group: ['**/core/tool/*', '!**/core/tool/tableView', '!**/core/tool/hierarchyView', '!**/core/tool/sectionsView'], message: 'Of src/core/tool a webview imports the types of tableView.ts, hierarchyView.ts and sectionsView.ts only: what a table, a page of boxes and a page of sections draw and ask.' },
+  { group: ['**/core/frame/**', '**/core/scene/**', '**/core/tool/tableView', '**/core/tool/hierarchyView', '**/core/tool/sectionsView', '!**/core/scene/geometry', '!**/core/scene/tidyTree'], allowTypeImports: true, message: 'src/webview imports only types from src/core/frame and src/core/scene, and the functions of src/core/scene/geometry and tidyTree.' },
 ];
 
 export default tseslint.config(

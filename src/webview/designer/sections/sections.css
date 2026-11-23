@@ -1,0 +1,314 @@
+/*
+ * The page of sections of a designer (DESL 7.8). Every colour is the theme's own: a warning badge
+ * is the editor's warning colour, an info badge the badge colours, and the related rows of a
+ * selection the editor's highlight. In high contrast every edge is the contrast border, so nothing
+ * is told by a fill alone.
+ */
+:root {
+  --adp-sections-line: var(--vscode-editorGroup-border, var(--vscode-widget-border, transparent));
+  --adp-sections-head: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+}
+
+body.vscode-high-contrast,
+body.vscode-high-contrast-light {
+  --adp-sections-line: var(--vscode-contrastBorder);
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+.adp-sections {
+  box-sizing: border-box;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 12px 20px 40px;
+}
+
+.adp-sections [hidden] {
+  display: none;
+}
+
+.adp-sections button,
+.adp-sections input,
+.adp-sections select,
+.adp-sections textarea {
+  font: inherit;
+}
+
+.adp-sections :focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+.adp-sections-notice {
+  padding: 6px 10px;
+  border: 1px solid var(--vscode-inputValidation-warningBorder, var(--adp-sections-line));
+  background: var(--vscode-inputValidation-warningBackground, transparent);
+}
+
+.adp-sections-status:empty {
+  display: none;
+}
+
+.adp-sections-status {
+  color: var(--vscode-errorForeground);
+}
+
+/* A part: its title, its figures and its add button on one line, then its record or its rows. */
+.adp-sections-part {
+  margin: 18px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--adp-sections-line);
+}
+
+.adp-sections-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 20px;
+}
+
+.adp-sections-header h2 {
+  margin: 0;
+  font-size: 1.25em;
+  font-weight: 600;
+}
+
+.adp-sections-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.adp-sections-figure {
+  display: flex;
+  gap: 6px;
+}
+
+.adp-sections-figure dt {
+  color: var(--vscode-descriptionForeground);
+}
+
+.adp-sections-figure dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.adp-sections-figure[data-absent="true"] dd {
+  font-weight: normal;
+  font-style: italic;
+  color: var(--vscode-descriptionForeground);
+}
+
+.adp-sections-add,
+.adp-sections-operation,
+.adp-sections-ask button {
+  padding: 2px 10px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 2px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  cursor: pointer;
+}
+
+.adp-sections-add {
+  margin-left: auto;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.adp-sections-add:hover:not(:disabled) {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.adp-sections-operation:hover:not(:disabled),
+.adp-sections-ask button:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.adp-sections button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.adp-sections-ask {
+  display: flex;
+  gap: 6px;
+}
+
+.adp-sections-empty,
+.adp-sections-untimed {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
+
+/* Fields: a label above its editor, side by side as space allows. */
+.adp-sections-record,
+.adp-sections-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 8px;
+}
+
+.adp-sections-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 120px;
+}
+
+.adp-sections-field[data-widget="text"] {
+  flex: 1 1 260px;
+}
+
+.adp-sections-label {
+  font-size: 0.9em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.adp-sections-field input:not([type="checkbox"]),
+.adp-sections-field select,
+.adp-sections-field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 2px 4px;
+  border: 1px solid var(--vscode-input-border, var(--adp-sections-line));
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+}
+
+.adp-sections-field input[type="checkbox"] {
+  align-self: flex-start;
+  accent-color: var(--vscode-checkbox-background);
+}
+
+/* Rows. */
+.adp-sections-group-heading {
+  margin: 12px 0 4px;
+  font-size: 1em;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.adp-sections-row {
+  margin: 6px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--adp-sections-line);
+  border-radius: 3px;
+  cursor: default;
+}
+
+.adp-sections-row[aria-selected="true"] {
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-list-inactiveSelectionBackground);
+}
+
+.adp-sections-row.adp-sections-related {
+  background: var(--vscode-editor-findMatchHighlightBackground, var(--vscode-list-hoverBackground));
+  border-style: dashed;
+}
+
+.adp-sections-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.adp-sections-id {
+  font-family: var(--vscode-editor-font-family);
+  font-weight: 600;
+}
+
+.adp-sections-badge,
+.adp-sections-finding {
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 0.85em;
+  border: 1px solid transparent;
+}
+
+.adp-sections-badge[data-style="info"] {
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.adp-sections-badge[data-style="warning"],
+.adp-sections-finding[data-severity="warning"] {
+  border-color: var(--vscode-editorWarning-foreground);
+  color: var(--vscode-editorWarning-foreground);
+}
+
+.adp-sections-finding[data-severity="error"] {
+  border-color: var(--vscode-editorError-foreground);
+  color: var(--vscode-editorError-foreground);
+}
+
+.adp-sections-row-head .adp-sections-operation:first-of-type {
+  margin-left: auto;
+}
+
+/* The time strip: one axis from the earliest to the latest time, a mark for each row with one. */
+.adp-sections-strip {
+  position: relative;
+  margin: 10px 0 14px;
+  padding: 0 8px;
+}
+
+.adp-sections-strip-from,
+.adp-sections-strip-to {
+  font-size: 0.85em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.adp-sections-strip-to {
+  float: right;
+}
+
+.adp-sections-strip-axis {
+  position: relative;
+  height: 46px;
+  margin-top: 4px;
+  border-bottom: 2px solid var(--adp-sections-line);
+}
+
+.adp-sections-strip-mark {
+  position: absolute;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  padding: 0;
+  border: 1px solid var(--vscode-editor-foreground);
+  border-radius: 50%;
+  background: var(--vscode-editor-background);
+  cursor: pointer;
+}
+
+.adp-sections-strip-emphasised {
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-focusBorder);
+}
+
+.adp-sections-strip-label {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%) rotate(-30deg);
+  transform-origin: bottom left;
+  white-space: nowrap;
+  font-size: 0.8em;
+}

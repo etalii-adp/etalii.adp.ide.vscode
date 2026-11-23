@@ -13,10 +13,13 @@
           "type": "string"
         },
         "desl": {
-          "description": "The DESL version the specification is written in: 0.1, or 0.2, which adds the hierarchy surface, counted ids, mentions, move and persistence.settings. See section 2.7.",
+          "description": "The DESL version the specification is written in: 0.1, 0.2, which adds the hierarchy surface, counted ids, mentions, move and persistence.settings, 0.3, which names an element read with a counter's placeholder line/<line>, 0.4, which adds the sections surface, or 0.5, which adds links to elements of other documents. See section 2.7.",
           "enum": [
             "0.1",
-            "0.2"
+            "0.2",
+            "0.3",
+            "0.4",
+            "0.5"
           ]
         },
         "language": {
@@ -304,6 +307,29 @@
         "labelAttribute": {
           "$ref": "#/$defs/SimpleId"
         },
+        "linkable": {
+          "description": "(DESL 0.5) Elements of this type can be linked to from other documents; true takes the default name property, the labelAttribute. See section 4.5.",
+          "anyOf": [
+            {
+              "const": true
+            },
+            {
+              "type": "object",
+              "properties": {
+                "nameProperty": {
+                  "$ref": "#/$defs/SimpleId"
+                },
+                "doc": {
+                  "$ref": "#/$defs/Doc"
+                }
+              },
+              "additionalProperties": false,
+              "patternProperties": {
+                "^x-": true
+              }
+            }
+          ]
+        },
         "doc": {
           "$ref": "#/$defs/Doc"
         }
@@ -383,7 +409,8 @@
                 "bool",
                 "date",
                 "datetime",
-                "time"
+                "time",
+                "link"
               ]
             },
             {
@@ -439,6 +466,20 @@
         },
         "mentions": {
           "$ref": "#/$defs/Mentions"
+        },
+        "origins": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+/[a-z0-9-]+$"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "(DESL 0.5) For link: the tool types, as <vendor>/<type>, whose documents the link may point into; absent, any. See section 4.2."
+        },
+        "document": {
+          "type": "boolean",
+          "description": "(DESL 0.5) For link: the value is a link to a document, without an element. Defaults to false. See section 4.2."
         }
       },
       "additionalProperties": false,
@@ -561,6 +602,22 @@
           "additionalProperties": {
             "$ref": "#/$defs/Setting"
           }
+        },
+        "documentId": {
+          "description": "(DESL 0.5) The rule of the document's own id (FBL section 17.2), a nanoid rule. See section 5.3.6.",
+          "allOf": [
+            {
+              "$ref": "#/$defs/IdRule"
+            }
+          ],
+          "properties": {
+            "strategy": {
+              "const": "nanoid"
+            }
+          },
+          "required": [
+            "strategy"
+          ]
         },
         "doc": {
           "$ref": "#/$defs/Doc"
@@ -694,7 +751,8 @@
           "enum": [
             "uuid-v4",
             "uuid-v7",
-            "derived"
+            "derived",
+            "nanoid"
           ]
         },
         "encoding": {
@@ -702,6 +760,19 @@
             "hex",
             "base36"
           ]
+        },
+        "alphabet": {
+          "description": "(DESL 0.5) nanoid: the characters of an id, nanoid's 64 (A-Za-z0-9_-, the default) or 0-9a-z. See section 5.3.6.",
+          "enum": [
+            "nanoid",
+            "base36"
+          ]
+        },
+        "length": {
+          "description": "(DESL 0.5) nanoid: the number of characters of an id. Default 21. See section 5.3.6.",
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 64
         },
         "stable": {
           "type": "boolean"
@@ -739,11 +810,25 @@
             "uuid-v4",
             "uuid-v7",
             "derived",
-            "counter"
+            "counter",
+            "nanoid"
           ]
         },
         "expression": {
           "$ref": "#/$defs/Expression"
+        },
+        "alphabet": {
+          "description": "(DESL 0.5) nanoid: the characters of an id, nanoid's 64 (A-Za-z0-9_-, the default) or 0-9a-z. See section 5.3.6.",
+          "enum": [
+            "nanoid",
+            "base36"
+          ]
+        },
+        "length": {
+          "description": "(DESL 0.5) nanoid: the number of characters of an id. Default 21. See section 5.3.6.",
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 64
         },
         "prefix": {
           "description": "(DESL 0.2) counter: what every id of the type starts with.",
@@ -1182,13 +1267,14 @@
       }
     },
     "Surface": {
-      "description": "How the model is laid out for the user: one shape per kind, a table (sections 7.2 to 7.6) or (DESL 0.2) a hierarchy (section 7.7). See section 7.",
+      "description": "How the model is laid out for the user: one shape per kind, a table (sections 7.2 to 7.6), (DESL 0.2) a hierarchy (section 7.7) or (DESL 0.4) a page of sections (section 7.8). See section 7.",
       "type": "object",
       "properties": {
         "kind": {
           "enum": [
             "table",
-            "hierarchy"
+            "hierarchy",
+            "sections"
           ]
         }
       },
@@ -1218,6 +1304,18 @@
           },
           "then": {
             "$ref": "#/$defs/Hierarchy"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "sections"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/Sections"
           }
         }
       ]
@@ -1502,6 +1600,265 @@
         "width"
       ]
     },
+    "Sections": {
+      "description": "(DESL 0.4) The sections kind of surface: one page of titled parts, in order, each a record (the fields of one element) or a list (the elements of one type, each a row of fields). Selection is shared across parts. See section 7.8.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "sections"
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SectionPart"
+          },
+          "minItems": 1
+        },
+        "doc": {
+          "$ref": "#/$defs/Doc"
+        }
+      },
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": true
+      },
+      "required": [
+        "kind",
+        "parts"
+      ]
+    },
+    "SectionPart": {
+      "description": "(DESL 0.4) A part of a sections surface: a record shows the fields of the one element of its type; a list shows the elements of its type as rows, in an optional order and groups, with an optional add gesture, time strip and marks. Either kind may show figures beside its title. See sections 7.8.1 to 7.8.4.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/SimpleId"
+        },
+        "title": {
+          "$ref": "#/$defs/Message"
+        },
+        "kind": {
+          "enum": [
+            "record",
+            "list"
+          ]
+        },
+        "type": {
+          "$ref": "#/$defs/TypeRef"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SectionField"
+          },
+          "minItems": 1
+        },
+        "order": {
+          "description": "list: each row's sort key; default document order. The order shown never reorders the file.",
+          "$ref": "#/$defs/Expression"
+        },
+        "group": {
+          "description": "list: each row's group key, shown as a sub-heading with the count of its rows.",
+          "$ref": "#/$defs/Expression"
+        },
+        "add": {
+          "description": "list: the operation that adds a row; absent, the part has no add gesture.",
+          "$ref": "#/$defs/SimpleId"
+        },
+        "timeStrip": {
+          "$ref": "#/$defs/TimeStrip"
+        },
+        "figures": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/SimpleId"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/Figure"
+          }
+        },
+        "marks": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/SimpleId"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/Mark"
+          }
+        },
+        "doc": {
+          "$ref": "#/$defs/Doc"
+        }
+      },
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": true
+      },
+      "required": [
+        "id",
+        "title",
+        "kind",
+        "type",
+        "fields"
+      ],
+      "allOf": [
+        {
+          "description": "Only a list part orders, groups, adds, carries a time strip or marks its rows (section 7.8).",
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "record"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "order"
+                  ]
+                },
+                {
+                  "required": [
+                    "group"
+                  ]
+                },
+                {
+                  "required": [
+                    "add"
+                  ]
+                },
+                {
+                  "required": [
+                    "timeStrip"
+                  ]
+                },
+                {
+                  "required": [
+                    "marks"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "SectionField": {
+      "description": "(DESL 0.4) A field of a record or of a list's rows: an attribute of the part's type, with an optional label and the editor of section 7.5 a host opens over it. See section 7.8.1.",
+      "type": "object",
+      "properties": {
+        "attribute": {
+          "$ref": "#/$defs/SimpleId"
+        },
+        "label": {
+          "$ref": "#/$defs/Message"
+        },
+        "widget": {
+          "enum": [
+            "text",
+            "number",
+            "checkbox",
+            "date",
+            "dateTime",
+            "time",
+            "choice",
+            "choices"
+          ]
+        },
+        "doc": {
+          "$ref": "#/$defs/Doc"
+        }
+      },
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": true
+      },
+      "required": [
+        "attribute"
+      ]
+    },
+    "TimeStrip": {
+      "description": "(DESL 0.4) A read-only band above a list part that places each row at its datetime attribute on an axis spanning the rows' times, emphasises the rows highlight selects and labels them with label. See section 7.8.3.",
+      "type": "object",
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/SimpleId"
+        },
+        "highlight": {
+          "$ref": "#/$defs/Expression"
+        },
+        "label": {
+          "$ref": "#/$defs/Expression"
+        },
+        "doc": {
+          "$ref": "#/$defs/Doc"
+        }
+      },
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": true
+      },
+      "required": [
+        "at"
+      ]
+    },
+    "Figure": {
+      "description": "(DESL 0.4) A named value shown beside a part's title; a value that is absent shows absentText. See section 7.8.4.",
+      "type": "object",
+      "properties": {
+        "label": {
+          "$ref": "#/$defs/Message"
+        },
+        "value": {
+          "$ref": "#/$defs/Expression"
+        },
+        "absentText": {
+          "$ref": "#/$defs/Message"
+        },
+        "doc": {
+          "$ref": "#/$defs/Doc"
+        }
+      },
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": true
+      },
+      "required": [
+        "label",
+        "value"
+      ]
+    },
+    "Mark": {
+      "description": "(DESL 0.4) A badge on each row of a list part for which when holds. See section 7.8.4.",
+      "type": "object",
+      "properties": {
+        "when": {
+          "$ref": "#/$defs/Expression"
+        },
+        "label": {
+          "$ref": "#/$defs/Message"
+        },
+        "style": {
+          "enum": [
+            "info",
+            "warning"
+          ]
+        },
+        "doc": {
+          "$ref": "#/$defs/Doc"
+        }
+      },
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": true
+      },
+      "required": [
+        "when",
+        "label"
+      ]
+    },
     "Columns": {
       "description": "The columns of a table: their element type and the attributes that name them, type them, mark the title column and the parent column, and the options a choice may take. See section 7.3.",
       "type": "object",
@@ -1682,6 +2039,31 @@
           },
           "additionalProperties": {
             "$ref": "#/$defs/Conversion"
+          }
+        },
+        "link": {
+          "description": "(DESL 0.5) The cells hold links into one document, chosen with the relation picker: the attributes of the columns' type that hold the target document's link, the limit and the backlink column's name. See section 7.5.1.",
+          "type": "object",
+          "properties": {
+            "target": {
+              "$ref": "#/$defs/SimpleId"
+            },
+            "limit": {
+              "$ref": "#/$defs/SimpleId"
+            },
+            "backlinkName": {
+              "$ref": "#/$defs/SimpleId"
+            },
+            "doc": {
+              "$ref": "#/$defs/Doc"
+            }
+          },
+          "required": [
+            "target"
+          ],
+          "additionalProperties": false,
+          "patternProperties": {
+            "^x-": true
           }
         },
         "doc": {

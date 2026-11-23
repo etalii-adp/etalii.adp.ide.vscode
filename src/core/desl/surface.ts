@@ -1,9 +1,10 @@
 // The surface of a designer (DESL 7): which types and attributes of the metamodel play which part
-// of the layout. DESL 0.1 has the one kind, `table`, and DESL 0.2 adds `hierarchy` (7.7).
+// of the layout. DESL 0.1 has the one kind, `table`, DESL 0.2 adds `hierarchy` (7.7), and DESL 0.4
+// adds `sections` (7.8).
 
 import { attributesOf, isA, valueKind, type Metamodel } from '../disl/metamodel';
 import { finding, type Finding, type Loaded } from '../disl/model';
-import { isObject, localized, type LocalizedText } from '../disl/specification';
+import { celOf, isCel, isObject, localized, type LocalizedText } from '../disl/specification';
 
 /** The editor a host opens over a cell (DESL 7.5). */
 export type Editor = 'text' | 'number' | 'checkbox' | 'date' | 'dateTime' | 'time' | 'choice' | 'choices' | 'rows';
@@ -73,8 +74,73 @@ export interface HierarchySurface {
   readonly ids: 'shown' | 'hidden';
 }
 
+/** The editor a host opens over a field of a part (DESL 7.8.1): a value type's editors but `rows`. */
+export type FieldWidget = Exclude<Editor, 'rows'>;
+
+/** A field of a part (DESL 7.8.1): an attribute of the part's type, its label and its editor. */
+export interface SectionsField {
+  readonly attribute: string;
+  readonly label: string;
+  readonly widget: FieldWidget;
+  /** Whether the attribute holds several values. */
+  readonly many: boolean;
+  /** The values an enumeration attribute takes, in its order. */
+  readonly options?: readonly string[];
+}
+
+/** A value shown beside a part's title (DESL 7.8.4), over `document`. */
+export interface SectionsFigure {
+  readonly id: string;
+  readonly label: string;
+  readonly value: string;
+  readonly absentText?: string;
+}
+
+/** A badge on the rows of a list for which `when` holds (DESL 7.8.4). */
+export interface SectionsMark {
+  readonly id: string;
+  readonly when: string;
+  readonly label: string;
+  readonly style: 'info' | 'warning';
+}
+
+/** One titled part of a page of sections (DESL 7.8.1). */
+export interface SectionsPart {
+  readonly id: string;
+  readonly title: string;
+  readonly kind: 'record' | 'list';
+  readonly type: string;
+  /** True for a type the persistence maps to the document (DESL 5.2): the record is of the document's own attributes. */
+  readonly document: boolean;
+  readonly fields: readonly SectionsField[];
+  readonly order?: string;
+  readonly group?: string;
+  readonly add?: string;
+  readonly timeStrip?: { readonly at: string; readonly highlight?: string; readonly label?: string };
+  readonly figures: readonly SectionsFigure[];
+  readonly marks: readonly SectionsMark[];
+}
+
+/** The `sections` kind (DESL 7.8): one page of titled parts, records and lists, one below the other. */
+export interface SectionsSurface {
+  readonly kind: 'sections';
+  readonly parts: readonly SectionsPart[];
+}
+
 /** A surface of one of the kinds this host lays out. */
-export type Surface = TableSurface | HierarchySurface;
+export type Surface = TableSurface | HierarchySurface | SectionsSurface;
+
+/** The types a persistence's type map keeps as the document (DESL 5.2, `as: "document"`, which the interpreter reads as DISL's `diagram`). */
+export const documentTypesOf = (persistence: { readonly typeMap: Readonly<Record<string, { readonly as?: string }>> }): string[] =>
+  Object.entries(persistence.typeMap).filter(([, mapped]) => mapped.as === 'document' || mapped.as === 'diagram').map(([type]) => type);
+
+/** What the names of a surface are checked against beside the metamodel (DESL 10.1, step 4). */
+export interface SurfaceContext {
+  /** The types the persistence maps `as: "document"`, which a sections part may show as a record of the document. */
+  readonly documentTypes?: readonly string[];
+  /** The operations the specification declares, which a part's add gesture names; unchecked when absent. */
+  readonly operations?: readonly string[];
+}
 
 const text = (value: unknown): string | undefined => (typeof value === 'string' && value !== '' ? value : undefined);
 
@@ -83,11 +149,12 @@ const text = (value: unknown): string | undefined => (typeof value === 'string' 
  * does not lay out, and one that names a type or an attribute the metamodel does not have, is not
  * read: there is then nothing to show a document on, and the finding says why.
  */
-export function interpretSurface(declared: unknown, metamodel: Metamodel, locale = 'en'): Loaded<Surface | undefined> {
+export function interpretSurface(declared: unknown, metamodel: Metamodel, locale = 'en', context: SurfaceContext = {}): Loaded<Surface | undefined> {
   if (!isObject(declared)) return { value: undefined, findings: [] };
   if (declared.kind === 'table') return interpretTable(declared, metamodel, locale);
   if (declared.kind === 'hierarchy') return interpretHierarchy(declared, metamodel);
-  return { value: undefined, findings: [finding('desl.unsupported-kind', 'error', `This tool lays its documents out as \`${String(declared.kind)}\`, and this host lays out a \`table\` or a \`hierarchy\` only, so its documents cannot be shown.`)] };
+  if (declared.kind === 'sections') return interpretSections(declared, metamodel, locale, context);
+  return { value: undefined, findings: [finding('desl.unsupported-kind', 'error', `This tool lays its documents out as \`${String(declared.kind)}\`, and this host lays out a \`table\`, a \`hierarchy\` or \`sections\` only, so its documents cannot be shown.`)] };
 }
 
 /** What both kinds check of the names a surface uses (DESL 10.1, step 4), each problem a `desl.surface` finding. */
@@ -269,4 +336,84 @@ function interpretHierarchy(declared: Readonly<Record<string, unknown>>, metamod
     ids: ids === 'hidden' ? 'hidden' : 'shown',
   };
   return { value: findings.length > 0 ? undefined : surface, findings };
+}
+
+/** An expression as its CEL text: written as a string or as `{ "cel": ... }`; nothing for none. */
+const expressionOf = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() !== '' ? value : isCel(value) ? celOf(value) : undefined);
+
+/**
+ * The `sections` kind (DESL 7.8) with the checks of DESL 10.1, step 4: part ids are unique; every
+ * part's type is an element type, or a type the persistence maps to the document; every field's
+ * attribute is an attribute of it; `add` names an operation; a time strip's `at` is a `datetime`
+ * attribute of its part's type; and what only a list has is not given on a record (7.8.1).
+ */
+export function interpretSections(declared: Readonly<Record<string, unknown>>, metamodel: Metamodel, locale = 'en', context: SurfaceContext = {}): Loaded<SectionsSurface | undefined> {
+  const findings: Finding[] = [];
+  const { problem } = namesOf(metamodel, findings);
+  const documentTypes = context.documentTypes ?? [];
+  const message = (value: unknown, fallback: string): string => localized(value as LocalizedText | undefined, locale) ?? fallback;
+  const parts: SectionsPart[] = [];
+  const declaredParts = Array.isArray(declared.parts) ? declared.parts : [];
+  if (declaredParts.length === 0) problem('The surface has no part to show.');
+  const seen = new Set<string>();
+  for (const written of declaredParts) {
+    if (!isObject(written)) continue;
+    const id = String(written.id ?? '');
+    if (seen.has(id)) problem(`The surface has two parts named \`${id}\`.`);
+    seen.add(id);
+    const kind = written.kind;
+    if (kind !== 'record' && kind !== 'list') problem(`The part \`${id}\` is a \`${String(kind)}\`, which is neither a \`record\` nor a \`list\`.`);
+    const type = String(written.type);
+    const document = !Object.hasOwn(metamodel.types, type) && documentTypes.includes(type);
+    if (!document && !Object.hasOwn(metamodel.types, type)) problem(`The part \`${id}\` shows \`${type}\`, which is neither a type of this tool nor one its documents keep as the document's.`);
+    const known = document ? metamodel.diagram : Object.hasOwn(metamodel.types, type) ? attributesOf(metamodel, type) : undefined;
+    const fields: SectionsField[] = [];
+    for (const field of Array.isArray(written.fields) ? written.fields : []) {
+      if (!isObject(field)) continue;
+      const name = String(field.attribute);
+      const attribute = known !== undefined && Object.hasOwn(known, name) ? known[name] : undefined;
+      if (known !== undefined && !attribute) problem(`The part \`${id}\` shows \`${name}\`, which is not an attribute of ${document ? 'the document' : `\`${type}\``}.`);
+      const value = attribute && valueKind(metamodel, attribute.type);
+      const implied: FieldWidget = !value ? 'text'
+        : value.kind === 'enum' ? (attribute.many === true ? 'choices' : 'choice')
+          : value.kind !== 'primitive' ? 'text'
+            : value.primitive === 'bool' ? 'checkbox' : value.primitive === 'datetime' ? 'dateTime' : value.primitive === 'date' ? 'date' : value.primitive === 'time' ? 'time'
+              : value.primitive === 'int' || value.primitive === 'number' ? 'number' : 'text';
+      if (field.widget !== undefined && (typeof field.widget !== 'string' || field.widget === 'rows' || !editors.includes(field.widget))) problem(`The field \`${name}\` of the part \`${id}\` is edited by \`${String(field.widget)}\`, which is no editor of DESL.`);
+      const widget = typeof field.widget === 'string' && field.widget !== 'rows' && editors.includes(field.widget) ? field.widget as FieldWidget : implied;
+      const options = value?.kind === 'enum' ? value.enum.values.map((member) => member.key) : undefined;
+      fields.push({ attribute: name, label: message(field.label, attribute?.label === undefined ? name : message(attribute.label, name)), widget, many: attribute?.many === true, ...(options ? { options } : {}) });
+    }
+    if (kind === 'record') {
+      for (const only of ['order', 'group', 'add', 'timeStrip', 'marks']) if (written[only] !== undefined) problem(`The part \`${id}\` is a record, and \`${only}\` is given only on a list.`);
+    }
+    const add = typeof written.add === 'string' ? written.add : undefined;
+    if (add !== undefined && context.operations !== undefined && !context.operations.includes(add)) problem(`The part \`${id}\` adds with \`${add}\`, which is not an operation of this tool.`);
+    let timeStrip: SectionsPart['timeStrip'];
+    if (isObject(written.timeStrip)) {
+      const at = String(written.timeStrip.at);
+      const attribute = known !== undefined && Object.hasOwn(known, at) ? known[at] : undefined;
+      const value = attribute && valueKind(metamodel, attribute.type);
+      if (!value || value.kind !== 'primitive' || value.primitive !== 'datetime') problem(`The time strip of the part \`${id}\` is at \`${at}\`, which is no \`datetime\` attribute of \`${type}\`.`);
+      const highlight = expressionOf(written.timeStrip.highlight);
+      const label = expressionOf(written.timeStrip.label);
+      timeStrip = { at, ...(highlight === undefined ? {} : { highlight }), ...(label === undefined ? {} : { label }) };
+    }
+    const figures: SectionsFigure[] = Object.entries(isObject(written.figures) ? written.figures : {}).filter((entry): entry is [string, Record<string, unknown>] => isObject(entry[1])).map(([figure, given]) => {
+      const absentText = localized(given.absentText as LocalizedText | undefined, locale);
+      return { id: figure, label: message(given.label, figure), value: expressionOf(given.value) ?? '', ...(absentText === undefined ? {} : { absentText }) };
+    });
+    const marks: SectionsMark[] = Object.entries(isObject(written.marks) ? written.marks : {}).filter((entry): entry is [string, Record<string, unknown>] => isObject(entry[1])).map(([mark, given]) => {
+      if (given.style !== undefined && given.style !== 'info' && given.style !== 'warning') problem(`The mark \`${mark}\` of the part \`${id}\` is drawn \`${String(given.style)}\`, which is neither \`info\` nor \`warning\`.`);
+      return { id: mark, when: expressionOf(given.when) ?? 'false', label: message(given.label, mark), style: given.style === 'warning' ? 'warning' : 'info' };
+    });
+    const order = expressionOf(written.order);
+    const group = expressionOf(written.group);
+    parts.push({
+      id, title: message(written.title, id), kind: kind === 'record' ? 'record' : 'list', type, document, fields,
+      ...(order === undefined ? {} : { order }), ...(group === undefined ? {} : { group }), ...(add === undefined ? {} : { add }),
+      ...(timeStrip === undefined ? {} : { timeStrip }), figures, marks,
+    });
+  }
+  return { value: findings.length > 0 ? undefined : { kind: 'sections', parts }, findings };
 }

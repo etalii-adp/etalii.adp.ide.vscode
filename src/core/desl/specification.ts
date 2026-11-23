@@ -11,7 +11,7 @@ import type { InterpretedPersistence } from '../disl/persistence';
 import { emptySpecification, isObject, type IdStrategy, type Specification, type TypeMapEntry } from '../disl/specification';
 
 /** The minor version of DESL this interpreter reads; its major version is 0. */
-export const deslMinor = 2;
+export const deslMinor = 4;
 
 /** The name the interpreter of `../disl/` has for the document as a whole. */
 const whole = 'diagram';
