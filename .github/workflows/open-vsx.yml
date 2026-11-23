@@ -1,0 +1,47 @@
+# Publishes the plug-in of an existing release to Open VSX, by hand (Actions > Open VSX > Run workflow).
+#
+# The Build workflow's release job publishes every release to Open VSX by trusted publishing. Open VSX lets a
+# trusted publisher be registered only for an extension it already holds, so the first version goes there through
+# this workflow, with the OVSX_PAT secret; it also republishes a release whose Open VSX step failed. With no
+# OVSX_PAT it tries trusted publishing, which needs a trusted publisher for this file, open-vsx.yml, as well.
+name: Open VSX
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release to publish, as its tag (v<version>)
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Take the plug-in of the release
+        run: |
+          gh release download "$TAG" --pattern 'etalii-adp-*.vsix' --dir plugin
+          vsix=$(find plugin -type f -name 'etalii-adp-*.vsix' | head -n 1)
+          [ -n "$vsix" ] || { echo "::error::The release $TAG has no etalii-adp-*.vsix."; exit 1; }
+          echo "VSIX=$vsix" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Publish to Open VSX
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if [ -n "$OVSX_PAT" ]; then
+            npx --yes ovsx@1 publish "$VSIX" --skip-duplicate
+          else
+            npx --yes ovsx@1 publish "$VSIX" --trusted-publishing --skip-duplicate
+          fi
