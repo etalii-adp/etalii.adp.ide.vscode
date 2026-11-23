@@ -16,7 +16,7 @@ const { model } = open;
 
 type Done = Exclude<Outcome, { readonly refused: string }>;
 const idOf = (type: string, index = 0): string => model.elements.filter((element) => element.type === type)[index].id;
-const placeholder = open.unnumbered[0]?.newId ?? '';
+const placeholder = open.unnumbered[0]?.name ?? '';
 
 interface Sample {
   readonly on?: readonly string[] | ((on: Model) => readonly string[]);

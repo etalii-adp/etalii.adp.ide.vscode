@@ -87,16 +87,18 @@ describe('the marks', () => {
 });
 
 describe('a document read with its placeholders', () => {
-  it('numbers a placeholder in memory after the mark, ephemeral, and reports it by std.missingId', () => {
+  it('names a placeholder line/<line> until it is numbered, with the number after the mark it is to have, ephemeral, and reports it by std.missingId (DESL 0.3)', () => {
     const read = numbered(readHierarchy(webShop()), rules);
     const placeholder = `${requirement().prefix}${requirement().placeholder!}`;
     const next = countedId(requirement(), Math.max(numberOf(requirement(), read.model.diagram[requirement().mark]) ?? 0, 10) + 1);
-    expect(read.unnumbered).toEqual([{ id: placeholder, newId: next, type: requirement().type, line: lineOf(webShop(), `+ ${placeholder}`) }]);
-    const element = read.model.elements.find((candidate) => candidate.id === next)!;
+    const name = `line/${lineOf(webShop(), `+ ${placeholder}`)}`;
+    expect(read.unnumbered).toEqual([{ id: placeholder, name, newId: next, type: requirement().type, line: lineOf(webShop(), `+ ${placeholder}`) }]);
+    expect(read.model.elements.some((candidate) => candidate.id === next)).toBe(false);
+    const element = read.model.elements.find((candidate) => candidate.id === name)!;
     expect(element).toMatchObject({ ephemeral: true, parent: 'ITEM-0003', line: lineOf(webShop(), `+ ${placeholder}`) });
     expect(read.model.elements.some((candidate) => candidate.id === placeholder)).toBe(false);
     expect(read.findings.map((found) => [found.code, found.severity, found.message, found.location.line, found.element])).toEqual([
-      ['std.missingId', 'warning', `${next} is numbered when the document is next changed: the file holds ${placeholder}.`, lineOf(webShop(), `+ ${placeholder}`), next],
+      ['std.missingId', 'warning', `${name} is numbered ${next} when the document is next changed: the file holds ${placeholder}.`, lineOf(webShop(), `+ ${placeholder}`), name],
     ]);
   });
 
@@ -110,9 +112,10 @@ describe('a document read with its placeholders', () => {
       ['ITEM-0008', lineOf(text, 'ITEM-NEW Data')],
       ['REQ-0014', lineOf(text, 'REQ-NEW Personal data')],
     ]);
+    expect(read.unnumbered.map((done) => done.name)).toEqual([`line/${lineOf(text, 'REQ-NEW A guest')}`, `line/${lineOf(text, 'ITEM-NEW Data')}`, `line/${lineOf(text, 'REQ-NEW Personal data')}`]);
     const parents = (id: string): string | undefined => read.model.elements.find((element) => element.id === id)?.parent;
-    expect(parents('REQ-0009')).toBe('ITEM-0008');
-    expect(parents('REQ-0014')).toBe('ITEM-0008');
+    expect(parents('REQ-0009')).toBe(`line/${lineOf(text, 'ITEM-NEW Data')}`);
+    expect(parents(`line/${lineOf(text, 'REQ-NEW Personal data')}`)).toBe(`line/${lineOf(text, 'ITEM-NEW Data')}`);
     // The library's duplicate at the later placeholder is a missing id to DESL.
     expect(read.findings.map((found) => `${found.code}@${found.location.line}`)).toEqual([
       `std.missingId@${lineOf(text, 'REQ-NEW A guest')}`, `std.missingId@${lineOf(text, 'ITEM-NEW Data')}`, `std.missingId@${lineOf(text, 'REQ-NEW Personal data')}`,
