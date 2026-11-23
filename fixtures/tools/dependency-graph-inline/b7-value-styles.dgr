@@ -1,0 +1,17 @@
+dependencies: 1
+elements:
+  - id: aaa
+    label: 'The author''s quotes' # kept by hand
+    x: &across 120
+    row: 0
+  - id: bbb
+    label: Aliased across
+    x: *across
+    row: 1
+relations:
+  - id: block
+    from: aaa
+    to: bbb
+    label: |
+      first line
+      second line

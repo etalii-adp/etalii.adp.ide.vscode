@@ -3,6 +3,7 @@
 // what a definition and its bindings name of them.
 
 import type { Change } from '../disl/behavior';
+import type { ConstraintFinding } from '../disl/constraints';
 import type { PluginFunction } from '../disl/expressions';
 import type { LayoutPlugin } from '../disl/layout';
 import type { Model } from '../disl/model';
@@ -56,6 +57,8 @@ export interface ReadingLogic {
   numberText?(value: number): string;
   /** The style of an underline that no style states, where the tool type draws it otherwise than straight, such as `wavy`. */
   readonly underlineStyle?: string;
+  /** The findings of a model in the order the tool type reports them, where `constraints.order` cannot state it, as when it interleaves two codes. */
+  order?(findings: readonly ConstraintFinding[], model: Model): readonly ConstraintFinding[];
 }
 
 /** What an export of a document is given: its model, the name of its file without the extension, and where the canvas draws the centre of each node, by id. */

@@ -1,0 +1,22 @@
+dependencies: 1
+elements:
+  - id: 007
+    label: 1.0
+    x: 0
+    row: 0
+  - id: 7
+    label: true
+    x: 240
+    row: 0
+  - id: tilde
+    label: ~
+    x: 480
+    row: 1
+relations:
+  - id: hex-end
+    from: 0x1F
+    to: 007
+    label: 1.0
+  - id: seven
+    from: 7
+    to: 007

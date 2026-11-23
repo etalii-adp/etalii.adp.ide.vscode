@@ -1,0 +1,15 @@
+dependencies: 1
+elements:
+  - id: aaa
+    label: Said once
+    label: Said twice
+    x: 0
+    row: 0
+  - id: bbb
+    label: Other
+    x: 240
+    row: 1
+relations:
+  - id: between
+    from: aaa
+    to: bbb

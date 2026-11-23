@@ -47,6 +47,8 @@ export interface WorldOptions {
   view?(id: string): Scope | undefined;
   /** `diagram.file`: the name of the file the model was read from (DISL 8.6). */
   readonly file?: string;
+  /** The host attribute that holds the id an element is written with (DISL 0.10, `persistence.writtenId`): `self.id` reads it, the empty text where the element has none. */
+  readonly writtenId?: string;
 }
 
 export interface Expressions {
@@ -69,10 +71,12 @@ export interface ExpressionOptions {
 }
 
 /**
- * A plugin function as a host carries it (DISL 13.1.1): its arguments as CEL holds them, and `read`, which reads a
- * member of an element as an expression would. What it gives back is held by CEL as it is: elements, lists, strings.
+ * A plugin function as a host carries it (DISL 13.1.1): its arguments as CEL holds them, `read`, which reads a
+ * member of an element as an expression would, and `host`, which reads what the binding reads of an element beside
+ * the model (a host attribute, DISL 11.2), which no expression can. What it gives back is held by CEL as it is:
+ * elements, lists, strings.
  */
-export type PluginFunction = (args: readonly unknown[], read: (target: unknown, name: string) => unknown) => unknown;
+export type PluginFunction = (args: readonly unknown[], read: (target: unknown, name: string) => unknown, host: (target: unknown, name: string) => unknown) => unknown;
 
 // The library tells a value of a type of its own by its constructor, so an element is an object of
 // this class, and reads its members through a proxy. What CEL may not see of it is kept beside it.
@@ -85,6 +89,8 @@ interface Facts {
   /** Whether a member holds a value of its own, which is what `has()` and `.?` ask (DISL 4.3). */
   stored(name: string): boolean;
   find(id: string): Entity | null;
+  /** A host attribute of the element (DISL 11.2), for a plugin function. */
+  host?(name: string): unknown;
 }
 
 const facts = new WeakMap<object, Facts>();
@@ -341,7 +347,7 @@ export function createExpressions(specification: Specification, metamodel: Metam
       const fallback = typeof declaration.fallback === 'string' ? declaration.fallback : undefined;
       try {
         register(`${name}(${params.map(() => 'dyn').join(', ')}): dyn`, (...values: unknown[]) => {
-          if (carried) return carried(values, member);
+          if (carried) return carried(values, member, (target, attribute) => factsOf(target instanceof Optional ? (target.hasValue() ? target.value() : undefined) : target)?.host?.(attribute));
           if (fallback === undefined) throw new Error(`the plugin ${plugin}, which carries ${name}(), is not present`);
           const scope: Record<string, unknown> = Object.fromEntries(params.map((param, index) => [param, values[index]]));
           for (const used of uses) scope[used] = active[used];
@@ -409,7 +415,7 @@ export function createExpressions(specification: Specification, metamodel: Metam
       const relation = 'source' in element || 'target' in element || metamodel.types[element.type]?.kind === 'relation';
       const built = (name: string): unknown => {
         switch (name) {
-          case 'id': return element.id;
+          case 'id': return worldOptions.writtenId === undefined ? element.id : writtenText(element.host[worldOptions.writtenId]);
           case 'type': return element.type;
           case 'kind': return relation ? 'relation' : 'node';
           case 'view': return worldOptions.view?.(element.id) ?? null;
@@ -442,7 +448,7 @@ export function createExpressions(specification: Specification, metamodel: Metam
         return Object.hasOwn(attributes, name) && attributes[name].derived !== undefined;
       };
       const created: Entity = entity(
-        { id: element.id, type: element.type, stored: (name) => Object.hasOwn(element.attributes, name) || (built(name) ?? null) !== null },
+        { id: element.id, type: element.type, stored: (name) => Object.hasOwn(element.attributes, name) || (built(name) ?? null) !== null, host: (name) => element.host[name] },
         (name) => { const value = built(name); return value !== undefined ? value : isDerived(name) ? derivedOf(name) : attribute(element.type, element.attributes, name); },
       );
       entities.set(element.id, created);
@@ -505,6 +511,9 @@ function rewrite(node: ASTNode): string {
 }
 
 // ---- values ----
+
+/** A host attribute's value as the text of an id: the empty text for none. */
+const writtenText = (value: unknown): string => (value === undefined || value === null ? '' : String(value));
 
 /** What CEL holds as plain data: a number for an integer, an id for an element, null for an optional without a value. */
 function plain(value: unknown): Value {

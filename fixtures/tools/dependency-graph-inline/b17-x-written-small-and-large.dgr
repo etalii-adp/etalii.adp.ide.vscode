@@ -1,0 +1,14 @@
+dependencies: 1
+elements:
+  - id: aaa
+    label: Moved to the small and the large
+    x: 0
+    row: 0
+  - id: bbb
+    label: Other
+    x: 240
+    row: 1
+relations:
+  - id: between
+    from: aaa
+    to: bbb

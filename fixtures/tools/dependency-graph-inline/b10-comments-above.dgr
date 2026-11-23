@@ -1,0 +1,19 @@
+dependencies: 1
+elements:
+  - id: aaa
+    label: First
+    x: 0
+    row: 0
+  # About bbb, directly above it.
+  - id: bbb
+    # About bbb's label.
+    label: Second
+    x: 240
+    row: 1
+relations:
+  # About the dependency.
+  - id: uses
+    from: aaa
+    to: bbb
+    # About its label.
+    label: uses

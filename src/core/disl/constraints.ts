@@ -187,6 +187,8 @@ const limit = (type: string, violation: Violation): string =>
  */
 export function interpretConstraints(specification: Specification, metamodel: Metamodel, expressions: Expressions): Loaded<Constraints> {
   const declared = (specification.constraints ?? {}) as ConstraintsSection;
+  // `self.id` in a rule and its message reads the id as written, where the specification names the host attribute that holds it (DISL 0.10, 11.5.4).
+  const writtenId = typeof specification.persistence?.writtenId === 'string' ? specification.persistence.writtenId : undefined;
   const settings = declared.builtIn ?? {};
   const groups = declared.groups ?? {};
   const locale = specification.language.defaultLocale ?? 'en';
@@ -259,7 +261,7 @@ export function interpretConstraints(specification: Specification, metamodel: Me
     readonly file: string;
   }
   const contextOf = (model: Model, file: string): Context =>
-    ({ model, world: expressions.over(model, { file }), byId: new Map([...model.relations, ...model.elements].map((element) => [element.id, element])), file });
+    ({ model, world: expressions.over(model, { file, ...(writtenId === undefined ? {} : { writtenId }) }), byId: new Map([...model.relations, ...model.elements].map((element) => [element.id, element])), file });
   const scopeFor = (context: Context, self: ModelElement | undefined, more: Scope = {}): Scope =>
     (self ? context.world.scope(self.id, more) : context.world.scope(undefined, { self: context.world.diagram, ...more }));
   const at = (context: Context, element: ModelElement | undefined): Finding['location'] =>

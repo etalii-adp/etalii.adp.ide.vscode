@@ -1,0 +1,22 @@
+dependencies: 1
+elements:
+  - id: hex
+    label: Hexadecimal
+    x: 0x10
+    row: 0
+  - id: dot-inf
+    label: YAML's infinity
+    x: .inf
+    row: 1
+  - id: infinity
+    label: .NET's infinity
+    x: Infinity
+    row: 2
+  - id: nan
+    label: Not a number
+    x: NaN
+    row: 3
+relations:
+  - id: across
+    from: hex
+    to: dot-inf

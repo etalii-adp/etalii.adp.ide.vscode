@@ -1,0 +1,22 @@
+dependencies: 1
+elements:
+  - id: aaa
+    label: Present
+    x: 0
+    row: 0
+relations:
+  - id: to-ghost
+    from: aaa
+    to: ghost
+  - id: from-ghost
+    from: ghost
+    to: aaa
+  - id: both-ghosts
+    from: ghost1
+    to: ghost2
+    label: between nobodies
+  - id: no-from
+    to: aaa
+  - id: empty-to
+    from: aaa
+    to: ""

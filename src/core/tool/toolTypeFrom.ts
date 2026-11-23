@@ -58,6 +58,7 @@ const NO_ROW = 'This value cannot be changed here.';
 const NO_TEXT = 'This text cannot be changed here.';
 const NOT_HERE = 'This is not possible here.';
 const UNREADABLE = 'The document could not be read, so it cannot be edited.';
+const unreadableFile = (fileName: string): string => `${fileName.slice(Math.max(fileName.lastIndexOf('/'), fileName.lastIndexOf('\\')) + 1)} could not be read, so it cannot be edited.`;
 const NO_LINK = 'There is no link to open.';
 const NO_PLACE = 'An end is put on a part of what it is on, on a side of that part, at a share of the side from 0 to 1.';
 
@@ -188,16 +189,20 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     const model = read.unreadable ? emptyModel : typed.value;
     const derived = derivedRelations(metamodel.value, expressions, model);
     // The reader of a binding says itself that its plugin is missing; it is said once, with the others.
+    const checked = constraints.value.check(model, typed.findings, { file: source.fileName.slice(Math.max(source.fileName.lastIndexOf('/'), source.fileName.lastIndexOf('\\')) + 1) }).filter((finding) => finding.code !== findingCodes.pluginMissing);
     const found = [
-      ...constraints.value.check(model, typed.findings, { file: source.fileName.slice(Math.max(source.fileName.lastIndexOf('/'), source.fileName.lastIndexOf('\\')) + 1) }).filter((finding) => finding.code !== findingCodes.pluginMissing),
+      ...(readingLogic?.order ? readingLogic.order(checked, model) : checked),
       ...derived.findings,
     ].map(framed);
     const gate = needed.length > 0 ? messages.pluginMissing(needed[0].id) : body.isReadOnly && !read.unreadable ? binding.readOnly || messages.readOnlyFile : undefined;
     const kept = { view: typed.view, stale: typed.stale, ...(typed.entries ? { entries: typed.entries } : {}), derived: derived.value, corners: keptBeside ? layoutOf(source.registration) : {} };
     // What is said of a document that cannot be read is the definition's sentence for one that cannot be edited, else the reader's finding.
-    const unread = behavior.value.message('std.readOnly', emptyModel) ?? found[0]?.message ?? UNREADABLE;
+    const readOnly = behavior.value.message('std.readOnly', emptyModel);
+    const unread = readOnly ?? found[0]?.message ?? UNREADABLE;
+    // An edit of it is refused naming the file, in the standalone host's words, where the definition gives no sentence of its own.
+    const unedited = readOnly ?? unreadableFile(source.fileName);
     const open: Open = read.unreadable
-      ? { binding, read, model, findings: found, unreadable: true, refusal: unread, notice: unread, ...kept }
+      ? { binding, read, model, findings: found, unreadable: true, refusal: unedited, notice: unread, ...kept }
       : { binding, read, model, findings: found, unreadable: false, refusal: gate, notice: gate, ...kept };
     last = { source, open };
     return open;

@@ -1,0 +1,15 @@
+dependencies: 1
+elements:
+  - id: aaa
+    label: Dash gap of one
+    x: 0
+    row: 0
+  -   id: bbb
+      label: Dash gap of three
+      x: 240
+      row: 1
+relations:
+- id: flush
+  from: aaa
+  to: bbb
+  label: indented by nothing
