@@ -45,6 +45,8 @@ export interface State {
   };
   /** What the tool type offers for the selection. */
   actions?: { id: string; label: string; enabled: boolean; disabledReason?: string }[];
+  /** The document of the active tool: the state is of that tool, whichever tab was opened last. */
+  uri: string;
   kind: 'diagram' | 'designer';
   /** What change of the document the last view sent followed: an edit of the editor's own, or one made outside it. */
   cause?: 'edit' | 'outside';

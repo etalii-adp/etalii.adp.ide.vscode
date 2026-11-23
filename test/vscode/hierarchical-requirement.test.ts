@@ -46,6 +46,9 @@ async function open(): Promise<{ uri: vscode.Uri; registration: vscode.Uri; docu
   const registrationBytes = fs.readFileSync(registration.fsPath);
   await vscode.commands.executeCommand('vscode.open', uri);
   await until('the designer\'s tab', () => inDesigner(uri));
+  // The tab shows before its tool is the active one: until then, state and edits still reach the
+  // tool of the test before, whose tab is closing, and an edit made there never shows in this file.
+  await until('the designer to be the active tool', async () => (await state())?.uri === uri.toString());
   await drawn();
   const document = await vscode.workspace.openTextDocument(uri);
   return { uri, registration, document, original: document.getText(), bytes, registrationBytes };
