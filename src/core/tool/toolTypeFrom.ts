@@ -21,7 +21,7 @@ import { interpretLayout } from '../disl/layout';
 import { defaultOf, derivedRelations, interpretMetamodel, isA, isRelation, linkKind, type DerivedRelation } from '../disl/metamodel';
 import { emptyModel, type Finding as Found, type Model, type Value } from '../disl/model';
 import { edgeNotation, interpretNotation, nodeNotation, styleOf, type GestureRefusals, type Notation, type Paint } from '../disl/notation';
-import { entryOf, foldsOf, interpretPersistence, momentAttributes, naturalId, newId, readModel, viewEntryIds, type StoredView } from '../disl/persistence';
+import { entryOf, foldsOf, interpretPersistence, momentAttributes, naturalId, newId, readModel, typeIds, viewEntryIds, type StoredView } from '../disl/persistence';
 import { isCel, isObject, loadSpecification, localized, type LocalizedText } from '../disl/specification';
 import { groupsIn, interpretToolbox, type ToolGroup } from '../disl/toolbox';
 import { interpretViewpoints } from '../disl/viewpoints';
@@ -30,7 +30,7 @@ import { extensionOf, nameOf } from '../fbl/files/paths';
 import { findingCodes } from '../fbl/finding';
 import { OpenBody } from '../fbl/history/openBody';
 import { messages } from '../fbl/messages';
-import type { FblModel } from '../fbl/model';
+import type { FblModel, IdRequest } from '../fbl/model';
 import type { ChangePosition, ModelChange } from '../fbl/planning/modelChange';
 import { PluginBody } from '../fbl/plugins/pluginBody';
 import { OpenRegistration } from '../fbl/registration/openRegistration';
@@ -186,7 +186,10 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   }
 
   // What the FBL library asks of the tool type's specification: the id of an entry of bound view data, and which attributes hold a moment (FBL 5.3, 6.3).
-  const reading = new Map(bindings.map((binding) => [binding, { deriveId: viewEntryIds(persistence.value), timeAttributes: momentAttributes(binding, metamodel.value, persistence.value) }]));
+  const viewIds = viewEntryIds(persistence.value);
+  const ownIds = typeIds(persistence.value, expressions);
+  const deriveId = (request: IdRequest): string | undefined => viewIds(request) ?? ownIds(request);
+  const reading = new Map(bindings.map((binding) => [binding, { deriveId, timeAttributes: momentAttributes(binding, metamodel.value, persistence.value) }]));
   const bodyOf = (binding: FblBinding, source: Source): OpenBody | PluginBody => {
     const bytes = encode(source.text);
     return binding.plugin ? PluginBody.open(bytes, binding, plugins.persistence(binding.plugin.plugin), source.fileName) : OpenBody.open(bytes, binding, reading.get(binding));

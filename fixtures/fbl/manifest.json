@@ -927,6 +927,34 @@
         "designers/hierarchical-requirement.des": "7f09ec401293e1de2f52533e0dcd410253614211e648a885a5b384330058a55b",
         "designers/hierarchical-requirement.fbl": "0b49ee62e028294e4fdcfab2ffd843b01c330d9905d91b8174710134bf6b4703"
       }
+    },
+    {
+      "name": "value-stream-map",
+      "repository": "https://github.com/etalii-adp/etalii.adp",
+      "commit": "519f7be9fd5d02aa221d5d72f0a3b1e34eb749c0",
+      "licence": "Apache-2.0",
+      "from": "specifications/fbl/",
+      "to": "fixtures/fbl/conformance/",
+      "files": {
+        "fixtures/value-stream-map-edits/fixture.json": "f5697703ff55cc77604806e9638ccf40b7506e8678be255e8e1d5b7ff400ca1b",
+        "fixtures/value-stream-map-edits/small-stream.vsm": "5dcadd082dd801690949420fe0637371391777a82a9df41071de850422a0f451",
+        "fixtures/value-stream-map-future/fixture.json": "cab3b0e50a08c1c2b84aac7d02be7bca85d1ab28a0cafed9f31ab5fac9a1232d",
+        "fixtures/value-stream-map-future/two-steps.vsm": "a0421abb859cddf46d756f3636e0df30df0f4f7cc8d15b8574e71f2f4bb1348a",
+        "fixtures/value-stream-map-read/fixture.json": "7a8109e69ce48d9c1fdeb04497dd9c1c30b5115c059cd1acea840b62d790dc49",
+        "fixtures/value-stream-map-read/restore-service.vsm": "cbcc83c91a6ccb94b0610bd5c51c137960af1a8aac8fb49f7529b16785e22bd7"
+      }
+    },
+    {
+      "name": "value-stream-map-definitions",
+      "repository": "https://github.com/etalii-adp/etalii.adp",
+      "commit": "519f7be9fd5d02aa221d5d72f0a3b1e34eb749c0",
+      "licence": "Apache-2.0",
+      "from": "definitions/",
+      "to": "fixtures/fbl/definitions/",
+      "files": {
+        "diagrams/value-stream-map.dis": "d3791cf9aa539cf1279f3e80c3270dc8d80f9da313dc7b4be8cc72ba1bffcf86",
+        "diagrams/value-stream-map.fbl": "57b361f1139efa8639de4b886baad2eefe22472ad9ce18ddd09aa06bc163d483"
+      }
     }
   ]
 }

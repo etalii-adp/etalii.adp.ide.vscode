@@ -592,7 +592,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
   const keeps = (type: string, attribute: string): boolean => Object.hasOwn(attributesOf(metamodel, type), attribute);
   // A condition that is not given holds, and one that cannot be evaluated does not.
   const given = (condition: unknown, scope: Scope): boolean => condition === undefined || holds(condition, scope, false);
-  const mint = (type: string): string => parts.newId?.(type) ?? newId(parts.persistence, type);
+  const mint = (type: string, taken: Iterable<string>): string => parts.newId?.(type) ?? newId(parts.persistence, type, taken);
 
   // ---- what cannot be read ----
 
@@ -913,7 +913,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
         refuse(`This could not be done: \`${type}\` is not a type that can be created here.`);
         return undefined;
       }
-      const id = mint(type);
+      const id = mint(type, [...working.elements, ...working.relations].map((element) => element.id));
       // A default that is computed is worked out now, in the `create` context (DISL 4.3).
       const computed: Record<string, Value> = {};
       for (const [name, attribute] of Object.entries(meta.attributes)) {
@@ -1229,6 +1229,8 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     function related(type: string, source: string, target: string, ends: { readonly source?: EndPlace; readonly target?: EndPlace }, values: Readonly<Record<string, Value | null>> = {}): string | undefined {
       if (!check({ kind: 'connect', elements: { source, target }, values: { relationType: type } })) return undefined;
       const id = add(type, values, { source, target });
+      // Checked again once the transaction is made, the gesture names the relation it made, which is no parallel of itself (DISL 14.4).
+      if (id !== undefined && lastGesture?.kind === 'connect' && lastGesture.self === undefined) lastGesture = { ...lastGesture, self: id };
       if (id !== undefined) write(id, attached(id, ends, true), 'hook');
       return id;
     }

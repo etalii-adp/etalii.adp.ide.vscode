@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createExpressions } from '../../../src/core/disl/expressions';
+import { createExpressions, durationOf } from '../../../src/core/disl/expressions';
 import { interpretMetamodel, parseYearMonth } from '../../../src/core/disl/metamodel';
 import { loadSpecification } from '../../../src/core/disl/specification';
 import { expressionsOf } from './expressionsOf';
@@ -206,6 +206,29 @@ describe('elements in CEL', () => {
     expect(expressions.evaluate('[diagram.unit, has(diagram.unit)]', none.scope())).toMatchObject({ value: ['month', false] });
   });
 
+  // etalii.adp spec 090, research R1: an aggregate of whole numbers is a whole number (DISL 12.4), so it adds to one.
+  it('keeps the sum, the least and the greatest of whole numbers whole', () => {
+    expect(value(undefined, '[[1, 2, 3].max() + 1, [4, 2].min() + 1, [1, 2].sum() + 1, [].sum() + 1]')).toEqual([4, 3, 4, 1]);
+    expect(value(undefined, '[[1.5, 2.0].max() + 1.0, [1.5, 2.0].min() + 1.0, [0.5, 0.25].sum() + 1.0]')).toEqual([3, 2.5, 1.75]);
+    expect(expressions.evaluate('[1, 2].max() + 1.0', world.scope(undefined)).ok).toBe(false);
+  });
+
+  // etalii.adp spec 090, research R2: the graph members of a node (DISL 12.2), over the influences spark > even > pinned and even > nowhere.
+  it('walks a node\'s successors, predecessors and what it reaches', () => {
+    expect(value('spark', "self.successors('Influence').map(n, n.id)")).toEqual(['even']);
+    expect(value('even', "self.predecessors('Influence').map(n, n.id)")).toEqual(['spark']);
+    expect(value('spark', "self.reachable('Influence').map(n, n.id)")).toEqual(['even', 'pinned']);
+    expect(value('even', "self.neighbors().map(n, n.id)")).toEqual(['spark', 'pinned']);
+    expect(value('spark', "[self.inCycle('Influence'), diagram.hasCycle('Influence')]")).toEqual([false, false]);
+    expect(value('pinned', "self.reachable('Influence').size()")).toBe(0);
+  });
+
+  // etalii.adp spec 090: a duration attribute is written in ISO 8601 and read as a CEL duration (DISL 4.2).
+  it('reads an ISO 8601 duration as a duration', () => {
+    expect([durationOf('PT20M')?.seconds, durationOf('P2DT3H')?.seconds, durationOf('PT1.5S')?.nanos, durationOf('P1W')?.seconds]).toEqual([1200n, 183600n, 500000000, 604800n]);
+    expect([durationOf('P1M'), durationOf('PT'), durationOf('20 minutes')]).toEqual([undefined, undefined, undefined]);
+  });
+
   it('binds env, the view and what a context adds', () => {
     expect(value('even', "[env.viewpoint, env.mode, env.readOnly]")).toEqual(['compact', 'light', false]);
     expect(value('even', 'self.view.x')).toBe(3.5);
@@ -262,6 +285,14 @@ describe('the function library', () => {
     expect(value("[enumLabel('TimeUnit', 'decade'), enumLabel('TimeUnit', 'aeon'), string(ordinal('slope', 'Phase'))]")).toEqual(['Decade', 'aeon', '2']);
     // The specification declares an average text metric: 0.55 of the font size for each UTF-16 unit.
     expect(value("textWidth('Steam', 12.0)")).toBeCloseTo(5 * 0.55 * 12);
+  });
+
+  // etalii.adp spec 090: what the value stream map's totals and labels call (DISL 12.4).
+  it('writes numbers by a pattern and durations by a style, and counts with a macro', () => {
+    expect(value("[formatNumber(1745.0 / 60.0, '#,##0.##'), formatNumber(1234567, '#,##0'), formatNumber(3.7, '0.#'), formatNumber(0.25, '0.00'), formatNumber(2.0, '0.##'), formatNumber(-0.04, '0.#')]")).toEqual(['29.08', '1,234,567', '3.7', '0.25', '2', '0']);
+    expect(value("[formatDuration(duration('3h'), 'short'), formatDuration(duration('90m'), 'short'), formatDuration(duration('26h'), 'long'), formatDuration(duration('0s'), 'short'), formatDuration(duration('90m'), 'iso')]")).toEqual(['3h', '1h 30m', '1 day 2 hours', '0m', 'PT1H30M']);
+    expect(value('[1, 5, 7, 2].count(n, n > 2)')).toBe(2);
+    expect(expressions.evaluate("formatNumber(1.5, 'x')", {}).ok).toBe(false);
   });
 
   it('keeps cel.bind, optionals, macros and maps working beside has() and the optional member', () => {

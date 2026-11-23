@@ -157,6 +157,16 @@
           }
         ],
         "priority": "default"
+      },
+      {
+        "viewType": "etalii.adp.generic.value-stream-map",
+        "displayName": "Value stream map",
+        "selector": [
+          {
+            "filenamePattern": "*.vsm"
+          }
+        ],
+        "priority": "default"
       }
     ],
     "commands": [
@@ -300,6 +310,11 @@
         "command": "etalii.adp.new.freeplane.mindmap",
         "title": "New Mind map",
         "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.new.generic.value-stream-map",
+        "title": "New Value stream map",
+        "category": "ADP"
       }
     ],
     "menus": {
@@ -354,6 +369,9 @@
         },
         {
           "command": "etalii.adp.new.freeplane.mindmap"
+        },
+        {
+          "command": "etalii.adp.new.generic.value-stream-map"
         }
       ],
       "commandPalette": [

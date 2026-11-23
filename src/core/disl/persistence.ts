@@ -8,7 +8,7 @@ import type { FblElement, FblModel, IdRequest } from '../fbl/model';
 import { attributesOf, formatYearMonth, isRelation, parseYearMonth, valueKind, type Metamodel } from './metamodel';
 import { emptyModel, finding, type Finding, type Loaded, type Model, type ModelElement, type ModelRelation, type Value } from './model';
 import type { Expressions } from './expressions';
-import { isCel, isObject, type Attribute, type IdStrategy, type Specification, type TypeMapEntry } from './specification';
+import { isCel, isObject, type Attribute, type Expression, type IdStrategy, type Specification, type TypeMapEntry } from './specification';
 
 export interface InterpretedPersistence {
   readonly format: string;
@@ -86,8 +86,10 @@ export function interpretPersistence(specification: Specification, metamodel: Me
   // A derived id is its expression's value (DISL 11.5.2), a natural id its key (11.5.1); any other strategy is read as `uuid-v4`.
   const derived = ids.strategy === 'derived' && (typeof ids.expression === 'string' || isCel(ids.expression));
   if (ids.strategy === 'derived' && !derived) problem('The ids are derived, and `ids.expression` does not say from what.');
-  else if (ids.strategy !== 'uuid-v4' && ids.strategy !== 'natural' && !derived) findings.push(finding('disl.persistence', 'warning', `New elements get an id by the strategy \`uuid-v4\`, not by \`${ids.strategy}\`, which this add-on does not support.`));
-  if (ids.types) findings.push(finding('disl.persistence', 'warning', 'The id rules for single types are not supported; every type follows the one rule.'));
+  else if (ids.strategy !== 'uuid-v4' && ids.strategy !== 'natural' && ids.strategy !== 'sequential' && !derived) findings.push(finding('disl.persistence', 'warning', `New elements get an id by the strategy \`uuid-v4\`, not by \`${ids.strategy}\`, which this add-on does not support.`));
+  // A type's own rule is supported where it derives the id from an expression, which reading forms (DISL 11.5.2).
+  const unsupported = Object.entries(ids.types ?? {}).filter(([, rule]) => !(rule.strategy === 'derived' && (typeof rule.expression === 'string' || isCel(rule.expression)))).map(([type]) => type);
+  if (unsupported.length > 0) findings.push(finding('disl.persistence', 'warning', `The id rules of ${unsupported.map((type) => `\`${type}\``).join(', ')} are not supported; those types follow the one rule.`));
 
   const store = declared.view?.store ?? [];
   const bind: { -readonly [Kind in keyof ViewBind]: ViewBind[Kind] } = {};
@@ -122,6 +124,27 @@ export function viewEntryIds(persistence: InterpretedPersistence): (request: IdR
     if (pinned && request.type === pinned.type) return `pinned:${named(request, pinned.element)}`;
     if (groups && request.type === groups.type) return `groups:${named(request, groups.element)}#${named(request, groups.group)}`;
     return undefined;
+  };
+}
+
+/**
+ * The id of an element of a type whose own rule derives it (DISL 11.5.2, `ids.types`): its expression
+ * over the element as reading finds it, its attributes and the ids of its ends, which is what the FBL
+ * library is given to derive an id that is not stored by. Nothing for another type, or when the
+ * expression gives no text.
+ */
+export function typeIds(persistence: InterpretedPersistence, expressions: Expressions): (request: IdRequest) => string | undefined {
+  const rules = new Map<string, Expression>();
+  for (const [type, rule] of Object.entries(persistence.ids.types ?? {})) {
+    if (rule.strategy === 'derived' && (typeof rule.expression === 'string' || isCel(rule.expression))) rules.set(type, rule.expression);
+  }
+  return (request) => {
+    const expression = rules.get(entryOf(persistence, request.type).as) ?? rules.get(request.type);
+    if (expression === undefined) return undefined;
+    const end = (id: string | undefined): Map<string, unknown> | null => (id === undefined ? null : new Map([['id', id]]));
+    const self = new Map<string, unknown>([...Object.entries(request.attributes), ['source', end(request.source)], ['target', end(request.target)]]);
+    const result = expressions.evaluate(expression, { self });
+    return result.ok && typeof result.value === 'string' && result.value !== '' ? result.value : undefined;
   };
 }
 
@@ -167,9 +190,22 @@ export function foldsOf(persistence: InterpretedPersistence, expressions: Expres
 export const bindingOf = (persistence: InterpretedPersistence, document: FblDocument): FblBinding | undefined =>
   persistence.binding ? document.bindings.get(persistence.binding.name) : undefined;
 
-/** A new id for an element of `type`: a version 4 UUID in the declared encoding, after the declared prefix (DISL 11.5.1). */
-export function newId(persistence: InterpretedPersistence, type: string): string {
+/**
+ * A new id for an element of `type` (DISL 11.5.1): with `sequential`, the type's prefix and the number
+ * after the greatest one an id of the file with that prefix has (`s6` then `s7`); otherwise a version 4
+ * UUID in the declared encoding, after the declared prefix.
+ */
+export function newId(persistence: InterpretedPersistence, type: string, taken: Iterable<string> = []): string {
   const { encoding, prefix } = persistence.ids;
+  if (persistence.ids.strategy === 'sequential') {
+    const before = typeof prefix === 'string' ? prefix : prefix?.[type] ?? '';
+    let greatest = 0;
+    for (const id of taken) {
+      const number = id.startsWith(before) && /^\d+$/.test(id.slice(before.length)) ? Number(id.slice(before.length)) : 0;
+      if (number > greatest) greatest = number;
+    }
+    return `${before}${greatest + 1}`;
+  }
   const hex = crypto.randomUUID();
   const digits = hex.replace(/-/g, '');
   const text = encoding === 'base36' ? BigInt(`0x${digits}`).toString(36).padStart(25, '0')

@@ -36,6 +36,14 @@ const pinned = [
     why: 'the bullets family and declared registration blocks of FBL 0.7, and the Hierarchical Requirement Designer',
     files: (file) => /^specifications\/fbl\/(fixtures\/(bullets-[^/]+|behavior-tree-read|registration-blocks|hierarchical-requirement-[^/]+)\/|behavior-tree\.fbl$|registrations\/requirements\.adp$)/.test(file),
   },
+  // value-stream-map: etalii.adp spec 090, the read and edit fixtures the value stream map's definition
+  // declares a host must pass, with the definition they name, at the merge of etalii.adp spec 084.
+  {
+    name: 'value-stream-map',
+    commit: '519f7be9fd5d02aa221d5d72f0a3b1e34eb749c0',
+    why: 'the value stream map, etalii.adp spec 090',
+    files: (file) => /^specifications\/fbl\/fixtures\/value-stream-map-[^/]+\//.test(file),
+  },
 ];
 if (!adp || !standalone) {
   console.error('Usage: node scripts/sync-fbl.mjs <path to etalii.adp> <path to etalii.adp.ide.standalone> [<etalii.adp ref>] [<standalone ref>]');

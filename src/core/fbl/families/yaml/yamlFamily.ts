@@ -289,10 +289,15 @@ export class YamlFamily extends TreeFamily {
     const captures = request.parent?.candidate.captures ?? (parent ? plan.reading.elementOf(parent)?.candidate.captures : undefined) ?? this.capturesOf(plan);
     const selector = settings.container ?? containerOf(rule.at);
     const container = this.container(selector, parent, captures);
+    const member = memberKey(request);
     const keys = this.itemLines(request);
     if (keys.length === 0) refuse(messages.yamlNoKeys(rule.type));
     if (!container) {
-      this.ensureContainer(plan, settings, selector, parent, keys);
+      this.ensureContainer(plan, settings, selector, parent, keys, member);
+      return;
+    }
+    if (member !== undefined) {
+      this.insertMember(plan, request, container, selector, member, keys);
       return;
     }
     const value = container.value;
@@ -330,7 +335,42 @@ export class YamlFamily extends TreeFamily {
     refuse(messages.yamlNotAList(selector, rule.type));
   }
 
-  private ensureContainer(plan: SplicePlan, settings: InsertSettings, selector: string, parent: Entry | undefined, keys: readonly string[]): void {
+  /**
+   * A new member of a mapping, named by its key (FBL 0.14 6.2): the key, then the entry's keys one step
+   * deeper, placed among the container's members by `place` and indented like the member it follows,
+   * else like the one it precedes. A container written as its key alone takes it as the first member of
+   * a block mapping; one written in flow form, or that is not a mapping, takes none.
+   */
+  private insertMember(plan: SplicePlan, request: InsertRequest, container: TreeEntry, selector: string, key: string, lines: readonly string[]): void {
+    const value = container.value;
+    const trimmed = trimEndOf(selector, '/');
+    const name = trimmed.slice(trimmed.lastIndexOf('/') + 1);
+    if (value.style === 'flowMapping') refuse(messages.flowMappingTakesNoInsert(name));
+    if (value.style === 'empty') {
+      const at = container.isRoot ? this.text.length : this.lineEndAfter(container);
+      plan.add('insert-entry', at, at, this.newLine(at, this.memberLines(key, lines, container.isRoot ? 0 : container.indent + this.step)));
+      return;
+    }
+    if (value.kind !== 'mapping' || value.entries.length === 0) refuse(messages.notAMapping(selector, request.rule.type));
+    if (value.entries.some((entry) => entry.name === key)) refuse(request.rule.insert!.refusals?.duplicate ?? messages.memberKeyTaken(request.rule.type, key));
+    const siblings = value.entries;
+    const place = request.rule.insert!.place;
+    const previous = place === 'start'
+      ? undefined
+      : place === 'after-last'
+        ? [...siblings].reverse().find((sibling) => plan.reading.claimedBy(sibling) === request.rule.name) ?? siblings[siblings.length - 1]
+        : siblings[siblings.length - 1];
+    const offset = previous ? this.lineEndAfter(previous) : siblings[0].lineSpan?.start ?? siblings[0].own.start;
+    plan.add('insert-entry', offset, offset, this.newLine(offset, this.memberLines(key, lines, (previous ?? siblings[0]).indent)));
+  }
+
+  /** The lines of a new member (FBL 0.14 6.2): its key at `indent`, written as a new string value is, then `lines` one step deeper. */
+  private memberLines(key: string, lines: readonly string[], indent: number): string[] {
+    const inside = indent + this.step;
+    return [`${this.indentation(indent)}${this.scalar(key, undefined, undefined, indent)}:`, ...lines.map((line) => this.indentation(inside) + this.nested(line, inside))];
+  }
+
+  private ensureContainer(plan: SplicePlan, settings: InsertSettings, selector: string, parent: Entry | undefined, keys: readonly string[], member?: string): void {
     const create = settings.create;
     if (!create) refuse(messages.yamlNoContainer(selector.replace(/^\/+/, '')));
     const trimmed = trimEndOf(selector, '/');
@@ -348,7 +388,7 @@ export class YamlFamily extends TreeFamily {
       if (create.text !== undefined && levels.length > 0) levels[levels.length - 1] = create.text;
       for (const level of levels) plan.add('ensure-container', at, at, this.newLine(at, [level]));
       const first = inside - this.step + this.sequenceOffset;
-      plan.add('insert-entry', at, at, this.newLine(at, this.item(keys, first, first + 2)));
+      plan.add('insert-entry', at, at, this.newLine(at, member === undefined ? this.item(keys, first, first + 2) : this.memberLines(member, keys, inside)));
       return;
     }
     const argument = create.argument ?? '';
@@ -379,7 +419,7 @@ export class YamlFamily extends TreeFamily {
     const containerText = create.text ?? `${this.indentation(indent)}${name}:`;
     plan.add('ensure-container', offset, offset, this.newLine(offset, [containerText]));
     const dash = indent + this.sequenceOffset;
-    plan.add('insert-entry', offset, offset, this.newLine(offset, this.item(keys, dash, dash + 2)));
+    plan.add('insert-entry', offset, offset, this.newLine(offset, member === undefined ? this.item(keys, dash, dash + 2) : this.memberLines(member, keys, indent + this.step)));
   }
 
   /**
@@ -495,8 +535,10 @@ export class YamlFamily extends TreeFamily {
   private wireValue(request: InsertRequest, key: string): string | undefined {
     const rule = request.rule;
     if (rule.id?.from?.key === key && request.id !== undefined) return this.scalar(request.id, undefined, undefined, 0);
-    if (rule.source?.key === key && request.source) return this.scalar(request.source.key, undefined, undefined, 0);
-    if (rule.target?.key === key && request.target) return this.scalar(request.target.key, undefined, undefined, 0);
+    const source = request.source?.key ?? request.sourceKey;
+    const target = request.target?.key ?? request.targetKey;
+    if (rule.source?.key === key && source !== undefined) return this.scalar(source, undefined, undefined, 0);
+    if (rule.target?.key === key && target !== undefined) return this.scalar(target, undefined, undefined, 0);
     for (const [name, binding] of rule.attributes) {
       if (binding.key !== key || binding.child !== undefined || isComputed(binding)) continue;
       // An attribute the add does not give has no value; one it gives its empty value has its key by the binding's `empty` (FBL 6.2).
@@ -549,6 +591,24 @@ export class YamlFamily extends TreeFamily {
 
 /** The key segments of a selector, without the slashes around them. */
 const segmentsOf = (selector: string): string[] => selector.replace(/^\/+|\/+$/g, '').split('/');
+
+/**
+ * The key of the member an insert adds (FBL 0.14 6.2): the value the add gives the attribute its rule
+ * binds to the capture its `at` ends in, taken as the new entry's key rather than as a set of that
+ * attribute; nothing for an insert that adds no member. An add that gives no key, or the empty text,
+ * is refused.
+ */
+function memberKey(request: InsertRequest): string | undefined {
+  const rule = request.rule;
+  const capture = /\/\{([^}/]+)\}$/.exec(rule.at ?? '')?.[1];
+  if (capture === undefined) return undefined;
+  const name = rule.attributes.find(([, attribute]) => attribute.capture === capture)?.[0];
+  if (name === undefined) return undefined;
+  const value = request.values.get(name);
+  const key = value === null || value === undefined ? '' : plain(value);
+  if (key.length === 0) refuse(rule.insert!.refusals?.key ?? messages.memberNeedsKey(rule.type));
+  return key;
+}
 
 /** Whether a selector's segment names a key, which gives a level its line; `*` and a capture do not. */
 const isKeySegment = (segment: string): boolean => segment.length > 0 && segment !== '*' && !segment.startsWith('{');

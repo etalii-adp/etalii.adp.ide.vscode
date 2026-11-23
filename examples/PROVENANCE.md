@@ -25,6 +25,8 @@ The files under `examples/` and `fixtures/` are copied unchanged, byte for byte,
 | `examples/hierarchical-requirement/web-shop.md` | `etalii.adp` | `definitions/designers/examples/web-shop.md` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
 | `examples/hierarchical-requirement/web-shop.adp` | `etalii.adp` | `definitions/designers/examples/web-shop.adp` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
 | `examples/hierarchical-requirement/nist-sp-800-53/` | `etalii.adp.ide.standalone` | `src/examples/designers/hierarchical-requirement/nist-sp-800-53/` | `80ad865b9ab14f48bc23cb77daeccab9b89df513` |
+| `examples/value-stream-map/request-fulfilment.vsm` | `etalii.adp` | `definitions/diagrams/examples/request-fulfilment.vsm` | `519f7be9fd5d02aa221d5d72f0a3b1e34eb749c0` |
+| `examples/value-stream-map/restore-service.vsm` | `etalii.adp` | `definitions/diagrams/examples/restore-service.vsm` | `519f7be9fd5d02aa221d5d72f0a3b1e34eb749c0` |
 | `fixtures/tools/desl/minimal-table.des` | `etalii.adp` | `specifications/desl/minimal-table.des` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
 | `fixtures/tools/desl/minimal-table.fbl` | `etalii.adp` | `specifications/desl/minimal-table.fbl` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
 | `fixtures/tools/desl/desl.schema.json` | `etalii.adp` | `specifications/desl/desl.schema.json` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |

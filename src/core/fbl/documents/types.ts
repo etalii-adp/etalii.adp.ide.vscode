@@ -231,6 +231,8 @@ export interface InsertSettings {
   readonly emit?: string;
   readonly skeleton?: string;
   readonly when?: string;
+  /** *(FBL 0.10)* The sentences of the refusals the insert causes: `key` for a new member without a key, `duplicate` for one whose key is taken (FBL 0.14 6.2). */
+  readonly refusals?: { readonly key?: string; readonly duplicate?: string; readonly when?: string };
   /**
    * The keys and values every new entry is given as they are (FBL 0.8 6.2), in the constant's member
    * order: a string, a number, a boolean or null; undefined for a member that is none of them, which

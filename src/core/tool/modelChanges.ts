@@ -78,11 +78,16 @@ export function modelChangesOf(changes: readonly Change[], context: ChangeContex
     if (reading.length === 0) return found;
     // A relation's ends are attributes of a model change, whether or not the binding reads them as attributes.
     const known = new Set([...reading.flatMap((rule) => rule.attributes.map(([name]) => name)), ...(reading.some((rule) => rule.isRelation) ? ['source', 'target'] : [])]);
+    // A value of nothing (null, the empty text, the empty list) needs no place: an attribute the document does not keep is left out.
+    const nothing = (value: unknown): boolean => value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
+    const kept: Record<string, unknown> = {};
     for (const [name, value] of Object.entries(found.attributes)) {
+      if (!known.has(name) && nothing(value)) continue;
       if (!known.has(name)) return { refused: `The document has no place for \`${name}\` of ${named}, so the change cannot be written.` };
       if (!takes(value)) return { refused: `The document cannot hold the value given for \`${name}\` of ${named}.` };
+      kept[name] = value;
     }
-    return found;
+    return { ...found, attributes: kept };
   }
 
   // What the removal of `id` takes by the binding's own cascade: the entries of the rules it names that refer to it.
@@ -135,7 +140,12 @@ export function modelChangesOf(changes: readonly Change[], context: ChangeContex
       const ends = { ...(change.source === undefined ? {} : { source: change.source }), ...(change.target === undefined ? {} : { target: change.target }) };
       // An attribute the metamodel declares read-only is the file's to state, never written: a new element starts without it.
       const declared = attributesOf(metamodel, change.type);
-      const written = Object.fromEntries(Object.entries(change.attributes).filter(([name]) => !Object.hasOwn(declared, name) || declared[name].readOnly !== true));
+      // Unless the binding asks for it on an add: as the key a new entry is written under (FBL 0.14 6.2), as a key its insert
+      // writes, or as a value it computes, by which an insert's `when` chooses among the rules of the type (FBL 0.10 6.2).
+      const keyed = new Set(rulesOf(change.type).flatMap((rule) => rule.attributes
+        .filter(([, slot]) => slot.capture !== undefined || slot.value !== undefined || (slot.key !== undefined && slot.child === undefined && rule.insert?.keys.includes(slot.key) === true))
+        .map(([name]) => name)));
+      const written = Object.fromEntries(Object.entries(change.attributes).filter(([name]) => !Object.hasOwn(declared, name) || declared[name].readOnly !== true || keyed.has(name)));
       const found = stored(change.type, change.id, { ...written, ...ends });
       if ('refused' in found) return found;
       const placed = binding.plugin === undefined ? undefined : change.position;

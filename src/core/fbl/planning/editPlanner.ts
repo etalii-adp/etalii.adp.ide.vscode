@@ -13,7 +13,7 @@ import { Plan, type PlanResult } from './plan';
  * removed, in the body's own conventions, or the reason the change cannot be made. Planning writes
  * nothing; an open body applies what it plans.
  */
-export function planEdit(reading: BodyReading, change: ModelChange): PlanResult {
+export function planEdit(reading: BodyReading, change: ModelChange, added: ReadonlySet<string> = new Set()): PlanResult {
   // A save writes the bytes that were read, which an unreadable body keeps (FBL 6.6, 7.5): nothing to splice.
   if (reading.unreadable) return change.kind === 'save' ? { planned: { splices: [] } } : { refused: messages.neverWritten };
   const readOnly = reading.binding.readOnly;
@@ -27,7 +27,7 @@ export function planEdit(reading: BodyReading, change: ModelChange): PlanResult 
         planSet(plan, reading, change);
         break;
       case 'add':
-        planAdd(plan, reading, change);
+        planAdd(plan, reading, change, added);
         break;
       case 'remove':
         planRemove(plan, reading, change.id);
@@ -63,11 +63,15 @@ export function planEdit(reading: BodyReading, change: ModelChange): PlanResult 
 export function planEdits(reading: BodyReading, changes: readonly ModelChange[]): PlanResult {
   const splices: FblSplice[] = [];
   let snapshot = false;
+  // The ids the transaction's adds give, which a later change of it may name as a relation's end.
+  const added = new Set<string>();
   for (const change of mergedSets(changes)) {
-    const result = planEdit(reading, change);
+    const result = planEdit(reading, change, added);
     if ('refused' in result) return result;
-    splices.push(...result.planned.splices);
+    // A container two changes both create is created once: the same level, at the same offset.
+    splices.push(...result.planned.splices.filter((splice) => splice.operation !== 'ensure-container' || !splices.some((made) => made.operation === 'ensure-container' && made.start === splice.start && made.text === splice.text)));
     snapshot ||= result.planned.snapshot === true;
+    if (change.kind === 'add' && change.id !== undefined) added.add(change.id);
   }
   try {
     const ordered = orderSplices(splices, () => refuse(messages.changesOverlap));
@@ -272,7 +276,7 @@ function rewrite(plan: Plan, reading: BodyReading, read: SlotRead | undefined, o
 
 // ---- add ----
 
-function planAdd(plan: Plan, reading: BodyReading, add: ModelChange & { kind: 'add' }): void {
+function planAdd(plan: Plan, reading: BodyReading, add: ModelChange & { kind: 'add' }, added: ReadonlySet<string>): void {
   // A declared binding appends where its insert rule says; a position among siblings is a plugin's to
   // honour, or a family's whose nesting is its indentation (FBL 0.7 6.3, 6.4).
   if (add.position !== undefined && !reading.family.placesByPosition) refuse(messages.cannotAddAtPosition(add.type));
@@ -286,10 +290,10 @@ function planAdd(plan: Plan, reading: BodyReading, add: ModelChange & { kind: 'a
   const insertable = rules.filter((candidate) => candidate.insert);
   const contained = insertable.filter((candidate) => container !== undefined && candidate.parent?.rules.includes(container.rule.name) === true);
   const bound = (candidate: Rule): number => Object.keys(add.attributes).filter((name) => attributeOf(candidate, name) !== undefined).length;
-  let rule: Rule | undefined;
-  for (const candidate of contained.length > 0 ? contained : insertable) {
-    if (!rule || bound(candidate) > bound(rule)) rule = candidate;
-  }
+  // FBL 0.10 6.2: of the rules of one type, the first whose insert's `when` holds plans the add; when none does, the first refuses it.
+  const ordered = [...(contained.length > 0 ? contained : insertable)].sort((a, b) => bound(b) - bound(a));
+  const given = (candidate: Rule): Map<string, unknown> => new Map(Object.entries(add.attributes).filter(([name]) => !(candidate.isRelation && (name === 'source' || name === 'target'))));
+  const rule: Rule | undefined = ordered.find((candidate) => candidate.insert!.when === undefined || reading.insertAllowed(candidate.insert!.when, given(candidate))) ?? ordered[0];
   if (!rule) {
     const reason = rules[0].readOnly;
     refuse(reason !== undefined && reason.length > 0 ? reason : messages.cannotBeAdded(add.type));
@@ -300,28 +304,31 @@ function planAdd(plan: Plan, reading: BodyReading, add: ModelChange & { kind: 'a
     if (rule.isRelation && (name === 'source' || name === 'target')) continue;
     values.set(name, value);
   }
-  if (rule.insert!.when !== undefined && !reading.insertAllowed(rule.insert!.when, values)) refuse(messages.thisCannotBeAdded(add.type));
+  if (rule.insert!.when !== undefined && !reading.insertAllowed(rule.insert!.when, values)) refuse(rule.insert!.refusals?.when ?? messages.thisCannotBeAdded(add.type));
   // An attribute the add gives its empty value refuses the add when its binding says so, as a set of it does (FBL 6.2, 6.4).
   for (const [name, value] of values) {
     const binding = attributeOf(rule, name);
     if (binding && !binding.flag && binding.empty === 'refuse' && isEmpty(value)) refuse(messages.attributeNotEmpty(name, rule.type));
   }
-  const source = rule.isRelation ? endOf(reading, add, 'source') : undefined;
-  const target = rule.isRelation ? endOf(reading, add, 'target') : undefined;
+  const source = rule.isRelation ? endOf(reading, add, 'source', added) : undefined;
+  const target = rule.isRelation ? endOf(reading, add, 'target', added) : undefined;
   const parent = add.parent !== undefined ? elementOf(reading, add.parent) : undefined;
   if (parent && rule.parent && !rule.parent.rules.includes(parent.rule.name)) refuse(messages.cannotBePlacedInside(add.type, parent.rule.type));
   if (rule.id?.from && add.id !== undefined && reading.elements.some((element) => element.rule.id?.from !== undefined && element.id === add.id)) {
     refuse(messages.idTaken(add.id));
   }
-  reading.family.insert(plan, { rule, id: add.id, values, parent, source, target, position: add.position });
+  const pendingKey = (end: 'source' | 'target', element: ReadElement | undefined): string | undefined => (rule.isRelation && !element ? plain(add.attributes[end]) : undefined);
+  reading.family.insert(plan, { rule, id: add.id, values, parent, source, target, sourceKey: pendingKey('source', source), targetKey: pendingKey('target', target), position: add.position });
   if (rule.snapshotUndo) plan.snapshot = true;
 }
 
-function endOf(reading: BodyReading, add: ModelChange & { kind: 'add' }, end: 'source' | 'target'): ReadElement {
+/** A relation's end: an element of the body, or one an earlier add of the same transaction gives, which the body does not hold yet. */
+function endOf(reading: BodyReading, add: ModelChange & { kind: 'add' }, end: 'source' | 'target', added: ReadonlySet<string>): ReadElement | undefined {
   const value = add.attributes[end];
   if (value === null || value === undefined) refuse(messages.needsEnd(add.type, end));
   const id = plain(value);
   const element = reading.find(id);
+  if (!element && added.has(id)) return undefined;
   if (!element || element.isRelation) refuse(messages.endNamesNoElement(end, id));
   return element;
 }
