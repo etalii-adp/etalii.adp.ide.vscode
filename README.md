@@ -57,7 +57,7 @@ Every pull request into `develop` and every change to `develop` is checked by th
 
 ## Release
 
-A release is a tag `v<version>` on a commit of `develop`, where `<version>` is the `version` in `package.json`. Pushing the tag runs the Build workflow on that commit; when every check passes, its `release` job makes the release `v<version>` on the Releases page with `etalii-adp-<version>.vsix`, and publishes that same file to the Visual Studio Marketplace and, when the `OVSX_PAT` secret is set, to Open VSX. A tag that names another version, or a commit that is not on `develop`, is refused.
+A release is a tag `v<version>` on a commit of `develop`, where `<version>` is the `version` in `package.json`. Pushing the tag runs the Build workflow on that commit; when every check passes, its `release` job makes the release `v<version>` on the Releases page with `etalii-adp-<version>.vsix`, and publishes that same file to the Visual Studio Marketplace and to Open VSX. A tag that names another version, or a commit that is not on `develop`, is refused.
 
 ```sh
 git tag v0.1.0 origin/develop
@@ -69,8 +69,8 @@ Raise the version in `package.json` right after a release: the Marketplace accep
 It needs, once:
 
 - A Marketplace publisher whose id is the `publisher` in `package.json` (`etalii`), made at <https://marketplace.visualstudio.com/manage>.
-- A personal access token of Azure DevOps for that publisher, with the organization **All accessible organizations** and the scope **Marketplace: Manage**, stored as the repository secret `VSCE_PAT`.
-- For Open VSX, optionally: a namespace `etalii` there and an access token, stored as the repository secret `OVSX_PAT`. Without it, Open VSX is skipped.
+- A namespace `etalii` on [Open VSX](https://open-vsx.org).
+- A trusted publisher on each store for this repository (`etalii-adp/etalii.adp.ide.vscode`) and its workflow `build.yml`: the publisher's Trusted Publishing policy for GitHub on the Marketplace, and the namespace's trusted publisher on Open VSX. The `release` job then publishes with its own OIDC token (`vsce publish --oidc`, `ovsx publish --trusted-publishing`); no store token is stored as a secret.
 
 ## Debug
 
