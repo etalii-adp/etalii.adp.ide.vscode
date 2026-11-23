@@ -339,6 +339,13 @@ body {
   vector-effect: non-scaling-stroke;
 }
 
+/* The ring around an anchor dot that a press finds it by: invisible, but under the pointer. */
+.adp-anchor-zone {
+  fill: transparent;
+  stroke: none;
+  pointer-events: all;
+}
+
 .adp-ghost {
   opacity: 0.25;
 }

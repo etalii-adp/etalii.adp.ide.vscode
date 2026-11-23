@@ -76,11 +76,13 @@ Six gestures after the palette, with no error, no refusal and nothing that neede
 
 Hurdles 5 and 6 are the definition's, shared with the standalone host; 1 to 4 are this host's.
 
+Hurdles 1 to 4 are fixed in [#87](https://github.com/etalii-adp/etalii.adp.ide.vscode/pull/87): an empty graph shows a hint (etalii.adp #813) and the New commands open the side bar with ADP Toolbox; every node shows its dots and a press within 12 pixels of one draws a dependency; a node made off-screen is brought into view; the toolbox places a node at the nearest free point.
+
 ## Bugs found
 
-- **Standalone: no arrowheads.** Open any `.dgr` in the standalone host: no dependency has an arrowhead. `src/diagrams/dependency-graph/client/dependency-graph.css` gives `.dependency-graph-relation-line` `marker-end: url(#dependency-graph-arrowhead)`, and the canvas defines only the shared `library-arrow`, `library-open-arrow`, `library-diamond` and `library-circle` markers, so the reference resolves to nothing.
-- **Standalone: a dependency's Kind is Node.** Select a dependency in `services.dgr` (for example "calls") and open Properties: Kind reads "Node".
-- **Standalone: the end rows promise a gesture that does not exist.** Spec 088 says reconnecting a dependency's end is absent from the standalone host, yet Properties says "Reconnecting is done on the canvas, by dragging the dependency's end to another node." Either the gesture or the sentence is wrong.
+- **Standalone: no arrowheads** ([standalone #822](https://github.com/etalii-adp/etalii.adp.ide.standalone/issues/822)). Open any `.dgr` in the standalone host: no dependency has an arrowhead. `src/diagrams/dependency-graph/client/dependency-graph.css` gives `.dependency-graph-relation-line` `marker-end: url(#dependency-graph-arrowhead)`, and the canvas defines only the shared `library-arrow`, `library-open-arrow`, `library-diamond` and `library-circle` markers, so the reference resolves to nothing.
+- **Standalone: a dependency's Kind is Node** ([standalone #823](https://github.com/etalii-adp/etalii.adp.ide.standalone/issues/823)). Select a dependency in `services.dgr` (for example "calls") and open Properties: Kind reads "Node".
+- **Standalone: the end rows promise a gesture that does not exist** ([standalone #824](https://github.com/etalii-adp/etalii.adp.ide.standalone/issues/824)). Spec 088 says reconnecting a dependency's end is absent from the standalone host, yet Properties says "Reconnecting is done on the canvas, by dragging the dependency's end to another node." Either the gesture or the sentence is wrong.
 - **VS Code, seen twice and not reproduced: a document read twice over.** During the driving of one VS Code window, after the colour theme had been changed through the theme picker (which sent some keys to the diagram) and the window restarted, every `.dgr` opened in that window, new copies included, showed three `fbl.duplicate-key` warnings at lines 86, 89 and 130 of an 85-line file, and "Reopen Editor With… Text Editor" showed the text twice (171 lines) while the tab was not modified and the file on disk was unchanged. It survived "Developer: Reload Window" and went away when VS Code was quit and started again. I could not bring it back with a fresh profile, a reload, a theme change or typing into the canvas. Recorded so that it is recognised if it is seen again.
 
 ## Verdict

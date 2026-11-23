@@ -481,6 +481,8 @@ export class Tools implements vscode.Disposable {
       }
       if (outcome.select !== undefined) {
         diagram.post({ v: 2, type: 'reveal', id: outcome.select, ...(outcome.editLabel ? { editLabel: true, multiline: outcome.multiline === true } : {}) });
+      } else if (outcome.show !== undefined) {
+        diagram.post({ v: 2, type: 'reveal', id: outcome.show, keepSelection: true });
       }
       return { result: 'applied' };
     });
@@ -723,6 +725,8 @@ export class Tools implements vscode.Disposable {
         }
         if (outcome.select !== undefined) {
           diagram.post({ v: 2, type: 'reveal', id: outcome.select, ...(outcome.editLabel ? { editLabel: true, multiline: outcome.multiline === true } : {}) });
+        } else if (outcome.show !== undefined) {
+          diagram.post({ v: 2, type: 'reveal', id: outcome.show, keepSelection: true });
         }
         return { result: 'applied' };
       }

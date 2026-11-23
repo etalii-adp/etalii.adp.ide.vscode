@@ -116,6 +116,10 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
       const fileName = target.path.slice(target.path.lastIndexOf('/') + 1);
       await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(type.newDocument(fileName)));
       await vscode.commands.executeCommand('vscode.openWith', target, viewTypeOf(type));
+      // A new document begins from the ADP Toolbox and ADP Properties, so their side bar is shown beside it, and the focus
+      // goes back to the tool, where its keys work.
+      await vscode.commands.executeCommand(`${ToolboxView.viewId}.focus`);
+      await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
     });
   }
 

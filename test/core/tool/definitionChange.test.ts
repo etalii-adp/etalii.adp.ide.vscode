@@ -51,7 +51,7 @@ function given(type: DiagramToolType, source: Source) {
 /** What each request comes to. */
 const outcomes = (type: DiagramToolType, source: Source, requests: readonly EditRequest[]): EditOutcome[] => requests.map((request) => type.edit(source, request, {}, false));
 /** An outcome with the ids a document cannot have had before left out: a new element is given a new id each time. */
-const comparable = (outcome: EditOutcome): unknown => (outcome.kind === 'applied' ? { ...outcome, splices: outcome.splices.map((splice) => ({ ...splice, text: splice.text.replace(/id: [0-9a-z]{25}/, 'id: <new>') })), select: outcome.select === undefined ? undefined : '<new>' } : outcome);
+const comparable = (outcome: EditOutcome): unknown => (outcome.kind === 'applied' ? { ...outcome, splices: outcome.splices.map((splice) => ({ ...splice, text: splice.text.replace(/id: [0-9a-z]{25}/, 'id: <new>') })), select: outcome.select === undefined ? undefined : '<new>', show: outcome.show === undefined ? undefined : '<new>' } : outcome);
 
 describe('a label, a colour and a refusal sentence changed in a temporary copy of a definition show in the tool type with no other change', () => {
   describe('the Gartner hype cycle graph', () => {

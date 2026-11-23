@@ -351,3 +351,21 @@ describe.each(documents)('$name', { timeout: 60_000 }, ({ source, recorded }) =>
     });
   });
 });
+
+describe('a node made by a gesture that selects nothing', () => {
+  const source: Source = { fileName: 'services.dgr', text: readFileSync('examples/dependency-graph/example-1/services.dgr', 'utf8') };
+
+  it('is brought into view without being selected, so that a user sees what the gesture made', () => {
+    const outcome = type.edit(source, { kind: 'connect', from: 'checkout-web', fromAnchor: 'right', to: '', toPoint: { x: 4000, y: 3000 } }, {}, false);
+    expect(outcome.kind).toBe('applied');
+    if (outcome.kind !== 'applied') return;
+    const had = idsOf(source.text);
+    const made = [...idsOf(spliced(source.text, outcome.splices))].filter((id) => !had.has(id));
+    expect(outcome.select).toBeUndefined();
+    // The gesture makes a node and the dependency on it; the node is the one shown.
+    const after = spliced(source.text, outcome.splices);
+    const nodes = made.filter((id) => new RegExp(`id: ${id}\\r?\\n\\s+label:`).test(after));
+    expect(nodes).toHaveLength(1);
+    expect(outcome.show).toBe(nodes[0]);
+  });
+});
