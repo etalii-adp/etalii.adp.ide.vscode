@@ -115,6 +115,8 @@ export class Table {
   /** The list of options that is open over a cell. */
   private list: { sync(): void; close(): void } | undefined;
   private form: HTMLFormElement | undefined;
+  /** The column whose border is being dragged and the width it has so far: a view that comes meanwhile is drawn with it. */
+  private resizing: { readonly id: string; readonly width: number } | undefined;
   /** What a view's or a column's menu was opened on: a name renamed in place is typed there. */
   private menuAt: HTMLElement | undefined;
   /** Whether the property made last was given no name: it asks for one in its header once it is shown. */
@@ -253,7 +255,7 @@ export class Table {
     this.drawOptions();
 
     const columns = view.properties.filter((property) => property.visible);
-    const widths = columns.map((property) => property.width ?? defaultWidth);
+    const widths = columns.map((property) => (this.resizing?.id === property.id ? this.resizing.width : property.width ?? defaultWidth));
     // A frozen column stays at the sum of the widths of what is frozen before it.
     const lefts = new Map<string, number>();
     const lead = gestures ? leadWidth : numberWidth;
@@ -327,6 +329,7 @@ export class Table {
             view.readOnly || gestures ? undefined : menuButton(property.name, -1),
             gestures?.widths?.[property.id] ? html('span', { class: 'adp-table-resizer', 'aria-hidden': 'true' }) : undefined);
           cell.style.width = `${widths[index]}px`;
+          if (this.resizing?.id === property.id) cell.classList.add('adp-table-resizing');
           return frozen(cell, property);
         }),
         ...(gestures?.newProperty ? [html('th', { class: 'adp-table-add-column', role: 'columnheader', scope: 'col' },
@@ -505,7 +508,8 @@ export class Table {
   private down(event: MouseEvent): void {
     const target = event.target as HTMLElement;
     const cell = target.closest<HTMLElement>('[data-column]');
-    if (!cell || event.button !== 0 || target.closest('.adp-table-editor, button, .adp-table-check')) return;
+    // A press on a column's border starts a resize: it selects nothing, or the view the selection brings draws the table again under the pointer.
+    if (!cell || event.button !== 0 || target.closest('.adp-table-editor, button, .adp-table-check, .adp-table-resizer')) return;
     const row = cell.closest('tr')?.dataset.id;
     this.silent = true;
     if (row !== undefined && cell.matches('[role="rowheader"]') && (event.ctrlKey || event.metaKey || event.shiftKey)) {
@@ -972,21 +976,32 @@ export class Table {
     this.make(steps.length === 1 ? steps[0] : { kind: 'steps', steps });
   }
 
-  /** A column's border dragged: the column follows the pointer, never narrower than the minimum, and one width is written when it is let go. */
+  /**
+   * A column's border dragged: the column follows the pointer, never narrower than the minimum, and one width is
+   * written when it is let go. The table may be drawn again meanwhile, by a view that comes while the border is
+   * held, so each move widens the header drawn then, which the width so far is drawn with.
+   */
   private resize(start: MouseEvent, header: HTMLElement): void {
     const id = header.dataset.id ?? '';
     const request = this.gestures?.widths?.[id];
     if (!request) return;
     const grabbed = this.view?.properties.find((property) => property.id === id)?.width ?? defaultWidth;
-    const table = Number.parseFloat(this.grid.style.width) || 0;
     const widthAt = (dx: number): number => Math.max(minimumWidth, Math.round(grabbed + dx));
+    const shown = (): HTMLElement | null => this.grid.querySelector<HTMLElement>(`thead [role="columnheader"][data-id="${CSS.escape(id)}"]`);
+    this.resizing = { id, width: grabbed };
     header.classList.add('adp-table-resizing');
     follow(start, (dx) => {
       const width = widthAt(dx);
-      header.style.width = `${width}px`;
-      this.grid.style.width = `${table + width - grabbed}px`;
+      const cell = shown();
+      if (cell) {
+        const before = Number.parseFloat(cell.style.width) || width;
+        this.grid.style.width = `${(Number.parseFloat(this.grid.style.width) || 0) + width - before}px`;
+        cell.style.width = `${width}px`;
+      }
+      this.resizing = { id, width };
     }, (dx, _dy, dragged) => {
-      header.classList.remove('adp-table-resizing');
+      this.resizing = undefined;
+      shown()?.classList.remove('adp-table-resizing');
       const width = widthAt(dx);
       if (dragged && width !== grabbed) this.make(request, undefined, width);
     });

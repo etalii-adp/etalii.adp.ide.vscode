@@ -56,11 +56,25 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
 
   // ---- columns, in the standalone host's order ----
 
+  const listed = new Map(view === undefined ? [] : model.elements.filter((element) => element.parent === view.id && element.type === 'Column').map((element) => [text(element.attributes.property), element]));
+  const columnSetting = (id: string, width?: number | string): TableRequest => {
+    const shown = columns.find((column) => column.id === id);
+    const given = width ?? shown?.width;
+    return operation('setColumn', [view!.id], { property: id, visible: shown?.visible ?? true, wrap: shown?.wrap ?? false, ...(given === undefined ? {} : { width: given }) });
+  };
+  // A setting given to a column the view has none for would list it before every column without one, and so
+  // move it there. Each such column shown before it is first given a setting of its own, so that it stays
+  // where it is shown, as the standalone host does.
+  const keptInPlace = (id: string, request: TableRequest): TableRequest => {
+    const before = listed.has(id) ? [] : columns.slice(0, columns.findIndex((column) => column.id === id)).map((column) => column.id).filter((other) => !listed.has(other));
+    return before.length === 0 ? request : { kind: 'steps', steps: [...before.map((other) => columnSetting(other)), request] };
+  };
+
   const columnMenus = view === undefined ? {} : Object.fromEntries(properties.map((property, index): [string, TableMenu] => {
     const shown: { readonly visible?: boolean; readonly width?: number; readonly wrap?: boolean } = columns.find((column) => column.id === property.id) ?? {};
-    const setting = (change: Readonly<Record<string, boolean>>): TableRequest => operation('setColumn', [view.id], {
+    const setting = (change: Readonly<Record<string, boolean>>): TableRequest => keptInPlace(property.id, operation('setColumn', [view.id], {
       property: property.id, visible: shown.visible ?? true, wrap: shown.wrap ?? false, ...(shown.width === undefined ? {} : { width: shown.width }), ...change,
-    });
+    }));
     const frozenUpTo = text(view.attributes.freeze) === property.id;
     const selecting = property.valueType === 'selection' || property.valueType === 'multipleSelection';
     const element = model.elements.find((found) => found.id === property.id);
@@ -179,13 +193,7 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
 
   const placed = (after?: string): Readonly<Record<string, string>> => (after === undefined ? {} : { after });
   const viewIds = views.map((tab) => tab.id);
-  const listed = new Map(view === undefined ? [] : model.elements.filter((element) => element.parent === view.id && element.type === 'Column').map((element) => [text(element.attributes.property), element]));
   const columnOf = (id: string): ModelElement | undefined => listed.get(id);
-  const columnSetting = (id: string, width?: number | string): TableRequest => {
-    const shown = columns.find((column) => column.id === id);
-    const given = width ?? shown?.width;
-    return operation('setColumn', [view!.id], { property: id, visible: shown?.visible ?? true, wrap: shown?.wrap ?? false, ...(given === undefined ? {} : { width: given }) });
-  };
   // The order of the columns is the view's own: a column moved there, and each before it, is first given a setting where it has none.
   const columnMoved = (id: string, after?: string): TableRequest => {
     const others = columns.map((column) => column.id).filter((other) => other !== id);
@@ -201,7 +209,7 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
     // In a view with a sort, the sort places the rows: a row's handle moves nothing.
     ...(sorted ? {} : { rows: { first: operation('moveRow', [ROW]), after: operation('moveRow', [ROW], { after: TYPED }) } }),
   };
-  const widths = view === undefined ? undefined : Object.fromEntries(columns.map((column) => [column.id, columnSetting(column.id, TYPED)]));
+  const widths = view === undefined ? undefined : Object.fromEntries(columns.map((column) => [column.id, keptInPlace(column.id, columnSetting(column.id, TYPED))]));
 
   // ---- the sorts and filters, in words ----
 
