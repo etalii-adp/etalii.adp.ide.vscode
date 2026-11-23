@@ -335,3 +335,63 @@ describe('an insert constant', () => {
     expect(textOf(body.bytes)).toBe(expected);
   });
 });
+
+// etalii.adp spec 090, for the value stream map: FBL 0.14's member named by its key, FBL 0.10's choice
+// among the rules of a type by their insert's `when`, the changes of one transaction that name each
+// other (FBL 6.4), and FBL 4.3's flow mappings, whose members are read and not written one by one.
+describe('what the value stream map needs of a yaml binding', () => {
+  const binding = (version: string, elements: string, relations = '[]'): FblBinding => {
+    const json = `{ "fbl": "${version}", "bindings": { "t": { "claims": { "extensions": [".t"] }, "body": { "kind": "file", "family": "yaml" }, "reader": "declared", "elements": ${elements}, "relations": ${relations} } } }`;
+    const { document, problems } = loadDocument(utf8(json));
+    expect(problems.filter((problem) => problem.severity === 'error')).toEqual([]);
+    return document!.bindings.get('t')!;
+  };
+  const member = binding('0.14', String.raw`[{ "name": "role", "type": "Role", "at": "/states/{role}", "id": { "from": { "key": "id" } },
+    "attributes": { "role": { "capture": "role" }, "name": { "key": "name" } },
+    "insert": { "place": "end", "container": "/states", "create": { "at": "end" }, "keys": ["id", "name"], "refusals": { "duplicate": "That state is there already." } } }]`);
+
+  it('writes a new member under the key its capture attribute is given, and refuses a key that is there or missing', () => {
+    const body = OpenBody.open(utf8('states:\n  a:\n    id: r1\n    name: A\n'), member);
+    expect(body.change({ kind: 'add', type: 'Role', id: 'r2', attributes: { role: 'b', name: 'B' } })).toEqual({ planned: { splices: [expect.objectContaining({ operation: 'insert-entry', text: '  b:\n    id: r2\n    name: B\n' })] } });
+    expect(textOf(body.bytes)).toBe('states:\n  a:\n    id: r1\n    name: A\n  b:\n    id: r2\n    name: B\n');
+    expect(body.change({ kind: 'add', type: 'Role', id: 'r3', attributes: { role: 'a', name: 'C' } })).toEqual({ refused: 'That state is there already.' });
+    expect(body.change({ kind: 'add', type: 'Role', id: 'r3', attributes: { name: 'C' } })).toEqual({ refused: 'A new Role needs a key.' });
+  });
+
+  it('creates the mapping a new member is written in when the body has none', () => {
+    const body = OpenBody.open(utf8('name: x\n'), member);
+    expect(operationsOf(body.change({ kind: 'add', type: 'Role', id: 'r1', attributes: { role: 'a', name: 'A' } }))).toEqual(['ensure-container', 'insert-entry']);
+    expect(textOf(body.bytes)).toBe('name: x\nstates:\n  a:\n    id: r1\n    name: A\n');
+  });
+
+  const states = binding('0.10', String.raw`[
+    { "name": "now", "type": "Step", "at": "/now/*", "id": { "from": { "key": "id" } }, "attributes": { "state": { "value": "'now'" } }, "insert": { "place": "end", "container": "/now", "create": { "at": "end" }, "keys": ["id"], "when": "!has(attributes.state) || attributes.state == 'now'" } },
+    { "name": "later", "type": "Step", "at": "/later/*", "id": { "from": { "key": "id" } }, "attributes": { "state": { "value": "'later'" } }, "insert": { "place": "end", "container": "/later", "create": { "at": "end" }, "keys": ["id"], "when": "!has(attributes.state) || attributes.state == 'later'" } }]`,
+  String.raw`[{ "name": "link", "type": "Link", "at": "/links/*", "source": { "key": "from" }, "target": { "key": "to" }, "insert": { "place": "end", "container": "/links", "create": { "at": "end" }, "keys": ["from", "to"] } }]`);
+
+  it('plans an add by the first rule of its type whose insert\'s when holds', () => {
+    const body = OpenBody.open(utf8('now:\n  - id: a\n'), states);
+    body.change({ kind: 'add', type: 'Step', id: 'b', attributes: { state: 'later' } });
+    expect(textOf(body.bytes)).toBe('now:\n  - id: a\nlater:\n  - id: b\n');
+  });
+
+  it('lets a change of one transaction name an element an earlier one adds, and creates a container both need once', () => {
+    const body = OpenBody.open(utf8('now:\n  - id: a\n'), states);
+    const result = body.changeAll([
+      { kind: 'add', type: 'Step', id: 'b', attributes: { state: 'later' } },
+      { kind: 'add', type: 'Step', id: 'c', attributes: { state: 'later' } },
+      { kind: 'add', type: 'Link', attributes: { source: 'a', target: 'b' } },
+    ]);
+    expect(operationsOf(result)).toEqual(['ensure-container', 'insert-entry', 'insert-entry', 'ensure-container', 'insert-entry']);
+    expect(textOf(body.bytes)).toBe('now:\n  - id: a\nlater:\n  - id: b\n  - id: c\nlinks:\n  - from: a\n    to: b\n');
+  });
+
+  it('reads the members of an entry written as a flow mapping, and writes none of them on its own', () => {
+    const text = 'now:\n  - { id: a, name: "A", size: 2 }\n';
+    const body = OpenBody.open(utf8(text), binding('0.10', String.raw`[{ "name": "now", "type": "Step", "at": "/now/*", "id": { "from": { "key": "id" } }, "attributes": { "name": { "key": "name" }, "size": { "key": "size" }, "note": { "key": "note" } } }]`));
+    expect(body.model.elements.map((element) => [element.id, element.attributes.name, element.attributes.size])).toEqual([['a', 'A', 2n]]);
+    expect(body.change({ kind: 'set', id: 'a', attributes: { name: 'B' } })).toEqual({ refused: expect.stringContaining('flow mapping') });
+    expect(body.change({ kind: 'set', id: 'a', attributes: { note: 'n' } })).toEqual({ refused: expect.stringContaining('flow mapping') });
+    expect(textOf(body.bytes)).toBe(text);
+  });
+});

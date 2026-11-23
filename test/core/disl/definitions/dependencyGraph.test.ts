@@ -100,9 +100,15 @@ describe('the dependency graph, read from its definition', () => {
     expect(changed.map(({ recorded }) => recorded.document)).toEqual([]);
   });
 
-  // Two documents differ, as `docs/disl-support.md` lists: the message of a file that is not YAML is the YAML reader's own,
-  // and a node and a dependency that share an id, the dependency written first, are read in the file's order (etalii.adp #791).
-  const differing = ['inline/not-yaml', 'inline/relations-before-elements'];
+  // Three documents differ, as `docs/disl-support.md` lists: the message of a file that is not YAML is the YAML reader's own,
+  // a node and a dependency that share an id, the dependency written first, are read in the file's order (etalii.adp #791),
+  // and an entry written as a flow mapping is read with its members (FBL 4.3, etalii.adp #812).
+  const differing = ['inline/not-yaml', 'inline/relations-before-elements', 'inline/b16-merge-key-and-flow-entry'];
+  it('reads a node and a dependency written as flow mappings with their ids, where standalone finds none (etalii.adp #812)', () => {
+    const { source, recorded } = documents.find(({ recorded }) => recorded.document === 'inline/b16-merge-key-and-flow-entry')!;
+    expect(recorded.findings?.map((line) => line.split(' | ')[2])).toEqual(['dependencies.missing-id', 'dependencies.missing-id']);
+    expect(type.findings(source).filter((finding) => !finding.rule.startsWith('disl.'))).toEqual([]);
+  });
   describe.each(documents.filter(({ recorded }) => !differing.includes(recorded.document)))('$name', ({ source, recorded }) => {
     it('finds what the transcript found, in its order, with its codes and sentences', () => {
       const expected = recorded.findings ?? [];

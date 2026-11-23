@@ -57,6 +57,8 @@ const copies = [
   ...['web-shop.md', 'web-shop.adp'].map((name) => [adpName, `definitions/designers/examples/${name}`, `examples/hierarchical-requirement/${name}`]),
   // Its large example, NIST SP 800-53's controls with their licence and readme, which the performance guard opens; the script that wrote it is left out.
   [standaloneName, 'src/examples/designers/hierarchical-requirement/nist-sp-800-53/', 'examples/hierarchical-requirement/nist-sp-800-53/'],
+  // etalii.adp spec 090: the value stream map's two examples; the fixtures its definition declares a host must pass are under fixtures/fbl/.
+  ...['request-fulfilment.vsm', 'restore-service.vsm'].map((name) => [adpName, `definitions/diagrams/examples/${name}`, `examples/value-stream-map/${name}`]),
   // DESL's smallest example and its binding: the tool type a test adds to a temporary definitions folder.
   [adpName, 'specifications/desl/minimal-table.des', 'fixtures/tools/desl/minimal-table.des'],
   [adpName, 'specifications/desl/minimal-table.fbl', 'fixtures/tools/desl/minimal-table.fbl'],

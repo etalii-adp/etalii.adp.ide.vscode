@@ -180,6 +180,7 @@ export abstract class TreeFamily extends FamilyReader {
       return { value: key, present: true, writable: false, reason: messages.capturedKeyNotFound };
     }
     if (slot.key === undefined) return readOnlyAbsent(messages.entryHasNoSlot(this.familyName, slotText(slot)));
+    if (slot.child === undefined && entry.value.style === 'flowMapping') return readFlowMember(entry.value, slot.key);
     const mapping = this.mapping(entry, slot.child);
     if (!mapping) return absentSlot;
     return readMember(mapping, slot.key);
@@ -187,6 +188,7 @@ export abstract class TreeFamily extends FamilyReader {
 
   readRaw(entry: Entry, name: string): SlotRead {
     const tree = entry as TreeEntry;
+    if (tree.value.style === 'flowMapping') return readFlowMember(tree.value, name);
     return tree.value.kind === 'mapping' ? readMember(tree.value, name) : absentSlot;
   }
 
@@ -212,6 +214,22 @@ export abstract class TreeFamily extends FamilyReader {
       this.index(child);
     }
   }
+}
+
+/**
+ * A member of an entry written as a flow mapping (`- { id: s2, name: Fix }`): readable, as CEL sees
+ * it, with its written text and style, while the mapping's only writable span is the whole of it
+ * (FBL 4.3), so the member is read-only and a key it lacks takes no insert (FBL 6.2).
+ */
+export function readFlowMember(mapping: TreeValue, name: string): SlotRead {
+  const typed = mapping.flow instanceof Map ? mapping.flow : undefined;
+  if (!typed?.has(name)) return readOnlyAbsent(messages.valueInFlowMapping);
+  const value = typed.get(name);
+  const text = (readFlow(mapping.text, 'text') as CelMap).get(name);
+  const style = (readFlow(mapping.text, 'style') as CelMap).get(name);
+  const collection = value instanceof Map ? 'flowMapping' : Array.isArray(value) ? 'flowSequence' : undefined;
+  const written = new TreeValue('scalar', collection ?? (style === 'double' || style === 'single' ? style : 'plain'), mapping.span, typeof text === 'string' ? text : '', collection ? null : value, collection ? value : undefined, true);
+  return { value, span: mapping.span, present: true, writable: false, reason: messages.valueInFlowMapping, tree: written, wire: typeof text === 'string' ? text : undefined };
 }
 
 export function readMember(mapping: TreeValue, name: string): SlotRead {

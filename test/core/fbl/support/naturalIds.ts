@@ -35,6 +35,13 @@ export function naturalIds(binding: string): (request: Request) => string | unde
       case 'aad/diagram': return 'diagram';
       case 'aad/placement': return `pinned:${attribute(request, 'element')}`;
       case 'aad/group': return `groups:${attribute(request, 'element')}#${attribute(request, 'group')}`;
+      // The value stream map (definitions/diagrams/value-stream-map.dis, persistence.ids): the root is the
+      // diagram, a vocabulary entry is named by its name, and a flow, alternative or rework by its ends.
+      case 'vsm/diagram': return 'diagram';
+      case 'vsm/activity': return `activity:${attribute(request, 'name')}`;
+      case 'vsm/practice': return `practice:${attribute(request, 'name')}`;
+      case 'vsm/currentFlow': case 'vsm/futureFlow': case 'vsm/currentAlternative': case 'vsm/futureAlternative': return `flow:${request.source ?? ''}->${request.target ?? ''}`;
+      case 'vsm/currentRework': case 'vsm/futureRework': return `rework:${request.source ?? ''}->${request.target ?? ''}`;
       default: return undefined;
     }
   };
@@ -57,6 +64,17 @@ export function attributeTypes(binding: string): ((element: string, attribute: s
   if (binding !== 'timeline') return undefined;
   const types: Readonly<Record<string, string>> = { label: 'string', begin: 'datetime', end: 'datetime', row: 'int' };
   return (_element, attribute) => (Object.hasOwn(types, attribute) ? types[attribute] : undefined);
+}
+
+/**
+ * The defaults a binding's tool type gives the attributes of a new element, which a host fills in
+ * before the add reaches the binding: read here, as the ids are, from the specifications in
+ * etalii.adp. The value stream map's trigger and outcome take their key, `role`, from them
+ * (`definitions/diagrams/value-stream-map.dis`, FBL 0.14 6.2).
+ */
+export function addDefaults(binding: string): (type: string) => Readonly<Record<string, unknown>> {
+  if (binding !== 'vsm') return () => ({});
+  return (type) => (type === 'Trigger' ? { role: 'trigger' } : type === 'Outcome' ? { role: 'outcome' } : {});
 }
 
 /** Whether a binding's tool type keeps DISL's default deletion policy, which clears the references to a removed element. */

@@ -152,6 +152,9 @@ export interface InsertRequest {
   readonly parent?: ReadElement;
   readonly source?: ReadElement;
   readonly target?: ReadElement;
+  /** The key a relation's end is written with when it is an element an earlier add of the same transaction gives, which has no reading yet (FBL 6.4). */
+  readonly sourceKey?: string;
+  readonly targetKey?: string;
   /** *(FBL 0.7)* Where among its siblings it goes, for a family that `placesByPosition`; the rule's `insert.place` without it. */
   readonly position?: ChangePosition;
 }

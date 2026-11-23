@@ -149,6 +149,7 @@ export const messages = {
   entryHasNoSlot: (family: string, slot: string) => `A ${family} entry has no ${slot}.`,
   valueViaAlias: 'The value is reached through an alias, so it is read-only.',
   valueIsCollection: 'The value is a block collection, which a slot does not write.',
+  valueInFlowMapping: 'The value stands in a flow mapping, which is written only as a whole, so it is read-only here.',
   valueViaMerge: 'The value is reached through a merge key, so it is read-only.',
 
   // ---- the yaml family (FBL 4.3) ----
@@ -169,6 +170,10 @@ export const messages = {
   yamlNotAList: (selector: string, type: string) => `The ${selector} of this file is not a list a ${type} can be added to.`,
   yamlNoContainer: (container: string) => `The file has no ${container} to add to.`,
   yamlNoPlace: (name: string) => `The file has no place to create ${name} in.`,
+  memberNeedsKey: (type: string) => `A new ${type} needs a key.`,
+  memberKeyTaken: (type: string, key: string) => `A ${type} named '${key}' is already there.`,
+  flowMappingTakesNoInsert: (name: string) => `The ${name} are written as a flow mapping, which takes no insert.`,
+  notAMapping: (selector: string, type: string) => `The ${selector} of this file is not a mapping a ${type} can be added to.`,
   noPlaceToCreate: (binding: string, child: string) => `The ${binding} file has no place to create ${child} in.`,
   wholeFile: (binding: string) => `The whole ${binding} file cannot be removed.`,
 

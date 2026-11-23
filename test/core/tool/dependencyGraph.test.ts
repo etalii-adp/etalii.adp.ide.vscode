@@ -107,6 +107,9 @@ const dependencyEntries = ['dependencies.relabel', 'dependencies.disconnect'];
 const nodeRows = ['dependencies.x', 'dependencies.row'];
 const dependencyRows = ['dependencies.from', 'dependencies.to'];
 
+/** The node and the dependency `b16-merge-key-and-flow-entry` writes as flow mappings. */
+const flowWritten = ['bbb', 'flow-dependency'];
+
 const differences: readonly { readonly when: (step: Step, source: Source) => boolean; readonly difference: Difference }[] = [
   {
     when: (step, source) => /^execute parity\.no-such-action /.test(step.do) || namedBy(step).some((id) => kindOf(source, id) === 'none'),
@@ -143,6 +146,14 @@ const differences: readonly { readonly when: (step: Step, source: Source) => boo
     difference: {
       reason: 'An X set in a node whose Row is reached through a merge key, or does not read: this host writes the X alone (FBL 3.4: only a slot reached through the merge is read-only), where standalone writes X and Row together, and refuses for a merged Row or writes the unreadable one as 0.',
       answers: (outcome) => (outcome.kind === 'applied' ? undefined : `The outcome is ${JSON.stringify(outcome)}, not applied.`),
+    },
+  },
+  {
+    // The steps that name them, and the two whose answer depends on `bbb` being a node: an add without a point is placed beside the nodes there are, and removing `aaa` counts and removes its dependency on `bbb` too.
+    when: (step, source) => source.fileName === 'b16-merge-key-and-flow-entry.dgr' && (namedBy(step).some((id) => flowWritten.includes(id)) || step.do === 'commit dependencies.add-element on  = ""' || /^(execute|commit) dependencies\.remove on aaa/.test(step.do)),
+    difference: {
+      reason: 'A node and a dependency written as flow mappings: this host reads them with their members (FBL 4.3), so they are a node and a dependency it offers menus for, removes by their line and refuses a change of one value of with FBL\'s sentence, since a flow mapping is written only whole; standalone reads them without members, as nothing (etalii.adp #812).',
+      answers: (outcome) => (outcome.kind === 'refused' && !/flow mapping|no longer|must be nodes|does not apply|cannot be edited/.test(outcome.sentence) ? `The refusal ${JSON.stringify(outcome.sentence)} is not one of this host's.` : undefined),
     },
   },
 ];
@@ -319,6 +330,8 @@ describe.each(documents)('$name', { timeout: 60_000 }, ({ source, recorded }) =>
       if (target.startsWith('rel:') || target.startsWith('parity:') || target.startsWith('new:') || target === '' || kindOf(source, target) === 'none') continue;
       // A node and a dependency that share an id, the dependency written first: the id names the dependency here and the node in standalone (etalii.adp #791).
       if (source.fileName === 'relations-before-elements.dgr' && target === 'shared') continue;
+      // An entry written as a flow mapping is read with its members here (FBL 4.3) and without them in standalone, which offers it no menu (etalii.adp #812).
+      if (source.fileName === 'b16-merge-key-and-flow-entry.dgr' && flowWritten.includes(target)) continue;
       // The menu's groups are separators of the webview's, which an action does not carry: the entries and their order are compared.
       const expected = recorded.menus[Number(menu)].map((entry) => entry.replace(/^g\d+ /, '').replace(/ \| on \(.*\)$/, ' | on'));
       const offered = type.actions(source, [target]).map((action) => `${action.id} | ${action.label} | ${action.icon ?? '-'} | ${action.shortcut ?? '-'} | ${action.enabled ? 'on' : `off (${action.disabledReason})`}`);

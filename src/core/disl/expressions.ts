@@ -210,6 +210,34 @@ export function createExpressions(specification: Specification, metamodel: Metam
     return cyclesOver(entity, type, max).cycles.map((cycle) => cycle.map((id) => byId.get(id)));
   });
   register('Entity.cyclesTruncated(string, int): bool', (entity: Entity, type: string, max: bigint) => cyclesOver(entity, type, max).truncated);
+  // The graph members of a node (DISL 12.2), over the relations of a type and its subtypes: the nodes one relation
+  // leads to and comes from, in model order and each once; every node reached by following them, the node itself only
+  // when it lies on a cycle; and whether it does (etalii.adp spec 090, research R2).
+  const endOf = (relation: Entity, end: 'source' | 'target'): Entity | undefined => {
+    const node = member(relation, end);
+    return node instanceof Entity ? node : undefined;
+  };
+  const once = (nodes: (Entity | undefined)[]): Entity[] => [...new Set(nodes.filter((node): node is Entity => node !== undefined))];
+  const successorsOf = (entity: Entity, type: string): Entity[] => once(list(entity, 'outgoing').filter(typed(type)).map((relation) => endOf(relation, 'target')));
+  const reachableFrom = (entity: Entity, type: string): Entity[] => {
+    const reached: Entity[] = [];
+    const seen = new Set<Entity>();
+    const next = [...successorsOf(entity, type)];
+    for (let node = next.shift(); node !== undefined; node = next.shift()) {
+      if (seen.has(node)) continue;
+      seen.add(node);
+      reached.push(node);
+      next.push(...successorsOf(node, type));
+    }
+    return reached;
+  };
+  register('Entity.successors(string): list<dyn>', successorsOf);
+  register('Entity.predecessors(string): list<dyn>', (entity: Entity, type: string) => once(list(entity, 'incoming').filter(typed(type)).map((relation) => endOf(relation, 'source'))));
+  register('Entity.neighbors(): list<dyn>', (entity: Entity) =>
+    once([...list(entity, 'incoming').map((relation) => endOf(relation, 'source')), ...list(entity, 'outgoing').map((relation) => endOf(relation, 'target'))]).filter((node) => node !== entity));
+  register('Entity.reachable(string): list<dyn>', reachableFrom);
+  register('Entity.inCycle(string): bool', (entity: Entity, type: string) => reachableFrom(entity, type).includes(entity));
+  register('Entity.hasCycle(string): bool', (entity: Entity, type: string) => cyclesOver(entity, type, 1n).cycles.length > 0);
   options.library?.(register);
   register('Entity.label(): string', (entity: Entity) => String(member(entity, metamodel.types[factsOf(entity)?.type ?? '']?.labelAttribute ?? '') ?? ''));
 
@@ -250,10 +278,14 @@ export function createExpressions(specification: Specification, metamodel: Metam
     if (items.length === 0 && name !== 'sum') throw new Error(`${name}() of an empty list`);
     return items.map(number);
   };
-  register('list.sum(): double', (items: unknown[]) => numbers(items, 'sum').reduce((sum, item) => sum + item, 0));
+  // The sum, the least and the greatest of whole numbers are whole numbers, and of a list holding another number a
+  // double (DISL 12.4), so `….max() + 1` adds two ints, as CEL requires (etalii.adp spec 090, research R1). The sum of
+  // an empty list is the whole number 0.
+  const whole = (items: unknown[]): items is bigint[] => items.every((item) => typeof item === 'bigint');
+  register('list.sum(): dyn', (items: unknown[]) => (whole(items) ? items.reduce((sum, item) => sum + item, 0n) : numbers(items, 'sum').reduce((sum, item) => sum + item, 0)));
   register('list.avg(): double', (items: unknown[]) => numbers(items, 'avg').reduce((sum, item) => sum + item, 0) / items.length);
-  register('list.min(): double', (items: unknown[]) => Math.min(...numbers(items, 'min')));
-  register('list.max(): double', (items: unknown[]) => Math.max(...numbers(items, 'max')));
+  register('list.min(): dyn', (items: unknown[]) => (whole(items) && items.length > 0 ? items.reduce((a, b) => (b < a ? b : a)) : Math.min(...numbers(items, 'min'))));
+  register('list.max(): dyn', (items: unknown[]) => (whole(items) && items.length > 0 ? items.reduce((a, b) => (b > a ? b : a)) : Math.max(...numbers(items, 'max'))));
   // simplified: a theme token is resolved by the page that draws, in its mode, so `token()` gives the paint `{token}` that names it (DISL 6.2).
   register('token(string): dyn', (name: string) => new Map([['token', name]]));
 
@@ -265,6 +297,8 @@ export function createExpressions(specification: Specification, metamodel: Metam
     return index === undefined ? Optional.none() : Optional.of(BigInt(index));
   });
   register('formatYearMonth(dyn, string): string', (index: unknown, pattern: string) => formatPattern(number(index), pattern, locale));
+  register('formatNumber(dyn, string): string', (value: unknown, pattern: string) => formatNumber(value, pattern));
+  register('formatDuration(dyn, string): string', (value: unknown, style: string) => formatDuration(value, style));
 
   register('enumLabel(string, dyn): string', (name: string, key: unknown) => metamodel.enums[name]?.values.find((value) => value.key === key)?.label ?? String(key));
   register('ordinal(dyn, string): int', (key: unknown, name: string) => BigInt(ordinal(metamodel, name, String(key))));
@@ -384,6 +418,8 @@ export function createExpressions(specification: Specification, metamodel: Metam
       const one = (item: Value): unknown => {
         if (kind.kind === 'reference') return typeof item === 'string' ? find(item) : null;
         const integer = kind.kind === 'primitive' && (kind.primitive === 'int' || kind.primitive === 'yearMonth');
+        // A duration is written in ISO 8601 and is a CEL duration (DISL 4.2), so it has `getSeconds()` and arithmetic.
+        if (kind.kind === 'primitive' && kind.primitive === 'duration' && typeof item === 'string') return durationOf(item) ?? item;
         return integer && typeof item === 'number' && Number.isInteger(item) ? BigInt(item) : item;
       };
       const present = value ?? defaultOf(attribute) ?? zeroOf(kind, attribute.many === true);
@@ -476,7 +512,7 @@ export function createExpressions(specification: Specification, metamodel: Metam
 //
 // The same pass works around the library's typing of `o.value()`: on a variable it has no static
 // type for, the result takes part in no comparison ("overlaps with"), so it is wrapped in `dyn()`.
-const needsRewrite = /\.\?|\bhas\s*\(|\.value\s*\(/;
+const needsRewrite = /\.\?|\bhas\s*\(|\.value\s*\(|\.count\s*\(/;
 
 function rewrite(node: ASTNode): string {
   const list = (nodes: readonly ASTNode[]): string => nodes.map(rewrite).join(', ');
@@ -498,6 +534,8 @@ function rewrite(node: ASTNode): string {
       return asked?.op === '.' ? `__has(${rewrite(asked.args[0])}, ${JSON.stringify(asked.args[1])})` : `${name}(${list(parameters)})`;
     }
     case 'rcall': {
+      // DISL 12.4's macro `l.count(x, pred)`: the number of items for which `pred` holds.
+      if (node.args[0] === 'count' && node.args[2].length === 2) return `${rewrite(node.args[1])}.filter(${list(node.args[2])}).size()`;
       const call = `${rewrite(node.args[1])}.${node.args[0]}(${list(node.args[2])})`;
       return node.args[0] === 'value' && node.args[2].length === 0 ? `dyn(${call})` : call;
     }
@@ -508,6 +546,77 @@ function rewrite(node: ASTNode): string {
     case '-_': return `(-${rewrite(node.args)})`;
     default: return `(${rewrite(node.args[0])} ${node.op} ${rewrite(node.args[1])})`;
   }
+}
+
+// ---- durations and numbers (DISL 4.2, 12.4) ----
+
+/** The class of CEL's durations, which the library does not export by name. */
+const Duration = (new Environment().evaluate("duration('0s')") as object).constructor as new (seconds: bigint | number, nanos?: number) => { readonly seconds: bigint; readonly nanos: number };
+
+/** An ISO 8601 duration in weeks, days, hours, minutes and seconds (`PT20M`, `P2DT3H`) as a CEL duration; nothing for another text, a month or a year included. */
+export function durationOf(text: string): InstanceType<typeof Duration> | undefined {
+  const match = /^(-)?P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:[.,]\d+)?)S)?)?$/.exec(text.trim());
+  if (!match || /^-?PT?$/.test(text.trim())) return undefined;
+  const [, minus, weeks, days, hours, minutes, seconds] = match;
+  const whole = (part: string | undefined): number => (part === undefined ? 0 : Number(part));
+  const fraction = Number((seconds ?? '0').replace(',', '.'));
+  const total = ((whole(weeks) * 7 + whole(days)) * 24 + whole(hours)) * 3600 + whole(minutes) * 60 + Math.trunc(fraction);
+  const nanos = Math.round((fraction - Math.trunc(fraction)) * 1e9);
+  const duration = minus ? new Duration(-total, -nanos) : new Duration(total, nanos);
+  written.set(duration, text);
+  return duration;
+}
+
+/** The text each duration read from a document was written as, so that a copy of it is written the same way. */
+const written = new WeakMap<object, string>();
+
+/**
+ * `formatDuration(d, style)` (DISL 12.4): `short` writes its days, hours, minutes and seconds that are
+ * not zero, as `3d 4h`; `long` as `3 days 4 hours`; `iso` in ISO 8601. A duration of nothing is `0m`,
+ * `0 minutes` and `PT0S`.
+ */
+function formatDuration(value: unknown, style: string): string {
+  const duration = typeof value === 'string' ? durationOf(value) : value;
+  if (!(duration instanceof Duration)) throw new Error('formatDuration() takes a duration.');
+  let rest = Number(duration.seconds < 0n ? -duration.seconds : duration.seconds);
+  const sign = duration.seconds < 0n ? '-' : '';
+  const parts: [number, string, string, string][] = [];
+  for (const [size, short, one, many] of [[86400, 'd', 'day', 'days'], [3600, 'h', 'hour', 'hours'], [60, 'm', 'minute', 'minutes'], [1, 's', 'second', 'seconds']] as const) {
+    const count = Math.floor(rest / size);
+    rest -= count * size;
+    if (count > 0) parts.push([count, short, one, many]);
+  }
+  if (style === 'iso') {
+    const of = (letter: string): string => parts.filter(([, short]) => short === letter).map(([count]) => `${count}${letter.toUpperCase()}`).join('');
+    const time = `${of('h')}${of('m')}${of('s')}`;
+    return `${sign}P${of('d')}${time.length > 0 ? `T${time}` : of('d').length > 0 ? '' : 'T0S'}`;
+  }
+  if (parts.length === 0) return style === 'long' ? '0 minutes' : '0m';
+  return sign + parts.map(([count, short, one, many]) => (style === 'long' ? `${count} ${count === 1 ? one : many}` : `${count}${short}`)).join(' ');
+}
+
+/**
+ * `formatNumber(n, pattern)` (DISL 12.4), in the patterns the hosts write: `0` a digit always written,
+ * `#` one written when it is significant, `,` grouping by thousands and `.` the decimal point, in the
+ * invariant culture; a half rounds away from zero.
+ */
+function formatNumber(value: unknown, pattern: string): string {
+  if (!/^[#,]*0[0,]*(\.[0#]+)?$|^#[#,]*(\.[0#]+)?$/.test(pattern)) throw new Error(`'${pattern}' is not a number pattern: digits '0' and '#', grouping ',' and one decimal point '.'.`);
+  if (typeof value !== 'bigint' && typeof value !== 'number') throw new Error('formatNumber() takes a number.');
+  const [integerPart, decimalPart = ''] = pattern.split('.');
+  const most = decimalPart.length;
+  const least = decimalPart.replace(/#+$/, '').length;
+  const scaled = Math.abs(Number(value)) * 10 ** most;
+  const rounded = Math.round(scaled);
+  let digits = String(rounded).padStart(most + 1, '0');
+  let whole = digits.slice(0, digits.length - most);
+  let decimals = digits.slice(digits.length - most);
+  while (decimals.length > least && decimals.endsWith('0')) decimals = decimals.slice(0, -1);
+  const minimum = (integerPart.match(/0/g) ?? []).length;
+  whole = whole.replace(/^0+/, '').padStart(minimum, '0');
+  if (integerPart.includes(',')) whole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  digits = decimals.length > 0 ? `${whole}.${decimals}` : whole;
+  return (Number(value) < 0 && /[1-9]/.test(digits) ? '-' : '') + (digits.length > 0 ? digits : '0');
 }
 
 // ---- values ----
@@ -522,6 +631,8 @@ function plain(value: unknown): Value {
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
   if (value instanceof Optional) return value.hasValue() ? plain(value.value()) : null;
   if (value instanceof Date) return value.toISOString();
+  // A duration is stored as it was written, and one worked out in ISO 8601 (DISL 4.2).
+  if (value instanceof Duration) return written.get(value) ?? formatDuration(value, 'iso');
   if (Array.isArray(value) || value instanceof Set) return [...value].map(plain);
   const known = factsOf(value);
   if (known) return known.id;

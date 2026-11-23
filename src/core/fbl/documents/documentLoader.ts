@@ -299,6 +299,7 @@ function readRule(json: JsonNode, relation: boolean): Rule {
       emit: str(insertJson, 'emit'),
       skeleton: str(insertJson, 'skeleton'),
       when: str(insertJson, 'when'),
+      refusals: memberOf(insertJson, 'refusals') ? { key: str(memberOf(insertJson, 'refusals'), 'key'), duplicate: str(memberOf(insertJson, 'refusals'), 'duplicate'), when: str(memberOf(insertJson, 'refusals'), 'when') } : undefined,
       constant: readConstant(memberOf(insertJson, 'constant')),
     };
   }

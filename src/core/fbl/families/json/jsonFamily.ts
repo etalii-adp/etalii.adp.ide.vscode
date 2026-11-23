@@ -160,8 +160,8 @@ export class JsonFamily extends TreeFamily {
       text = render(settings.emit, (name) => {
         switch (name) {
           case 'id': return request.id === undefined ? undefined : escape(request.id);
-          case 'source': return request.source ? escape(request.source.key) : undefined;
-          case 'target': return request.target ? escape(request.target.key) : undefined;
+          case 'source': return request.source ? escape(request.source.key) : request.sourceKey !== undefined ? escape(request.sourceKey) : undefined;
+          case 'target': return request.target ? escape(request.target.key) : request.targetKey !== undefined ? escape(request.targetKey) : undefined;
           default: {
             const value = request.values.get(name);
             return value !== null && value !== undefined ? escape(plain(value, attributeOf(request.rule, name))) : undefined;
@@ -351,8 +351,10 @@ export function escape(value: string): string {
 function wireValue(request: InsertRequest, key: string): string | undefined {
   const rule = request.rule;
   if (rule.id?.from?.key === key && request.id !== undefined) return quote(request.id);
-  if (rule.source?.key === key && request.source) return quote(request.source.key);
-  if (rule.target?.key === key && request.target) return quote(request.target.key);
+  const source = request.source?.key ?? request.sourceKey;
+  const target = request.target?.key ?? request.targetKey;
+  if (rule.source?.key === key && source !== undefined) return quote(source);
+  if (rule.target?.key === key && target !== undefined) return quote(target);
   for (const [name, binding] of rule.attributes) {
     if (binding.key !== key || binding.child !== undefined) continue;
     // An attribute the add does not give has no value; one it gives its empty value has its key by the binding's `empty` (FBL 6.2).

@@ -14,7 +14,7 @@ import type { FblSplice } from '../../../../src/core/fbl/splice';
 import { behaviorTreeView } from './behaviorTree';
 import { expectRequirementRead, HierarchicalRequirementDocument, requirementOptions } from './hierarchicalRequirement';
 import { definitions, knowledgeIds, knowledgeTypes } from './knowledge';
-import { attributeTypes, naturalIds, timeAttributes, unsetsReferences } from './naturalIds';
+import { addDefaults, attributeTypes, naturalIds, timeAttributes, unsetsReferences } from './naturalIds';
 import { conformance, filesBelow, textOf, utf8 } from './repository';
 
 // The round-trip fixtures copied from etalii.adp (FBL 15.3), and how a host runs one: what
@@ -210,8 +210,9 @@ export class Subject {
   /** Plans and applies a fixture's edit: one change, or a list of them as one transaction (FBL 6.4). */
   edit(edit: FixtureEdit | readonly FixtureEdit[]): PlanResult {
     if (this.requirement) return this.requirement.change(edit);
-    if (!Array.isArray(edit)) return this.change(changeOf(edit as FixtureEdit));
-    return this.body!.changeAll(edit.map(changeOf));
+    const defaults = addDefaults(this.binding?.name ?? '');
+    if (!Array.isArray(edit)) return this.change(changeOf(edit as FixtureEdit, defaults));
+    return this.body!.changeAll(edit.map((one) => changeOf(one, defaults)));
   }
 
   get model(): FblModel | undefined {
@@ -300,7 +301,7 @@ const textOrNothing = (value: unknown): string | undefined => (typeof value === 
  * A step's edit as the model change it names (FBL 15.3). A `position` is passed on as it is
  * written: it is section 11.2's, an index counted once a moved element is taken out.
  */
-export function changeOf(edit: FixtureEdit): ModelChange {
+export function changeOf(edit: FixtureEdit, defaults: (type: string) => Readonly<Record<string, unknown>> = () => ({})): ModelChange {
   if ('save' in edit) return { kind: 'save' };
   const part = (name: string): Record<string, unknown> | undefined => edit[name] as Record<string, unknown> | undefined;
   const set = part('set');
@@ -311,7 +312,8 @@ export function changeOf(edit: FixtureEdit): ModelChange {
       kind: 'add',
       type: add.type as string,
       id: textOrNothing(add.id),
-      attributes: attributesOf(add.attributes),
+      // The defaults the tool type's specification gives what the add leaves out, as a host fills them in.
+      attributes: { ...defaults(add.type as string), ...attributesOf(add.attributes) },
       parent: textOrNothing(add.parent),
       position: add.position as ChangePosition | undefined,
       slot: textOrNothing(add.slot),
