@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { EditRequest, ViewOptions } from '../core/frame/toolType';
 import { viewTypeOf } from '../core/frame/toolType';
+import { exportCommand, exportContext, exportingOf, lastExport, writeExport } from './exports';
 import { keepAsText } from './opening';
 import { PropertiesView } from './propertiesView';
 import { entriesOf, ToolboxView } from './toolboxView';
@@ -106,6 +107,26 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
     });
   }
 
+  // An export of a tool type (etalii.adp spec 082, research R5): one command for each export the tool types carry,
+  // reached from the Command Palette, the Explorer, an editor's tab and the ADP menu of its title bar alike. The
+  // manifest contributes it and the menus offer it for the extensions in its context key, which says which files'
+  // tool types offer it. It exports the file it is invoked on, else the active editor's: as the editor of a tool
+  // open on it holds it, unsaved edits and the positions it shows included; else the file's text as open or saved.
+  const exportIds = [...new Set(types.flatMap((type) => (type.exports ?? []).map((offer) => offer.id)))];
+  for (const id of exportIds) {
+    const extensions = types.filter((type) => (type.exports ?? []).some((offer) => offer.id === id)).flatMap((type) => type.claims.filter((claim) => !claim.registrationOnly).flatMap((claim) => claim.extensions.map((extension) => `.${extension}`)));
+    void vscode.commands.executeCommand('setContext', exportContext(id), extensions);
+    if (!contributed.has(exportCommand(id))) continue;
+    register(exportCommand(id), async (uri?: unknown) => {
+      const target = uri instanceof vscode.Uri ? uri : tools.active?.document.uri ?? vscode.window.activeTextEditor?.document.uri;
+      if (!target) return;
+      const open = tools.editorOn(target);
+      const exporting = open ? { type: open.type, uri: target, source: open.source, options: open.options } : await exportingOf(target, types);
+      if (!exporting || !(exporting.type.exports ?? []).some((offer) => offer.id === id)) return;
+      await writeExport(exporting, id);
+    });
+  }
+
   // Under test, the canvas's two ends are reachable without a pointer: what it was last sent, and
   // an edit request made as it would make one (etalii.adp spec 006, contracts/frame.md). What a
   // diagram was sent is its `scene`, and `view` says the same of it in the words the tests of spec
@@ -136,6 +157,7 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
       return active ? tools.perform(active, request as EditRequest | TableRequest | HierarchyRequest, undefined, typeof seq === 'number' ? seq : undefined) : undefined;
     });
     register('etalii.adp.test.toolbox', () => entriesOf(tools.active));
+    register('etalii.adp.test.lastExport', () => ({ uri: lastExport.uri?.toString(), opened: lastExport.opened }));
     // The options a canvas or a page sends, as it sends them: a filter typed, a level narrowed to.
     register('etalii.adp.test.viewOptions', (options: unknown) => {
       const active = tools.active;

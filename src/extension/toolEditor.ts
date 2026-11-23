@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import type { EditRequest, Field, Source, TextSplice, ViewOptions } from '../core/frame/toolType';
-import { viewTypeOf } from '../core/frame/toolType';
+import type { Action, EditRequest, Field, Source, TextSplice, ViewOptions } from '../core/frame/toolType';
+import { exportOf, viewTypeOf } from '../core/frame/toolType';
 import type { FromCanvas, ToCanvas, ViewCause } from '../core/frame/protocol';
 import { linkKind } from '../core/disl/metamodel';
 import { placesOf, type Scene } from '../core/scene/scene';
@@ -8,6 +8,7 @@ import { spliceRanges } from '../core/tool/spliceRanges';
 import type { HierarchyRequest, HierarchyView } from '../core/tool/hierarchyView';
 import type { TableRequest, TableView } from '../core/tool/tableView';
 import type { Findings } from './findings';
+import { UNSAVED, writeExport } from './exports';
 import { handBack } from './opening';
 import { pickLink } from './projectLinkPicker';
 import { movedName, relativePath } from '../core/tool/toolTypeFrom';
@@ -232,11 +233,26 @@ export class Tools implements vscode.Disposable {
     diagram.lastCause = cause;
     diagram.post({
       v: 2, type: 'view', origin: diagram.type.origin, kind: diagram.type.kind, view,
-      actions: view.readOnly ? [] : diagram.type.actions(source, diagram.selection, diagram.options),
+      actions: this.actionsOf(diagram, view.readOnly === true),
       version: diagram.document.version, ...(cause === undefined ? {} : { cause }),
     });
     this.findings.show(diagram.document, diagram.type, source.related);
     if (diagram === this.current) this.changed.fire();
+  }
+
+  /**
+   * What the menu of a diagram offers: in a document that cannot be edited only its exports, which change nothing of it;
+   * and an export of a document never saved is offered disabled, since its file is written beside the document.
+   */
+  private actionsOf(diagram: OpenTool, readOnly: boolean): Action[] {
+    const actions = diagram.type.actions(diagram.source, diagram.selection, diagram.options).filter((action) => !readOnly || exportOf(action.id) !== undefined);
+    return diagram.document.isUntitled ? actions.map((action) => (exportOf(action.id) === undefined ? action : { ...action, enabled: false, disabledReason: UNSAVED })) : actions;
+  }
+
+  /** The editor open on a file, the active one first; none when no editor of a tool holds it. */
+  editorOn(uri: vscode.Uri): OpenTool | undefined {
+    const on = [...this.open].filter((diagram) => diagram.document.uri.toString() === uri.toString());
+    return on.find((diagram) => diagram === this.current) ?? on[0];
   }
 
   /**
@@ -572,7 +588,7 @@ export class Tools implements vscode.Disposable {
     let outcome = diagram.type.edit(diagram.source, request, diagram.options, confirmed);
     // A file that cannot be written takes no edit, which the tool type does not know. What changes
     // only this viewer's state, such as a fold, is still its to do.
-    if (diagram.readOnly && !(outcome.kind === 'applied' && outcome.viewOptions !== undefined && outcome.splices.length === 0 && outcome.registration === undefined)) {
+    if (diagram.readOnly && outcome.kind !== 'export' && !(outcome.kind === 'applied' && outcome.viewOptions !== undefined && outcome.splices.length === 0 && outcome.registration === undefined)) {
       return { result: 'cancelled' };
     }
     if (outcome.kind === 'confirm') {
@@ -613,6 +629,10 @@ export class Tools implements vscode.Disposable {
         if (version !== undefined && version !== diagram.document.version) return { result: 'cancelled' };
         return this.perform(diagram, { ...request, params });
       }
+      case 'export':
+        // An export changes nothing of the document: the extension writes it beside the document, as the editor holds it.
+        await writeExport({ type: diagram.type, uri: diagram.document.uri, source: diagram.source, options: diagram.options }, outcome.export);
+        return { result: 'applied' };
       case 'pickPath': {
         // The user picks a file or a folder, and the answer is an edit like any other: one undo step.
         const picked = await pickLink(diagram.document.uri);

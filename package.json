@@ -227,6 +227,11 @@
         "category": "ADP"
       },
       {
+        "command": "etalii.adp.export.flowPage",
+        "title": "Export Flow Page",
+        "category": "ADP"
+      },
+      {
         "command": "etalii.adp.new.etalii.agent-activity-diagram",
         "title": "New Agent activity diagram",
         "category": "ADP"
@@ -283,6 +288,11 @@
           "command": "etalii.adp.openAsText",
           "when": "activeCustomEditorId =~ /^etalii\\.adp\\./",
           "group": "navigation"
+        },
+        {
+          "submenu": "etalii.adp.menu",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./",
+          "group": "navigation@100"
         },
         {
           "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
@@ -373,6 +383,10 @@
           "when": "editorLangId == atd"
         },
         {
+          "command": "etalii.adp.export.flowPage",
+          "when": "resourceExtname in etalii.adp.exports.flowPage"
+        },
+        {
           "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
           "when": "resourceExtname =~ /^\\.(md)$/"
         },
@@ -387,6 +401,11 @@
       ],
       "explorer/context": [
         {
+          "command": "etalii.adp.export.flowPage",
+          "when": "resourceExtname in etalii.adp.exports.flowPage",
+          "group": "adp"
+        },
+        {
           "command": "etalii.adp.openAs.etalii.agent-behavior-modelling",
           "when": "resourceExtname =~ /^\\.(md)$/ && resourcePath in etalii.adp.suggested",
           "group": "navigation@90"
@@ -400,6 +419,20 @@
           "command": "etalii.adp.openAs.etalii.knowledge",
           "when": "resourceExtname =~ /^\\.(yaml|yml|json|ded|xml)$/ && resourcePath in etalii.adp.suggested",
           "group": "navigation@90"
+        }
+      ],
+      "etalii.adp.menu": [
+        {
+          "command": "etalii.adp.export.flowPage",
+          "when": "resourceExtname in etalii.adp.exports.flowPage",
+          "group": "export"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "etalii.adp.export.flowPage",
+          "when": "resourceExtname in etalii.adp.exports.flowPage",
+          "group": "adp"
         }
       ]
     },
@@ -477,7 +510,14 @@
         "editor.wordBasedSuggestions": "off",
         "editor.semanticHighlighting.enabled": true
       }
-    }
+    },
+    "submenus": [
+      {
+        "id": "etalii.adp.menu",
+        "label": "ADP",
+        "icon": "$(layers)"
+      }
+    ]
   },
   "scripts": {
     "prebuild": "node scripts/ensure-dependencies.mjs && node scripts/fetch-atd-lsp.mjs --if-missing",

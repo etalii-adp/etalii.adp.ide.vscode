@@ -256,7 +256,8 @@ describe.each(documents)('$name', { timeout: 60_000 }, ({ source, recorded }) =>
       const selection = target.startsWith('new:') ? [] : [target];
       // An entry that is on shows no reason here; standalone records one beside it.
       const expected = recorded.menus[Number(menu)].map((entry) => entry.replace(/ \| on \(.*\)$/, ' | on'));
-      const offered = type.actions(source, selection).map((action) => `g1 ${action.id} | ${action.label} | ${action.icon ?? '-'} | ${action.shortcut ?? '-'} | ${action.enabled ? 'on' : `off (${action.disabledReason})`}`);
+      // The flow page export is the desktop host's, which standalone has none of (etalii.adp spec 082; docs/parity.md): it is no entry of standalone's menus.
+      const offered = type.actions(source, selection).filter((action) => !action.id.startsWith('export:')).map((action) => `g1 ${action.id} | ${action.label} | ${action.icon ?? '-'} | ${action.shortcut ?? '-'} | ${action.enabled ? 'on' : `off (${action.disabledReason})`}`);
       expect(offered, target).toEqual(expected);
     }
   });

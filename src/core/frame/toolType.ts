@@ -159,7 +159,26 @@ export type EditOutcome =
     readonly select?: string;
   }
   /** A path is asked with the platform's file and folder dialog; chosen, it is set as the named field, relative to the document. */
-  | { readonly kind: 'pickPath'; readonly id: string; readonly field: string };
+  | { readonly kind: 'pickPath'; readonly id: string; readonly field: string }
+  /** The named export of the tool type is asked for: the extension has it written beside the document (`ToolType.exported`); nothing of the document changes. */
+  | { readonly kind: 'export'; readonly export: string };
+
+/** What a tool type exports of a document, as its menu offers it. */
+export interface ExportOffer {
+  readonly id: string;
+  readonly label: string;
+}
+
+/** A file an export writes beside the document: its name and its text. */
+export interface Exported {
+  readonly name: string;
+  readonly text: string;
+}
+
+/** The action of the menu that asks for an export: `export:<id>`. */
+export const exportAction = (id: string): string => `export:${id}`;
+/** The export an action asks for; nothing for any other action. */
+export const exportOf = (action: string): string | undefined => (action.startsWith('export:') ? action.slice('export:'.length) : undefined);
 
 /** A document as a tool type reads it: its text and, where one exists, its registration's. */
 export interface Source {
@@ -231,6 +250,10 @@ export interface ToolType<View, Request> {
   edit(source: Source, request: Request, options: ViewOptions, confirmed: boolean): EditOutcome;
   /** The text of a new document, from the binding's template. */
   newDocument(name: string): string;
+  /** What the tool type exports of a document; none when absent. */
+  readonly exports?: readonly ExportOffer[];
+  /** The file an export writes of the document as the canvas shows it with these options, at a moment of local time; nothing for an export the type does not have. */
+  exported?(source: Source, id: string, options: ViewOptions, moment: Date): Exported | undefined;
   /**
    * The registration an undo or a redo gives back (FBL 0.7 7.1): `snapshot`, the text the step
    * restores, with the entries of the blocks the binding keeps outside the history taken from

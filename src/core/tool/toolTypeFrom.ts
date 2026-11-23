@@ -39,7 +39,8 @@ import { RegistrationDocument } from '../fbl/registration/registrationDocument';
 import { produceTemplate } from '../fbl/routing/templateWriter';
 import type { Edit } from '../fbl/splice';
 import { decode, encode } from '../fbl/text/utf8';
-import type { Action, Control, DesignerToolType, DiagramToolType, EditOutcome, EditRequest, Field, Finding, Severity, Source, TextSplice, ToolboxEntry, ViewOptions } from '../frame/toolType';
+import type { Action, Control, DesignerToolType, DiagramToolType, EditOutcome, EditRequest, ExportOffer, Exported, Field, Finding, Severity, Source, TextSplice, ToolboxEntry, ViewOptions } from '../frame/toolType';
+import { exportAction, exportOf } from '../frame/toolType';
 import { anchorOf, arrangedPlaces, arrangedRows, createScene, type Scene, type SceneChrome, type SceneOptions, type SceneRuler, type SceneTool, type SceneToken } from '../scene/scene';
 import { widthOfText } from '../text/textMetric';
 import { claimingBinding, claimsOf, suggests } from './claims';
@@ -106,6 +107,9 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   const origin = typeof specification.language.origin === 'string' ? specification.language.origin : specification.language.id;
   // What the binding cannot state of how this tool type reads its documents (`docs/disl-support.md`, "Code for one tool type").
   const readingLogic = plugins.reading(origin);
+  // What the tool type exports of a document, which no definition states (`docs/disl-support.md`, "Code for one tool type").
+  const exportLogic = plugins.exports(origin);
+  const exportOffers: ExportOffer[] = (exportLogic?.exports ?? []).map((offer) => ({ id: offer.id, label: offer.label }));
   const metamodel = interpretMetamodel(specification);
   const persistence = interpretPersistence(specification, metamodel.value);
   const expressions = createExpressions(specification, metamodel.value, { pluginFunction: (plugin, name) => plugins.celFunctions(plugin)?.functions[name] });
@@ -399,11 +403,26 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       .filter(({ entry }) => open.refusal === undefined || (!open.unreadable && behavior.value.operations.find((operation) => operation.id === entry.operation)?.viewOnly === true));
     // A derived relation whose removal its definition maps to an operation, and that has no menu of its own, is removed by the host's own entry: see docs/disl-support.md.
     if (line && offered.length === 0 && open.refusal === undefined && Object.hasOwn(line.edits, 'delete')) return [{ id: 'delete', label: 'Delete', shortcut: 'Delete', enabled: true }];
-    return offered.map(({ entry, id }): Action => ({
+    // What the tool type exports is offered on the diagram itself, after its own entries, in a document that cannot be edited too: an export changes nothing of it.
+    const exporting = selection.length === 0 ? exportOffers.map((offer): Action => ({ id: exportAction(offer.id), label: offer.label, enabled: true })) : [];
+    return [...offered.map(({ entry, id }): Action => ({
       id, label: entry.label,
       ...(entry.icon === undefined ? {} : { icon: entry.icon }), ...(entry.shortcut === undefined ? {} : { shortcut: entry.shortcut }),
       enabled: entry.enabled, ...(entry.reason === undefined ? {} : { disabledReason: entry.reason }),
-    }));
+    })), ...exporting];
+  }
+
+  /** The file an export writes: the model as read, and the centre of each node where the canvas draws it with these options. */
+  function exported(source: Source, id: string, options: ViewOptions, moment: Date): Exported | undefined {
+    const writer = exportLogic?.exports.find((offer) => offer.id === id);
+    if (!writer) return undefined;
+    const open = opened(source);
+    // The scene keeps a box to six decimals; its centre is kept to as many, so that a point the registration states is the point written.
+    const sixth = (value: number): number => Math.round(value * 1e6) / 1e6 + 0;
+    const centres = Object.fromEntries(sceneOf(open, options).nodes.map((node) => [node.id, { x: sixth(node.box.x + node.box.width / 2), y: sixth(node.box.y + node.box.height / 2) }]));
+    const base = source.fileName.slice(Math.max(source.fileName.lastIndexOf('/'), source.fileName.lastIndexOf('\\')) + 1);
+    const stem = base.lastIndexOf('.') > 0 ? base.slice(0, base.lastIndexOf('.')) : base;
+    return { name: writer.name(stem, moment), text: writer.write({ model: open.model, stem, centres }) };
   }
 
   // ---- an edit ----
@@ -533,6 +552,9 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   }
 
   function edit(source: Source, request: EditRequest, options: ViewOptions, confirmed: boolean): EditOutcome {
+    // An export asked for from the menu is the extension's to write: it changes nothing of the document, which may be read-only.
+    const asked = request.kind === 'action' ? exportOf(request.action) : undefined;
+    if (asked !== undefined && exportOffers.some((offer) => offer.id === asked)) return { kind: 'export', export: asked };
     const open = opened(source);
     const { model } = open;
     const intents = behavior.value;
@@ -788,6 +810,8 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     fields,
     actions,
     edit,
+    exports: exportOffers,
+    exported,
     newDocument: (name) => {
       const made = produceTemplate(bindings[0], undefined, name, () => crypto.randomUUID(), bindings[0].plugin && plugins.persistence(bindings[0].plugin.plugin));
       return made ? decode(made) : '';

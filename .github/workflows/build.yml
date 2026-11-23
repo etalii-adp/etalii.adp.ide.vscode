@@ -58,6 +58,9 @@ jobs:
       # The copied definitions are what their records say, and package.json offers what they give (etalii.adp spec 027).
       - name: Check the copied definitions
         run: npm run sync-definitions -- --check
+      # The flow page's template is the desktop host's, as its record says (etalii.adp spec 082).
+      - name: Check the copied flow page
+        run: node scripts/sync-flow-page.mjs --check
       - name: Check types and lint
         run: npm run check
       - name: Test the core and the webview
