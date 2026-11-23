@@ -56,6 +56,15 @@ describe('the gestures of a post-incident review, as the bytes of the fixture po
     expect(made.select).toBe('A-0001');
   });
 
+  it('names the entries written E-NEW by their lines until they are numbered, and numbers one a gesture names (DESL 0.3)', () => {
+    const timeline = (type.view(sourceOf(input), {}) as unknown as SectionsView).parts.find((shown) => shown.id === 'timeline')!;
+    const ids = (timeline.groups ?? []).flatMap((group) => group.rows.map((row) => row.id));
+    expect(ids.filter((id) => id.startsWith('line/'))).toEqual(['line/46', 'line/47', 'line/48']);
+    const made = gesture(input, { kind: 'setField', id: 'line/47', field: 'text', value: 'Error rate of checkout back to its usual level.' }).text;
+    expect(made).not.toContain('E-NEW 2026-11-03T10:50');
+    expect(made).toMatch(/^- E-\d{4} 2026-11-03T10:50\+01:00 Error rate of checkout back to its usual level\. by:agent$/m);
+  });
+
   it('completes an action, and gives it an owner by its field', () => {
     const done = gesture(after('An action is added for F-0001'), { kind: 'operation', operation: 'completeAction', on: ['A-0001'] }).text;
     expect(done).toBe(after('A-0001 is marked done'));

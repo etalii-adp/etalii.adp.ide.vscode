@@ -146,13 +146,13 @@ describe('a reference in a description', () => {
 describe('a finding', () => {
   it('shows the entry it is about that the filter hides, by taking out the words that hide it', () => {
     show(h.page, viewOf({ query: 'category:functional #mail' }));
-    const finding = document.querySelector<HTMLElement>('.hs-finding-link[data-id="REQ-0013"]')!;
-    expect(box('REQ-0013')).toBeNull();
+    const finding = document.querySelector<HTMLElement>('.hs-finding-link[data-id="line/44"]')!;
+    expect(box('line/44')).toBeNull();
     click(finding);
     expect(options(h.sent).at(-1)).toEqual({ query: 'category:functional' });
     show(h.page, viewOf({ query: 'category:functional' }), 2);
     // It stands in Guest checkout, which is collapsed: the fold is opened, as for any reveal.
     expect(requests(h.sent)).toEqual([{ kind: 'operation', operation: 'toggleCollapsed', on: ['ITEM-0003'] }]);
-    expect(h.sent.at(-1)).toEqual({ v: 2, type: 'selection', ids: ['REQ-0013'] });
+    expect(h.sent.at(-1)).toEqual({ v: 2, type: 'selection', ids: ['line/44'] });
   });
 });

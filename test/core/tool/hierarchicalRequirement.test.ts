@@ -20,6 +20,8 @@ const source: Source = { fileName: 'C:/work/web-shop.md', text, registration };
 /** The example with its placeholder numbered, as the first edit that writes it leaves it. */
 const numberedText = text.replace('<!-- last: ITEM-0007 REQ-0012 -->', '<!-- last: ITEM-0007 REQ-0013 -->').replace('+ REQ-NEW A guest', '+ REQ-0013 A guest');
 const numbered: Source = { ...source, text: numberedText };
+/** What the placeholder is named until it is numbered: the line its entry starts on (DESL 0.3). */
+const unnumbered = 'line/44';
 
 const operation = (name: string, on: readonly string[] = [], args: Readonly<Record<string, string | number | boolean>> = {}): HierarchyRequest => ({ kind: 'operation', operation: name, on, args });
 
@@ -59,7 +61,7 @@ describe('the Hierarchical Requirement Designer', () => {
   });
 
   it('reads its example with one finding: the placeholder, which the next edit numbers', () => {
-    expect(type.findings(source)).toEqual([{ rule: 'std.missingId', severity: 'warning', message: 'REQ-0013 is numbered when the document is next changed: the file holds REQ-NEW.', line: 43 }]);
+    expect(type.findings(source)).toEqual([{ rule: 'std.missingId', severity: 'warning', message: `${unnumbered} is numbered REQ-0013 when the document is next changed: the file holds REQ-NEW.`, line: 43 }]);
   });
 
   it('shows the items as levels and the requirements as entries, in the file\'s order', () => {
@@ -70,7 +72,7 @@ describe('the Hierarchical Requirement Designer', () => {
     expect(storefront.entries.map((node) => node.id)).toEqual(['REQ-0001', 'REQ-0002']);
     expect(storefront.levels.map((node) => node.id)).toEqual(['ITEM-0002']);
     expect(storefront.levels[0].levels[0]).toMatchObject({ id: 'ITEM-0003', depth: 3, parent: 'ITEM-0002', collapsed: true });
-    expect(storefront.levels[0].levels[0].entries.map((node) => [node.id, node.ephemeral, node.renumber])).toEqual([['REQ-0005', false, false], ['REQ-0013', true, true]]);
+    expect(storefront.levels[0].levels[0].entries.map((node) => [node.id, node.ephemeral, node.renumber])).toEqual([['REQ-0005', false, false], [unnumbered, true, true]]);
     expect(storefront).toMatchObject({ role: 'level', type: 'Item', depth: 1, shownId: 'ITEM-0001', title: 'Storefront', notes: { open: 0, within: 1 } });
     expect(storefront.labels).toEqual([{ label: 'tags', name: 'customer', member: 'tag/customer', colourKey: 'blue', implied: false }]);
     expect(storefront.entries[1]).toMatchObject({ collapsed: true, descriptionText: 'Measured at the 95th percentile, on a 4G connection.' });
@@ -132,16 +134,16 @@ describe('the Hierarchical Requirement Designer', () => {
 
   it('gives the filter that reveals each level or entry a reference or a finding on the page names and the filter hides', () => {
     // REQ-0004 refers to REQ-0003 and to ITEM-0005, which `#mail` hides; the finding is about REQ-0013, which carries no tag.
-    expect(type.view(source, { query: 'category:functional #mail' }).unhide).toEqual({ 'REQ-0013': 'category:functional', 'REQ-0003': 'category:functional', 'ITEM-0005': '' });
+    expect(type.view(source, { query: 'category:functional #mail' }).unhide).toEqual({ [unnumbered]: 'category:functional', 'REQ-0003': 'category:functional', 'ITEM-0005': '' });
     expect(type.view(source, {}).unhide).toEqual({});
     expect(type.view(source, { query: '#mail' }).roots.length).toBeGreaterThan(0);
   });
 
   it('shows a fold the session keeps only for an entry that is still without a number: the registration decides for any other', () => {
-    expect(nodeOf(source, 'REQ-0013')!.collapsed).toBe(false);
-    const view = type.view(source, { collapsed: { 'REQ-0013': true, 'ITEM-0004': true, 'ITEM-0003': false } });
+    expect(nodeOf(source, unnumbered)!.collapsed).toBe(false);
+    const view = type.view(source, { collapsed: { [unnumbered]: true, 'ITEM-0004': true, 'ITEM-0003': false } });
     const shown = all([...view.roots, ...view.stray]);
-    expect(shown.filter((node) => ['REQ-0013', 'ITEM-0004', 'ITEM-0003'].includes(node.id)).map((node) => [node.id, node.collapsed])).toEqual([['ITEM-0003', true], ['REQ-0013', true], ['ITEM-0004', false]]);
+    expect(shown.filter((node) => [unnumbered, 'ITEM-0004', 'ITEM-0003'].includes(node.id)).map((node) => [node.id, node.collapsed])).toEqual([['ITEM-0003', true], [unnumbered, true], ['ITEM-0004', false]]);
   });
 
   it('offers an item and a requirement in ADP Toolbox', () => {
@@ -185,26 +187,26 @@ describe('an edit of a requirement document', () => {
   });
 
   it('folds a requirement without a number for the session only', () => {
-    expect(type.edit(source, operation('toggleCollapsed', ['REQ-0013']), { collapsed: { 'ITEM-0001': true } }, false)).toEqual({ kind: 'applied', splices: [], viewOptions: { collapsed: { 'ITEM-0001': true, 'REQ-0013': true } } });
+    expect(type.edit(source, operation('toggleCollapsed', [unnumbered]), { collapsed: { 'ITEM-0001': true } }, false)).toEqual({ kind: 'applied', splices: [], viewOptions: { collapsed: { 'ITEM-0001': true, [unnumbered]: true } } });
   });
 
   it('folds, unfolds and folds again a requirement without a number, for the session', () => {
-    const toggle = operation('toggleCollapsed', ['REQ-0013']);
-    const label = (options: ViewOptions): string | undefined => type.actions(source, ['REQ-0013'], options).find((action) => action.id === 'toggleCollapsed')?.label;
+    const toggle = operation('toggleCollapsed', [unnumbered]);
+    const label = (options: ViewOptions): string | undefined => type.actions(source, [unnumbered], options).find((action) => action.id === 'toggleCollapsed')?.label;
     expect(label({})).toBe('Collapse');
     const folded = applied(type.edit(source, toggle, {}, false));
-    expect(folded).toEqual({ kind: 'applied', splices: [], viewOptions: { collapsed: { 'REQ-0013': true } } });
-    expect(type.view(source, folded.viewOptions!).roots[0].levels[0].levels[0].entries[1]).toMatchObject({ id: 'REQ-0013', collapsed: true, gestures: { fold: { operation: 'toggleCollapsed', enabled: true } } });
+    expect(folded).toEqual({ kind: 'applied', splices: [], viewOptions: { collapsed: { [unnumbered]: true } } });
+    expect(type.view(source, folded.viewOptions!).roots[0].levels[0].levels[0].entries[1]).toMatchObject({ id: unnumbered, collapsed: true, gestures: { fold: { operation: 'toggleCollapsed', enabled: true } } });
     expect(label(folded.viewOptions!)).toBe('Expand');
     const unfolded = applied(type.edit(source, toggle, folded.viewOptions!, false));
-    expect(unfolded.viewOptions).toEqual({ collapsed: { 'REQ-0013': false } });
-    expect(nodeOf(source, 'REQ-0013')!.collapsed).toBe(false);
+    expect(unfolded.viewOptions).toEqual({ collapsed: { [unnumbered]: false } });
+    expect(nodeOf(source, unnumbered)!.collapsed).toBe(false);
     expect(label(unfolded.viewOptions!)).toBe('Collapse');
-    expect(applied(type.edit(source, toggle, unfolded.viewOptions!, false)).viewOptions).toEqual({ collapsed: { 'REQ-0013': true } });
+    expect(applied(type.edit(source, toggle, unfolded.viewOptions!, false)).viewOptions).toEqual({ collapsed: { [unnumbered]: true } });
   });
 
   it('leaves a requirement to the registration once a body write numbers it, whatever the session held', () => {
-    const session: ViewOptions = { collapsed: { 'REQ-0013': true } };
+    const session: ViewOptions = { collapsed: { [unnumbered]: true } };
     const titled = applied(type.edit(source, operation('setTitle', ['REQ-0001'], { title: 'Search works.' }), session, false));
     const written: Source = { ...source, text: spliced(text, titled.splices) };
     expect(written.text).toContain('+ REQ-0013 A guest');
@@ -337,7 +339,7 @@ describe('a gesture of the frame', () => {
     const outcome = applied(type.edit(doubled, { kind: 'renumber', id: later.id }, {}, false));
     expect(outcome.select).toBe('REQ-0014');
     expect(spliced(doubled.text, outcome.splices)).toBe(doubled.text.replace('REQ-0013 -->', 'REQ-0014 -->').replace('REQ-0006 Customers', 'REQ-0014 Customers'));
-    expect(spliced(text, applied(type.edit(source, { kind: 'renumber', id: 'REQ-0013' }, {}, false)).splices)).toBe(numberedText);
+    expect(spliced(text, applied(type.edit(source, { kind: 'renumber', id: unnumbered }, {}, false)).splices)).toBe(numberedText);
     expect(refusal(type.edit(numbered, { kind: 'renumber', id: 'REQ-0001' }, {}, false))).toBe('Only an entry whose id another holds before it, or that has none yet, is given a new one.');
   });
 });

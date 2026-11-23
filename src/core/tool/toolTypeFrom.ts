@@ -883,6 +883,23 @@ const emptyHierarchy = (notice: string): HierarchyView => ({
   name: '', ids: 'shown', roles: { level: '', entry: '' }, mentions: {}, queryWords: { level: '', sort: '' }, readOnly: true, notice, roots: [], stray: [], lists: [], notes: [], noteKinds: [], filters: [], completions: {}, unhide: {}, sortKeys: [], widths: [], pageGestures: {}, findings: [], operations: {},
 });
 
+/**
+ * A request or view options made again of a text whose unnumbered elements are numbered: every
+ * name such an element had in memory (`line/<line>`, DESL 0.3) given as the id it now has, also
+ * where it is a key, as a fold the session kept for it.
+ */
+function numberedIn<T>(given: T, unnumbered: readonly Unnumbered[]): T {
+  const now = new Map(unnumbered.filter((element) => element.name !== element.newId).map((element) => [element.name, element.newId]));
+  if (now.size === 0) return given;
+  const walk = (value: unknown): unknown => {
+    if (typeof value === 'string') return now.get(value) ?? value;
+    if (Array.isArray(value)) return value.map(walk);
+    if (typeof value !== 'object' || value === null) return value;
+    return Object.fromEntries(Object.entries(value).map(([key, part]) => [now.get(key) ?? key, walk(part)]));
+  };
+  return walk(given) as T;
+}
+
 /** An element of a model the FBL library read, by where it stands in the reading: the same place in two readings of one body is the same entry. */
 const placesOf = (before: FblModel, after: FblModel): Map<string, string> => new Map(before.elements.map((element, index) => [element.id, after.elements[index]?.id ?? element.id]));
 
@@ -1021,7 +1038,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     ];
     const found: NodeFinding[] = raw.map((finding) => ({ ...framed(finding), ...(finding.element === undefined ? {} : { element: finding.element }) }));
     const gate = unshown ?? (needed.length > 0 ? messages.pluginMissing(needed[0].id) : dedRefusal(envelope) ?? (body.isReadOnly && !read.unreadable ? binding.readOnly || messages.readOnlyFile : undefined));
-    const renumbered = new Set([...counted.unnumbered.map((element) => element.newId), ...raw.filter((finding) => finding.code === 'std.duplicateId' && finding.element !== undefined).map((finding) => finding.element!)]);
+    const renumbered = new Set([...counted.unnumbered.map((element) => element.name), ...raw.filter((finding) => finding.code === 'std.duplicateId' && finding.element !== undefined).map((finding) => finding.element!)]);
     const open: Open = {
       binding, read, model, findings: found.map(({ rule, severity, message, line }) => ({ rule, severity, message, line })), found,
       unreadable: read.unreadable, refusal: read.unreadable ? found[0]?.message ?? UNREADABLE : gate,
@@ -1292,7 +1309,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     const numberedFirst = (): EditOutcome => {
       const numbered = numbering(source, open);
       if ('refused' in numbered) return refused(numbered.refused);
-      const rest = editHierarchy({ ...source, text: numbered.text }, request, options, confirmed);
+      const rest = editHierarchy({ ...source, text: numbered.text }, numberedIn(request, open.unnumbered), numberedIn(options, open.unnumbered), confirmed);
       if (rest.kind !== 'applied') return rest;
       return { ...rest, splices: composedSplices([...numbered.edits, ...(rest.splices.length === 0 ? [] : [editOf(rest.splices)])]) };
     };
@@ -1316,9 +1333,10 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
         if (!open.renumbered.has(request.id)) return refused(NOT_RENUMBERED);
         if (open.unnumbered.length > 0) {
           // What was numbered in memory is numbered by the first edit that writes the body; this one writes nothing else.
-          if (open.unnumbered.some((element) => element.newId === request.id)) {
+          const named = open.unnumbered.find((element) => element.name === request.id);
+          if (named) {
             const numbered = numbering(source, open);
-            return 'refused' in numbered ? refused(numbered.refused) : { kind: 'applied', splices: composedSplices([...numbered.edits]), select: request.id };
+            return 'refused' in numbered ? refused(numbered.refused) : { kind: 'applied', splices: composedSplices([...numbered.edits]), select: named.newId };
           }
           return numberedFirst();
         }
@@ -1372,7 +1390,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
       if (outcome.changes.length > 0 && open.unnumbered.length > 0) {
         const numbered = numbering(source, open);
         if ('refused' in numbered) return { kind: 'refused', sentence: numbered.refused };
-        const rest = editSections({ ...source, text: numbered.text }, request, confirmed);
+        const rest = editSections({ ...source, text: numbered.text }, numberedIn(request, open.unnumbered), confirmed);
         if (rest.kind !== 'applied') return rest;
         return { ...rest, splices: composedSplices([...numbered.edits, ...(rest.splices.length === 0 ? [] : [editOf(rest.splices)])]) };
       }

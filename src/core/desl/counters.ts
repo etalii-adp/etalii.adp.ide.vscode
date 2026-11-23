@@ -1,9 +1,9 @@
 // Counted ids (DESL 5.3.5): the ids of a type are a prefix and a number counted up per document,
 // written with at least `digits` digits, and the last id given is kept in a string attribute of the
 // document, the mark, so that a number is never given twice. An element written with the
-// placeholder after the prefix has no number yet: it is numbered in memory when the document is
-// read, in reading order, and that number is written with the next edit that writes the document
-// (DESL 5.3.4). Every other id is opaque: it has no number, and nothing here changes it.
+// placeholder after the prefix has no number yet: until the next edit that writes the document
+// numbers it, in reading order (DESL 5.3.4), it is named `line/<line>`, the line its entry starts on
+// (DESL 0.3, 5.3.5). Every other id is opaque: it has no number, and nothing here changes it.
 
 import type { Change } from '../disl/behavior';
 import type { Finding, Model, ModelElement } from '../disl/model';
@@ -24,7 +24,9 @@ export interface CounterRule {
 export interface Unnumbered {
   /** The id the FBL library reads the element under: its written id, or one by its place. */
   readonly id: string;
-  /** The counted id it has in memory, and is written with by the next edit that writes the document. */
+  /** The name it has in memory until it is numbered: `line/<line>` for one written with the placeholder (DESL 0.3), else the id it is numbered with. */
+  readonly name: string;
+  /** The counted id the next edit that writes the document gives it, the next number of its rule in reading order. */
   readonly newId: string;
   readonly type: string;
   readonly line: number;
@@ -105,11 +107,13 @@ export function renumbering(model: Model, ids: readonly string[], rules: readonl
 }
 
 /**
- * A model read through a binding, with every element of a counted type that has no usable id
- * numbered in memory (DESL 5.3.4, 5.3.5, 10.2): an element written with the placeholder, the first
- * holder and every later one, and one the library found no id for, each the next number of its rule
- * in reading order, after the mark and every number the document holds. Such an element is
- * ephemeral until the number is written, and what it holds follows it to its new id.
+ * A model read through a binding, with every element of a counted type that has no usable id given
+ * the number the next edit writes (DESL 5.3.4, 5.3.5, 10.2): an element written with the
+ * placeholder, the first holder and every later one, and one the library found no id for, each the
+ * next number of its rule in reading order, after the mark and every number the document holds.
+ * Until it is written, one written with the placeholder is named `line/<line>` (DESL 0.3) and one
+ * without an id by its number. Such an element is ephemeral until the number is written, and what
+ * it holds follows it to its name.
  *
  * Of the findings, the library's `std.duplicateId` at a placeholder becomes `std.missingId`, which
  * every placeholder is reported by; one the library gave already for an id it did not find stays.
@@ -133,12 +137,12 @@ export function numbered(read: { readonly value: Model; readonly findings: reado
     const isPlaceholder = (written !== undefined && element.id === written) || heldPlaceholder.has(element.id);
     if (!isPlaceholder && !missing.has(element.id)) continue;
     const newId = nextCounted(rule, stored, unnumbered.map((done) => done.newId));
-    unnumbered.push({ id: element.id, newId, type: element.type, line: element.line });
+    unnumbered.push({ id: element.id, name: isPlaceholder ? `line/${element.line}` : newId, newId, type: element.type, line: element.line });
     if (isPlaceholder) placeholders.set(element.id, written ?? element.id);
   }
   if (unnumbered.length === 0) return { model, findings: read.findings, unnumbered };
 
-  const now = new Map(unnumbered.map((done) => [done.id, done.newId]));
+  const now = new Map(unnumbered.map((done) => [done.id, done.name]));
   const to = (id: string | undefined): string | undefined => (id === undefined ? undefined : now.get(id) ?? id);
   const elements = model.elements.map((element) => {
     const id = to(element.id)!;
@@ -152,8 +156,8 @@ export function numbered(read: { readonly value: Model; readonly findings: reado
   const findings: Finding[] = [
     ...read.findings.filter((found) => !(found.code === duplicateId && found.element !== undefined && heldPlaceholder.has(found.element))).map((found) => (found.element !== undefined && now.has(found.element) ? { ...found, element: now.get(found.element) } : found)),
     ...unnumbered.filter((done) => placeholders.has(done.id)).map((done): Finding => ({
-      code: missingId, severity: 'warning', message: `${done.newId} is numbered when the document is next changed: the file holds ${placeholders.get(done.id)!}.`,
-      location: { file, line: done.line, column: 1, length: 0 }, element: done.newId,
+      code: missingId, severity: 'warning', message: `${done.name} is numbered ${done.newId} when the document is next changed: the file holds ${placeholders.get(done.id)!}.`,
+      location: { file, line: done.line, column: 1, length: 0 }, element: done.name,
     })),
   ].sort((a, b) => a.location.line - b.location.line);
   return { model: { ...model, elements, relations }, findings, unnumbered };

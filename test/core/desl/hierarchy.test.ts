@@ -77,7 +77,7 @@ describe('the tree of a hierarchy', () => {
     expect(tree.roots.map((level) => level.id)).toEqual(['ITEM-0001', 'ITEM-0004', 'ITEM-0006']);
     expect(tree.entriesOf('ITEM-0001').map((entry) => entry.id)).toEqual(['REQ-0001', 'REQ-0002']);
     expect(tree.levelsOf('ITEM-0001').map((level) => level.id)).toEqual(['ITEM-0002']);
-    expect(tree.entriesOf('ITEM-0003').map((entry) => entry.id)).toEqual(['REQ-0005', open.unnumbered[0].newId]);
+    expect(tree.entriesOf('ITEM-0003').map((entry) => entry.id)).toEqual(['REQ-0005', open.unnumbered[0].name]);
     expect(tree.stray).toEqual([]);
     expect(tree.ancestorsOf('REQ-0005').map((level) => level.id)).toEqual(['ITEM-0003', 'ITEM-0002', 'ITEM-0001']);
     expect(tree.depthOf('ITEM-0003')).toBe(3);
@@ -150,7 +150,7 @@ describe('a filter (DESL 7.7.3)', () => {
 
   it('keeps the levels whose title matches an item word, with what is in them and above them', () => {
     expect(shown('item:back*')).toEqual(['ITEM-0004', 'ITEM-0005', 'REQ-0006', 'REQ-0007', 'REQ-0008']);
-    expect(shown('item:GUEST?CHECKOUT')).toEqual(['ITEM-0001', 'ITEM-0002', 'ITEM-0003', 'REQ-0005', open.unnumbered[0].newId].sort());
+    expect(shown('item:GUEST?CHECKOUT')).toEqual(['ITEM-0001', 'ITEM-0002', 'ITEM-0003', 'REQ-0005', open.unnumbered[0].name].sort());
     expect(shown('item:back* #security')).toEqual(['ITEM-0004', 'REQ-0006', 'REQ-0007']);
     expect(shown('item:nothing')).toEqual([]);
   });
@@ -160,8 +160,8 @@ describe('a filter (DESL 7.7.3)', () => {
     expect(filtered(renamed, surface, 'sort:TITLE').entriesOf('ITEM-0004').map((entry) => entry.id)).toEqual(['REQ-0007', 'REQ-0006']);
     expect(filtered(renamed, surface, 'sort:number sort:title').entriesOf('ITEM-0004').map((entry) => entry.id)).toEqual(['REQ-0006', 'REQ-0007']);
     expect(ordered('sort:state', 'ITEM-0002')).toEqual(['REQ-0003', 'REQ-0004']);
-    expect(ordered('sort:state', 'ITEM-0003')).toEqual(['REQ-0005', open.unnumbered[0].newId]);
-    expect(ordered('sort:category', 'ITEM-0003')).toEqual([open.unnumbered[0].newId, 'REQ-0005']);
+    expect(ordered('sort:state', 'ITEM-0003')).toEqual(['REQ-0005', open.unnumbered[0].name]);
+    expect(ordered('sort:category', 'ITEM-0003')).toEqual([open.unnumbered[0].name, 'REQ-0005']);
     expect(ordered('', 'ITEM-0001')).toEqual(['REQ-0001', 'REQ-0002']);
   });
 

@@ -483,12 +483,12 @@ describe('findings', () => {
   it('lists every finding, which shows its entry when it is selected', () => {
     show(viewOf());
     const list = document.querySelector('.hs-findings')!;
-    expect(list.textContent).toContain('REQ-0013 is numbered when the document is next changed: the file holds REQ-NEW.');
+    expect(list.textContent).toContain('line/44 is numbered REQ-0013 when the document is next changed: the file holds REQ-NEW.');
     expect(list.querySelector('.hs-finding-line')!.textContent).toBe('line 43');
     list.querySelector<HTMLButtonElement>('.hs-finding-link')!.click();
-    // REQ-0013 stands in ITEM-0003, which is collapsed: its fold opens it.
+    // line/44 stands in ITEM-0003, which is collapsed: its fold opens it.
     expect(requests()).toEqual([{ kind: 'operation', operation: 'toggleCollapsed', on: ['ITEM-0003'] }]);
-    expect(sent.at(-1)).toEqual({ v: 2, type: 'selection', ids: ['REQ-0013'] });
+    expect(sent.at(-1)).toEqual({ v: 2, type: 'selection', ids: ['line/44'] });
   });
 
   it('shows an entry under two collapsed levels by expanding both, and reveals it once the view that follows holds it', () => {
@@ -521,8 +521,8 @@ describe('findings', () => {
 
   it('stays listed when the filter hides its entry', () => {
     show(viewOf({ query: '#security' }));
-    expect(document.querySelector('[data-node="REQ-0013"]')).toBeNull();
-    expect(document.querySelector('.hs-findings')!.textContent).toContain('REQ-0013 is numbered');
+    expect(document.querySelector('[data-node="line/44"]')).toBeNull();
+    expect(document.querySelector('.hs-findings')!.textContent).toContain('line/44 is numbered REQ-0013');
   });
 });
 
