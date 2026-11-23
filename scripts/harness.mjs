@@ -1,7 +1,7 @@
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-// A page that shows the canvas, or the table or the page of boxes of a designer, outside Visual Studio Code, on one example, for a look at the drawing.
+// A page that shows the canvas, or the table, the page of boxes or the page of sections of a designer, outside Visual Studio Code, on one example, for a look at the drawing.
 // The tool type is the one read from definitions/, as in the plug-in.
 await build({ entryPoints: ['src/extension/toolTypes.ts'], bundle: true, format: 'cjs', platform: 'node', outfile: '.debug/core.cjs', logLevel: 'error' });
 const { toolTypesAt } = createRequire(import.meta.url)('../.debug/core.cjs');
@@ -27,4 +27,5 @@ writeFileSync('.debug/harness.html', `<!DOCTYPE html><html><head><meta charset="
 <script>window.postMessage(${JSON.stringify(message)}, '*');</script></body></html>`);
 const { view } = message;
 if (bundle === 'hierarchy') console.log('wrote .debug/harness.html', view.roots.length, 'top levels', view.findings.length, 'findings');
+else if (bundle === 'sections') console.log('wrote .debug/harness.html', view.parts.length, 'parts');
 else console.log('wrote .debug/harness.html', (view.nodes ?? view.elements ?? view.rows).length, 'elements', (view.edges ?? view.relations ?? view.properties).length, type.kind === 'designer' ? 'columns' : 'relations');

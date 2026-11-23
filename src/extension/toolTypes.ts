@@ -4,6 +4,7 @@ import type { EditRequest, ToolType } from '../core/frame/toolType';
 import { plugins } from '../core/plugins/index';
 import type { Scene } from '../core/scene/scene';
 import type { HierarchyRequest, HierarchyView } from '../core/tool/hierarchyView';
+import type { SectionsRequest, SectionsView } from '../core/tool/sectionsView';
 import type { TableRequest, TableView } from '../core/tool/tableView';
 import { toolTypesFrom } from '../core/tool/toolTypeFrom';
 
@@ -11,7 +12,7 @@ import { toolTypesFrom } from '../core/tool/toolTypeFrom';
  * A tool type this plug-in brings: a diagram or a designer read from its definition. A request is
  * the tool type's own, and its `edit` refuses one it does not know.
  */
-export type AnyToolType = ToolType<Scene | TableView | HierarchyView, EditRequest | TableRequest | HierarchyRequest>;
+export type AnyToolType = ToolType<Scene | TableView | HierarchyView | SectionsView, EditRequest | TableRequest | HierarchyRequest | SectionsRequest>;
 
 /** Every file of every folder of `definitions/` in the plug-in's install folder, as bytes by name. */
 function definitionFolders(extensionPath: string): Map<string, Map<string, Uint8Array>> {

@@ -201,6 +201,21 @@ export function interpretOperations(designer: DesignerSpecification, surface: Su
     return quick;
   }
 
+  // A page of sections gives each field the quick change of its value (DESL 7.8.1): set, or emptied without a value.
+  if (surface.kind === 'sections') {
+    for (const part of surface.parts) {
+      const target = part.document ? { target: 'document' } : {};
+      const attributes = part.document ? metamodel.diagram : typesOf(part.type);
+      for (const field of part.fields) {
+        const attribute = attributes[field.attribute];
+        quick[`:${part.type}.${field.attribute}`] = {
+          for: part.document ? scoped('document') : [part.type],
+          params: { value: { type: field.many ? 'string' : attribute?.type ?? 'string' } },
+          actions: [{ set: { [field.attribute]: 'p.value' }, ...target, when: 'has(p.value)' }, { unset: [field.attribute], ...target, when: '!has(p.value)' }],
+        };
+      }
+    }
+  }
   const operations: Record<string, unknown> = { ...quick };
   for (const [id, operation] of Object.entries(designer.operations)) {
     if (isObject(operation)) operations[id] = { ...operation, for: scoped(operation.for), actions: assigning(operation.actions) };
@@ -392,7 +407,8 @@ export function interpretOperations(designer: DesignerSpecification, surface: Su
     }
     return known.get(id);
   };
-  const selectable: readonly string[] = surface.kind === 'table' ? [surface.rows.type] : [surface.levels.type, surface.entries.type];
+  // On a page of sections a row or a record selects its element (DESL 7.8.2); a record of the document selects nothing.
+  const selectable: readonly string[] = surface.kind === 'table' ? [surface.rows.type] : surface.kind === 'hierarchy' ? [surface.levels.type, surface.entries.type] : surface.parts.filter((part) => !part.document).map((part) => part.type);
   const unoffered: Availability = { offered: false, available: false, label: '' };
   const availability: Operations['availability'] = (model, id, selection) => {
     const operation = all.find((candidate) => candidate.id === id);

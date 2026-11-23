@@ -45,7 +45,7 @@ describe('a DESL specification', () => {
     const major = loadDesigner({ ...knowledge, desl: '1.0' });
     expect(major.findings.map((found) => [found.code, found.severity])).toEqual([['desl.specification', 'error']]);
     expect(interpretSurface(major.value.surface, interpretMetamodel(major.value.interpreted).value).value).toBeUndefined();
-    const minor = loadDesigner({ ...knowledge, desl: '0.3' });
+    const minor = loadDesigner({ ...knowledge, desl: '0.5' });
     expect(minor.findings.map((found) => [found.code, found.severity])).toEqual([['desl.specification', 'warning']]);
     expect(minor.value.surface).toEqual(knowledge.surface);
   });

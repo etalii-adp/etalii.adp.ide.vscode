@@ -33,7 +33,7 @@ The files under `examples/` and `fixtures/` are copied unchanged, byte for byte,
 | `fixtures/tools/post-incident-review/edits/` | `etalii.adp` | `specifications/fbl/fixtures/post-incident-review-edits/` | `eba610d55c0c343062a3c672fc135099254ba334` |
 | `fixtures/tools/desl/minimal-table.des` | `etalii.adp` | `specifications/desl/minimal-table.des` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
 | `fixtures/tools/desl/minimal-table.fbl` | `etalii.adp` | `specifications/desl/minimal-table.fbl` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
-| `fixtures/tools/desl/desl.schema.json` | `etalii.adp` | `specifications/desl/desl.schema.json` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
+| `fixtures/tools/desl/desl.schema.json` | `etalii.adp` | `specifications/desl/desl.schema.json` | `e598c604280fd31dcc66e382bd7788dd0a249a4a` |
 | `fixtures/disl/flag-inheritance/service-calls.dis` | `etalii.adp` | `specifications/disl/service-calls.dis` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
 | `fixtures/disl/flag-inheritance/service-calls.did` | `etalii.adp` | `specifications/disl/service-calls.did` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
 | `fixtures/disl/flag-inheritance/service-calls.findings.json` | `etalii.adp` | `specifications/disl/service-calls.findings.json` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |

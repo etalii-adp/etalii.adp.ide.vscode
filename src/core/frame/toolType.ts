@@ -1,5 +1,6 @@
 import type { Scene } from '../scene/scene';
 import type { HierarchyRequest, HierarchyView } from '../tool/hierarchyView';
+import type { SectionsRequest, SectionsView } from '../tool/sectionsView';
 import type { TableRequest, TableView } from '../tool/tableView';
 
 // The frame: what every tool type shares in this host, and the one contract a type implements
@@ -225,8 +226,8 @@ export interface ToolType<View, Request> {
   readonly origin: string;
   /** The tool's kind, as docs/terminology.md has it. */
   readonly kind: 'diagram' | 'designer';
-  /** The page that shows a document: a canvas for a diagram, a table or a page of boxes for a designer (DESL 7). */
-  readonly page: 'canvas' | 'table' | 'hierarchy';
+  /** The page that shows a document: a canvas for a diagram, a table, a page of boxes or a page of sections for a designer (DESL 7). */
+  readonly page: 'canvas' | 'table' | 'hierarchy' | 'sections';
   /** The one display name of the tool type. */
   readonly displayName: string;
   /** What the binding claims: one entry per binding of the definition. */
@@ -272,7 +273,7 @@ export interface ToolType<View, Request> {
 /** A diagram read from its definition. */
 export type DiagramToolType = ToolType<Scene, EditRequest>;
 /** A designer read from its definition. */
-export type DesignerToolType = ToolType<TableView | HierarchyView, TableRequest | HierarchyRequest>;
+export type DesignerToolType = ToolType<TableView | HierarchyView | SectionsView, TableRequest | HierarchyRequest | SectionsRequest>;
 
 /** The identifier a tool type registers under: `etalii.adp.<vendor>.<type>`. */
 export function viewTypeOf(type: Pick<ToolType<unknown, unknown>, 'origin'>): string {

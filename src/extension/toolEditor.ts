@@ -6,6 +6,7 @@ import { linkKind } from '../core/disl/metamodel';
 import { placesOf, type Scene } from '../core/scene/scene';
 import { spliceRanges } from '../core/tool/spliceRanges';
 import type { HierarchyRequest, HierarchyView } from '../core/tool/hierarchyView';
+import type { SectionsRequest, SectionsView } from '../core/tool/sectionsView';
 import type { TableRequest, TableView } from '../core/tool/tableView';
 import type { Findings } from './findings';
 import { UNSAVED, writeExport } from './exports';
@@ -34,7 +35,7 @@ export class OpenTool {
   options: ViewOptions = {};
   selection: readonly string[] = [];
   /** What the canvas was last sent: the tool type's own view, and the version of the document it was made of. */
-  lastView: Scene | TableView | HierarchyView | undefined;
+  lastView: Scene | TableView | HierarchyView | SectionsView | undefined;
   lastVersion: number | undefined;
   readOnly = false;
   /** The text of the registration beside the document, when there is one. */
@@ -96,7 +97,7 @@ function replaceRegistration(edit: vscode.WorkspaceEdit, document: vscode.TextDo
 }
 
 // The name of what a request does, for the undo step: the label of the action it invokes.
-function labelOf(tool: OpenTool, request: EditRequest | TableRequest | HierarchyRequest): string | undefined {
+function labelOf(tool: OpenTool, request: EditRequest | TableRequest | HierarchyRequest | SectionsRequest): string | undefined {
   if (request.kind === 'operation') return tool.type.actions(tool.source, request.on ?? [], tool.options).find((action) => action.id === request.operation)?.label;
   if (request.kind !== 'action') return undefined;
   return tool.type.actions(tool.source, request.id === undefined ? [] : [request.id], tool.options).find((action) => action.id === request.action)?.label;
@@ -421,7 +422,7 @@ export class Tools implements vscode.Disposable {
    * that changes only what the registration keeps outside the history is written at once and is no
    * undo step either.
    */
-  async perform(diagram: OpenTool, request: EditRequest | TableRequest | HierarchyRequest, version?: number, seq?: number): Promise<Performed> {
+  async perform(diagram: OpenTool, request: EditRequest | TableRequest | HierarchyRequest | SectionsRequest, version?: number, seq?: number): Promise<Performed> {
     diagram.performing += 1;
     try {
       return await this.carryOut(diagram, request, version, seq);
@@ -456,7 +457,7 @@ export class Tools implements vscode.Disposable {
   // A request that changes the registration alone, carried out in its turn among the registration's
   // writes: the tool type makes it again from the registration as the write before it left it. Such a
   // change leaves the document clean, so nothing would save the registration later: it is saved now.
-  private registrationOnly(diagram: OpenTool, request: EditRequest | TableRequest | HierarchyRequest, confirmed: boolean): Promise<Performed> {
+  private registrationOnly(diagram: OpenTool, request: EditRequest | TableRequest | HierarchyRequest | SectionsRequest, confirmed: boolean): Promise<Performed> {
     return this.queued(diagram, async (): Promise<Performed> => {
       const outcome = diagram.type.edit(diagram.source, request, diagram.options, confirmed);
       if (outcome.kind === 'refused') return { result: 'refused', sentence: outcome.sentence };
@@ -589,7 +590,7 @@ export class Tools implements vscode.Disposable {
   /** The row each document opened by a link selects once its page is ready, by the document's address. */
   readonly selecting = new Map<string, string>();
 
-  private async carryOut(diagram: OpenTool, request: EditRequest | TableRequest | HierarchyRequest, version: number | undefined, seq: number | undefined): Promise<Performed> {
+  private async carryOut(diagram: OpenTool, request: EditRequest | TableRequest | HierarchyRequest | SectionsRequest, version: number | undefined, seq: number | undefined): Promise<Performed> {
     if (version !== undefined && version !== diagram.document.version) return { result: 'cancelled' };
 
     let confirmed = false;
@@ -772,7 +773,7 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
     diagram.readOnly = await isReadOnly(document);
     diagram.registration = await readText(diagram.registrationUri);
     panel.webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'dist')] };
-    // A diagram is drawn on the canvas, a designer on its table or its page of boxes.
+    // A diagram is drawn on the canvas, a designer on its table, its page of boxes or its page of sections.
     panel.webview.html = webviewHtml(panel.webview, this.context.extensionUri, this.type.page, this.type.displayName);
     this.tools.add(diagram);
     void this.tools.findPeers(diagram);
@@ -813,7 +814,7 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
         return;
       case 'edit': {
         // The request is the tool type's own; its `edit` refuses one it does not know.
-        const performed = await this.tools.perform(diagram, message.request as EditRequest | TableRequest | HierarchyRequest, message.version, message.seq);
+        const performed = await this.tools.perform(diagram, message.request as EditRequest | TableRequest | HierarchyRequest | SectionsRequest, message.version, message.seq);
         diagram.post({ v: 2, type: 'outcome', seq: message.seq, ...performed });
         return;
       }

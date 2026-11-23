@@ -11,7 +11,7 @@ import { checkMentions, interpretMentions } from '../desl/mentions';
 import { interpretOperations, readingOf, type RunStep } from '../desl/operations';
 import { derivedIds, interpretSettings, settingSteps, withSettings, type SettingSteps, type StoredBlocks } from '../desl/settings';
 import { expressionsOf, loadDesigner } from '../desl/specification';
-import { interpretSurface } from '../desl/surface';
+import { documentTypesOf, interpretSurface } from '../desl/surface';
 import { applyChanges, baseCoordinate, interpretBehavior, type Change, type EndPlace, type OfferedEntry, type Outcome, type Point, type Situation, type ViewChange } from '../disl/behavior';
 import { interpretConstraints } from '../disl/constraints';
 import { interpretCoordinates, rulerRows } from '../disl/coordinates';
@@ -49,6 +49,7 @@ import { composedSplices, modelChangesOf, viewStepsOf, type Refused } from './mo
 import { missingPlugins, pluginReferences, type PluginRegistry } from './pluginRegistry';
 import { layoutOf, newRegistration, withLayout, type Corner } from './registrationLayout';
 import { hierarchyReader, type HierarchyRequest, type HierarchyView, type NodeFinding } from './hierarchyView';
+import { sectionsReader, type SectionsRequest, type SectionsView } from './sectionsView';
 import { CREATED, tableReader, withFindings, type RelatedRows, type TableGestures, type TableProperty, type TableRequest, type TableValue, type TableView } from './tableView';
 import { wireIdsOf } from './wireIds';
 
@@ -909,9 +910,12 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
   const metamodel = interpretMetamodel(designer.interpreted);
   const expressions = expressionsOf(designer, metamodel.value);
   const constraints = interpretConstraints(designer.interpreted, metamodel.value, expressions);
-  const surface = interpretSurface(designer.surface, metamodel.value);
+  const language = designer.interpreted.language;
+  const locale = language.defaultLocale ?? 'en';
+  const surface = interpretSurface(designer.surface, metamodel.value, locale, { documentTypes: documentTypesOf(persistence), operations: Object.keys(designer.operations) });
   const tableSurface = surface.value?.kind === 'table' ? surface.value : undefined;
   const hierarchySurface = surface.value?.kind === 'hierarchy' ? surface.value : undefined;
+  const sectionsSurface = surface.value?.kind === 'sections' ? surface.value : undefined;
   const operations = surface.value && interpretOperations(designer, surface.value, metamodel.value, expressions, constraints.value);
   // A document is read as the specification says, also where its surface is one this host cannot show.
   const readBy = readingOf(persistence, metamodel.value, expressions);
@@ -919,19 +923,18 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
   const mentions = interpretMentions(metamodel.value);
   const derive = derivedIds(expressions, persistence);
   const counters = counterRules(persistence);
-  const language = designer.interpreted.language;
   const origin = typeof language.origin === 'string' ? language.origin : language.id;
-  const locale = language.defaultLocale ?? 'en';
   const logic = plugins.views(origin);
   const table = tableSurface && operations && tableReader({ surface: tableSurface, metamodel: metamodel.value, operations: operations.value.all, logic });
   const gestures = hierarchySurface && operations && gesturesOf(hierarchySurface, metamodel.value, operations.value.all, designer.operations);
   const hierarchy = hierarchySurface && operations && gestures && hierarchyReader({ surface: hierarchySurface, metamodel: metamodel.value, operations: operations.value.all, gestures, mentions: mentions.value, logic, locale });
+  const sections = sectionsSurface && operations && sectionsReader({ surface: sectionsSurface, metamodel: metamodel.value, expressions, operations: operations.value.all, mentions: mentions.value });
   const needed = missingPlugins(pluginReferences({}, bindings), plugins);
 
   const ofDefinition: Finding[] = [...loaded.findings, ...metamodel.findings, ...expressions.findings, ...constraints.findings, ...surface.findings, ...(operations?.findings ?? []), ...settings.findings, ...mentions.findings].map(framed);
   const ofPlugins: Finding[] = needed.map((reference) => ({ rule: findingCodes.pluginMissing, severity: 'warning', message: messages.pluginMissing(reference.id), line: 0 }));
   // A document of a surface this host does not lay out opens read-only, with the reason (DESL 11).
-  const unshown = table || hierarchy ? undefined : surface.findings[0]?.message ?? loaded.findings[0]?.message ?? UNREADABLE;
+  const unshown = table || hierarchy || sections ? undefined : surface.findings[0]?.message ?? loaded.findings[0]?.message ?? UNREADABLE;
 
   // ---- a document ----
 
@@ -1013,6 +1016,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     const raw = [
       ...constraints.value.check(model, counted.findings, { file }).filter((finding) => finding.code !== findingCodes.pluginMissing),
       ...(read.unreadable ? [] : checkMentions(model, mentions.value, metamodel.value, file)),
+      ...(read.unreadable || !sections ? [] : sections.findings(model, file)),
       ...ded,
     ];
     const found: NodeFinding[] = raw.map((finding) => ({ ...framed(finding), ...(finding.element === undefined ? {} : { element: finding.element }) }));
@@ -1050,8 +1054,15 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
 
   const baseName = (fileName: string): string => nameOf(fileName).replace(/\.[^.]*$/, '');
 
-  const view = (source: Source, options: ViewOptions = {}): TableView | HierarchyView => {
+  const view = (source: Source, options: ViewOptions = {}): TableView | HierarchyView | SectionsView => {
     const open = opened(source);
+    if (sectionsSurface) {
+      if (!sections || !operations || open.unreadable) return { name: baseName(source.fileName), readOnly: true, notice: open.refusal ?? UNREADABLE, parts: [] };
+      return sections.view(open.model, {
+        name: baseName(source.fileName), readOnly: open.refusal !== undefined, ...(open.refusal === undefined ? {} : { notice: open.refusal }), findings: open.found,
+        availability: (operation, on) => operations.value.availability(open.model, operation, on),
+      });
+    }
     if (hierarchySurface) {
       if (!hierarchy || !operations || open.unreadable) return emptyHierarchy(open.refusal ?? UNREADABLE);
       const session = withSession(open.model, options);
@@ -1105,6 +1116,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
   function fields(source: Source, selection: readonly string[]): Field[] {
     const open = opened(source);
     if (hierarchy) return selection.length === 1 ? hierarchy.fields(open.model, selection[0], open.refusal) : [];
+    if (sections) return selection.length === 1 ? sections.fields(open.model, selection[0], open.refusal) : [];
     if (!table || selection.length !== 1 || !isRow(open.model, selection[0])) return [];
     const row = table.rowsOf(open.model).find((candidate) => candidate.id === selection[0]);
     return table.propertiesOf(open.model).map((property): Field => {
@@ -1346,7 +1358,42 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     }
   }
 
-  function edit(source: Source, request: TableRequest | HierarchyRequest, options: ViewOptions, confirmed: boolean): EditOutcome {
+  /**
+   * A request on a page of sections: an operation, or a field given a value, each one transaction.
+   * An edit that writes the body numbers first what was numbered in memory (DESL 5.3.4), in the
+   * same step, as on a page of boxes.
+   */
+  function editSections(source: Source, request: SectionsRequest, confirmed: boolean): EditOutcome {
+    const open = opened(source);
+    if (!operations || !sections || open.refusal !== undefined) return { kind: 'refused', sentence: open.refusal ?? UNREADABLE };
+    const run = operations.value;
+    const done = (outcome: Outcome): EditOutcome => {
+      if (outcome.refused !== undefined) return { kind: 'refused', sentence: outcome.refused };
+      if (outcome.changes.length > 0 && open.unnumbered.length > 0) {
+        const numbered = numbering(source, open);
+        if ('refused' in numbered) return { kind: 'refused', sentence: numbered.refused };
+        const rest = editSections({ ...source, text: numbered.text }, request, confirmed);
+        if (rest.kind !== 'applied') return rest;
+        return { ...rest, splices: composedSplices([...numbered.edits, ...(rest.splices.length === 0 ? [] : [editOf(rest.splices)])]) };
+      }
+      const made = outcome.created.find((id) => sectionsSurface!.parts.some((part) => !part.document && outcome.after.elements.some((element) => element.id === id && element.type === part.type)));
+      return written(source, open, outcome.changes, made);
+    };
+    switch (request.kind) {
+      case 'operation':
+        return operated(open, request, confirmed, done);
+      case 'setField': {
+        const steps = sections.fieldSteps(open.model, request.id, request.field, request.value);
+        if ('refused' in steps) return { kind: 'refused', sentence: steps.refused };
+        return done(run.runAll(open.model, steps));
+      }
+      default:
+        return { kind: 'refused', sentence: NOT_HERE };
+    }
+  }
+
+  function edit(source: Source, request: TableRequest | HierarchyRequest | SectionsRequest, options: ViewOptions, confirmed: boolean): EditOutcome {
+    if (sectionsSurface) return editSections(source, request as SectionsRequest, confirmed);
     if (hierarchySurface) return editHierarchy(source, request as HierarchyRequest, options, confirmed);
     return editTable(source, request as TableRequest, options, confirmed);
   }
@@ -1535,7 +1582,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
   return {
     origin,
     kind: 'designer',
-    page: hierarchySurface ? 'hierarchy' : 'table',
+    page: sectionsSurface ? 'sections' : hierarchySurface ? 'hierarchy' : 'table',
     displayName: localized(language.label, locale) ?? definition.name,
     claims: claimsOf(bindings),
     claimed: (fileName, text) => claimingBinding(bindings, fileName, text) !== undefined,

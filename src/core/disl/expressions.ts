@@ -298,6 +298,8 @@ export function createExpressions(specification: Specification, metamodel: Metam
   });
   register('formatYearMonth(dyn, string): string', (index: unknown, pattern: string) => formatPattern(number(index), pattern, locale));
   register('formatNumber(dyn, string): string', (value: unknown, pattern: string) => formatNumber(value, pattern));
+  // CEL's `int(timestamp)`, the seconds since the Unix epoch, which the CEL library lacks: a sections list orders rows by it (DESL 7.8.1).
+  register('int(google.protobuf.Timestamp): int', (time: Date) => BigInt(Math.floor(time.getTime() / 1000)));
   register('formatDuration(dyn, string): string', (value: unknown, style: string) => formatDuration(value, style));
 
   register('enumLabel(string, dyn): string', (name: string, key: unknown) => metamodel.enums[name]?.values.find((value) => value.key === key)?.label ?? String(key));
@@ -578,6 +580,20 @@ export function timestampOf(text: string): Date | undefined {
   if (Number.isNaN(time.getTime())) return undefined;
   written.set(time, text);
   return time;
+}
+
+/**
+ * A value an expression gave, as a page shows it (DESL 7.8.4, "its written form"): a duration in
+ * short (`1h 25m`), a timestamp as it was written, a list with its items between commas, and a
+ * number, a string or a bool as itself. Nothing for no value: an absent optional or null.
+ */
+export function shownText(raw: unknown): string | undefined {
+  if (raw instanceof Optional) return raw.hasValue() ? shownText(raw.value()) : undefined;
+  if (raw instanceof Duration) return formatDuration(raw, 'short');
+  const value = plain(raw);
+  if (value === null) return undefined;
+  if (Array.isArray(value)) return value.map((item) => (typeof item === 'object' && item !== null ? JSON.stringify(item) : String(item))).join(', ');
+  return typeof value === 'object' ? JSON.stringify(value) : String(value);
 }
 
 /** The text each duration and timestamp read from a document was written as, so that a copy of it is written the same way. */
