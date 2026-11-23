@@ -79,9 +79,9 @@ describe('a document with entries that cannot be read', () => {
     // docs/disl-support.md, "A key the binding does not read" and "A malformed value, the wording of a reader's sentence":
     // `colour` and `weight` are kept and give no finding, and a value that cannot be read is found on the first line of its entry.
     expect(type.findings(malformed)).toEqual([
-      { rule: 'ghg.unreadable-entry', severity: 'warning', line: 8, message: '`start` of `odd` is not a value of the type `yearMonth`, so it is not read: 19xx-01' },
-      { rule: 'ghg.unreadable-entry', severity: 'warning', line: 8, message: '`row` of `odd` is not a value of the type `int`, so it is not read: two' },
-      { rule: 'ghg.unreadable-entry', severity: 'warning', line: 8, message: '`phases` of `odd` is not a value of the type `int`, so it is not read: many' },
+      { rule: 'ghg.unreadable-entry', severity: 'warning', line: 8, element: 'odd', message: '`start` of `odd` is not a value of the type `yearMonth`, so it is not read: 19xx-01' },
+      { rule: 'ghg.unreadable-entry', severity: 'warning', line: 8, element: 'odd', message: '`row` of `odd` is not a value of the type `int`, so it is not read: two' },
+      { rule: 'ghg.unreadable-entry', severity: 'warning', line: 8, element: 'odd', message: '`phases` of `odd` is not a value of the type `int`, so it is not read: many' },
       { rule: 'ghg.unreadable-entry', severity: 'warning', line: 15, message: 'This entry is not a mapping, so it is kept as it is.' },
     ]);
     // The lines that give no finding are kept through an edit.

@@ -48,6 +48,10 @@ describe('the expressions of a binding', () => {
     ['entry.tags.map(t, t.upperAscii())', 'A,B'],
     ['\'b\' in entry.tags', true],
     ['int(entry.count) + 1', 4n],
+    // The lists extension's distinct (FBL 2.4 by DISL 12): each value once, in the order it first appears.
+    ['(entry.tags + [\'c\', \'a\', \'b\']).distinct()', 'a,b,c'],
+    ['[1, 2, 1, 3, 2].distinct()', '1,2,3'],
+    ['[].distinct()', ''],
   ])('a CEL expression evaluates on an entry: %s', (expression, expected) => {
     const entry = new Map<string, unknown>([['end', '2026-10-01'], ['kind', 'task'], ['count', 3n], ['tags', ['a', 'b']]]);
     const program = compileCel(expression, 'tree');

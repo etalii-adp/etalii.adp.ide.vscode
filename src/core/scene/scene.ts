@@ -399,6 +399,75 @@ const hundredth = (value: number): number => Math.round(value * 100) / 100;
 // A value an item order sorts by: a moment by its time, whatever offset it is written with, and anything else as it is.
 const sortKey = (value: Value | undefined): Value | undefined => (typeof value === 'string' && /^\d{4}-\d\d-\d\dT/.test(value) && !Number.isNaN(Date.parse(value)) ? Date.parse(value) : value);
 
+/**
+ * A line through points with each corner rounded (DISL 6.4, routing `rounded`): straight up to `radius`
+ * before a corner, a quadratic curve round it, never more than half of either side it joins.
+ */
+function roundedThrough(points: readonly { readonly x: number; readonly y: number }[], radius: number): PathCommand[] {
+  const path: PathCommand[] = [{ op: 'M', x: points[0].x, y: points[0].y }];
+  for (let index = 1; index < points.length - 1; index++) {
+    const [before, corner, after] = [points[index - 1], points[index], points[index + 1]];
+    const into = Math.hypot(corner.x - before.x, corner.y - before.y);
+    const out = Math.hypot(after.x - corner.x, after.y - corner.y);
+    const r = Math.min(radius, into / 2, out / 2);
+    if (r <= 0) {
+      path.push({ op: 'L', x: corner.x, y: corner.y });
+      continue;
+    }
+    path.push({ op: 'L', x: corner.x - ((corner.x - before.x) / into) * r, y: corner.y - ((corner.y - before.y) / into) * r });
+    path.push({ op: 'Q', cx: corner.x, cy: corner.y, x: corner.x + ((after.x - corner.x) / out) * r, y: corner.y + ((after.y - corner.y) / out) * r });
+  }
+  const last = points[points.length - 1];
+  path.push({ op: 'L', x: last.x, y: last.y });
+  return path;
+}
+
+/** A quarter of an ellipse as a cubic: the length of each handle, as a fraction of the radius it follows. */
+const quarter = 0.5523;
+
+/**
+ * A cylinder (DISL B.2): its outline, a cap ellipse at each end joined by the sides, and the near edge
+ * of the first cap drawn across it, `cap` the cap's depth as a fraction of the length along
+ * `orientation` (default 0.15, vertical). Each half of an ellipse is two cubics.
+ */
+function cylinder(within: Box, stated: Readonly<Record<string, unknown>>, numberOf: (value: unknown) => number | undefined): PathCommand[] {
+  const horizontal = stated.orientation === 'horizontal';
+  const { x, y, width: w, height: h } = within;
+  const length = horizontal ? w : h;
+  const across = horizontal ? h : w;
+  const fraction = numberOf(stated.cap) ?? 0.15;
+  const r = Math.min(length / 2, fraction > 1 ? fraction : fraction * length) / 2;
+  const half = across / 2;
+  // A point in the cylinder's own axes, `a` along its length and `b` across it, on the canvas.
+  const at = (a: number, b: number): { readonly x: number; readonly y: number } => (horizontal ? { x: x + a, y: y + b } : { x: x + b, y: y + a });
+  // Half the ellipse whose middle is at `a`, from across 0 to across `across`, or back, bulging by `side`.
+  const arc = (a: number, side: number, forward: boolean): PathCommand[] => {
+    const [from, to] = forward ? [0, across] : [across, 0];
+    const sign = forward ? 1 : -1;
+    const top = at(a + side * r, half);
+    const end = at(a, to);
+    const c1 = at(a + side * quarter * r, from);
+    const c2 = at(a + side * r, half - sign * quarter * half);
+    const c3 = at(a + side * r, half + sign * quarter * half);
+    const c4 = at(a + side * quarter * r, to);
+    return [
+      { op: 'C', c1x: c1.x, c1y: c1.y, c2x: c2.x, c2y: c2.y, x: top.x, y: top.y },
+      { op: 'C', c1x: c3.x, c1y: c3.y, c2x: c4.x, c2y: c4.y, x: end.x, y: end.y },
+    ];
+  };
+  const start = at(r, 0);
+  const far = at(length - r, across);
+  return [
+    { op: 'M', x: start.x, y: start.y },
+    ...arc(r, -1, true),
+    { op: 'L', x: far.x, y: far.y },
+    ...arc(length - r, 1, false),
+    { op: 'Z' },
+    { op: 'M', x: start.x, y: start.y },
+    ...arc(r, 1, true),
+  ];
+}
+
 /** How finely a superellipse is walked. A multiple of four, so the middle of each side is a step. */
 const superellipseSteps = 64;
 
@@ -965,6 +1034,7 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
         const commands: PathCommand[] = [...points.map(([x, y], index): PathCommand => ({ op: index === 0 ? 'M' : 'L', x: within.x + x, y: within.y + y })), { op: 'Z' }];
         return { kind: 'path', name: called, box: within, commands };
       }
+      if (!definition && called === 'cylinder') return { kind: 'path', name: called, box: within, commands: cylinder(within, typeof shape === 'object' && 'type' in shape ? shape.params ?? {} : {}, (value) => number(bound(value, self))) };
       if (called === 'ellipse') return { kind: 'ellipse', name: called, box: within };
       if (called === 'circle') {
         const across = Math.min(within.width, within.height);
@@ -1338,12 +1408,15 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
       edges.push({ ...common, from: start, to: end, path: [{ op: 'M', x: start.x, y: start.y }, { op: 'Q', cx: control.x, cy: control.y, x: end.x, y: end.y }] });
       continue;
     }
-    if (routing === 'orthogonal') {
+    if (routing === 'orthogonal' || routing === 'rounded') {
       // At right angles, as the end it leaves faces: away to halfway, across, and on into the other end.
       const down = from.normal.x === 0;
       const middle = down ? (from.y + to.y) / 2 : (from.x + to.x) / 2;
       const [first, second] = down ? [{ x: from.x, y: middle }, { x: to.x, y: middle }] : [{ x: middle, y: from.y }, { x: middle, y: to.y }];
-      edges.push({ ...common, from, to, path: [{ op: 'M', x: from.x, y: from.y }, { op: 'L', ...first }, { op: 'L', ...second }, { op: 'L', x: to.x, y: to.y }] });
+      const path: PathCommand[] = routing === 'rounded'
+        ? roundedThrough([from, first, second, to], typeof own.line.cornerRadius === 'number' ? own.line.cornerRadius : 6)
+        : [{ op: 'M', x: from.x, y: from.y }, { op: 'L', ...first }, { op: 'L', ...second }, { op: 'L', x: to.x, y: to.y }];
+      edges.push({ ...common, from, to, path });
       continue;
     }
     if (routing !== 'bezier') {

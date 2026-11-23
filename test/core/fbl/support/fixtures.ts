@@ -10,6 +10,7 @@ import { FblModel, type FblElement, type FblOptions } from '../../../../src/core
 import type { ChangePosition, ModelChange } from '../../../../src/core/fbl/planning/modelChange';
 import type { PlanResult } from '../../../../src/core/fbl/planning/plan';
 import { OpenRegistration } from '../../../../src/core/fbl/registration/openRegistration';
+import { readFolder } from '../../../../src/core/fbl/routing/folderReading';
 import type { FblSplice } from '../../../../src/core/fbl/splice';
 import { behaviorTreeView } from './behaviorTree';
 import { expectRequirementRead, HierarchicalRequirementDocument, requirementOptions } from './hierarchicalRequirement';
@@ -92,6 +93,11 @@ export class Fixture {
     const hash = file.binding.lastIndexOf('#');
     this.bindingPath = hash > 0 ? located(this.folder, file.binding.slice(0, hash)) : join(this.folder, 'fixture.json');
     this.bindingName = file.binding.slice(hash + 1);
+  }
+
+  /** The input's path, for a folder subject whose registration sits in the folder it reads. */
+  get inputPathForFolder(): string {
+    return this.inputPath;
   }
 
   /** A registration (an `.adp` input) is not read through a binding. */
@@ -189,6 +195,12 @@ export class Subject {
   private static registration(fixture: Fixture, binding: FblBinding): Subject {
     const registration = OpenRegistration.open(fixture.input, binding);
     const subject = new Subject(binding, undefined, registration);
+    if (binding.body.isFolder) {
+      // A folder subject's registration sits in the folder it reads (FBL 10.4), file by file (FBL 10.3).
+      const model = readFolder(binding, dirname(fixture.inputPathForFolder), nodeFiles, fixture.options);
+      subject.read = new FblModel(model.elements, [...model.findings, ...registration.findings(fixture.inputName)], false);
+      return subject;
+    }
     const body = fixture.bodyOf(registration);
     if (!body) return subject;
     const model = OpenBody.open(body.bytes, binding, { ...fixture.options, fileName: body.name }).model;
@@ -375,10 +387,14 @@ export function expectRead(model: FblModel, read: Read, name: string, view?: (el
     }
   }
   if (!read.findings) return;
+  // A finding stated with its element (`x-element`) is the tool type's, from its specification's
+  // constraints, for a host to replay through the tool type (test/core/tool/sloMap.test.ts); the
+  // reading through the binding reports none of them.
+  const fbl = read.findings.filter((finding) => !Object.hasOwn(finding, 'x-element'));
   // A fixture that lists no finding says the reading has none: a reference that does not resolve,
   // an entry without its id, would each be one.
-  if (read.findings.length === 0) expect(model.findings.map((finding) => `${finding.code} ${finding.message}`), `${name}: the fixture expects no finding`).toEqual([]);
-  for (const finding of read.findings) {
+  if (fbl.length === 0) expect(model.findings.map((finding) => `${finding.code} ${finding.message}`), `${name}: the fixture expects no finding of the binding`).toEqual([]);
+  for (const finding of fbl) {
     const matching = model.findings.filter((candidate) => candidate.code === finding.rule && (finding.line === undefined || candidate.location.line === finding.line));
     expect(matching.length, `${name}: a finding ${finding.rule}${finding.line === undefined ? '' : ` on line ${finding.line}`}`).toBeGreaterThan(0);
   }

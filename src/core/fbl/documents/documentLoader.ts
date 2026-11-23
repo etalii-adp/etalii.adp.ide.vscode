@@ -240,9 +240,13 @@ function readBody(json: JsonNode, pointer: string, problems: LoadProblem[]): Bod
   const kind = str(json, 'kind');
   if (kind !== 'file' && kind !== 'folder') problems.push(error(`${pointer}/kind`, messages.bodyKind));
   const recognise = memberOf(json, 'recognise');
+  const family = parseFamily(str(json, 'family'));
+  // FBL 0.22: which documents of a YAML stream are bound; only a yaml body has a stream (14.1).
+  const stream = str(json, 'stream');
+  if (stream !== undefined && (family !== 'yaml' || (stream !== 'first' && stream !== 'documents'))) problems.push(error(`${pointer}/stream`, messages.bodyStream));
   return {
     isFolder: kind === 'folder',
-    family: parseFamily(str(json, 'family')),
+    family,
     alsoRead: strings(json, 'alsoRead').flatMap((name) => parseFamily(name) ?? []),
     recogniseAll: strings(recognise, 'all'),
     recogniseAny: strings(recognise, 'any'),
@@ -250,6 +254,7 @@ function readBody(json: JsonNode, pointer: string, problems: LoadProblem[]): Bod
     files: array(json, 'files').map((file) => ({ name: str(file, 'name'), glob: str(file, 'glob') ?? '', family: parseFamily(str(file, 'family')), readOnly: bool(file, 'readOnly') })),
     ignore: strings(json, 'ignore'),
     settle: integer(memberOf(json, 'settle')) ?? 400,
+    stream: stream === 'documents' && family === 'yaml' ? 'documents' : 'first',
   };
 }
 

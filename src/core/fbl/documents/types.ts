@@ -68,6 +68,8 @@ export interface BodySettings {
   readonly files: readonly FileRule[];
   readonly ignore: readonly string[];
   readonly settle: number;
+  /** *(FBL 0.22)* `yaml`: `documents` binds every document of the stream as the items of the root; `first`, the default, the first alone. */
+  readonly stream: 'first' | 'documents';
 }
 
 export interface FileRule {
@@ -341,7 +343,7 @@ export const claimsOf = (claims: Partial<Claims> = {}): Claims => ({
 
 /** A body's settings with every member a document may leave out. */
 export const bodyOf = (body: Partial<BodySettings> = {}): BodySettings => ({
-  isFolder: false, alsoRead: [], recogniseAll: [], recogniseAny: [], recogniseNone: [], files: [], ignore: [], settle: 400, ...body,
+  isFolder: false, alsoRead: [], recogniseAll: [], recogniseAny: [], recogniseNone: [], files: [], ignore: [], settle: 400, stream: 'first', ...body,
 });
 
 /** A binding with every member a document may leave out, for a caller that makes one without a document. */

@@ -44,6 +44,14 @@ const pinned = [
     why: 'the value stream map, etalii.adp spec 090',
     files: (file) => /^specifications\/fbl\/fixtures\/value-stream-map-[^/]+\//.test(file),
   },
+  // openslo-slo: etalii.adp spec 090, the read, edit and folder fixtures the SLO map's definition
+  // declares a host must pass, with the definition and OpenSLO's examples they name.
+  {
+    name: 'openslo-slo',
+    commit: '88fc48e6aa339ca0efd4ac1a11094293c4cef18f',
+    why: 'the SLO map, etalii.adp spec 090',
+    files: (file) => /^specifications\/fbl\/fixtures\/openslo-slo-[^/]+\//.test(file),
+  },
 ];
 if (!adp || !standalone) {
   console.error('Usage: node scripts/sync-fbl.mjs <path to etalii.adp> <path to etalii.adp.ide.standalone> [<etalii.adp ref>] [<standalone ref>]');

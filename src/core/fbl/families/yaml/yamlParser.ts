@@ -84,6 +84,60 @@ export class YamlParser {
     return root;
   }
 
+  /**
+   * Every document of the stream, as the items of a sequence at the root (FBL 0.22, 4.3). A
+   * document's own span runs from its `---` line, or the directive lines right above it, to the
+   * next document's; a first document without a `---` line, and the comments and blank lines before
+   * the first `---` line, start at the body's first byte. A document with no content is an item
+   * whose value is empty, which CEL sees as null.
+   */
+  parseStream(): TreeValue {
+    const lines = this.text.lines;
+    const markers: number[] = [];
+    for (let i = 0; i < lines.length; i++) if (this.isMarker(i, '---')) markers.push(i);
+    const isDirective = (line: number): boolean => {
+      const p = this.firstNonSpace(line);
+      return p < this.contentEnd(line) && this.bytes[p] === code('%') && p === this.lineStart(line);
+    };
+    // A document before the first `---` line, when a line there has content.
+    const before = markers.length > 0 ? markers[0] : lines.length;
+    let implicit = false;
+    for (let i = 0; i < before && !implicit; i++) implicit = this.isSignificant(i) && !isDirective(i) && !this.isMarker(i, '...');
+    const starts: { readonly span: number; readonly content: number }[] = [];
+    if (implicit) starts.push({ span: 0, content: 0 });
+    markers.forEach((marker, index) => {
+      let first = marker;
+      while (first > 0 && isDirective(first - 1)) first--;
+      // The comments and blank lines before the first `---` belong to the first document.
+      const span = index === 0 && !implicit ? 0 : first;
+      starts.push({ span, content: marker + 1 });
+    });
+    const sequence = new TreeValue('sequence', 'block', { start: this.lineStart(0), end: this.text.length });
+    starts.forEach((start, index) => {
+      const spanEnd = index + 1 < starts.length ? lines[starts[index + 1].span].start : this.text.length;
+      const lastLine = index + 1 < starts.length ? starts[index + 1].span : lines.length;
+      this.anchors.clear();
+      this.line = start.content;
+      this.end = lastLine;
+      for (let i = start.content; i < lastLine; i++) {
+        if (this.isMarker(i, '...')) {
+          this.end = i;
+          break;
+        }
+      }
+      const contentStart = start.content < lines.length ? lines[start.content].start : this.text.length;
+      const value = this.parseBlockNode(-1, false) ?? empty(contentStart);
+      const rest = this.nextSignificant(this.line);
+      if (rest < this.end) throw new YamlError(this.firstNonSpace(rest), messages.yamlNotContinued);
+      const own = { start: start.span === 0 ? this.lineStart(0) : lines[start.span].start, end: spanEnd };
+      const entry = new TreeEntry(own, undefined, 0, value);
+      entry.lineSpan = own;
+      sequence.entries.push(entry);
+    });
+    this.documentEnd = this.text.length;
+    return sequence;
+  }
+
   // ---- lines ----
 
   private lineStart(line: number): number {

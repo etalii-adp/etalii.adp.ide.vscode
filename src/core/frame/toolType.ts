@@ -16,6 +16,8 @@ export interface Finding {
   readonly severity: Severity;
   readonly message: string;
   readonly line: number;
+  /** The id of the element it is about, where it is about one. */
+  readonly element?: string;
 }
 
 /** A rectangle in canvas units. */

@@ -29,9 +29,21 @@ describe('the value stream map', () => {
     const scene = type.view(source, {});
     expect(scene.findings).toEqual([]);
     const types = new Set(scene.nodes.map((node) => node.type));
-    expect([...types].sort()).toEqual(['Outcome', 'Step', 'Trigger']);
+    // The two summaries and the comparison are derived nodes (DISL 4.11.2), drawn from the steps and flows.
+    expect([...types].sort()).toEqual(['Comparison', 'Outcome', 'Step', 'Summary', 'Trigger']);
     // Ids by kind: the steps of the future state go on from those of the current one.
     expect(scene.nodes.filter((node) => node.type === 'Step').map((node) => node.id)).toEqual(Array.from({ length: 12 }, (_, i) => `s${i + 1}`));
+  });
+
+  it('draws each state\'s totals and the comparison of the two, computed and not editable', () => {
+    const source = example('request-fulfilment');
+    const scene = type.view(source, {});
+    const label = (id: string): string | undefined => scene.nodes.find((node) => node.id === id)?.labels[0]?.text;
+    expect(label('summary-current')).toBe('Lead time 35.95 h\nProcess time 3.18 h\nFlow efficiency 8.8 %\nHand-offs 3');
+    expect(label('summary-future')).toBe('Lead time 10.23 h\nProcess time 3.18 h\nFlow efficiency 31 %\nHand-offs 3');
+    expect(label('comparison')).toBe('Current → future (difference)\nLead time 35.95 h → 10.23 h (-25.72 h)\nProcess time 3.18 h → 3.18 h (0 h)\nFlow efficiency 8.8 % → 31 %\nHand-offs 3 → 3 (0)');
+    expect(type.fields(source, ['summary-current']).every((field) => field.readOnly !== undefined)).toBe(true);
+    expect(type.edit(source, { kind: 'rename', id: 'comparison', text: 'x' }, {}, false).kind).toBe('refused');
   });
 
   it('labels a step with its name, its performer and its times, written short', () => {

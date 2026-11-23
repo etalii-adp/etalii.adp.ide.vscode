@@ -18,10 +18,10 @@ import { interpretCoordinates, rulerRows } from '../disl/coordinates';
 import { createExpressions, type Scope } from '../disl/expressions';
 import { createTexts, formFor, interpretForms, type FormItem, type Subject } from '../disl/forms';
 import { interpretLayout } from '../disl/layout';
-import { defaultOf, derivedRelations, interpretMetamodel, isA, isRelation, linkKind, type DerivedRelation } from '../disl/metamodel';
+import { defaultOf, derivedRelations, interpretMetamodel, isA, isRelation, linkKind, withDerivedNodes, type DerivedRelation } from '../disl/metamodel';
 import { emptyModel, type Finding as Found, type Model, type Value } from '../disl/model';
 import { edgeNotation, interpretNotation, nodeNotation, styleOf, type GestureRefusals, type Notation, type Paint } from '../disl/notation';
-import { entryOf, foldsOf, interpretPersistence, momentAttributes, naturalId, newId, readModel, typeIds, viewEntryIds, type StoredView } from '../disl/persistence';
+import { derivedIds as worldIds, entryOf, foldsOf, interpretPersistence, momentAttributes, naturalId, newId, readModel, typeIds, viewEntryIds, type StoredView } from '../disl/persistence';
 import { isCel, isObject, loadSpecification, localized, type LocalizedText } from '../disl/specification';
 import { groupsIn, interpretToolbox, type ToolGroup } from '../disl/toolbox';
 import { interpretViewpoints } from '../disl/viewpoints';
@@ -69,7 +69,7 @@ const controls: Readonly<Record<string, Control>> = {
 };
 
 /** A finding of the interpreter or the library as the frame's: its line counted from zero. */
-const framed = (found: Found): Finding => ({ rule: found.code, severity: severities[found.severity] ?? 'warning', message: found.message, line: Math.max(0, found.location.line - 1) });
+const framed = (found: Found): Finding => ({ rule: found.code, severity: severities[found.severity] ?? 'warning', message: found.message, line: Math.max(0, found.location.line - 1), ...(found.element === undefined ? {} : { element: found.element }) });
 
 /** An end as a request names it: `<part>/<side>/<at>`. */
 function endOf(text: string | undefined): EndPlace | undefined {
@@ -184,6 +184,8 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     readonly derived: readonly DerivedRelation[];
     /** The corners the registration keeps, by id, where pins are kept beside the document. */
     readonly corners: Readonly<Record<string, Corner>>;
+    /** The ids its types' own rules derive over the model, by the place of their entries, which the body is read again with. */
+    readonly named?: ReadonlyMap<string, string>;
   }
 
   // What the FBL library asks of the tool type's specification: the id of an entry of bound view data, and which attributes hold a moment (FBL 5.3, 6.3).
@@ -191,9 +193,21 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   const ownIds = typeIds(persistence.value, expressions);
   const deriveId = (request: IdRequest): string | undefined => viewIds(request) ?? ownIds(request);
   const reading = new Map(bindings.map((binding) => [binding, { deriveId, timeAttributes: momentAttributes(binding, metamodel.value, persistence.value) }]));
-  const bodyOf = (binding: FblBinding, source: Source): OpenBody | PluginBody => {
+  const bodyOf = (binding: FblBinding, source: Source, named?: ReadonlyMap<string, string>): OpenBody | PluginBody => {
     const bytes = encode(source.text);
-    return binding.plugin ? PluginBody.open(bytes, binding, plugins.persistence(binding.plugin.plugin), source.fileName) : OpenBody.open(bytes, binding, reading.get(binding));
+    if (binding.plugin) return PluginBody.open(bytes, binding, plugins.persistence(binding.plugin.plugin), source.fileName);
+    const options = reading.get(binding);
+    return OpenBody.open(bytes, binding, named === undefined ? options : { ...options, deriveId: (request: IdRequest) => named.get(`${request.rule}@${request.line}`) ?? deriveId(request) });
+  };
+  // A type's own derived rule (DISL 11.5.2, `ids.types`) may read what only the model has, such as its
+  // parent and its place among its siblings: such ids are derived over the model read first, and the
+  // document is read again with them, each by its entry's place, `<rule>@<line>` (FBL 5.3).
+  const perType = persistence.value.ids.strategy === 'derived' && Object.keys(persistence.value.ids.types ?? {}).length > 0;
+  const namedOver = (read: FblModel, model: Model): ReadonlyMap<string, string> | undefined => {
+    if (!perType) return undefined;
+    const { renamed } = worldIds(persistence.value, expressions, model);
+    if (renamed.size === 0) return undefined;
+    return new Map(read.elements.flatMap((element) => (renamed.has(element.id) ? [[`${element.rule}@${element.line}`, renamed.get(element.id)!] as const] : [])));
   };
 
   // The frame asks several things of one text in a row: the last reading is kept.
@@ -201,22 +215,35 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   function opened(source: Source): Open {
     if (last && last.source.text === source.text && last.source.fileName === source.fileName && last.source.registration === source.registration) return last.open;
     const binding = claimingBinding(bindings, source.fileName, source.text) ?? bindings[0];
-    const body = bodyOf(binding, source);
     const bytes = encode(source.text);
     const entryText = (span: { readonly start: number; readonly end: number }): string => decode(bytes.subarray(span.start, span.end)).replace(/[\r\n]+$/, '');
-    const read = body.model;
-    const reread = readingLogic?.reread ? { elements: readingLogic.reread(read.elements, entryText), findings: read.findings, unreadable: read.unreadable } : read;
-    const typed = readModel(reread, binding, metamodel.value, persistence.value, readingLogic?.unreadable ? (entry) => readingLogic.unreadable!(entryText(entry.ownSpan)) : undefined);
-    const model = read.unreadable ? emptyModel : typed.value;
+    const typedOf = (from: FblModel) => {
+      const reread = readingLogic?.reread ? { elements: readingLogic.reread(from.elements, entryText), findings: from.findings, unreadable: from.unreadable } : from;
+      return readModel(reread, binding, metamodel.value, persistence.value, readingLogic?.unreadable ? (entry) => readingLogic.unreadable!(entryText(entry.ownSpan)) : undefined);
+    };
+    let body = bodyOf(binding, source);
+    let read = body.model;
+    let typed = typedOf(read);
+    const named = read.unreadable ? undefined : namedOver(read, typed.value);
+    if (named !== undefined && named.size > 0) {
+      body = bodyOf(binding, source, named);
+      read = body.model;
+      typed = typedOf(read);
+    }
+    // The nodes the derived node types compute (DISL 4.11.2) are part of the model, before the derived relations, which may end at them.
+    const nodes = read.unreadable ? { value: emptyModel, findings: [] } : withDerivedNodes(metamodel.value, expressions, typed.value);
+    const model = nodes.value;
     const derived = derivedRelations(metamodel.value, expressions, model);
     // The reader of a binding says itself that its plugin is missing; it is said once, with the others.
-    const checked = constraints.value.check(model, typed.findings, { file: source.fileName.slice(Math.max(source.fileName.lastIndexOf('/'), source.fileName.lastIndexOf('\\')) + 1) }).filter((finding) => finding.code !== findingCodes.pluginMissing);
+    // The derived relations are part of the diagram a constraint reads (DISL 4.11), though no part of the model that is written.
+    const checked = constraints.value.check(derived.value.length === 0 ? model : { ...model, relations: [...model.relations, ...derived.value] }, typed.findings, { file: source.fileName.slice(Math.max(source.fileName.lastIndexOf('/'), source.fileName.lastIndexOf('\\')) + 1) }).filter((finding) => finding.code !== findingCodes.pluginMissing);
     const found = [
       ...(readingLogic?.order ? readingLogic.order(checked, model) : checked),
+      ...nodes.findings,
       ...derived.findings,
     ].map(framed);
     const gate = needed.length > 0 ? messages.pluginMissing(needed[0].id) : body.isReadOnly && !read.unreadable ? binding.readOnly || messages.readOnlyFile : undefined;
-    const kept = { view: typed.view, stale: typed.stale, ...(typed.entries ? { entries: typed.entries } : {}), derived: derived.value, corners: keptBeside ? layoutOf(source.registration) : {} };
+    const kept = { view: typed.view, stale: typed.stale, ...(typed.entries ? { entries: typed.entries } : {}), derived: derived.value, corners: keptBeside ? layoutOf(source.registration) : {}, ...(named === undefined ? {} : { named }) };
     // What is said of a document that cannot be read is the definition's sentence for one that cannot be edited, else the reader's finding.
     const readOnly = behavior.value.message('std.readOnly', emptyModel);
     const unread = readOnly ?? found[0]?.message ?? UNREADABLE;
@@ -405,7 +432,8 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       const marks = item.widget === 'slider' && Array.isArray(item.widgetOptions.marks) ? (item.widgetOptions.marks as unknown[]).flatMap((mark) => (isObject(mark) && typeof mark.label === 'string' ? [mark.label] : [])) : [];
       const options = marks.length > 0 ? marks : item.options(on).map((option) => option.label);
       const locked = item.readOnly(on);
-      const readOnly = open.refusal ?? (locked.readOnly ? locked.reason ?? NO_ROW : undefined);
+      // Every attribute of a derived node is read-only (DISL 4.11.2), with its reason.
+      const readOnly = open.refusal ?? element?.derived?.reason ?? (locked.readOnly ? locked.reason ?? NO_ROW : undefined);
       return {
         id: wire.property(item.rowId(on)), label: item.label(on), group, control: controls[item.widget] ?? 'text', value: item.display(on),
         ...(options.length > 0 ? { options } : {}), ...(readOnly === undefined ? {} : { readOnly }),
@@ -533,7 +561,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     const written = modelSteps.length + viewSteps.length > 0;
     const steps = [...(written ? [...open.stale].reverse().map((id) => ({ kind: 'remove' as const, id })) : []), ...modelSteps, ...viewSteps];
     // Each step is planned against the body the one before left; FBL's own history is not used (research R5).
-    const body = steps.length > 0 ? bodyOf(open.binding, source) : undefined;
+    const body = steps.length > 0 ? bodyOf(open.binding, source, open.named) : undefined;
     const edits: Edit[] = [];
     // Values set on entries that are each named once touch no byte of one another: they are planned against the one body,
     // which is read once and not once for every step, and are one edit.
@@ -615,6 +643,14 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     const refused = (sentence: string): EditOutcome => ({ kind: 'refused', sentence });
     const done = (outcome: Outcome): EditOutcome => carriedOut(source, open, outcome, viewpoint, options);
     const nodeOf = (id: string) => sceneOf(open, options).nodes.find((node) => node.id === id);
+
+    // A gesture that would change a derived node, or join a relation to one, is refused with its reason (DISL 4.11.4);
+    // moving, sizing, folding and pinning it change the view alone.
+    const derivedNode = (id: string | undefined) => (id === undefined ? undefined : elementOf(model, id)?.derived);
+    const changed = request.kind === 'rename' || request.kind === 'setField' || request.kind === 'reparent' || (request.kind === 'action' && !viewing)
+      ? derivedNode(request.id)
+      : request.kind === 'connect' ? derivedNode(request.from) ?? derivedNode(request.to) : undefined;
+    if (changed) return refused(changed.reason);
 
     // A point of a viewpoint that places by layout, on the axes of the viewpoint it varies: what is created is placed there.
     const inBase = (point: Point): Point => {

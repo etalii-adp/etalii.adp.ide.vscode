@@ -50,6 +50,7 @@ export { bare, candidates, readings, suggests, suggestsReading } from './routing
 export { markerMatches } from './routing/markerEvaluator';
 export { globMatches } from './routing/glob';
 export { folderFiles, recogniseFolder } from './routing/folderSubject';
+export { readFolder } from './routing/folderReading';
 export type { FolderFile } from './routing/folderSubject';
 export { produceTemplate, replacePlaceholders, templateKey } from './routing/templateWriter';
 

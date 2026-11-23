@@ -65,7 +65,7 @@ const variablesOf: Record<CelContext, readonly string[]> = {
 
 const stepBudget = 100_000;
 const macros = new Set(['all', 'exists', 'exists_one', 'filter', 'map']);
-const functions = new Set(['size', 'matches', 'startsWith', 'endsWith', 'contains', 'replace', 'lowerAscii', 'upperAscii', 'int', 'double', 'string', 'type']);
+const functions = new Set(['size', 'matches', 'startsWith', 'endsWith', 'contains', 'replace', 'lowerAscii', 'upperAscii', 'int', 'double', 'string', 'type', 'distinct']);
 const minInt = -(2n ** 63n);
 const maxInt = 2n ** 63n - 1n;
 
@@ -415,6 +415,11 @@ function call(node: CelNode & { kind: 'call' }, run: Run, locals: Local | undefi
       }
       return asDouble(receiver);
     case 'string': return format(receiver);
+    // The lists extension (DISL 12, which FBL 2.4 takes): each value once, as it first appears.
+    case 'distinct': {
+      if (!Array.isArray(receiver)) throw new CelException(messages.celFunctionNotSupported(node.name));
+      return receiver.filter((item, index) => receiver.findIndex((earlier) => equal(earlier, item)) === index);
+    }
     case 'type': return typeOf(receiver);
     default: throw new CelException(messages.celFunctionNotSupported(node.name));
   }

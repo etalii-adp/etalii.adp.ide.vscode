@@ -955,6 +955,70 @@
         "diagrams/value-stream-map.dis": "d3791cf9aa539cf1279f3e80c3270dc8d80f9da313dc7b4be8cc72ba1bffcf86",
         "diagrams/value-stream-map.fbl": "57b361f1139efa8639de4b886baad2eefe22472ad9ce18ddd09aa06bc163d483"
       }
+    },
+    {
+      "name": "openslo-slo",
+      "repository": "https://github.com/etalii-adp/etalii.adp",
+      "commit": "88fc48e6aa339ca0efd4ac1a11094293c4cef18f",
+      "licence": "Apache-2.0",
+      "from": "specifications/fbl/",
+      "to": "fixtures/fbl/conformance/",
+      "files": {
+        "fixtures/openslo-slo-edits/checkout.yaml": "ef96865bc469157b5b780cd1bf6a85fe26a32f4edfdde66b903039bbc66b6662",
+        "fixtures/openslo-slo-edits/fixture.json": "9febcaad44dee1974d7c5daf91165f0adf3489a77267e4674d9ffdce858f1cac",
+        "fixtures/openslo-slo-folder/fixture.json": "9c8933096cc014a3bb9598e9e77e623b30b2379a7eec1a9aa4768caac79282ea",
+        "fixtures/openslo-slo-folder/shop/README.md": "5ff70b396b1e79c56a90ca15d37877b45640adc40f98aadc4e745f2d91523f58",
+        "fixtures/openslo-slo-folder/shop/openslo.adp": "63522c91fe1d7935ea8a00ee855c113a80ec2385d45eee178e80ac68cadb4fac",
+        "fixtures/openslo-slo-folder/shop/services/web-shop.yaml": "9895ce917be474bf16606e11b518065d2530f004d8c35e34f021cb807b96ff25",
+        "fixtures/openslo-slo-folder/shop/slis/search-latency.yaml": "1a81a4b51448fa0f61aebb339cba5c7bd91210b971a3cbbe49b9d5f3bf7e8969",
+        "fixtures/openslo-slo-folder/shop/slos/search-slo.yaml": "206f9118a58a27da1b4a2345c05f940d703c413ab859941254d0dff904371b06",
+        "fixtures/openslo-slo-read/findings-clean/fixture.json": "e75e8f931fd8f2165391aca428f849a32fa65a94be9e52e86ff7130084395ec9",
+        "fixtures/openslo-slo-read/findings-clean/stream.yaml": "8f6f26efdc9f37f8568087173ba1338bb4fec8afc066dc16b4c8412ebdc4984e",
+        "fixtures/openslo-slo-read/findings-conflicting-windows/fixture.json": "cf1fec9815672064354f8aff7de98c7ecc405c56755b08fa1e89538b6b7a129a",
+        "fixtures/openslo-slo-read/findings-conflicting-windows/stream.yaml": "0b4997eb3d1358d5a3bd17153f0193d575f729cdd218425e4feeaaad4c5a2208",
+        "fixtures/openslo-slo-read/findings-indicator-twice/fixture.json": "8056fd4ccca7128fda907fd3bb79dc2abfb5384e7c4af242ab4bf9dbdde458bb",
+        "fixtures/openslo-slo-read/findings-indicator-twice/stream.yaml": "88592f8adbe36297f18419a73674d2113d11e501d71a0f5669e613835ebc883f",
+        "fixtures/openslo-slo-read/findings-missing-reference/fixture.json": "a04e6e69c7f4795f3a91c4675306f9afec4458db80635dbb2a2313ececc5ec7b",
+        "fixtures/openslo-slo-read/findings-missing-reference/stream.yaml": "f758a9f7cdb6241530f224397b8cd19dae336103c15c1c4af344b7411073819f",
+        "fixtures/openslo-slo-read/findings-name/fixture.json": "1431e03091d988bb312546db9713a35358201072cc7a11b5f5ab162c2393d951",
+        "fixtures/openslo-slo-read/findings-name/stream.yaml": "d75b7cd2c0b68b60b9c8d9b78014616132f27c75c323f01fea9365c9a546322e",
+        "fixtures/openslo-slo-read/findings-no-alerting/fixture.json": "acf725d397341be43880d42981bbb76403e19b098e4e8e5a7f298ae29f6e4243",
+        "fixtures/openslo-slo-read/findings-no-alerting/stream.yaml": "0910ce23e0e01345d5cb07ec39af1421ea11ba2e1bedaec64ba935e66b50f5cb",
+        "fixtures/openslo-slo-read/findings-target-range/fixture.json": "72ce94c245fe950e33017dc9634610ce017a4fccc4830f47bda2fffa474e958f",
+        "fixtures/openslo-slo-read/findings-target-range/stream.yaml": "e11ad9b04992ecd13842de46a72c5a145e0b05abf426626b15a9d1a5dc043662",
+        "fixtures/openslo-slo-read/findings-target-twice/fixture.json": "01e88c73b91c17ac33731f2ecae953ef6cc9e9600e737cac23d484ef5c6513d1",
+        "fixtures/openslo-slo-read/findings-target-twice/stream.yaml": "1c9456404757713fff1f6267afd130291a8717de1fd92fd54f5410f88d4f61a3",
+        "fixtures/openslo-slo-read/findings-timeslice-fields/fixture.json": "c72940763f869681f281c34b8c4bf1137b8f6da21b7dbe87720ab6db5a32056f",
+        "fixtures/openslo-slo-read/findings-timeslice-fields/stream.yaml": "41af4686fa10b71d10f78d418fdbb6cae0e6788c72efd55bc5991b02412266f2",
+        "fixtures/openslo-slo-read/findings-unknown-kind/fixture.json": "e76c5241f2464d25827ec86ad41e0c25b7b38203d1cf3540928e2fd5e3c14cca",
+        "fixtures/openslo-slo-read/findings-unknown-kind/stream.yaml": "c005d02ccea20927f0557ccfbaff0c471373e7d0f68f4e5ecb4723ca42121169",
+        "fixtures/openslo-slo-read/findings-version/fixture.json": "598cecfc64f40dbe25b164f5a77a1e7608afa017053b40773e98f01a754da634",
+        "fixtures/openslo-slo-read/findings-version/stream.yaml": "f0b1d2b2665fe901c180221e8ba0c76e4fb95345b388a79e54bf43cdd4946d26",
+        "fixtures/openslo-slo-read/findings-window-count/fixture.json": "9d1e2f874898a5e2639a82e2abd72c8673d476ecd1482d569de2d5142cc2ffe8",
+        "fixtures/openslo-slo-read/findings-window-count/stream.yaml": "9675ed96fda2a18e5e1cad414f513eeda1c49dddc44eb7ad564b91a5599ad1e6",
+        "fixtures/openslo-slo-read/low-traffic/fixture.json": "a81a42c615147c35594706da6f6e0c6e12a2a36fa13ff853248ddcc816806fd2",
+        "fixtures/openslo-slo-read/occurrences/fixture.json": "e701ec2c1df9c264ce53356dba9515466420c98a48ed068ea46b730a74f9d6d7",
+        "fixtures/openslo-slo-read/ratio-timeslices/fixture.json": "c81068f03f62346684e708a65db322654c3900e7621e220173d9e02cb0993481",
+        "fixtures/openslo-slo-read/specification-samples/fixture.json": "7535470d3da0e8728bde13a4e3daa08d9af2e0d16d8b7c71da29e39ad78e6f59",
+        "fixtures/openslo-slo-read/timeslices/fixture.json": "3dfc1791b6988c906c36e50a27dd1a838e5f88cade45ca54e0894e50ade560ad"
+      }
+    },
+    {
+      "name": "openslo-slo-definitions",
+      "repository": "https://github.com/etalii-adp/etalii.adp",
+      "commit": "88fc48e6aa339ca0efd4ac1a11094293c4cef18f",
+      "licence": "Apache-2.0",
+      "from": "definitions/",
+      "to": "fixtures/fbl/definitions/",
+      "files": {
+        "diagrams/openslo-slo.dis": "a64abb4ca42648b30af1d5f2424d3feb64304cfd50b1273d46404eb7cfc00836",
+        "diagrams/openslo-slo.fbl": "4bd695f90dbb8d4d588a4a25969c760c9b68e26a3d07a089afa49e63bba744bc",
+        "diagrams/vendored/openslo/examples/budgeting-method/occurences-slo.yaml": "7f061c2eaa4fb0196a79f6156b05c2c66346a44d47d9600dd7e34910d5ce39f5",
+        "diagrams/vendored/openslo/examples/budgeting-method/ratio-timeslices.yaml": "782b8ce57796693f00e65f7a3777520bdbf4ccc908531373290bd70deb91caf1",
+        "diagrams/vendored/openslo/examples/budgeting-method/timeslices-slo.yaml": "edaa82146ac29c734797c574a93fbfc204753298d8da9de40c6109d8f9cd4746",
+        "diagrams/vendored/openslo/examples/treat-low-traffic-as-equally-important/timeslices-slo.yaml": "034ae86fa999d26d41854e48654d3e0e658f113a8d3cbf99eb2fd18806bf0c2a",
+        "diagrams/vendored/openslo/specification-samples.yaml": "b9dad644885b2a15f021870e445885c5786e7975d7308c6a8fc489da8e5b5dd5"
+      }
     }
   ]
 }
