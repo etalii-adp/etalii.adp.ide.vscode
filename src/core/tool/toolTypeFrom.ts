@@ -554,6 +554,8 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       edits.push(planned.planned);
     }
     const asked = outcome.effects.find((effect) => (effect.kind === 'select' || effect.kind === 'editLabel') && effect.elements.length > 0);
+    const madeFirst = outcome.after.elements.find((element) => element.id === outcome.created[0]);
+    const shown = madeFirst && (naturalId(persistence.value, metamodel.value, madeFirst.type, madeFirst.attributes) ?? madeFirst.id);
     const labelled = outcome.effects.find((effect) => effect.kind === 'editLabel' && effect.elements.length > 0);
     const editing = labelled ? editedLabel(outcome.after, labelled.elements[0], viewpoint)?.how : undefined;
     // What the viewer holds after the request: the folds it changed, and every folded node that hides what it selects, opened (DISL 11.6, `revealExpands`).
@@ -568,6 +570,8 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       kind: 'applied', splices: edits.length === 0 ? [] : composedSplices(edits),
       ...(registration === undefined ? {} : { registration }),
       ...(asked ? { select: asked.elements[0] } : {}),
+      // What a gesture made is brought into view where nothing selects it, so a node made off screen is seen (a host rule, docs/disl-support.md).
+      ...(!asked && shown !== undefined ? { show: shown } : {}),
       ...(editing === undefined ? {} : { editLabel: true, multiline: editing === 'multiline' }),
       ...(Object.keys(folds).length === 0 ? {} : { viewOptions: { ...options, collapsed: { ...options.collapsed, ...folds } } }),
     };

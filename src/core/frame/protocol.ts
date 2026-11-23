@@ -28,7 +28,7 @@ export type ToCanvas =
    */
   | { readonly v: 2; readonly type: 'confirm'; readonly seq: number; readonly title: string; readonly message: string; readonly confirmLabel: string; readonly danger: boolean }
   /** Select an element and bring it into view; with `editLabel`, open its text for editing in place. */
-  | { readonly v: 2; readonly type: 'reveal'; readonly id: string; readonly editLabel?: boolean; readonly multiline?: boolean }
+  | { readonly v: 2; readonly type: 'reveal'; readonly id: string; readonly editLabel?: boolean; readonly multiline?: boolean; /** Brought into view only: the selection stays as it is. */ readonly keepSelection?: boolean }
   /** A command invoked from the Command Palette or a shortcut, for the canvas to carry out on its selection. */
   | { readonly v: 2; readonly type: 'command'; readonly command: string }
   /** An ADP Toolbox entry activated in its view: added at the centre of what the canvas shows. */

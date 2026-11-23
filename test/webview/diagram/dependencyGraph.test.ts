@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { FromCanvas } from '../../../src/core/frame/protocol';
-import { Canvas } from '../../../src/webview/diagram/canvas';
+import { Canvas, freePointNear } from '../../../src/webview/diagram/canvas';
 import { drawScene, type ThemeKind } from '../../../src/webview/diagram/scene';
 import { diagram, group, pointer, requestsOf } from '../support';
 
@@ -103,8 +103,70 @@ describe('the dependency graph\'s canvas', () => {
     expect(request.kind === 'connect' && request.toPoint).toEqual({ x: expect.closeTo(start.x - 200, 3), y: expect.closeTo(start.y + 60, 3) });
   });
 
-  it('shows the anchors of the selected node as dots a line can be drawn out of', () => {
-    open(['checkout-web']);
-    expect([...document.querySelectorAll('.adp-anchor')].map((dot) => dot.getAttribute('data-anchor'))).toEqual(['left', 'right']);
+  it('shows the anchors of every node as dots a line can be drawn out of, as the standalone host does', () => {
+    open([]);
+    const dots = [...document.querySelectorAll('.adp-anchor')];
+    expect(dots.length).toBe(scene.nodes.length * 2);
+    expect(dots.filter((dot) => dot.getAttribute('data-node') === 'checkout-web').map((dot) => dot.getAttribute('data-anchor'))).toEqual(['left', 'right']);
+  });
+
+  it('draws a line from a press anywhere in the ring around a dot, which lies over the node', () => {
+    open([]);
+    document.elementFromPoint = () => null;
+    const zone = document.querySelector('.adp-anchor-zone[data-node="checkout-web"][data-anchor="right"]')!;
+    const start = anchorOf('checkout-web', 'right');
+    drag(zone, screen({ x: start.x - 9, y: start.y + 3 }), screen({ x: start.x + 200, y: start.y + 60 }));
+    expect(requestsOf(sent)[0]).toMatchObject({ kind: 'connect', from: 'checkout-web', to: '', fromAnchor: 'right' });
+  });
+});
+
+describe('the dependency graph\'s anchors under the pointer', () => {
+  it('draws a line from a press a few pixels inside an anchor dot, at any zoom', () => {
+    document.body.replaceChildren();
+    const sent: FromCanvas[] = [];
+    const canvas = new Canvas(document.body, (message) => sent.push(message));
+    const source = { fileName: 'services.dgr', text: readFileSync('examples/dependency-graph/example-1/services.dgr', 'utf8') };
+    canvas.receive({ v: 2, type: 'view', origin: type.origin, kind: 'diagram', view: type.view(source, {}), actions: type.actions(source, ['checkout-web']), version: 1 });
+    canvas.receive({ v: 2, type: 'reveal', id: 'checkout-web' });
+    const dot = document.querySelector('.adp-anchor[data-anchor="right"]')!;
+    const cx = Number(dot.getAttribute('cx'));
+    const cy = Number(dot.getAttribute('cy'));
+    const transform = /translate\(([-\d.e]+)[ ,]+([-\d.e]+)\)\s*scale\(([-\d.e]+)\)/.exec(document.querySelector('[transform]')?.getAttribute('transform') ?? '');
+    const [tx, ty, scale] = transform ? [Number(transform[1]), Number(transform[2]), Number(transform[3])] : [0, 0, 1];
+    const at = (x: number, y: number): [number, number] => [x * scale + tx, y * scale + ty];
+    // Five screen pixels inside the node from the dot's centre, pressed on the node's own shape.
+    const [sx, sy] = at(cx, cy);
+    document.elementFromPoint = () => null;
+    pointer(group('checkout-web'), 'pointerdown', sx - 5, sy);
+    pointer(window, 'pointermove', sx + 60, sy + 40);
+    pointer(window, 'pointermove', sx + 120, sy + 80);
+    pointer(window, 'pointerup', sx + 120, sy + 80);
+    expect(requestsOf(sent)[0]).toMatchObject({ kind: 'connect', from: 'checkout-web', fromAnchor: 'right' });
+  });
+});
+
+describe('the dependency graph\'s canvas helping a first-time user', () => {
+  const source = { fileName: 'services.dgr', text: readFileSync('examples/dependency-graph/example-1/services.dgr', 'utf8') };
+  it('adds a toolbox entry at a free point near the centre, not on top of a node', () => {
+    // The centre of the view is on Order service: the entry goes to the nearest point clear of every node.
+    const order = scene.nodes.find((node) => node.id === 'order-service')!.box;
+    const centre = { x: order.x + order.width / 2, y: order.y + order.height / 2 };
+    const at = freePointNear(scene.nodes, centre, { x: centre.x - 600, y: centre.y - 400, width: 1200, height: 800 });
+    const width = Math.max(...scene.nodes.map((node) => node.box.width));
+    const height = Math.max(...scene.nodes.map((node) => node.box.height));
+    expect(scene.nodes.filter((node) => at.x + width > node.box.x && at.x - width < node.box.x + node.box.width && at.y + height > node.box.y && at.y - height < node.box.y + node.box.height).map((node) => node.id)).toEqual([]);
+    expect(Math.hypot(at.x - centre.x, at.y - centre.y)).toBeLessThan(600);
+    // Where the wanted point is clear, it is kept.
+    expect(freePointNear(scene.nodes, { x: -5000, y: -5000 }, { x: -5600, y: -5400, width: 1200, height: 800 })).toEqual({ x: -5000, y: -5000 });
+  });
+
+  it('brings a node into view without selecting it when asked to keep the selection', () => {
+    document.body.replaceChildren();
+    const sent: FromCanvas[] = [];
+    const canvas = new Canvas(document.body, (message) => sent.push(message));
+    canvas.receive({ v: 2, type: 'view', origin: type.origin, kind: 'diagram', view: type.view(source, {}), actions: type.actions(source, []), version: 1 });
+    canvas.receive({ v: 2, type: 'reveal', id: 'checkout-web', keepSelection: true });
+    expect(document.querySelectorAll('.adp-selected, [data-selected="true"]').length).toBe(0);
+    expect(sent.filter((message) => (message as { type?: string }).type === 'select')).toEqual([]);
   });
 });

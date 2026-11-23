@@ -18,7 +18,7 @@ const minimumSize = 4;
 /** How near, in canvas units, a press must be to where an end of an edge can sit to draw an edge rather than move the node. */
 const connectBand = 6;
 /** How near, in screen pixels, a press must be to an anchor a node names to draw a line out of it. */
-const anchorBand = 8;
+const anchorBand = 12;
 
 /**
  * The keys this plug-in binds to commands of its own, which ask for the action with that shortcut
@@ -37,6 +37,27 @@ const pressed = (event: KeyboardEvent): string =>
 // A distance on its step, a half rounding away from zero; without a step, on whole canvas units, so
 // a drop made at any zoom is stored as a whole number.
 const snapTo = (value: number, step: number): number => Math.sign(value) * Math.round(Math.abs(value) / (step > 0 ? step : 1)) * (step > 0 ? step : 1);
+
+/**
+ * The point nearest a wanted point, within what is in view, around which nothing is drawn for the size of the
+ * largest node: an entry added from the toolbox lands there rather than on top of a node. Where no point in view
+ * is free, the wanted point itself.
+ */
+export function freePointNear(nodes: readonly SceneNode[], wanted: CanvasPoint, view: Box): CanvasPoint {
+  const width = Math.max(40, ...nodes.map((node) => node.box.width));
+  const height = Math.max(24, ...nodes.map((node) => node.box.height));
+  const clear = (point: CanvasPoint): boolean => nodes.every((node) => {
+    const box = node.box;
+    return point.x + width <= box.x || point.x - width >= box.x + box.width || point.y + height <= box.y || point.y - height >= box.y + box.height;
+  });
+  if (clear(wanted)) return wanted;
+  const step = Math.max(20, height);
+  const candidates: CanvasPoint[] = [];
+  for (let dy = -view.height / 2; dy <= view.height / 2; dy += step) {
+    for (let dx = -view.width / 2; dx <= view.width / 2; dx += step) candidates.push({ x: wanted.x + dx, y: wanted.y + dy });
+  }
+  return candidates.filter(clear).sort((one, other) => Math.hypot(one.x - wanted.x, one.y - wanted.y) - Math.hypot(other.x - wanted.x, other.y - wanted.y))[0] ?? wanted;
+}
 
 /**
  * Where on a node of a scene an end of an edge let go at a point sits: on the nearest part an end
@@ -181,8 +202,12 @@ export class Canvas {
         if (message.result === 'refused' && message.sentence) this.say(message.sentence);
         return;
       case 'reveal': {
-        this.select([message.id]);
         const node = this.node(message.id);
+        if (message.keepSelection === true) {
+          if (node) this.surface.reveal(node.box);
+          return;
+        }
+        this.select([message.id]);
         if (node) {
           this.surface.reveal(node.box);
           if (message.editLabel) this.editLabel(node, message.multiline === true);
@@ -347,11 +372,19 @@ export class Canvas {
   // The handles of a single selection: the sides it can be resized by, and its notation's own.
   private drawHandles(): void {
     const handles: SVGElement[] = [];
+    // The anchors a line can be drawn out of, as dots on every node that names them, as the standalone host shows them:
+    // each with a wider ring the pointer finds it by, so a press near the dot draws a line rather than moving the node.
+    if (this.scene && !this.readOnly) {
+      for (const node of this.scene.nodes.filter((candidate) => candidate.connectable)) {
+        for (const anchor of node.anchors ?? []) {
+          handles.push(svg('circle', { class: 'adp-anchor-zone', 'data-anchor': anchor.id, 'data-node': node.id, cx: anchor.x, cy: anchor.y, r: anchorBand / this.surface.zoom, style: 'cursor: crosshair' }));
+          handles.push(svg('circle', { class: 'adp-handle adp-anchor', 'data-anchor': anchor.id, 'data-node': node.id, cx: anchor.x, cy: anchor.y, r: 4 / this.surface.zoom, style: 'cursor: crosshair' }));
+        }
+      }
+    }
     if (this.scene && !this.readOnly && this.selection.length === 1) {
       const node = this.node(this.selection[0]);
       if (node) handles.push(...this.resizeHandles(node.box, node.resizable.x, node.resizable.y), ...drawHandles(node, this.surface.zoom));
-      // The anchors a line can be drawn out of, as dots on the selected node.
-      if (node?.connectable) handles.push(...(node.anchors ?? []).map((anchor) => svg('circle', { class: 'adp-handle adp-anchor', 'data-anchor': anchor.id, 'data-node': node.id, cx: anchor.x, cy: anchor.y, r: 4 / this.surface.zoom, style: 'cursor: crosshair' })));
       // An end of an edge that is on a part can be moved along it.
       const edge = this.scene.edges.find((candidate) => candidate.id === this.selection[0]);
       for (const end of ['from', 'to'] as const) {
@@ -474,7 +507,8 @@ export class Canvas {
 
   private addAtCentre(entry: string): void {
     const view = this.surface.viewport();
-    this.request({ kind: 'drop', entry, x: view.x + view.width / 2, y: view.y + view.height / 2 });
+    const at = freePointNear(this.scene?.nodes ?? [], { x: view.x + view.width / 2, y: view.y + view.height / 2 }, view);
+    this.request({ kind: 'drop', entry, x: at.x, y: at.y });
   }
 
   // ---- gestures ----
@@ -524,7 +558,10 @@ export class Canvas {
     };
     // A press on an anchor the notation names draws a line out of it, which may also be let go on empty canvas: the
     // core reads what the anchor means and what is made there (DISL 6.10, `connect.from` and `connect.tool`).
-    const anchor = node.connectable && event.button === 0 ? node.anchors?.find((candidate) => Math.hypot(candidate.x - point.x, candidate.y - point.y) <= anchorBand / this.surface.zoom) : undefined;
+    const pressedAnchor = target.closest('[data-anchor]')?.getAttribute('data-anchor');
+    const anchor = node.connectable && event.button === 0
+      ? node.anchors?.find((candidate) => candidate.id === pressedAnchor) ?? node.anchors?.find((candidate) => Math.hypot(candidate.x - point.x, candidate.y - point.y) <= anchorBand / this.surface.zoom)
+      : undefined;
     if (anchor) {
       this.connect(event, from, '', false,
         (to) => svg('line', { class: 'adp-relation-line adp-connecting', x1: anchor.x, y1: anchor.y, x2: to.x, y2: to.y, 'marker-end': 'url(#adp-arrow)' }),

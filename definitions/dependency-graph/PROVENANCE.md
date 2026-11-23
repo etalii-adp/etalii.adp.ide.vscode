@@ -7,6 +7,6 @@ They are the definition of one tool type, copied unchanged, byte for byte, from 
 
 | File | Repository | Path | Commit | SHA-256 |
 |---|---|---|---|---|
-| `dependency-graph.dis` | `etalii.adp` | `definitions/diagrams/dependency-graph.dis` | `5d2aa43d2321db122694becddbca6b7458a44742` | `e71555d9b9eacb8b04ee73af5296558766b15e02dac2c757b1566f797fde88c9` |
+| `dependency-graph.dis` | `etalii.adp` | `definitions/diagrams/dependency-graph.dis` | `eba610d55c0c343062a3c672fc135099254ba334` | `a3e7a6b13cd62ef0b4ba4d507f303bdc55c870a807de81d09a045e3c133d1346` |
 | `dependency-graph.fbl` | `etalii.adp.ide.standalone` | `src/diagrams/dependency-graph/backend/EtAlii.Adp.Diagram.DependencyGraph/dependency-graph.fbl` | `4302e130593bb487358c1925c2b060165677fd4f` | `450946d78f1a87e7acf5676bc4f1bfcbe4bb02399804264137a2e97689cc32af` |
-| `dependency-graph.md` | `etalii.adp` | `definitions/diagrams/dependency-graph.md` | `5d2aa43d2321db122694becddbca6b7458a44742` | `acc86c740a1b468c51ed209a8958716acb32e507763590a29e334e5d0ba65b53` |
+| `dependency-graph.md` | `etalii.adp` | `definitions/diagrams/dependency-graph.md` | `eba610d55c0c343062a3c672fc135099254ba334` | `0b3661566ec07b96f9bbd402f81bfdfc69870a93e1f7d28b64edd23cdee4d023` |
