@@ -6,6 +6,8 @@ The ADP tools as a Visual Studio Code extension, "ADP: A Different Perspective".
 
 ADP, A Different Perspective, is a range of task-focused tools: diagrams, designers and editors (see the [ADP terminology](https://github.com/etalii-adp/etalii.adp/blob/develop/docs/terminology.md)). The site is at <https://etalii.net/adp/>.
 
+![Four ADP tools in Visual Studio Code: a causal loop diagram, a Gartner hype cycle, an agent behavior model and a hierarchical requirement designer](media/adp-vscode-tools.png)
+
 **Where it stands.** The plug-in brings seven tool types, five diagrams and two designers:
 
 - **Gartner hype cycle graph** (`.ghg`). A `.ghg` file opens in the diagram: trends on a time axis as banners in the phases they have reached, triggers, notes, and the influences between them. Drop elements from the ADP Toolbox, rename them in place, move and resize them, drag a phase boundary, draw an influence from one trend's edge to another's, filter by tags, switch to Compact, and arrange the diagram.
