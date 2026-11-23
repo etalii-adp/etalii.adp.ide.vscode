@@ -252,6 +252,8 @@ export interface Operation {
   readonly opens: boolean;
   /** Whether it changes nothing of the model: viewer state, the selection, a link opened. It is then no edit, and is run in a read-only document too. */
   readonly viewOnly: boolean;
+  /** Whether its actions read `position`, the point it was asked at (DISL 7.3), so that it means something only where a point is given. */
+  readonly placed: boolean;
 }
 
 export interface Availability {
@@ -319,6 +321,12 @@ export interface Behavior {
   create(model: Model, tool: string, at: Point, situation?: Situation, on?: string): Outcome;
   /** A relation of a type drawn from one element to another; an end that is not given attaches where the notation's default says. */
   connect(model: Model, type: string, source: string, target: string, ends?: { readonly source?: EndPlace; readonly target?: EndPlace }, situation?: Situation): Outcome;
+  /**
+   * A relation drawn from an element and let go on empty canvas (DISL 7.2): the library tool `tool` creates the other
+   * end at the point, by its `createTarget` where the new element is the target and its `createSource` where it is the
+   * source, and the relation it `creates` joins the two, as one transaction.
+   */
+  connectNew(model: Model, tool: string, other: string, newEnd: 'source' | 'target', at: Point, situation?: Situation): Outcome;
   /** Attributes of an element (the diagram when none is named) set to values; null empties one. */
   change(model: Model, element: string | undefined, values: Readonly<Record<string, Value | null>>, situation?: Situation): Outcome;
   /** A value entered in an item of a form: a text, or what the item's widget gives. */
@@ -822,11 +830,13 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       if (!same(held, value)) viewChanges.push({ kind: 'filter', id, value: same(value, standard) ? null : value });
     };
 
-    // A gesture is checked against the model as it was before the transaction (DISL 8.4).
+    // A gesture is checked against the model as it was before the transaction (DISL 8.4), and one on an element the
+    // transaction made, such as a node an operation creates and then connects, against the model with that element.
+    const checkedOn = (gesture: Gesture): Model => (Object.values(gesture.elements ?? {}).some((id) => id !== undefined && !find(model, id) && find(working, id) !== undefined) ? working : model);
     const check = (gesture: Gesture): boolean => {
       if (refused !== undefined) return false;
       lastGesture = gesture;
-      const found = constraints.refusals(gesture, model);
+      const found = constraints.refusals(gesture, checkedOn(gesture));
       if (found.length > 0) refuse(found[0].message);
       return found.length === 0;
     };
@@ -1299,7 +1309,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     const finish = (): Outcome => {
       if (refused === undefined) bounds();
       // An invariant that prevents rejects the whole transaction (DISL 14.4).
-      const broken = refused === undefined && changes.length > 0 && lastGesture ? constraints.refusals(lastGesture, model, working) : [];
+      const broken = refused === undefined && changes.length > 0 && lastGesture ? constraints.refusals(lastGesture, checkedOn(lastGesture), working) : [];
       if (broken.length > 0) refuse(broken[0].message);
       if (refused !== undefined) return { refused };
       // The ids a `derived` strategy computes, once the changes are made (DISL 11.5.2): what the outcome names beside its changes, it names by them.
@@ -1395,6 +1405,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     ...asked(operation),
     opens: (operation.actions ?? []).some((action) => isObject(action) && action.open !== undefined),
     viewOnly: free(operation.actions),
+    placed: /(^|[^.\w])position\b/.test(JSON.stringify(operation.actions ?? [])),
   }));
 
   const availability = (model: Model, id: string, selection: readonly string[], situation?: Situation): Availability => {
@@ -1506,6 +1517,28 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     // A derived relation is not created: drawing it is the operation its `edits` name, once the gesture's constraints let it (DISL 4.11.4).
     if (!mapped) run.related(type, source, target, ends ?? {});
     else if (run.check({ kind: 'connect', elements: { source, target }, values: { relationType: type } })) run.onDerived({ type, source, target, edits: mapped }, 'connect');
+    return run.finish();
+  };
+
+  const connectNew: Behavior['connectNew'] = (model, id, other, newEnd, at, situation) => {
+    const tool = Object.hasOwn(toolbox.tools, id) ? toolbox.tools[id] : undefined;
+    const end = newEnd === 'target' ? tool?.createTarget : tool?.createSource;
+    const made = end;
+    if (!tool?.creates || !made) return { refused: 'Nothing is created where this line was let go.' };
+    const run = open(model, situation, 'create');
+    const node = nodeNotation(viewOf(situation, true).notation, metamodel, made.type);
+    const system = coordinates.systems[node.placement.system ?? ''] ?? viewOf(situation, true).system;
+    const { position, placed } = run.dropped(made.type, domain(model, system, at));
+    const variables = { position, elementType: made.type, parent: null, dropTarget: null, tool: id };
+    if (!run.check({ kind: 'create', values: variables })) return run.finish();
+    const initial: Record<string, Value | null> = {};
+    for (const [name, value] of Object.entries(made.initial ?? {})) {
+      const result = isCel(value) ? run.evaluated(value, run.scopeOf(undefined, variables)) : { value: value as Value };
+      if (!result) return run.finish();
+      initial[name] = result.value;
+    }
+    const added = run.add(made.type, { ...placed, ...initial });
+    if (added !== undefined) run.related(tool.creates, newEnd === 'target' ? other : added, newEnd === 'target' ? added : other, {});
     return run.finish();
   };
 
@@ -1879,7 +1912,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
   return {
     value: {
       messages, message, operations, ...(isObject(section.clipboard) ? { clipboard: section.clipboard } : {}),
-      availability, menu, deletion, create, connect, change, edit, editLabel, move, resize, dragHandle, reattach, remove, reparent, shift, operate, createChild, pin, unpin, fold, filter,
+      availability, menu, deletion, create, connect, connectNew, change, edit, editLabel, move, resize, dragHandle, reattach, remove, reparent, shift, operate, createChild, pin, unpin, fold, filter,
     },
     findings,
   };

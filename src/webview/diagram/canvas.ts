@@ -17,6 +17,8 @@ const dragThreshold = 3;
 const minimumSize = 4;
 /** How near, in canvas units, a press must be to where an end of an edge can sit to draw an edge rather than move the node. */
 const connectBand = 6;
+/** How near, in screen pixels, a press must be to an anchor a node names to draw a line out of it. */
+const anchorBand = 8;
 
 /**
  * The keys this plug-in binds to commands of its own, which ask for the action with that shortcut
@@ -348,6 +350,8 @@ export class Canvas {
     if (this.scene && !this.readOnly && this.selection.length === 1) {
       const node = this.node(this.selection[0]);
       if (node) handles.push(...this.resizeHandles(node.box, node.resizable.x, node.resizable.y), ...drawHandles(node, this.surface.zoom));
+      // The anchors a line can be drawn out of, as dots on the selected node.
+      if (node?.connectable) handles.push(...(node.anchors ?? []).map((anchor) => svg('circle', { class: 'adp-handle adp-anchor', 'data-anchor': anchor.id, 'data-node': node.id, cx: anchor.x, cy: anchor.y, r: 4 / this.surface.zoom, style: 'cursor: crosshair' })));
       // An end of an edge that is on a part can be moved along it.
       const edge = this.scene.edges.find((candidate) => candidate.id === this.selection[0]);
       for (const end of ['from', 'to'] as const) {
@@ -506,7 +510,7 @@ export class Canvas {
       }
     }
 
-    const node = this.nodeAt(target);
+    const node = this.nodeAt(target) ?? this.node(target.closest('[data-anchor]')?.getAttribute('data-node') ?? '');
     if (!node) return;
     const from = { id: node.id, movable: node.movable.x || node.movable.y };
     const edge = (start: ReturnType<typeof endAt>): void => {
@@ -518,6 +522,15 @@ export class Canvas {
           return arrived ? endAt(arrived, at)?.text : null;
         });
     };
+    // A press on an anchor the notation names draws a line out of it, which may also be let go on empty canvas: the
+    // core reads what the anchor means and what is made there (DISL 6.10, `connect.from` and `connect.tool`).
+    const anchor = node.connectable && event.button === 0 ? node.anchors?.find((candidate) => Math.hypot(candidate.x - point.x, candidate.y - point.y) <= anchorBand / this.surface.zoom) : undefined;
+    if (anchor) {
+      this.connect(event, from, '', false,
+        (to) => svg('line', { class: 'adp-relation-line adp-connecting', x1: anchor.x, y1: anchor.y, x2: to.x, y2: to.y, 'marker-end': 'url(#adp-arrow)' }),
+        () => undefined, anchor.id);
+      return;
+    }
     const near = node.connectable ? endAt(node, point) : undefined;
     if (event.button === 2) {
       // A right-button drag from a node draws an edge from it; a right click is the menu.
@@ -755,7 +768,7 @@ export class Canvas {
    * for a target that is nothing a relation can reach.
    */
   private connect(event: PointerEvent, from: { readonly id: string; readonly movable: boolean }, fromEnd: string, rightButton: boolean,
-    line: (to: CanvasPoint) => SVGElement, arrive: (target: string, at: CanvasPoint) => string | undefined | null): void {
+    line: (to: CanvasPoint) => SVGElement, arrive: (target: string, at: CanvasPoint) => string | undefined | null, fromAnchor?: string): void {
     this.track(event, {
       move: (point) => {
         const drawn = line(point);
@@ -767,9 +780,14 @@ export class Canvas {
         if (rightButton) this.suppressMenu = true;
         this.drawHandles();
         const target = this.idAt(document.elementFromPoint(last.clientX, last.clientY));
+        // Out of a named anchor, a line let go on empty canvas asks for what the line makes there.
+        if (!target && fromAnchor !== undefined) {
+          this.request({ kind: 'connect', from: from.id, to: '', fromAnchor, toPoint: point });
+          return;
+        }
         const toEnd = target ? arrive(target, point) : null;
         if (!target || toEnd === null) return;
-        this.request({ kind: 'connect', from: from.id, to: target, ...(fromEnd.length > 0 ? { fromEnd } : {}), ...(toEnd ? { toEnd } : {}) });
+        this.request({ kind: 'connect', from: from.id, to: target, ...(fromEnd.length > 0 ? { fromEnd } : {}), ...(toEnd ? { toEnd } : {}), ...(fromAnchor === undefined ? {} : { fromAnchor }) });
       },
       cancel: () => {
         this.drawHandles();

@@ -172,6 +172,11 @@
         "category": "ADP"
       },
       {
+        "command": "etalii.adp.addNode",
+        "title": "Add Node",
+        "category": "ADP"
+      },
+      {
         "command": "etalii.adp.rename",
         "title": "Rename",
         "category": "ADP"
@@ -358,6 +363,10 @@
         },
         {
           "command": "etalii.adp.arrangeDiagram",
+          "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
+        },
+        {
+          "command": "etalii.adp.addNode",
           "when": "activeCustomEditorId =~ /^etalii\\.adp\\./"
         },
         {

@@ -376,9 +376,14 @@ export function interpretForms(specification: Specification, metamodel: Metamode
     const label = (on: Subject): string => worded(own.title ?? own.label, scope(on), name === undefined ? '' : localized(attributeOf(on)?.label, undefined, undefined) ?? labelOf(name));
     const validate = (on: Subject, input: Value, timing: 'input' | 'commit' = 'commit'): string | undefined => {
       const bound = scope(on, { value: entered(on, input) });
+      // A rule that cannot read the value as its attribute's type, such as a text function on a number, reads the text
+      // that was typed, which is what `value` is at a commit (DISL 9.3); its message reads the same.
+      const typed = typeof input === 'string' ? scope(on, { value: input }) : bound;
       for (const validation of own.validate ?? []) {
         if ((validation.severity ?? 'error') !== 'error' || (timing === 'input' && validation.timing === 'commit')) continue;
-        if (!holds(validation.rule, bound, false)) return worded(validation.message, bound, `This value is not accepted by ${owner}.`);
+        const judged = isCel(validation.rule) || typeof validation.rule === 'string' ? expressions.evaluate(validation.rule, bound) : undefined;
+        const reading = judged !== undefined && !judged.ok ? typed : bound;
+        if (!holds(validation.rule, reading, false)) return worded(validation.message, reading, `This value is not accepted by ${owner}.`);
       }
       return undefined;
     };

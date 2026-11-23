@@ -88,6 +88,15 @@ The diagram is read from its definition and held to the standalone host's record
 | A flow page of a diagram that opens on a ring holds the centres the canvas draws, to the scene's six decimals; the desktop host writes its own ring unrounded, so the two differ below a millionth of a unit there. | The page holds what this host draws (spec 082, FR-005); a position the registration states is written as the desktop host writes it. |
 | A flow page holds a link's note as this host reads it: a bare word is a note, and of two notes the last wins. The desktop host reads the first quoted word. | The standalone host's reading (spec 081, FR-008), which this host follows; raised as a difference of the desktop host in [etalii.adp issue 759](https://github.com/etalii-adp/etalii.adp/issues/759). |
 
+## Dependency graph
+
+The graph is read from its definition and held to the standalone host's recorded transcript (etalii.adp spec 088). Where the definition and the standalone host differ, the row is in [docs/disl-support.md](disl-support.md), "Dependency graph"; what follows is this host's own.
+
+| Difference | Why |
+|---|---|
+| X and Row are edited in a number box, where the standalone host has a line of text. What is typed is checked as it was typed, so `1e21`, `-2` and `0.00001` are taken, and `1.5` for a row is refused with "'1.5' is not a number this graph can place a node at." | The definition states `widget: number`, which is VS Code's number box here; the check reads the text the user typed, as the standalone host's does, so the two accept and refuse the same values. |
+| "Add node", with no point to place the node at, asks its label in an input box with "New node" filled in. | The standalone host asks in a dialog; an input box is Visual Studio Code's way to ask one value. |
+
 ## Native dialogs, seen in a real window
 
 A test in a real Visual Studio Code cannot answer a native dialog, so each one the three new tool types raise is looked at once by a person (etalii.adp spec 027, FR-015). Peter Vrenken saw them on 2026-10-13 in Visual Studio Code 1.141.0 on Windows, with the Development build of the plug-in at `9849baf`. Each appeared and read as its definition states.

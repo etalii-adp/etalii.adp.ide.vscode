@@ -54,6 +54,18 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
   runAction('etalii.adp.moveLater', { shortcut: 'Alt+Down' }, false, 'moveLater');
   runAction('etalii.adp.arrangeDiagram', { label: /^Arrange diagram$/ }, true);
 
+  // Adds an element with no point to place it at: the toolbox's entry, as an action on the selection, which the
+  // definition places, asking what its form asks (etalii.adp spec 088, FR-014). Of several entries the user picks one.
+  register('etalii.adp.addNode', async () => {
+    const active = tools.active;
+    if (!active || active.type.kind !== 'diagram' || active.readOnly || active.lastView?.readOnly) return;
+    const entries = active.type.toolbox(active.source);
+    const entry = entries.length <= 1 ? entries[0] : (await vscode.window.showQuickPick(entries.map((candidate) => ({ label: candidate.label, detail: candidate.description, entry: candidate })), { title: 'Add node' }))?.entry;
+    if (!entry) return;
+    const selected = active.selection[0];
+    await perform(active, { kind: 'action', action: entry.id, ...(selected !== undefined ? { id: selected } : {}) });
+  });
+
   // Undo and Redo of a change that touched the registration alone, such as a row dragged or a
   // diagram arranged. Their shortcuts are bound to these only while such a step is next in line;
   // run when none is, they are the platform's own Undo and Redo.

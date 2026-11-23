@@ -91,8 +91,12 @@ export type EditRequest =
   | { readonly kind: 'move'; readonly id: string; readonly x: number; readonly y: number }
   /** An element resized by one of its sides to new bounds. */
   | { readonly kind: 'resize'; readonly id: string; readonly side: 'left' | 'right' | 'top' | 'bottom' | 'corner'; readonly bounds: Box }
-  /** A relation drawn from one element to another; the ends say where on each, when the type has that. */
-  | { readonly kind: 'connect'; readonly from: string; readonly to: string; readonly fromEnd?: string; readonly toEnd?: string }
+  /**
+   * A relation drawn from one element to another; the ends say where on each, when the type has that. `fromAnchor` is the
+   * anchor the line was drawn out of, which decides its direction where the edge type's `connect.from` maps it (DISL 6.10).
+   * A line let go over no element names the point it was let go at as `toPoint`, and `to` is empty.
+   */
+  | { readonly kind: 'connect'; readonly from: string; readonly to: string; readonly fromEnd?: string; readonly toEnd?: string; readonly fromAnchor?: string; readonly toPoint?: { readonly x: number; readonly y: number } }
   /** One end of a relation moved along its element. */
   | { readonly kind: 'moveEnd'; readonly id: string; readonly end: 'from' | 'to'; readonly value: string }
   /** A shape handle dragged, such as a phase boundary, to an x. */

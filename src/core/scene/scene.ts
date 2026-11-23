@@ -204,6 +204,11 @@ export interface SceneNode {
   readonly refusesMove?: true;
   readonly resizable: { readonly x: boolean; readonly y: boolean };
   readonly connectable: boolean;
+  /**
+   * The anchors a line may be drawn out of, where the node's notation names them (DISL 6.9, `fixed` and `sides`), at their
+   * points on the canvas: a line drawn out of one is asked for with its id, which an edge's `connect.from` reads (DISL 6.10).
+   */
+  readonly anchors?: readonly { readonly id: string; readonly x: number; readonly y: number }[];
   readonly selectable: boolean;
   readonly deletable: boolean;
   /** A filter whose effect is `dim` filters the node out (DISL 6.13.1). */
@@ -1042,6 +1047,9 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
       };
     }
 
+    // The anchors the notation names, which a line may be drawn out of.
+    const named: readonly AnchorPoint[] = own.anchors.mode === 'fixed' ? own.anchors.points ?? []
+      : own.anchors.mode === 'sides' ? (own.anchors.sides ?? []).map((side) => ({ id: side, x: side === 'left' ? 0 : side === 'right' ? 1 : 0.5, y: side === 'top' ? 0 : side === 'bottom' ? 1 : 0.5 })) : [];
     const movable = own.placement.movable ?? true;
     const resizable = own.placement.resizable ?? true;
     const sizable = own.size.fixed ? false : own.size.resizable ?? true;
@@ -1067,6 +1075,7 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
         ...(own.refusals?.move !== undefined && own.refusals.move.length > 0 ? { refusesMove: true as const } : {}),
         resizable: { x: free('x', resizable) && sizable !== false && sizable !== 'vertical', y: free('y', resizable) && sizable !== false && sizable !== 'horizontal' },
         connectable: flag(own.connectable, self, true),
+        ...(named.length === 0 ? {} : { anchors: named.map((point) => ({ id: point.id, ...pointIn(box, point.x, point.y) })) }),
         selectable: flag(own.selectable, self, true),
         deletable: flag(own.deletable, self, true),
         dimmed: dimmed.has(self),
