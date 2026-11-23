@@ -1,0 +1,32 @@
+dependencies: 1
+elements:
+  - id: aaa
+    label: First
+    x: 0
+    row: 0
+  - id: aaa
+    label: Repeats the first
+    x: 240
+    row: 0
+  - label: Has no id
+    x: 480
+    row: 1
+  - id: bbb
+    label: Second
+    x: 720
+    row: 1
+relations:
+  - id: loop
+    from: bbb
+    to: bbb
+  - id: dangles
+    from: bbb
+    to: ghost
+  - id: loop-and-dangling
+    from: ghost
+    to: ghost
+  - from: aaa
+    to: bbb
+  - id: dangles
+    from: aaa
+    to: nobody

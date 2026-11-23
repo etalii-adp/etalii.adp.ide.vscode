@@ -1,0 +1,19 @@
+dependencies: 1
+elements:
+  - id: aaa
+    label: First holder
+    x: 0
+    row: 0
+  - id: bbb
+    label: Between the holders
+    x: 240
+    row: 0
+  - id: aaa
+    label: Second holder
+    x: 480
+    row: 1
+relations:
+  - id: first-holders
+    from: aaa
+    to: bbb
+    label: of the first

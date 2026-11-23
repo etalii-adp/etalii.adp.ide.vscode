@@ -1,0 +1,29 @@
+dependencies: 1
+elements:
+  - id: aaa
+    label: First
+    x: 0
+    row: 0
+  - id: aaa
+    label: Second
+    x: 200
+    row: 1
+  - id: aaa
+    label: Third
+    x: 400
+    row: 2
+  - id: bbb
+    label: Other
+    x: 600
+    row: 0
+relations:
+  - id: bbb
+    from: aaa
+    to: bbb
+  - id: ccc
+    from: bbb
+    to: aaa
+  - id: ccc
+    from: aaa
+    to: bbb
+    label: again

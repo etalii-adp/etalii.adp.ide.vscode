@@ -34,7 +34,7 @@ describe('loadSpecification', () => {
   it('refuses a higher major version and warns about a higher minor one', () => {
     const base = { language: { id: 'a.b', version: '1.0.0' }, metamodel: {} };
     expect(loadSpecification({ ...base, disl: '1.0' })).toMatchObject({ value: emptySpecification, findings: [{ severity: 'error' }] });
-    const newer = loadSpecification({ ...base, disl: '0.9' });
+    const newer = loadSpecification({ ...base, disl: '0.11' });
     expect(newer.findings).toMatchObject([{ severity: 'warning' }]);
     expect(newer.value.language.id).toBe('a.b');
   });

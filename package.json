@@ -97,6 +97,16 @@
         "priority": "default"
       },
       {
+        "viewType": "etalii.adp.generic.dependencies",
+        "displayName": "Dependency graph",
+        "selector": [
+          {
+            "filenamePattern": "*.dgr"
+          }
+        ],
+        "priority": "default"
+      },
+      {
         "viewType": "etalii.adp.gartner.hypecycle-graph",
         "displayName": "Gartner hype cycle graph",
         "selector": [
@@ -252,6 +262,11 @@
         "category": "ADP"
       },
       {
+        "command": "etalii.adp.new.generic.dependencies",
+        "title": "New Dependency graph",
+        "category": "ADP"
+      },
+      {
         "command": "etalii.adp.new.gartner.hypecycle-graph",
         "title": "New Gartner hype cycle graph",
         "category": "ADP"
@@ -319,6 +334,9 @@
         },
         {
           "command": "etalii.adp.new.systems.causal-loop-diagram"
+        },
+        {
+          "command": "etalii.adp.new.generic.dependencies"
         },
         {
           "command": "etalii.adp.new.gartner.hypecycle-graph"

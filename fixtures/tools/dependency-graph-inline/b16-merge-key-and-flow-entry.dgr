@@ -1,0 +1,11 @@
+dependencies: 1
+defaults: &defaults
+  row: 3
+elements:
+  - id: aaa
+    <<: *defaults
+    label: Row by merge
+    x: 0
+  - {id: bbb, label: Flow entry, x: 240, row: 1}
+relations:
+  - {id: flow-dependency, from: aaa, to: bbb}

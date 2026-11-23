@@ -1,0 +1,22 @@
+dependencies: 1
+elements:
+  - id: far
+    label: A million across
+    x: 1000000
+    row: 0
+  - id: fine
+    label: A hundred-thousandth across
+    x: 0.00001
+    row: 1
+  - id: huge
+    label: Past every screen
+    x: 1e21
+    row: 2
+  - id: signed-zero
+    label: Minus nothing
+    x: -0
+    row: -1
+relations:
+  - id: across
+    from: far
+    to: fine

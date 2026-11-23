@@ -1,0 +1,17 @@
+dependencies: 1
+elements:
+  -   label: A
+      id: aaa
+      x: 0
+      row: 0
+  - id: bbb
+    label: B
+    x: 240
+    row: 1
+relations:
+  - id: nested
+    from: aaa
+    to: bbb
+    note:
+      label: inner
+    label: outer

@@ -1,0 +1,21 @@
+dependencies: 1
+elements:
+  - label: Anonymous
+    x: 0
+    row: 0
+  - x: 200
+    row: 1
+  - id: ""
+    label: Empty id
+    x: 400
+    row: 2
+  - id: named
+    label: Named
+    x: 600
+    row: 0
+relations:
+  - from: named
+    to: named2
+  - id: ""
+    from: named
+    to: named

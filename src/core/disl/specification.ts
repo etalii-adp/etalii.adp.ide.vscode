@@ -214,6 +214,8 @@ export interface Persistence {
   readonly typeMap?: Readonly<Record<string, TypeMapEntry>>;
   readonly ids?: IdStrategy;
   readonly view?: { readonly store?: readonly string[]; readonly viewer?: readonly string[]; readonly [name: string]: unknown };
+  /** The host attribute that holds the id an element is written with (DISL 0.10, 11.5.4). */
+  readonly writtenId?: string;
   readonly doc?: Doc;
   readonly [name: string]: unknown;
 }

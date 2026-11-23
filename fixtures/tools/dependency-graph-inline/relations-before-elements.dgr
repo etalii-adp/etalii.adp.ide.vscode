@@ -1,0 +1,17 @@
+dependencies: 1
+relations:
+  - id: shared
+    from: aaa
+    to: bbb
+elements:
+  - id: aaa
+    label: Declared after the relations
+    x: 0
+    row: 0
+  - id: shared
+    label: Shares the relation's id
+    x: 240
+    row: 1
+  - id: bbb
+    x: 480
+    row: 2

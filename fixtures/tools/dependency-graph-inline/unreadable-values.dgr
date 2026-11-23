@@ -1,0 +1,19 @@
+dependencies: 1
+elements:
+  - id: aaa
+    x: sideways
+    row: sideways
+  - id: bbb
+    label: Fractional row
+    x: 1e3
+    row: 1.5
+  - just a string
+  - id: ccc
+    label:
+    x: -0.25
+    row: -3
+relations:
+  - not a mapping
+  - id: rel
+    from: aaa
+    to: bbb

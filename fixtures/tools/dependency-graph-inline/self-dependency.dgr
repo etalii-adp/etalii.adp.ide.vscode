@@ -1,0 +1,11 @@
+dependencies: 1
+elements:
+  - id: aaa
+    label: Needs itself
+    x: 0
+    row: 0
+relations:
+  - id: ccc
+    from: aaa
+    to: aaa
+    label: loops

@@ -32,6 +32,7 @@ const provenance = 'examples/PROVENANCE.md';
 const mindmap = 'src/diagrams/mindmap/';
 const activity = 'src/diagrams/agent-activity-diagram/';
 const causalLoop = 'src/diagrams/causal-loop-diagram/';
+const dependencyGraph = 'src/diagrams/dependency-graph/';
 const copies = [
   [standaloneName, 'src/diagrams/gartner-hype-cycle-graph/examples/', 'examples/gartner-hypecycle-graph/'],
   [standaloneName, 'src/diagrams/agent-behavior-modelling/examples/', 'examples/agent-behavior-modelling/'],
@@ -48,6 +49,10 @@ const copies = [
   [standaloneName, `${causalLoop}backend/EtAlii.Adp.Diagram.CausalLoopDiagram.Tests/Fixtures/`, 'fixtures/tools/causal-loop-diagram/'],
   [standaloneName, `${causalLoop}backend/EtAlii.Adp.Diagram.CausalLoopDiagram.Tests/Parity/causal-loop.transcript.json`, 'fixtures/tools/causal-loop-diagram/causal-loop.transcript.json'],
   [standaloneName, 'src/designers/knowledge/examples/', 'examples/knowledge/'],
+  // etalii.adp spec 088: the dependency graph's example, the fixtures its transcript was recorded over, and the transcript.
+  [standaloneName, `${dependencyGraph}examples/`, 'examples/dependency-graph/'],
+  [standaloneName, `${dependencyGraph}backend/EtAlii.Adp.Diagram.DependencyGraph.Tests/Fixtures/`, 'fixtures/tools/dependency-graph/'],
+  [standaloneName, `${dependencyGraph}backend/EtAlii.Adp.Diagram.DependencyGraph.Tests/Parity/dependency-graph.transcript.json`, 'fixtures/tools/dependency-graph/dependency-graph.transcript.json'],
   // The Hierarchical Requirement Designer's example document and its registration, beside its definition in etalii.adp.
   ...['web-shop.md', 'web-shop.adp'].map((name) => [adpName, `definitions/designers/examples/${name}`, `examples/hierarchical-requirement/${name}`]),
   // Its large example, NIST SP 800-53's controls with their licence and readme, which the performance guard opens; the script that wrote it is left out.

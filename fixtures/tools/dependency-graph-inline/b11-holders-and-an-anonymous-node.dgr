@@ -1,0 +1,26 @@
+dependencies: 1
+elements:
+  - id: aaa
+    label: First holder
+    x: 0
+    row: 0
+  - id: bbb
+    label: Other
+    x: 240
+    row: 0
+  - id: aaa
+    label: Second holder
+    x: 480
+    row: 1
+  - label: Has no id
+    x: 720
+    row: 1
+relations:
+  - id: of-the-first
+    from: aaa
+    to: bbb
+  - id: of-the-second
+    from: bbb
+    to: aaa
+  - id: no-from
+    to: bbb

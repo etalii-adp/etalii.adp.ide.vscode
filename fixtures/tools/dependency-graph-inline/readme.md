@@ -1,0 +1,5 @@
+# The dependency graph's inline documents
+
+The 26 documents the dependency graph's parity transcript records as `inline/<name>`, one file each, `<name>.dgr`. They are not files in the standalone host: they are the string literals of `Parity/DependencyGraphCorpus.cs`, in [etalii-adp/etalii.adp.ide.standalone](https://github.com/etalii-adp/etalii.adp.ide.standalone) at `src/diagrams/dependency-graph/backend/EtAlii.Adp.Diagram.DependencyGraph.Tests/Parity/DependencyGraphCorpus.cs`, commit `004723646580644bac7dc0949d60f5dcfb7c92d5`, written out byte for byte, line endings included (etalii.adp spec 088, research R8). That repository is licensed under the Apache License 2.0, as this one is.
+
+They sit beside `fixtures/tools/dependency-graph/` rather than in it, because `scripts/sync-examples.mjs` replaces that folder with the standalone module's `Fixtures/` on every refresh. Write them again from a newer commit when the transcript is refreshed; the transcript's `sha256` of each document says whether a file still matches.
