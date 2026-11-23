@@ -239,6 +239,18 @@ describe('what dragging moves in a Knowledge table', () => {
     expect(after).toMatchObject({ width: 240, visible: true });
   });
 
+  it('keeps a column where it is shown when it is given a width or wrapped in a view with no setting for those before it', () => {
+    // The view "Map" has no column settings: the first setting would otherwise list its column first.
+    const map = { ...source, text: textOf(source, { kind: 'show', view: 'v2' }) };
+    const order = (text: string): string[] => type.view({ ...map, text }, {}).properties.map((property) => property.id);
+    const before = order(map.text);
+    const shown = type.view(map, {}).gestures!;
+    const widened = textOf(map, put(shown.widths!.p4, '', 240));
+    expect(order(widened)).toEqual(before);
+    expect(type.view({ ...map, text: widened }, {}).properties.find((property) => property.id === 'p4')).toMatchObject({ width: 240, visible: true });
+    expect(order(textOf(map, find(shown.columnMenus?.p5, 'wrap').request!))).toEqual(before);
+  });
+
   it('renames a view and a column with the name typed in place', () => {
     const gestures = type.view(source, {}).gestures!;
     const view = find(gestures.viewMenus?.v1, 'rename');

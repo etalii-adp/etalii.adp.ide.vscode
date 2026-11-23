@@ -538,6 +538,23 @@ describe('dragging on a table with gestures, and the keyboard\'s way to the same
     expect(edits()[2]).toEqual(op('setColumn', ['va'], { property: 'size', width: 180 }));
   });
 
+  it('keeps a column following the pointer when the table is drawn again while its border is held, and selects nothing by the press', () => {
+    const selections = (): number => sent.filter((given) => given.type === 'selection').length;
+    const before = selections();
+    mouse(one('thead [data-id="size"] .adp-table-resizer'), 'mousedown', 300, 10);
+    expect(selections()).toBe(before);
+    mouse(window, 'mousemove', 320, 10);
+    // In Visual Studio Code a view comes while the border is held, as it does after a selection: the table is drawn again.
+    surface.receive(message(three));
+    mouse(window, 'mousemove', 340, 10);
+    const header = one<HTMLElement>('thead [data-id="size"]');
+    expect(header.style.width).toBe('200px');
+    expect(header.classList.contains('adp-table-resizing')).toBe(true);
+    mouse(window, 'mouseup', 340, 10);
+    expect(edits()).toEqual([op('setColumn', ['va'], { property: 'size', width: 200 })]);
+    expect(one('thead [data-id="size"]').classList.contains('adp-table-resizing')).toBe(false);
+  });
+
   it('moves a row by its handle, the rows selected with it, and by Alt with an arrow', () => {
     const lines = all('tbody tr.adp-table-row');
     lay(lines, 'y');
