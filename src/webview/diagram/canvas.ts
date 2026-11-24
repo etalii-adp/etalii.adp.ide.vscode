@@ -416,7 +416,10 @@ export class Canvas {
     const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement;
     const name = pressed(event);
     if (!this.scene || !this.surface.root.isConnected || typing || hostKeys.includes(name)) return;
-    const action = this.actions.find((candidate) => candidate.enabled && candidate.shortcut?.toLowerCase() === name);
+    // Tab stands for Insert where no action is offered under Tab: a Mac keyboard has no Insert key, and Tab adds a child in
+    // the standalone mind map and in XMind.
+    const action = this.actions.find((candidate) => candidate.enabled && candidate.shortcut?.toLowerCase() === name)
+      ?? (name === 'tab' && !this.actions.some((candidate) => candidate.shortcut?.toLowerCase() === 'tab') ? this.actions.find((candidate) => candidate.enabled && candidate.shortcut?.toLowerCase() === 'insert') : undefined);
     if (!action) return;
     event.preventDefault();
     this.request({ kind: 'action', action: action.id, ...(this.selection[0] !== undefined ? { id: this.selection[0] } : {}) });
@@ -518,7 +521,8 @@ export class Canvas {
   private addAtCentre(entry: string): void {
     const view = this.surface.viewport();
     const at = freePointNear(this.scene?.nodes ?? [], { x: view.x + view.width / 2, y: view.y + view.height / 2 }, view);
-    this.request({ kind: 'drop', entry, x: at.x, y: at.y });
+    // What is selected goes with it: an entry that runs an operation on an element runs it there, as it lands on none.
+    this.request({ kind: 'drop', entry, x: at.x, y: at.y, selected: [...this.selection] });
   }
 
   // ---- gestures ----

@@ -45,7 +45,7 @@ describe('the canvas', () => {
   it('adds an ADP Toolbox entry activated in its view at the centre of what it shows, under the id the tool type gives it', () => {
     const entry = type.toolbox(source)[2].id;
     canvas.receive({ v: 2, type: 'addAtCentre', entry });
-    expect(requests()).toEqual([{ kind: 'drop', entry: 'ghg.add.note', x: 0, y: 0 }]);
+    expect(requests()).toEqual([{ kind: 'drop', entry: 'ghg.add.note', x: 0, y: 0, selected: [] }]);
   });
 
   it('shows the sentence of a refusal where the user is working', () => {
