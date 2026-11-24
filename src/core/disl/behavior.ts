@@ -1197,6 +1197,9 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
           laidOut(action.layout, scopeOf(self, variables));
         } else if (isObject(action.abort)) {
           refuse(said(action.abort.message, 'This is not possible here.'));
+        } else if (isObject(action.lookup)) {
+          // DISL 0.12, 9.4: the host's lookup over the workspace, which this host does not offer yet (etalii.adp spec 089).
+          refuse('Picking an element of another document is not offered by this add-on yet.');
         } else if (typeof action.call === 'string' && Object.hasOwn(declared, action.call)) {
           act(declared[action.call].actions ?? [], self, { ...variables, p: each(action.args) ?? {} }, source);
         } else if (isObject(action.view)) {

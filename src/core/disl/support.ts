@@ -35,7 +35,7 @@ export const supportedFeatures: readonly string[] = [
  * what it adds (Appendix B.8 ends at 0.3), so what is read of it is in `docs/disl-support.md` by
  * section, and not in the list above.
  */
-export const dislMinor = 10;
+export const dislMinor = 12;
 
 /** The conformance class this interpreter states (DISL 15.1). */
 export const conformance = 'standard';

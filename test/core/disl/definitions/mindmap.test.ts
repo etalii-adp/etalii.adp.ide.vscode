@@ -162,9 +162,10 @@ describe('the view action', () => {
 
 describe('the id prefix', () => {
   it('is read as written and starts every id that is made', () => {
-    expect(persistence.value.ids).toMatchObject({ strategy: 'uuid-v4', prefix: at('persistence', 'ids', 'prefix'), encoding: 'base36' });
-    expect(newId(persistence.value, 'Node')).toMatch(/^ID_[0-9a-z]{25}$/);
-    expect(done(behavior.value.operate(map, 'addChild', ['leaf'], {})).created[0]).toMatch(/^ID_[0-9a-z]{25}$/);
+    // etalii.adp spec 089, FR-003: `ID_` and 8 characters of `0-9a-z`.
+    expect(persistence.value.ids).toMatchObject({ strategy: 'nanoid', prefix: at('persistence', 'ids', 'prefix'), alphabet: 'base36', length: 8 });
+    expect(newId(persistence.value, 'Node')).toMatch(/^ID_[0-9a-z]{8}$/);
+    expect(done(behavior.value.operate(map, 'addChild', ['leaf'], {})).created[0]).toMatch(/^ID_[0-9a-z]{8}$/);
   });
 });
 
@@ -265,7 +266,8 @@ describe('what else the definition is drawn from', () => {
         .nodes.find((drawn) => drawn.id === id)!.labels.find((label) => label.id === 'indicators')?.text;
     expect(glyphs({}, 'centre')).toBe('•');
     expect(glyphs({}, 'branch')).toBe('↗');
-    expect(glyphs({ branch: true }, 'branch')).toBe('↗ ⊕');
-    expect(glyphs({ centre: true }, 'centre')).toBe('•  ⊕');
+    // The definition joins four glyphs, the linked mark of spec 089 among them, with a space each, as they are.
+    expect(glyphs({ branch: true }, 'branch')).toBe('↗  ⊕');
+    expect(glyphs({ centre: true }, 'centre')).toBe('•   ⊕');
   });
 });
