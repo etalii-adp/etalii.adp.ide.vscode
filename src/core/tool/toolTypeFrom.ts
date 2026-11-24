@@ -18,10 +18,11 @@ import { interpretCoordinates, rulerRows } from '../disl/coordinates';
 import { createExpressions, type Scope } from '../disl/expressions';
 import { createTexts, formFor, interpretForms, type FormItem, type Subject } from '../disl/forms';
 import { interpretLayout } from '../disl/layout';
+import { indexedDocument, linkedModel, type Refreshed } from '../disl/links';
 import { defaultOf, derivedRelations, interpretMetamodel, isA, isRelation, linkKind, withDerivedNodes, type DerivedRelation } from '../disl/metamodel';
 import { emptyModel, type Finding as Found, type Model, type Value } from '../disl/model';
 import { edgeNotation, interpretNotation, nodeNotation, styleOf, type GestureRefusals, type Notation, type Paint } from '../disl/notation';
-import { derivedIds as worldIds, entryOf, foldsOf, interpretPersistence, momentAttributes, naturalId, newId, readModel, typeIds, viewEntryIds, type StoredView } from '../disl/persistence';
+import { derivedIds as worldIds, entryOf, foldsOf, interpretPersistence, momentAttributes, naturalId, newDocumentId, newId, readModel, typeIds, viewEntryIds, type StoredView } from '../disl/persistence';
 import { isCel, isObject, loadSpecification, localized, type LocalizedText } from '../disl/specification';
 import { groupsIn, interpretToolbox, type ToolGroup } from '../disl/toolbox';
 import { interpretViewpoints } from '../disl/viewpoints';
@@ -193,6 +194,10 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     readonly corners: Readonly<Record<string, Corner>>;
     /** The ids its types' own rules derive over the model, by the place of their entries, which the body is read again with. */
     readonly named?: ReadonlyMap<string, string>;
+    /** What load-time validation writes with the next edit (FBL 17.4): the links whose text differs from what resolution found. */
+    readonly refreshed: readonly Refreshed[];
+    /** Whether the next edit gives the body its document id (FBL 17.4, step 1). */
+    readonly needsId: boolean;
   }
 
   // What the FBL library asks of the tool type's specification: the id of an entry of bound view data, and which attributes hold a moment (FBL 5.3, 6.3).
@@ -227,7 +232,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   // The frame asks several things of one text in a row: the last reading is kept.
   let last: { readonly source: Source; readonly open: Open } | undefined;
   function opened(source: Source): Open {
-    if (last && last.source.text === source.text && last.source.fileName === source.fileName && last.source.registration === source.registration && last.source.folder === source.folder) return last.open;
+    if (last && last.source.text === source.text && last.source.fileName === source.fileName && last.source.registration === source.registration && last.source.folder === source.folder && last.source.links === source.links) return last.open;
     const folder = folderBinding === undefined ? undefined : source.folder;
     const binding = folder === undefined ? claimingBinding(bindings, source.fileName, source.text) ?? bindings[0] : folderBinding!;
     const readBody = (named?: ReadonlyMap<string, string>) => (folder === undefined ? bodyOf(binding, source, named) : folderBodyOf(binding, folder, named));
@@ -248,7 +253,9 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     }
     // The nodes the derived node types compute (DISL 4.11.2) are part of the model, before the derived relations, which may end at them.
     const nodes = read.unreadable ? { value: emptyModel, findings: [] } : withDerivedNodes(metamodel.value, expressions, typed.value);
-    const model = nodes.value;
+    // In a workspace, a document that holds links shows each linked element by its target and reports what does not resolve (DISL 4.12, FBL 17.4).
+    const linking = read.unreadable || source.links === undefined || persistence.value.documentId === undefined ? undefined : linkedModel(metamodel.value, nodes.value, source.links);
+    const model = linking?.model ?? nodes.value;
     const derived = derivedRelations(metamodel.value, expressions, model);
     // The reader of a binding says itself that its plugin is missing; it is said once, with the others.
     // The derived relations are part of the diagram a constraint reads (DISL 4.11), though no part of the model that is written.
@@ -257,9 +264,13 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       ...(readingLogic?.order ? readingLogic.order(checked, model) : checked),
       ...nodes.findings,
       ...derived.findings,
+      ...(linking?.findings ?? []),
     ].map(framed);
     const gate = needed.length > 0 ? messages.pluginMissing(needed[0].id) : body.isReadOnly && !read.unreadable ? binding.readOnly || messages.readOnlyFile : undefined;
-    const kept = { view: typed.view, stale: typed.stale, ...(typed.entries ? { entries: typed.entries } : {}), derived: derived.value, corners: keptBeside ? layoutOf(source.registration) : {}, ...(named === undefined ? {} : { named }) };
+    const kept = {
+      view: typed.view, stale: typed.stale, ...(typed.entries ? { entries: typed.entries } : {}), derived: derived.value, corners: keptBeside ? layoutOf(source.registration) : {}, ...(named === undefined ? {} : { named }),
+      refreshed: linking?.refreshed ?? [], needsId: linking !== undefined && read.documentId === undefined,
+    };
     // What is said of a document that cannot be read is the definition's sentence for one that cannot be edited, else the reader's finding.
     const readOnly = behavior.value.message('std.readOnly', emptyModel);
     const unread = readOnly ?? found[0]?.message ?? UNREADABLE;
@@ -531,6 +542,14 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     return text === undefined ? undefined : { operation: 're-emit-line', start: entry.ownSpan.start, end: entry.ownSpan.end, text };
   }
 
+  /** The steps of load-time validation (FBL 17.4) a document's next write carries: its document id where it has none, and each link written again. */
+  function loadTimeSteps(open: Open): readonly ModelChange[] | Refused {
+    const links: Change[] = open.refreshed.map((link) => ({ kind: 'set', id: link.element, attributes: { [link.attribute]: link.text, ...(link.label === undefined ? {} : { [link.label.attribute]: link.label.name }) } }));
+    const refreshed = links.length === 0 ? [] : modelChangesOf(links, { binding: open.binding, metamodel: metamodel.value, persistence: persistence.value, read: open.read, ...(open.entries ? { entries: open.entries } : {}) }, open.model);
+    if ('refused' in refreshed) return refreshed;
+    return [...(open.needsId ? [{ kind: 'setDocumentId' as const, id: newDocumentId(persistence.value) }] : []), ...refreshed];
+  }
+
   /** What an intent came to, as the outcome of the request: its changes planned by the library as splices of the text. */
   function carriedOut(source: Source, open: Open, outcome: Outcome, viewpoint: string, options: ViewOptions): EditOutcome {
     if (outcome.refused !== undefined) return { kind: 'refused', sentence: outcome.refused };
@@ -575,7 +594,10 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     }
     // With any write go the entries of view data that are about nothing, the last first, so that one named by its place is still at that place (DISL 11.6).
     const written = modelSteps.length + viewSteps.length > 0;
-    const steps = [...(written ? [...open.stale].reverse().map((id) => ({ kind: 'remove' as const, id })) : []), ...modelSteps, ...viewSteps];
+    // With the first write goes what load-time validation writes (FBL 17.4): the document id, and the links resolution found otherwise, in one step of the history.
+    const validation = written ? loadTimeSteps(open) : [];
+    if ('refused' in validation) return { kind: 'refused', sentence: validation.refused };
+    const steps = [...validation, ...(written ? [...open.stale].reverse().map((id) => ({ kind: 'remove' as const, id })) : []), ...modelSteps, ...viewSteps];
     // Each step is planned against the body the one before left; FBL's own history is not used (research R5).
     const body = steps.length > 0 ? bodyOf(open.binding, source, open.named) : undefined;
     const edits: Edit[] = [];
@@ -909,6 +931,13 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       folderFiles: (paths: readonly string[]) => {
         const files = memoryFiles(paths);
         return recogniseFolder(folderBinding, '/', files) ? selectedFiles(folderBinding, '/', files).map((file) => file.relativePath) : [];
+      },
+    }),
+    // The index holds a document as its body says it (FBL 17.3), so it is read without the workspace.
+    ...(persistence.value.documentId === undefined ? {} : {
+      indexed: (source: Source) => {
+        const open = opened(source.links === undefined ? source : { ...source, links: undefined });
+        return open.unreadable ? undefined : indexedDocument(metamodel.value, open.model, source.fileName, open.read.documentId);
       },
     }),
     findings: (source) => {

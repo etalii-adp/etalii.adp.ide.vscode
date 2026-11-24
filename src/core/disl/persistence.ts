@@ -9,7 +9,7 @@ import type { FblElement, FblModel, IdRequest } from '../fbl/model';
 import { attributesOf, formatYearMonth, isRelation, parseYearMonth, valueKind, type Metamodel } from './metamodel';
 import { emptyModel, finding, type Finding, type Loaded, type Model, type ModelElement, type ModelRelation, type Value } from './model';
 import type { Expressions } from './expressions';
-import { isCel, isObject, type Attribute, type Expression, type IdStrategy, type Specification, type TypeMapEntry } from './specification';
+import { isCel, isObject, type Attribute, type Expression, type IdRule, type IdStrategy, type Specification, type TypeMapEntry } from './specification';
 
 export interface InterpretedPersistence {
   readonly format: string;
@@ -20,6 +20,8 @@ export interface InterpretedPersistence {
   readonly typeMap: Readonly<Record<string, TypeMapEntry>>;
   /** What of the view is stored, and what each viewer keeps (DISL 11.6); `bind` is where a stored kind is kept in the body itself. */
   readonly view: { readonly store: readonly string[]; readonly viewer: readonly string[]; readonly initial: Readonly<Record<string, unknown>>; readonly bind: ViewBind };
+  /** *(DISL 0.12, 11.5)* How a document id is made, for a tool type whose documents hold one and so take part in links (4.12). */
+  readonly documentId?: IdRule;
 }
 
 /** `persistence.view.bind` (DISL 11.6): each stored kind onto the entries of a type of the binding, by the binding's attribute names. */
@@ -108,7 +110,8 @@ export function interpretPersistence(specification: Specification, metamodel: Me
     else problem(`\`view.bind\` binds \`${kind}\`, which is no kind that can be bound, or does not name the attributes its entries hold.`);
   }
 
-  return { value: { format, binding, ids, typeMap, view: { store, viewer: declared.view?.viewer ?? [], initial: isObject(declared.view?.initial) ? declared.view.initial : {}, bind } }, findings };
+  const documentId = isObject(declared.documentId) ? declared.documentId as IdRule : undefined;
+  return { value: { format, binding, ids, typeMap, view: { store, viewer: declared.view?.viewer ?? [], initial: isObject(declared.view?.initial) ? declared.view.initial : {}, bind }, ...(documentId === undefined ? {} : { documentId }) }, findings };
 }
 
 /**
@@ -215,6 +218,13 @@ export function newId(persistence: InterpretedPersistence, type: string, taken: 
     : encoding === 'base64url' ? btoa(String.fromCharCode(...(digits.match(/../g) ?? []).map((byte) => parseInt(byte, 16)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
       : hex;
   return before + text;
+}
+
+/** A new document id (DISL 0.12, 11.5, `persistence.documentId`): by its `nanoid` rule, else 8 characters of `0-9a-z` (FBL 17.2). */
+export function newDocumentId(persistence: InterpretedPersistence): string {
+  const rule = persistence.documentId;
+  const prefix = typeof rule?.prefix === 'string' ? rule.prefix : '';
+  return prefix + nanoid(alphabetOf(rule?.alphabet ?? 'base36'), rule?.length ?? 8);
 }
 
 /**
