@@ -336,4 +336,17 @@ describe('a failure', () => {
     // Three calls deep at most: the fourth gives the value at the limit instead.
     expect(own.evaluate('[depth(2), depth(5)]')).toMatchObject({ value: [2, 2] });
   });
+
+  it('calls a function again from within its own comprehension without losing the outer one\'s place', () => {
+    // A recursive call inside `map` evaluates the same body while the outer `map` is still running:
+    // each call must keep its own iteration and result, or a longest path comes out short, as the
+    // value stream map's columns once did.
+    const { specification, metamodel } = tool();
+    const functions = {
+      longest: { params: [{ name: 'n', type: 'int' }], returns: 'int', recursion: { maxDepth: 16, atMaxDepth: '0' }, cel: 'n <= 0 ? 0 : [n - 1, 0, n - 2].map(m, longest(m)).max() + 1' },
+    };
+    const own = createExpressions({ ...specification, functions } as never, metamodel);
+    expect(own.findings).toEqual([]);
+    expect(own.evaluate('[longest(1), longest(2), longest(4), longest(6)]')).toMatchObject({ value: [1, 2, 4, 6] });
+  });
 });

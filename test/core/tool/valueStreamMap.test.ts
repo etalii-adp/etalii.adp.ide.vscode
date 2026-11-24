@@ -39,11 +39,19 @@ describe('the value stream map', () => {
     const source = example('request-fulfilment');
     const scene = type.view(source, {});
     const label = (id: string): string | undefined => scene.nodes.find((node) => node.id === id)?.labels[0]?.text;
-    expect(label('summary-current')).toBe('Lead time 35.95 h\nProcess time 3.18 h\nFlow efficiency 8.8 %\nHand-offs 3');
-    expect(label('summary-future')).toBe('Lead time 10.23 h\nProcess time 3.18 h\nFlow efficiency 31 %\nHand-offs 3');
-    expect(label('comparison')).toBe('Current → future (difference)\nLead time 35.95 h → 10.23 h (-25.72 h)\nProcess time 3.18 h → 3.18 h (0 h)\nFlow efficiency 8.8 % → 31 %\nHand-offs 3 → 3 (0)');
+    // The figures the companion works by hand for this example (value-stream-map.md, "Request fulfilment").
+    expect(label('summary-current')).toBe('Lead time 11.51 h\nProcess time 1.05 h\nFlow efficiency 9.1 %\nHand-offs 2.2');
+    expect(label('summary-future')).toBe('Lead time 3.56 h\nProcess time 1.05 h\nFlow efficiency 29.5 %\nHand-offs 2.2');
+    expect(label('comparison')).toBe('Current → future (difference)\nLead time 11.51 h → 3.56 h (-7.94 h)\nProcess time 1.05 h → 1.05 h (0 h)\nFlow efficiency 9.1 % → 29.5 %\nHand-offs 2.2 → 2.2 (0)');
     expect(type.fields(source, ['summary-current']).every((field) => field.readOnly !== undefined)).toBe(true);
     expect(type.edit(source, { kind: 'rename', id: 'comparison', text: 'x' }, {}, false).kind).toBe('refused');
+  });
+
+  it('computes the figures the companion works by hand for the restore-service example', () => {
+    const scene = type.view(example('restore-service'), {});
+    const label = (id: string): string | undefined => scene.nodes.find((node) => node.id === id)?.labels[0]?.text;
+    expect(label('summary-current')).toBe('Lead time 5.92 h\nProcess time 1.42 h\nFlow efficiency 23.9 %\nHand-offs 3');
+    expect(label('summary-future')).toBe('Lead time 3.75 h\nProcess time 1.42 h\nFlow efficiency 37.8 %\nHand-offs 2');
   });
 
   it('labels a step with its name, its performer and its times, written short', () => {
@@ -52,6 +60,26 @@ describe('the value stream map', () => {
     expect(label('s1')).toEqual(['Log request', 'service desk', 'PT 5m · WT 10m']);
     expect(label('s4')).toEqual(['Build custom', 'platform team', 'PT 2h · WT 1d']);
     expect(label('t1')).toEqual(['Request submitted']);
+  });
+
+  it.each(['request-fulfilment', 'restore-service'])('stands no two elements of %s in the same place', (name) => {
+    // Found by the host test (spec 090, T029): the columns and rows are recursive functions over the
+    // flows, and a recursive call inside a comprehension once lost the outer one's place, so an
+    // alternative stood on the main path and a step after a branch stood back in an early column.
+    const scene = type.view(example(name), {});
+    const placed = scene.nodes.filter((node) => ['Trigger', 'Step', 'Outcome'].includes(node.type));
+    const overlapping = placed.flatMap((one, index) => placed.slice(index + 1)
+      .filter((other) => one.box.x < other.box.x + other.box.width && other.box.x < one.box.x + one.box.width && one.box.y < other.box.y + other.box.height && other.box.y < one.box.y + one.box.height)
+      .map((other) => `${one.id}/${other.id}`));
+    expect(overlapping).toEqual([]);
+  });
+
+  it('puts a step one column after the deepest step that flows into it, and an alternative on a row of its own', () => {
+    const scene = type.view(example('request-fulfilment'), {});
+    const box = (id: string) => scene.nodes.find((node) => node.id === id)!.box;
+    expect(box('s4').y).toBeGreaterThan(box('s3').y);
+    expect(box('s6').x).toBe(box('s5').x + 230);
+    expect(box('o1').x).toBe(box('s6').x + 230);
   });
 
   it('draws a trigger as a chevron and a step as a box', () => {
