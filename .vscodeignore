@@ -7,5 +7,6 @@
 !media/**
 !definitions/**
 !README.md
+!CHANGELOG.md
 !LICENSE
 dist/**/*.map

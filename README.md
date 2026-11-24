@@ -1,129 +1,149 @@
-# etalii.adp.ide.vscode
+# ADP: A Different Perspective
 
-[![Build](https://github.com/etalii-adp/etalii.adp.ide.vscode/actions/workflows/build.yml/badge.svg?branch=develop)](https://github.com/etalii-adp/etalii.adp.ide.vscode/actions/workflows/build.yml?query=branch%3Adevelop) [![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/etalii.adp?label=Marketplace)](https://marketplace.visualstudio.com/items?itemName=etalii.adp)
+[![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/etalii.adp?label=Marketplace)](https://marketplace.visualstudio.com/items?itemName=etalii.adp) [![Open VSX](https://img.shields.io/open-vsx/v/etalii/adp?label=Open%20VSX)](https://open-vsx.org/extension/etalii/adp)
 
-The ADP tools as a Visual Studio Code extension, "ADP: A Different Perspective". **Install it from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=etalii.adp)**, or search for `etalii.adp` in the Extensions view.
-
-ADP, A Different Perspective, is a range of task-focused tools: diagrams, designers and editors (see the [ADP terminology](https://github.com/etalii-adp/etalii.adp/blob/develop/docs/terminology.md)). The site is at <https://etalii.net/adp/>.
+**Visual tools for the files you already keep in your workspace.** ADP opens a mind map, a causal loop diagram, a requirements document or an incident review as a picture you can work in, right inside Visual Studio Code, and writes every change straight back to the file. Each tool is tuned for one task rather than being a general drawing canvas, so it knows what a feedback loop, a dependency or a contributing factor is, and helps you get it right.
 
 ![Four ADP tools in Visual Studio Code: a causal loop diagram, a Gartner hype cycle, an agent behavior model and a hierarchical requirement designer](media/adp-vscode-tools.png)
 
-**Where it stands.** The plug-in brings ten tool types, seven diagrams and three designers:
+## Highlights
 
-- **Gartner hype cycle graph** (`.ghg`). A `.ghg` file opens in the diagram: trends on a time axis as banners in the phases they have reached, triggers, notes, and the influences between them. Drop elements from the ADP Toolbox, rename them in place, move and resize them, drag a phase boundary, draw an influence from one trend's edge to another's, filter by tags, switch to Compact, and arrange the diagram.
-- **Agent Behavior Modelling** (Markdown). A chat agent's instructions as a behavior tree, kept as a bullet list under the `Behavior` heading of the Markdown file the agent reads. A Markdown file keeps opening as text; choose **Open With**, or **ADP: Open as Agent Behavior Modelling** from the Command Palette. Drop one of the eleven kinds of node under the node it belongs to, drag a node past a sibling to reorder the list, lower a row, right-drag from a node to another to move it under it, and change a node's kind in ADP Properties. Where rows were dragged to is kept in an `.adp` file beside the Markdown, never in it; Ctrl+Z in the diagram takes a row drag or an Arrange back like any other change, and opening that `.adp` opens the diagram.
-- **Mind map** (`.mm`). A Freeplane map opens in the diagram: ideas branching from one central topic to its left and right, each node with its text, its notes and a link. Add a child or a sibling, rename a node in place, drag a branch under another node, fold a branch, and link a node to a file or a folder. What the tool does not understand of the file is kept byte for byte, so Freeplane and FreeMind go on reading it.
-- **Causal loop diagram** (`.cld`). Variables joined by causal links that state a polarity and may be delayed, and the feedback loops an author claims, each checked against the arrows as reinforcing, balancing or undecidable. Drop a variable from the ADP Toolbox, drop a link or a loop onto a variable, connect two variables with a right-button drag, rename in place, change a link's polarity, delay, weight and note in ADP Properties, and arrange the diagram. Positions are kept in the `.adp` registration beside the `.cld`, never in it, and with nothing selected ADP Properties shows the diagram's own settings. **Export flow page** writes the diagram's animated flow page beside the `.cld` as `FILENAME {yyyy-mm-dd hh.mm}.html` and opens it, the same page the desktop host exports: from the diagram's right-click menu, the Command Palette, the right-click of a `.cld` in the Explorer or of its tab, or the ADP menu in the editor's title bar.
-- **Dependency graph** (`.dgr`). Named nodes on rows, placed freely and joined by dependencies drawn as curves with an arrowhead, a dependency that sits behind looping forward. Drop a node from the ADP Toolbox, draw a dependency out of a node's right side to what it depends on, or out of its left side from what depends on it, and let go on empty canvas to make the other node there; Tab and Enter add a node to the right or below, **ADP: Add Node** asks for a label, and X, Row and Label are edited in ADP Properties. Missing, repeated and dangling ids and self-dependencies are reported as the standalone host reports them.
-- **Agent activity diagram** (`.aad`). Which agents work on which specification of which project, where and on what system: projects in the middle, their specifications with tasks listed by status, then agents, locations and environments, laid out radiating outwards. Lock a node where you dragged it, fold a group, open a link, and show or hide what is archived. Agents keep the file current, and an open diagram follows it.
-- **Value stream map** (`.vsm`). How a service request or an incident flows from its trigger through its steps to its outcome, each step with its performer and its process and waiting time, in a current state and a future one. Drop a step from the ADP Toolbox, connect two elements, edit a step's times in ADP Properties, and **Create future state** copies the current one to improve on. Each state's lead time, process time, flow efficiency and hand-offs are drawn beside it, and the two states compared.
-- **SLO map** (OpenSLO YAML). Service level objectives as code, drawn: services, SLOs with their objectives and windows, SLIs, data sources and alerting, each reference a line, and the definition's findings, such as conflicting windows or a target out of range, at the object they concern. An object a reference names and the file does not hold is drawn as a dashed placeholder. Any `.yaml` file opens with **Open as SLO map**; change an objective's target or the SLO's window in ADP Properties. An `.adp` registration whose first line is `openslo/slo`, in a folder of OpenSLO files, opens the whole folder as one map, read-only.
-- **Knowledge** (YAML, JSON and XML). A table of rows and typed properties in a file you own, with stored views that choose, order, sort, filter and group its columns. A file whose envelope names it opens in the designer; every other YAML, JSON and XML file opens as text, as before, and **Open With** offers the designer.
-- **Hierarchical Requirement Designer** (Markdown). The requirements of one subject as boxes that contain boxes, in a Markdown file whose first line names the designer, kept by a person and an agent together; every other Markdown file opens as text, as before. Items nest to any depth and hold numbered requirements with tags, a category and a state, shown as many levels as fit with a trail and a focus. Add, type in place, drag, move with Alt and the arrow keys, and delete items and requirements on the page, or drop them from the ADP Toolbox and edit them in ADP Properties; add, change and resolve notes from their box, refer to another entry with `#` and follow the reference, change the labels and their lists, narrow and sort the page with a filter that completes what is typed and is stored by name, and drag a column's edge to the width you want. Folds, the lists' colours, stored filters and column widths are kept in the `.adp` registration beside the Markdown, never in it; a document as large as the 2,616 entries of NIST SP 800-53's controls, which ships as an example, opens well within the four seconds the standalone host allows it.
-- **Post-incident review designer** (Markdown). One incident's blameless review, kept by a person and an agent in one Markdown file: a summary, a timeline with its milestones, contributing factors and actions. A review opens on one page of sections: the summary with the time to detect, engage, mitigate and resolve, the impact, the timeline in time order on a time strip, the factors by category, the actions and the categories, where a factor is accepted or rejected, an action completed, and an entry, factor, action or category added.
+- **Eleven tools in one extension**: eight diagrams and three designers, for thinking, planning, requirements and service management.
+- **Your files stay yours.** Every tool reads and writes a plain text file (Markdown, YAML, JSON, XML or a small text format), so it diffs cleanly, lives in Git and can be edited by hand or by an AI agent at the same time.
+- **Only what you changed is changed.** An edit rewrites just the lines it concerns and leaves the rest of the file exactly as it was, including what the tool itself does not understand.
+- **Feels like VS Code.** Every change is one step of the normal Undo and Redo, the tab shows the unsaved dot, **Save** saves, and problems in a file show up in the Problems panel.
+- **Text and picture side by side.** **ADP: Open as Text** opens the same document as text next to the tool; type in one and watch the other follow.
+- **Works offline and in Restricted Mode.** The extension makes no network calls and needs nothing else installed.
+- **Three tools aligned with ITIL 4** practices: a value stream map, an SLO map and a post-incident review designer.
 
-**For ITIL 4 service management.** Three of the tools are aligned with ITIL 4 practices: the value stream map for a service's value streams, the SLO map for service level management, and the post-incident review designer for incident management and problem management. ADP is not affiliated with, endorsed or certified by AXELOS or PeopleCert; ITIL® is a registered trade mark of AXELOS Limited.
+## Getting started
 
-ADP Toolbox and ADP Properties, in the ADP container of the activity bar, offer what the tool that has the focus can add, and show and edit what is selected in it.
-Each tool is an editor on the file's own text: every change is one step in Visual Studio Code's undo, edits only the lines it concerns, and leaves the rest of the file byte for byte as it was. **Open as Text** shows the same document beside the tool, and problems in the file are listed in the Problems panel. A tool type whose definition carries instructions for an LLM has an **Include … LLM instructions** command, such as **ADP: Include Causal loop diagram LLM instructions**, which saves them as a Markdown file where you choose. The tool types are catalogued in [docs/tools.md](docs/tools.md).
+1. Install **ADP: A Different Perspective** from the Extensions view (search for `etalii.adp`).
+2. Create a document with **File > New File...** and pick one of the ADP tools, or run **ADP: New ...** from the Command Palette (`Ctrl+Shift+P`, `Cmd+Shift+P` on macOS). Or simply open a file the tool already knows, such as a `.mm` mind map.
+3. Open the **ADP** view in the activity bar. **ADP Toolbox** lists what you can add to the open tool: drag an item onto the canvas. **ADP Properties** shows and edits whatever you selected.
 
-**No tool type is written in code here.** Each is read from its definition in [etalii.adp](https://github.com/etalii-adp/etalii.adp/tree/develop/definitions), a DISL specification for a diagram or a DESL specification for a designer, with its [FBL](https://github.com/etalii-adp/etalii.adp/blob/develop/specifications/fbl/FBL-specification.md) binding, copied unchanged into [`definitions/`](definitions) ([spec 027 in etalii.adp](https://github.com/etalii-adp/etalii.adp/tree/develop/specs/027-vscode-disl-fbl-tools)). Three records say how far that goes: [docs/disl-support.md](docs/disl-support.md), what the plug-in reads of DISL 0.4 and DESL 0.2 and where a tool type differs from its definition; [docs/fbl.md](docs/fbl.md), what it implements of FBL 0.8; and [docs/parity.md](docs/parity.md), what this host does in its own way.
+Files with their own extension (`.ghg`, `.mm`, `.cld`, `.dgr`, `.aad`, `.vsm`) open in their tool straight away. Markdown, YAML, JSON and XML files keep opening as text as they always did; to open one in a tool, right-click it and choose **Open With...**, or use the tool's **ADP: Open as ...** command.
 
-## Install from the Marketplace
+## The tools
 
-Search for **ADP: A Different Perspective** in the Extensions view, or install `etalii.adp` from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=etalii.adp). Every release (see [Release](#release)) is published there.
+### Mind map (`.mm`)
 
-## Install from a file
+![A mind map in Visual Studio Code](docs/screenshots/mindmap.png)
 
-1. Download `etalii-adp-<version>.vsix` from the [Releases page](https://github.com/etalii-adp/etalii.adp.ide.vscode/releases): the **Development build** pre-release is the plug-in from the current `develop` after it passed every check.
-2. In Visual Studio Code, open the Extensions view, choose **...** and **Install from VSIX...**, and pick the file.
+Ideas branching from one central topic to the left and right. Add a child or a sibling, rename a node in place (`F2`), drag a branch under another node, fold a branch away, and give a node notes or a link to a file or folder in your workspace. Mind maps are stored in the Freeplane format, so Freeplane and FreeMind keep opening them, with everything the extension does not use left untouched.
 
-To try a pull request before it is merged, open its **Build** run under **Actions**: the run offers that pull request's `etalii-adp-<version>.vsix`.
+### Causal loop diagram (`.cld`)
 
-The plug-in needs Visual Studio Code 1.140 or later, and nothing else installed or running. It makes no network access.
+![A causal loop diagram in Visual Studio Code](docs/screenshots/causal-loop.png)
 
-## Build
+Understand how a system behaves: variables joined by cause-and-effect links, each with a polarity and an optional delay, and the feedback loops you see in them. ADP checks each loop you name against the arrows and tells you whether it is reinforcing, balancing or undecidable.
 
-You need [Node.js](https://nodejs.org) 22 or later. Nothing else: every command below installs the dependencies itself when they are missing or older than `package-lock.json`, and the tests download the Visual Studio Code they run in.
+- Drag a variable, link or loop from the ADP Toolbox, or connect two variables with a right-button drag.
+- Set a link's polarity, delay, weight and note in ADP Properties; with nothing selected, ADP Properties shows the diagram's own settings.
+- **ADP: Arrange Diagram** lays the diagram out for you.
+- **ADP: Export Flow Page** saves an animated, self-contained HTML page of the diagram next to the file and opens it, ready to share. It is also on the diagram's right-click menu, on the right-click of a `.cld` file in the Explorer and in the ADP menu of the editor title bar.
+- **ADP: Include Causal loop diagram LLM instructions** saves a Markdown guide that teaches an AI assistant how to read and write causal loop diagrams, so it can draft or extend one with you.
 
-```sh
-npm run check        # types and lint
-npm test             # check, then every test at the three levels below
-npm run package      # writes etalii-adp-<version>.vsix
-```
+### Dependency graph (`.dgr`)
 
-| Command | What it tests |
+![A dependency graph in Visual Studio Code](docs/screenshots/dependency-graph.png)
+
+Named items on rows, joined by arrows that show what depends on what: services, work packages, modules or anything else. Drag a dependency out of a node's right side to what it depends on, or out of its left side from what depends on it; let go on empty canvas and a new node appears there. `Tab` and `Enter` add a node to the right or below, and **ADP: Add Node** asks for a label. Missing, repeated or dangling references and self-dependencies are reported as problems.
+
+### Gartner hype cycle graph (`.ghg`)
+
+![A Gartner hype cycle graph in Visual Studio Code](docs/screenshots/gartner-hypecycle-graph-light.png)
+
+Plot technology trends on the hype cycle over time: each trend is a banner in the phase it has reached, with triggers, notes and the influences between trends. Rename in place, move and resize, drag a phase boundary or even them out with **ADP: Even Phases**, draw an influence from one trend to another, filter by tags, switch to a compact view with **ADP: Toggle Compact**, and let **ADP: Arrange Diagram** tidy up.
+
+### Agent Behavior Modelling (Markdown)
+
+![An agent behavior model in Visual Studio Code](docs/screenshots/agent-behavior-modelling.png)
+
+Design a chat agent's instructions as a behavior tree. The tree is kept as an ordinary bullet list under the `Behavior` heading of the Markdown file the agent reads, so the agent and the picture always agree. Drop one of eleven kinds of node under its parent, drag a node past a sibling to reorder, right-drag a node onto another to move it there, and change a node's kind in ADP Properties. Open a Markdown file with **ADP: Open as Agent Behavior Modelling**; the layout is remembered in a small `.adp` file beside it, never in the Markdown itself.
+
+### Agent activity diagram (`.aad`)
+
+![An agent activity diagram in Visual Studio Code](docs/screenshots/agent-activity-diagram.png)
+
+See at a glance which agents work on which tasks of which project, where and on what system: projects in the middle, their specifications and tasks by status, then agents, locations and environments radiating outwards. Pin a node where you dragged it, fold a group, open a link, and show or hide archived work. Agents keep the file up to date, and an open diagram follows along live.
+
+### Hierarchical Requirement Designer (Markdown)
+
+![The Hierarchical Requirement Designer in Visual Studio Code](docs/screenshots/hierarchical-requirement.png)
+
+Keep the requirements of a product or system as boxes within boxes, in a Markdown file that a person and an AI agent can maintain together. Items nest to any depth and hold numbered requirements with tags, a category and a state.
+
+- Add, type in place, drag, and move with `Alt+Up` and `Alt+Down`; delete with `Delete`.
+- Add, change and resolve notes on a box; refer to another entry with `#` and follow the reference.
+- Narrow and sort the page with a filter that completes what you type, and save filters by name.
+- Resize columns by dragging their edge; folds, colours, saved filters and widths are remembered beside the document.
+- Handles large documents: the 2,616-entry NIST SP 800-53 control catalogue opens in a few seconds.
+
+### Knowledge (YAML, JSON, XML)
+
+![The Knowledge designer in Visual Studio Code](docs/screenshots/knowledge.png)
+
+A table of rows and typed properties, like a small database, kept in a YAML, JSON or XML file you own. Define views that choose, order, sort, filter and group columns; show tags as coloured chips and relations as links; resize, hide and wrap columns. Create one with **ADP: New Knowledge**, or open an existing file with **ADP: Open as Knowledge**.
+
+### For ITIL 4 service management
+
+Three tools are aligned with ITIL 4 practices: the value stream map for a service's value streams, the SLO map for service level management, and the post-incident review designer for incident management and problem management.
+
+#### Value stream map (`.vsm`)
+
+![A value stream map in Visual Studio Code](docs/screenshots/value-stream-map.png)
+
+Follow how a service request or an incident flows from its trigger through its steps to its outcome, each step with who performs it and its process and waiting time. Lead time, process time, flow efficiency and hand-offs are calculated and shown for you. **Create future state** copies the current state so you can design the improvement, and the two states are compared side by side.
+
+#### SLO map (OpenSLO YAML)
+
+![An SLO map in Visual Studio Code](docs/screenshots/slo-map.png)
+
+See your service level objectives as code, drawn: services, SLOs with their objectives and time windows, indicators, data sources and alerting, with every reference as a line. Mistakes such as conflicting windows or a target out of range are shown right at the object concerned, and a reference to something the file does not contain is drawn as a dashed placeholder. Open any `.yaml` file with **ADP: Open as SLO map** and change a target or window in ADP Properties. An `.adp` file that names `openslo/slo` on its first line, placed in a folder of OpenSLO files, opens the whole folder as one read-only map.
+
+#### Post-incident review designer (Markdown)
+
+![The post-incident review designer in Visual Studio Code](docs/screenshots/post-incident-review.png)
+
+Write a blameless incident review in one Markdown file, together with an AI agent if you like. The review opens as a single page of sections: a summary with time to detect, engage, mitigate and resolve; the impact; the timeline in order on a time strip; contributing factors by category; and the follow-up actions. Accept or reject a factor, complete an action, and add entries, factors, actions and categories as you go.
+
+ADP is not affiliated with, endorsed or certified by AXELOS or PeopleCert. ITIL® is a registered trade mark of AXELOS Limited.
+
+## Building your own tools
+
+Every ADP tool is described in a tool description, and the extension helps you write your own. Files with the `.atd` extension get colouring, completion, hover, go to definition, rename, formatting, an outline and live problem checking. **ADP: New Tool Description** starts a new diagram, designer or editor from a working template, **ADP: Check Tool Description** checks every file of a description, and **ADP: Validate Tool Description** runs its test cases.
+
+## Commands
+
+All commands are in the Command Palette under **ADP**.
+
+| Command | What it does |
 |---|---|
-| `npm run test:unit` | The core (files, models, rules, edits) without Visual Studio Code, and the webview (canvas, table, page of boxes, toolbox, property grid) in a simulated browser. |
-| `npm run test:vscode` | The packaged plug-in, unpacked and run in a real Visual Studio Code, on a copy of the examples. A window opens while it runs. |
+| **ADP: New ...** | Creates a new document for a tool, for example **ADP: New Mind map**. Also under **File > New File...** |
+| **ADP: Open as ...** | Opens the current Markdown, YAML, JSON or XML file in a tool |
+| **ADP: Open as Text** | Opens the document as text beside the tool |
+| **ADP: Arrange Diagram** | Lays out the open diagram automatically |
+| **ADP: Add Node** | Adds a node to a dependency graph |
+| **ADP: Rename** (`F2`) / **ADP: Remove** (`Delete`) | Renames or removes the selection |
+| **ADP: Move Earlier** (`Alt+Up`) / **ADP: Move Later** (`Alt+Down`) | Moves the selection up or down among its siblings |
+| **ADP: Even Phases** / **ADP: Toggle Compact** | Spaces the hype cycle's phases evenly, or switches its compact view |
+| **ADP: Export Flow Page** | Saves an animated HTML page of a causal loop diagram |
+| **ADP: Include ... LLM instructions** | Saves a guide that teaches an AI assistant to work with a tool's files |
+| **ADP: Focus on ADP Toolbox** / **ADP: Focus on ADP Properties** | Moves the keyboard to the side bar views |
+| **ADP: New / Check / Validate Tool Description** | Creates and checks your own tool descriptions |
 
-The build fetches the language server of `.atd` tool descriptions from the desktop host's release that `vendor/atd-lsp.lock` names, checking its SHA-256 ([docs/atd.md](docs/atd.md)); `npm run fetch-atd-lsp` does it again.
+## Requirements
 
-Reports are written to `reports/`. On Windows, keep the clone at a short path: the Visual Studio Code the tests download does not start from a path near the 260-character limit.
+Visual Studio Code 1.140 or later. Nothing else needs to be installed or running, and no account is needed.
 
-Every pull request into `develop` and every change to `develop` is checked by the Build workflow (`.github/workflows/build.yml`), which runs the same commands. Its summary lists the tests that were skipped and why, and its test reports are kept with the run.
+## Feedback and more
 
-## Release
-
-A release is a tag `v<version>` on a commit of `develop`, where `<version>` is the `version` in `package.json`. Pushing the tag runs the Build workflow on that commit; when every check passes, its `release` job makes the release `v<version>` on the Releases page with `etalii-adp-<version>.vsix`, and publishes that same file to the Visual Studio Marketplace and to Open VSX. A tag that names another version, or a commit that is not on `develop`, is refused.
-
-```sh
-git tag v0.1.0 origin/develop
-git push origin v0.1.0
-```
-
-Raise the version in `package.json` right after a release: the Marketplace accepts each version once.
-
-It needs, once:
-
-- A Marketplace publisher whose id is the `publisher` in `package.json` (`etalii`), made at <https://marketplace.visualstudio.com/manage>.
-- A namespace `etalii` on [Open VSX](https://open-vsx.org).
-- A trusted publisher on each store for this repository (`etalii-adp/etalii.adp.ide.vscode`) and its workflow `build.yml`: the publisher's Trusted Publishing policy for GitHub on the Marketplace, and the namespace's trusted publisher on Open VSX. The `release` job then publishes with its own OIDC token (`vsce publish --oidc`, `ovsx publish --trusted-publishing`); no store token is stored as a secret. Open VSX accepts a trusted publisher only for an extension it already holds, so its first versions were published by hand with a personal access token; since v0.2.0 both stores take every release from the `release` job. A release whose publish step failed is published again by re-running that job, which leaves a store already holding the version as it is.
-
-## Debug
-
-Open this folder in Visual Studio Code and start **Run ADP** (F5). A second window opens with the plug-in loaded on `.debug/examples`, a copy of `examples/` that is refreshed on every start, so nothing you edit there changes what the tests read. On a fresh clone the first start also installs the dependencies, which takes a minute; nothing has to be run beforehand.
-
-- Breakpoints work in the original TypeScript in both halves: the code that runs in the extension host (`src/extension`, `src/core`) and the code that runs in a webview (`src/webview`).
-- The build runs in watch mode while you debug. After a change, run **Developer: Reload Window** in the second window. Build and type errors show in the Problems panel as you type.
-- **Debug core and webview tests** runs the test file that is open under the debugger. **Debug tests in Visual Studio Code** does the same for the tests under `test/vscode`.
-
-## Layout
-
-| Path | What it is |
-|---|---|
-| `definitions/<tool>` | One folder per tool type: its DISL or DESL specification, its FBL binding and its companion document, copied unchanged from etalii.adp and etalii.adp.ide.standalone, with `PROVENANCE.md` recording where each came from. Never edited here. The folder ships in the package and is read when the plug-in starts. |
-| `src/core` | Everything that knows a definition. It knows nothing of Visual Studio Code or a browser, and the lint rules keep it so. |
-| `src/core/disl`, `src/core/desl` | The DISL interpreter, taken from etalii.adp.ide.notion (see its [origin](src/core/disl/ORIGIN.md)) and owned here, and what DESL adds to it: a table surface and operations. |
-| `src/core/scene` | A model as a scene: the shapes, lines and labels a diagram's notation gives, with their geometry. |
-| `src/core/tool` | A definition as a tool type: `toolTypeFrom` turns a folder of `definitions/` into the one contract the frame serves (`src/core/frame/toolType.ts`), with what a diagram shows as a scene and what a designer shows as a table view. |
-| `src/core/plugins/<plugin>` | The code a definition names as a plugin, and the view logic of the Knowledge designer, each registered in `src/core/plugins/index.ts`. The only place where code is for one tool type. |
-| `src/core/fbl` | The FBL implementation: bodies and registrations read and written through FBL bindings, by splices on bytes; see [docs/fbl.md](docs/fbl.md). |
-| `src/extension` | The part that runs in the extension host: it reads `definitions/`, opens a file in its tool, applies an edit's splices as one edit of the text document, and reports findings. |
-| `src/webview` | The part that runs in webviews: the canvas that draws the scene of every diagram (`src/webview/diagram`), the table of a designer (`src/webview/table`), the page of boxes of a designer of the `hierarchy` kind (`src/webview/hierarchy`), and the ADP Toolbox and ADP Properties views. `npm run look` draws one example in a page outside Visual Studio Code, for a quick look at the drawing. |
-| `examples`, `fixtures` | Example documents and test fixtures, copied unchanged from etalii.adp.ide.standalone and, for `fixtures/tools/desl/`, from etalii.adp; see [their provenance](examples/PROVENANCE.md). |
-| `fixtures/fbl` | What the FBL implementation is tested on, copied unchanged from two sources: FBL's example bindings, fixtures and registrations from etalii.adp, and the real files standalone's FBL tests read from etalii.adp.ide.standalone; see [their provenance](fixtures/fbl/PROVENANCE.md). `npm run sync-fbl` refreshes them. |
-| `test/core`, `test/webview`, `test/vscode` | The three test levels. |
-
-## Adding a tool type
-
-A tool type is a folder of `definitions/`, and adding one writes no code as long as its definition uses only what [docs/disl-support.md](docs/disl-support.md) lists. With the clones of etalii.adp and etalii.adp.ide.standalone beside this one:
-
-```sh
-npm run sync-definitions -- ../etalii.adp ../etalii.adp.ide.standalone --add definitions/diagrams/<name>.dis
-npm run sync-definitions -- --check
-```
-
-The first command copies the specification, its companion and the binding it names, byte for byte from the `origin/develop` of both clones, copies the LLM instructions `definitions/diagrams/<name>/README.md` as `llm-instructions.md` where etalii.adp has them, writes the folder's `PROVENANCE.md`, and writes the tool type's custom editor and commands into `package.json`. A designer is added the same way with `--add definitions/designers/<name>.des`. Commit the folder and `package.json`, add the tool type's row to [docs/tools.md](docs/tools.md) and its subsection to "Differences from each definition" in the support record. Its examples are copied by `npm run sync-examples`, once `scripts/sync-examples.mjs` names them.
-
-Without `--add` the command refreshes every folder to the newest definitions. To remove a tool type, delete its folder and run the command. `--check` copies nothing: it fails when a copy differs from its record or `package.json` from the copies, and the Build workflow runs it.
-
-A definition that asks for more than the support record lists still opens: what is not read is reported as a finding. The construct is then built once, for every tool type, in `src/core/disl`, `src/core/desl`, `src/core/scene` or `src/core/tool`, where no tool type may be named, and its row is added to the support record in the same change. A plugin a definition names is written under `src/core/plugins/<plugin>` and registered by its id. Where a definition and the standalone host disagree, or a language cannot state what the tool needs, the definition is followed and the difference is raised as an issue in etalii.adp, never settled here.
-
-## How work is done here
-
-Every change starts as a specification, using GitHub Spec Kit in [etalii.adp](https://github.com/etalii-adp/etalii.adp), which also holds [this repository's principles](https://github.com/etalii-adp/etalii.adp/blob/develop/.specify/memory/repositories/etalii.adp.ide.vscode.md). See `CLAUDE.md`.
+- Release notes: see the [changelog](CHANGELOG.md).
+- Questions, ideas and bug reports: [GitHub issues](https://github.com/etalii-adp/etalii.adp.ide.vscode/issues).
+- More about ADP and its other hosts: [etalii.net/adp](https://etalii.net/adp/).
+- Building or contributing to the extension: [docs/development.md](docs/development.md).
 
 ## Licence
 
-[Apache License 2.0](LICENSE). The plug-in ships three third-party libraries, bundled into it: [yaml](https://github.com/eemeli/yaml) (ISC), which reads YAML documents and never writes them, [cel-js](https://github.com/marcbachmann/cel-js) (MIT), which evaluates the expressions of a DISL or DESL specification, and the icons the tool definitions name from [Material Design Icons](https://github.com/Templarian/MaterialDesign-JS) (Apache-2.0).
+[Apache License 2.0](LICENSE). The extension bundles [yaml](https://github.com/eemeli/yaml) (ISC), [cel-js](https://github.com/marcbachmann/cel-js) (MIT) and icons from [Material Design Icons](https://github.com/Templarian/MaterialDesign-JS) (Apache-2.0).
