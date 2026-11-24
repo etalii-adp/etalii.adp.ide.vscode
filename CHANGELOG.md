@@ -7,6 +7,7 @@ All notable changes to **ADP: A Different Perspective** are listed here, newest 
 ### Fixed
 
 - **Causal loop diagram:** in an exported flow page, variable names are now readable at every heat. A variable just above the middle of the scale showed a dark name on a mid-brown fill; the name now takes whichever of a dark and a light ink stands out more.
+- **Causal loop diagram:** in an exported flow page, each link now curves to the same side as on the canvas, and a link whose curve you flipped is flipped on the page too. Before, every curve was drawn on the other side.
 
 ### Changed
 

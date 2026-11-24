@@ -1,6 +1,6 @@
 # The desktop host's flow pages
 
-Each page here was written by the desktop host's own generator, the example `flow_page` of its causal loop diagram module, run at [etalii-adp/etalii.adp.ide.desktop](https://github.com/etalii-adp/etalii.adp.ide.desktop) commit `c7c6a480d5ee5f1a86ee468b7c89ac1a40420f47`, the commit the template in `src/core/plugins/cld-flow-page/` was copied from (etalii.adp spec 082, research R3):
+Each page here was written by the desktop host's own generator, the example `flow_page` of its causal loop diagram module, run at [etalii-adp/etalii.adp.ide.desktop](https://github.com/etalii-adp/etalii.adp.ide.desktop) commit `8dee3905c7a6dbd32423b5f422c9d3daa3578533`, the commit the template in `src/core/plugins/cld-flow-page/` was copied from (etalii.adp spec 082, research R3):
 
 ```sh
 cargo run -p adp-diagram-causal-loop --example flow_page -- <document>.cld <page>.html

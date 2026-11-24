@@ -4,7 +4,7 @@
 // generator, `flow_page.rs` of etalii.adp.ide.desktop, step for step (spec 082, research R2).
 //
 // `DATA` holds what the page reads: `v`, each variable as `[id, label, x, y, start, push]`; `l`, each
-// link as `[from, to, sign, delayed, note, weight]`; `o`, each loop as `[id, name, [member ids]]`;
+// link as `[from, to, sign, delayed, note, weight, flipped]`; `o`, each loop as `[id, name, [member ids]]`;
 // `c`, the ids of the chart's series; and `p`, the dynamics and the heatmap reading. Every number is
 // limited to the range of its control. A link that names no variable, and a loop whose links do not
 // close it, are left out, since the page has no way to draw either.
@@ -100,7 +100,7 @@ function data(model: Model, centres: ExportRequest['centres']): string {
 
   const drawn = links.filter((link) => declared.has(textOf(link.attributes, 'causeName')) && declared.has(textOf(link.attributes, 'effectName')));
   const linkTexts = drawn.map((link) =>
-    `[${jsonText(textOf(link.attributes, 'causeName'))},${jsonText(textOf(link.attributes, 'effectName'))},${signOf(link)},${link.attributes.delayed === true ? 1 : 0},${jsonText(textOf(link.attributes, 'note'))},${numberText(startingStrength(link))}]`);
+    `[${jsonText(textOf(link.attributes, 'causeName'))},${jsonText(textOf(link.attributes, 'effectName'))},${signOf(link)},${link.attributes.delayed === true ? 1 : 0},${jsonText(textOf(link.attributes, 'note'))},${numberText(startingStrength(link))},${link.attributes.flipped === true ? 1 : 0}]`);
 
   // The sign of the first link between two variables, by their names.
   const signs = new Map<string, number>();
