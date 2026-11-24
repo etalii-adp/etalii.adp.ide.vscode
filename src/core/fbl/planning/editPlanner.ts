@@ -26,6 +26,9 @@ export function planEdit(reading: BodyReading, change: ModelChange, added: Reado
       case 'set':
         planSet(plan, reading, change);
         break;
+      case 'migrate':
+        planSet(plan, reading, { kind: 'set', id: change.id, attributes: change.attributes }, true, change.after);
+        break;
       case 'add':
         planAdd(plan, reading, change, added);
         break;
@@ -135,9 +138,9 @@ function planStoreId(plan: Plan, reading: BodyReading, store: ModelChange & { ki
 const idBinding = (from: Slot): AttributeBinding =>
   ({ key: from.key, attribute: from.attribute, child: from.child, group: from.group, text: false, flag: false, absent: new Map(), keepTimePrecision: false, htmlParagraphs: false });
 
-function planSet(plan: Plan, reading: BodyReading, set: ModelChange & { kind: 'set' }): void {
+function planSet(plan: Plan, reading: BodyReading, set: ModelChange & { kind: 'set' }, migrating = false, after?: string): void {
   const element = elementOf(reading, set.id);
-  refuseReadOnly(element.rule, 'changed');
+  if (!migrating) refuseReadOnly(element.rule, 'changed');
   const changes: SlotChange[] = [];
   let newKey: string | undefined;
   for (const [attribute, requested] of Object.entries(set.attributes)) {
@@ -163,7 +166,10 @@ function planSet(plan: Plan, reading: BodyReading, set: ModelChange & { kind: 's
       }
     }
     if (!binding) refuse(messages.attributeNotKept(element.rule.type, attribute));
-    if (isComputed(binding) || binding.parent !== undefined || !read.writable) {
+    // A conversion writes what is read-only to every other change, and leaves what is written as it asks alone.
+    const pastReadOnly = migrating && read.reason !== undefined && read.reason === (binding.readOnly ?? element.rule.readOnly);
+    if (migrating && read.present && plain(read.value) === plain(value)) continue;
+    if (isComputed(binding) || binding.parent !== undefined || (!read.writable && !pastReadOnly)) {
       refuse(read.reason !== undefined && read.reason.length > 0 ? read.reason : messages.attributeNotChanged(attribute, element.rule.type));
     }
     const empty = isEmpty(value) || (binding.flag && value === false);
@@ -179,7 +185,7 @@ function planSet(plan: Plan, reading: BodyReading, set: ModelChange & { kind: 's
         newKey = key;
       }
     }
-    changes.push({ attribute, binding, rule, read, value, isEmpty: empty });
+    changes.push({ attribute, binding, rule: after !== undefined && !read.present && rule === element.rule ? placedAfter(rule, after, attribute) : rule, read, value, isEmpty: empty });
   }
   if (changes.length > 0) reading.family.write(plan, element, changes);
   if (newKey !== undefined) rewriteReferences(plan, reading, element, newKey);
@@ -193,6 +199,20 @@ function planSet(plan: Plan, reading: BodyReading, set: ModelChange & { kind: 's
     }
   }
   if (element.rule.snapshotUndo) plan.snapshot = true;
+}
+
+/** The rule with the order its keys are written in changed: the attribute `moved` right after `after` (a conversion's placement). */
+function placedAfter(rule: Rule, after: string, moved: string): Rule {
+  const wireOf = (name: string): string | undefined => {
+    const binding = attributeOf(rule, name);
+    return binding?.key ?? binding?.attribute;
+  };
+  const own = rule.attributes.flatMap(([name]) => (name === moved ? [] : [wireOf(name)].filter((wire): wire is string => wire !== undefined)));
+  const going = [wireOf(moved)].filter((wire): wire is string => wire !== undefined);
+  const anchor = wireOf(after);
+  const at = anchor === undefined ? own.length : own.indexOf(anchor) + 1;
+  const keys = [...own.slice(0, at), ...going, ...own.slice(at)];
+  return { ...rule, insert: { ...(rule.insert ?? { place: 'end' }), keys } };
 }
 
 const slotName = (slot: Slot): string => slot.key ?? slot.attribute ?? slot.group ?? slot.capture ?? slot.child ?? 'value';

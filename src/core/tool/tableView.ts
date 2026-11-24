@@ -9,6 +9,7 @@ import { attributesOf, defaultOf, valueKind, type Metamodel } from '../disl/meta
 import type { Change } from '../disl/behavior';
 import type { Model, ModelElement, Value } from '../disl/model';
 import type { Severity } from '../frame/toolType';
+import type { IndexedDocument, LinkWorkspace } from '../fbl/links/workspace';
 import { isCel, localized } from '../disl/specification';
 
 /** A value of the model as a request carries it. */
@@ -409,7 +410,7 @@ export interface ViewLogic {
   /** The colour of an option, by the value its colour attribute holds. */
   colour?(key: string): ThemedColour | undefined;
   /** The files other than its own that a document's columns name rows of, as it writes them. */
-  targets?(model: Model): readonly string[];
+  targets?(model: Model, linking?: TableLinking): readonly string[];
   /** The columns whose values name rows, by the property's id: of which file, and that file's rows. */
   relations?(table: TableData): Readonly<Record<string, TableRelation>>;
   /** What the tool type finds of those values and files that no constraint can state, because it reads another file. */
@@ -432,6 +433,14 @@ export interface ViewLogic {
    * required one is still asked, starting at the first.
    */
   choices?(table: TableData): Readonly<Record<string, Readonly<Record<string, readonly { readonly value: string; readonly label: string }[]>>>>;
+  /** What a value of several picked in a cell is written as, or, taken away, the one the cell holds for it: a link to a row, say (FBL 17.1). */
+  itemValue?(table: TableData, property: string, row: string, value: string, present: boolean): string;
+  /** The document as the workspace's index of links holds it (FBL 17.3), by its path there. */
+  indexed?(table: TableData, path: string): IndexedDocument;
+  /** Columns the table shows that no file holds, computed from the workspace: backlinks, say (FBL 17.5). */
+  shownColumns?(table: TableData): readonly ModelElement[];
+  /** What loading the document for editing in a workspace writes of it, with the next edit (FBL 17.4): nothing when nothing differs. */
+  conversion?(table: TableData, version: string, fileName: string, newDocumentId: () => string): { readonly migrate: Readonly<Record<string, Value>>; readonly changes: readonly Change[] };
 }
 
 /** An operation run on a document, as a step that may write another file too. */
@@ -452,6 +461,8 @@ export interface TableStep {
   readonly peers: readonly string[];
   /** Whether the user has confirmed the step already. */
   readonly confirmed: boolean;
+  /** The workspace's links, where the document is in a folder of the workspace (FBL 17.3). */
+  readonly linking?: TableLinking;
 }
 
 /** A question to ask before a step is made. */
@@ -474,6 +485,8 @@ export interface TableAcross {
 export interface TableRelation {
   /** The file as the column names it; `.` is the document itself. */
   readonly file: string;
+  /** The id of the row a value names, where a value is more than the id, as a link is (FBL 17.1). */
+  readonly idOf?: (value: string) => string;
   /** Whether a cell names one row at most. */
   readonly single: boolean;
   /** Its rows, by title, in its order; absent when the file cannot be read as a document of this tool type. */
@@ -516,6 +529,14 @@ export interface TableData {
   readonly related?: RelatedRows;
   /** The other documents of the same tool type the host knows of, each as this one would name it. */
   readonly peers?: readonly string[];
+  /** The workspace's links, where the document is in a folder of the workspace (FBL 17.3). */
+  readonly linking?: TableLinking;
+}
+
+/** The workspace a document resolves its links in (FBL 17.3), and its own path there. */
+export interface TableLinking {
+  readonly links: LinkWorkspace;
+  readonly path: string;
 }
 
 export interface ShownView {
@@ -689,12 +710,12 @@ export function tableReader(parts: TableParts) {
   }
 
   /** The table view of a model: the view the document is left in, else the first (DESL 7.4), applied to its columns and rows. */
-  function view(model: Model, state: Pick<TableView, 'readOnly' | 'notice'>, related?: RelatedRows, peers?: readonly string[]): TableView {
+  function view(model: Model, state: Pick<TableView, 'readOnly' | 'notice'>, related?: RelatedRows, peers?: readonly string[], linking?: TableLinking): TableView {
     const tabs = model.elements.filter((element) => element.type === views.type);
     const left = views.active === undefined ? undefined : model.diagram[views.active];
     const active = (tabs.find((tab) => tab.id === left) ?? tabs[0])?.id;
-    const all = tableOf(model, related);
-    const data: TableData = { model, metamodel, ...(active === undefined ? {} : { view: active }), properties: all.properties, rows: all.rows, ...(related ? { related } : {}), ...(peers ? { peers } : {}) };
+    const all = tableOf(model, related, linking);
+    const data: TableData = { model, metamodel, ...(active === undefined ? {} : { view: active }), properties: all.properties, rows: all.rows, ...(related ? { related } : {}), ...(peers ? { peers } : {}), ...(linking ? { linking } : {}) };
     const shown: ShownView = logic?.shown(data) ?? {};
     const operations = operationsOf(model, metamodel, parts.operations, locale, labelOf);
     for (const [operation, params] of Object.entries(logic?.choices?.(data) ?? {})) {
@@ -744,16 +765,16 @@ export function tableReader(parts: TableParts) {
    * link to it, and what the tool type finds of them: a related row is named by its title, not its id.
    */
   // The last table made: the view and the findings of one document ask for it in turn.
-  let last: { readonly model: Model; readonly related?: RelatedRows; readonly table: ReturnType<typeof tableOf> } | undefined;
-  function tableOf(model: Model, related?: RelatedRows): { readonly properties: readonly TableProperty[]; readonly rows: readonly TableRow[]; readonly found: readonly TableFound[] } {
-    if (last && last.model === model && last.related === related) return last.table;
-    const table = linkedTable(model, related);
-    last = { model, ...(related ? { related } : {}), table };
+  let last: { readonly model: Model; readonly related?: RelatedRows; readonly linking?: TableLinking; readonly table: ReturnType<typeof tableOf> } | undefined;
+  function tableOf(model: Model, related?: RelatedRows, linking?: TableLinking): { readonly properties: readonly TableProperty[]; readonly rows: readonly TableRow[]; readonly found: readonly TableFound[] } {
+    if (last && last.model === model && last.related === related && last.linking?.links === linking?.links && last.linking?.path === linking?.path) return last.table;
+    const table = linkedTable(model, related, linking);
+    last = { model, ...(related ? { related } : {}), ...(linking ? { linking } : {}), table };
     return table;
   }
 
-  function linkedTable(model: Model, related?: RelatedRows): { readonly properties: readonly TableProperty[]; readonly rows: readonly TableRow[]; readonly found: readonly TableFound[] } {
-    const data: TableData = { model, metamodel, properties: propertiesOf(model), rows: rowsOf(model), ...(related ? { related } : {}) };
+  function linkedTable(model: Model, related?: RelatedRows, linking?: TableLinking): { readonly properties: readonly TableProperty[]; readonly rows: readonly TableRow[]; readonly found: readonly TableFound[] } {
+    const data: TableData = { model, metamodel, properties: propertiesOf(model), rows: rowsOf(model), ...(related ? { related } : {}), ...(linking ? { linking } : {}) };
     const relations = logic?.relations?.(data) ?? {};
     if (Object.keys(relations).length === 0) return { properties: data.properties, rows: data.rows, found: [] };
     const titles = new Map(Object.entries(relations).map(([id, relation]) => [id, relation.rows && new Map(relation.rows.map((row) => [row.id, row.name]))]));
@@ -771,7 +792,9 @@ export function tableReader(parts: TableParts) {
           : row.cells[id];
         const named = titles.get(id);
         if (!cell || !named) continue;
-        const items = cell.items.map((item): TableItem => {
+        // A value that is a link is shown, and picked, by the id of the row it names (FBL 17.1); it is written as the link.
+        const items = cell.items.map((held): TableItem => {
+          const item = relation.idOf ? { ...held, value: relation.idOf(held.value) } : held;
           const title = named.get(item.value);
           return title === undefined ? { ...item, label: item.value } : { ...item, label: title || item.value, link: { file: relation.file, row: item.value } };
         });
@@ -784,7 +807,7 @@ export function tableReader(parts: TableParts) {
   }
 
   /** What the tool type finds of the values that name rows of another file. */
-  const foundOf = (model: Model, related?: RelatedRows): readonly TableFound[] => (logic?.relations ? tableOf(model, related).found : []);
+  const foundOf = (model: Model, related?: RelatedRows, linking?: TableLinking): readonly TableFound[] => (logic?.relations ? tableOf(model, related, linking).found : []);
 
   return { view, propertiesOf, rowsOf, titlesOf, foundOf };
 }

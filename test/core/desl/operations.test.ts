@@ -84,13 +84,14 @@ const samples: Readonly<Record<string, Sample>> = {
   hideEmptyGroups: { on: ['v1'], args: { hide: true } },
   setGroup: { on: ['v1'], args: { slot: 'collapsed', key: 'o1' } },
   unsetGroup: { on: ['v1/groupOrder/o2'], first: [['setGroup', ['v1'], { slot: 'groupOrder', key: 'o2' }]] },
+  setNewOption: { on: ['r1'], args: { property: 'p2', name: 'Luxembourg' } },
   moveGroup: { on: ['v1/groupOrder/o1'], first: [['setGroup', ['v1'], { slot: 'groupOrder', key: 'o2' }], ['setGroup', ['v1'], { slot: 'groupOrder', key: 'o1' }]] },
 };
 
 describe('the operations of a designer', () => {
   it('are those the definition lists, each with its label, what it is for and its parameters', () => {
     expect(operations.all.map((operation) => operation.id)).toEqual(Object.keys(declared));
-    expect(operations.all).toHaveLength(55);
+    expect(operations.all).toHaveLength(56);
     for (const operation of operations.all) {
       const written = object(declared[operation.id]);
       expect(operation.label, operation.id).toBe(written.label);
@@ -157,7 +158,7 @@ describe('an operation', () => {
   it('gives a new element the id its type\'s rule says: a new one, or the one derived from the model', () => {
     const property = added(run('addProperty', [], { name: 'Mayor', valueType: 'text' }))[0];
     expect(property).toMatchObject({ type: 'Property', attributes: { name: 'Mayor', valueType: 'text' } });
-    expect(property.id).toMatch(/^[0-9a-z]{25}$/);
+    expect(property.id).toMatch(/^[0-9a-z]{8}$/);
     expect(added(run('setNumber', ['r2'], { property: 'p3', value: 536079 }))).toEqual([
       { kind: 'add', id: 'r2/p3', type: 'Cell', parent: 'r2', slot: 'cells', attributes: { property: 'p3', number: 536079 } },
     ]);

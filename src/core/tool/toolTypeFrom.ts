@@ -57,7 +57,7 @@ import { missingPlugins, pluginReferences, type PluginRegistry } from './pluginR
 import { layoutOf, newRegistration, withLayout, type Corner } from './registrationLayout';
 import { hierarchyReader, type HierarchyRequest, type HierarchyView, type NodeFinding } from './hierarchyView';
 import { sectionsReader, type SectionsRequest, type SectionsView } from './sectionsView';
-import { CREATED, tableReader, withFindings, type RelatedRows, type TableGestures, type TableProperty, type TableRequest, type TableValue, type TableView } from './tableView';
+import { CREATED, tableReader, withFindings, type RelatedRows, type TableData, type TableGestures, type TableLinking, type TableProperty, type TableRequest, type TableValue, type TableView } from './tableView';
 import { wireIdsOf } from './wireIds';
 
 // The host's own sentences, for what a definition has no words for.
@@ -1171,11 +1171,21 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     relatedRead.set(key, { text: given.text, rows });
     return rows;
   });
+  /** The workspace a document resolves its links in, where it is in one (FBL 17.3). */
+  const linkingOf = (source: Source): TableLinking | undefined => (source.links === undefined ? undefined : { links: source.links, path: source.linkPath ?? source.fileName });
+  /** The model as the table shows it: with the columns the tool type computes from the workspace, which no file holds. */
+  const shownModel = (source: Source, open: Open): Model => {
+    if (!table || !logic?.shownColumns || open.unreadable) return open.model;
+    const related = relatedOf(source);
+    const linking = linkingOf(source);
+    const columns = logic.shownColumns({ model: open.model, metamodel: metamodel.value, properties: table.propertiesOf(open.model), rows: table.rowsOf(open.model), ...(related ? { related } : {}), ...(source.peers ? { peers: source.peers } : {}), ...(linking ? { linking } : {}) });
+    return columns.length === 0 ? open.model : { ...open.model, elements: [...open.model.elements, ...columns] };
+  };
   /** The tool type's own findings of the values that name rows of the files a document names. */
   const relatedFound = (source: Source, open: Open): NodeFinding[] => {
     if (!table || open.unreadable) return [];
     const lines = new Map(open.model.elements.map((element) => [element.id, element.line]));
-    return table.foundOf(open.model, relatedOf(source)).map((found) => ({ rule: found.code, severity: found.severity, message: found.message, line: Math.max(0, (lines.get(found.element) ?? 1) - 1), element: found.element }));
+    return table.foundOf(shownModel(source, open), relatedOf(source), linkingOf(source)).map((found) => ({ rule: found.code, severity: found.severity, message: found.message, line: Math.max(0, (lines.get(found.element) ?? 1) - 1), element: found.element }));
   };
 
   function readOpen(source: Source): Open {
@@ -1259,7 +1269,8 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     }
     if (!table || open.unreadable) return emptyTable(open.refusal ?? UNREADABLE);
     const related = relatedOf(source);
-    const shown = withFindings(table.view(open.model, { readOnly: open.refusal !== undefined, ...(open.refusal === undefined ? {} : { notice: open.refusal }) }, related, source.peers), [...open.found, ...relatedFound(source, open)], open.model);
+    const model = shownModel(source, open);
+    const shown = withFindings(table.view(model, { readOnly: open.refusal !== undefined, ...(open.refusal === undefined ? {} : { notice: open.refusal }) }, related, source.peers, linkingOf(source)), [...open.found, ...relatedFound(source, open)], model);
     return shown.gestures && operations ? { ...shown, gestures: checkedGestures(shown.gestures, open.model) } : shown;
   };
 
@@ -1598,6 +1609,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
       back: (file) => relativePath(source.related?.[file]?.fileName ?? file, source.fileName),
       newId: (type) => newId(persistence, entryOf(persistence, type).as),
       peers: source.peers ?? [], confirmed,
+      ...(source.links === undefined ? {} : { linking: linkingOf(source)! }),
     });
     if (step === undefined) return undefined;
     if ('refused' in step) return { kind: 'refused', sentence: step.refused };
@@ -1628,7 +1640,45 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     }
   }
 
-  function editTable(source: Source, request: TableRequest, options: ViewOptions, confirmed: boolean): EditOutcome {
+  /** The table of a document as the tool type's own logic is given it, in its workspace. */
+  function dataOf(source: Source, open: Open): TableData {
+    const related = relatedOf(source);
+    const linking = linkingOf(source);
+    return { model: open.model, metamodel: metamodel.value, properties: table!.propertiesOf(open.model), rows: table!.rowsOf(open.model), ...(related ? { related } : {}), ...(source.peers ? { peers: source.peers } : {}), ...(linking ? { linking } : {}) };
+  }
+
+  /**
+   * What loading a document for editing in a workspace writes of it (FBL 17.4), planned on its text: the root's
+   * attributes past their `readOnly` (its version, its document id), then the changes of the model. Nothing outside a
+   * workspace, or for a tool type that takes no part in links.
+   */
+  function conversionOf(source: Source, open: Open): { readonly edits: readonly Edit[]; readonly text: string } | Refused {
+    if (!table || !logic?.conversion || source.links === undefined || persistence.documentId === undefined) return { edits: [], text: source.text };
+    const root = open.read.elements.find((element) => entryOf(persistence, element.type).as === 'diagram');
+    const version = root === undefined ? '' : String(root.attributes.version ?? '');
+    const { migrate, changes } = logic.conversion(dataOf(source, open), version, nameOf(source.linkPath ?? source.fileName), () => newDocumentId(persistence));
+    if (Object.keys(migrate).length === 0 && changes.length === 0) return { edits: [], text: source.text };
+    const body = bodyOf(open.binding, source);
+    const edits: Edit[] = [];
+    if (Object.keys(migrate).length > 0) {
+      if (root === undefined) return { refused: UNREADABLE };
+      // A new document id goes after the envelope's designer type, as a new file's template writes it (DED 2).
+      const planned = body.change({ kind: 'migrate', id: root.id, attributes: migrate, after: 'designer' });
+      if ('refused' in planned) return planned;
+      edits.push(planned.planned);
+    }
+    const steps = modelChangesOf(changes, { binding: open.binding, metamodel: metamodel.value, persistence, read: body.model }, open.model);
+    if ('refused' in steps) return steps;
+    for (const step of steps) {
+      const planned = body.change(step);
+      if ('refused' in planned) return planned;
+      edits.push(planned.planned);
+    }
+    return { edits, text: decode(body.bytes) };
+  }
+
+  function editTable(source: Source, incoming: TableRequest, options: ViewOptions, confirmed: boolean): EditOutcome {
+    let request = incoming;
     const open = opened(source);
     if (!operations || !table || open.refusal !== undefined) return { kind: 'refused', sentence: open.refusal ?? UNREADABLE };
     const run = operations.value;
@@ -1651,6 +1701,23 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
       if (outcome.kind !== 'applied' || outcome.splices.length === 0) return outcome;
       return { ...outcome, splices: composedSplices([...edits, editOf(outcome.splices)]) };
     }
+
+    // In a workspace, what loading the document writes of it (FBL 17.4) is written with its first edit, in the same step:
+    // its document id, the conversion of a file made before links, the links that resolve otherwise than they say.
+    const converted = conversionOf(source, open);
+    if ('refused' in converted) return { kind: 'refused', sentence: converted.refused };
+    if (converted.edits.length > 0) {
+      const outcome = editTable({ ...source, text: converted.text }, request, options, confirmed);
+      if (outcome.kind !== 'applied' || outcome.splices.length === 0) return outcome;
+      return { ...outcome, splices: composedSplices([...converted.edits, editOf(outcome.splices)]) };
+    }
+    // A value picked in a cell of several is written as the tool type writes it: a related row as a link to it (FBL 17.1).
+    const data = dataOf(source, open);
+    const valued = (step: TableRequest): TableRequest => {
+      if (step.kind === 'item' && logic?.itemValue) return { ...step, value: logic.itemValue(data, step.property, step.row, step.value, step.present) };
+      return step.kind === 'steps' ? { ...step, steps: step.steps.map(valued) } : step;
+    };
+    request = valued(request);
 
     const done = (outcome: Outcome): EditOutcome => {
       if (outcome.refused !== undefined) return { kind: 'refused', sentence: outcome.refused };
@@ -1778,8 +1845,16 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     },
     related: (source) => {
       const open = opened(source);
-      return open.unreadable ? [] : logic?.targets?.(open.model) ?? [];
+      return open.unreadable ? [] : logic?.targets?.(open.model, linkingOf(source)) ?? [];
     },
+    // A document of a tool type that takes part in links is in the workspace's index (FBL 17.3), read without the workspace.
+    ...(persistence.documentId === undefined || !logic?.indexed || !table ? {} : {
+      indexed: (source: Source) => {
+        const open = opened(source);
+        if (open.unreadable) return undefined;
+        return logic.indexed!({ model: open.model, metamodel: metamodel.value, properties: table.propertiesOf(open.model), rows: table.rowsOf(open.model) }, source.linkPath ?? source.fileName);
+      },
+    }),
     ...(logic?.retarget ? {
       retargeted: (source: Source, moved: (file: string) => string | undefined) => {
         const open = readOpen(source);

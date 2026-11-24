@@ -346,8 +346,8 @@ describe('a gesture of the frame', () => {
 
 describe('a requirement document this host does not change', () => {
   it('is one of a later DED, opened read-only with standalone\'s reason', () => {
-    const later = { ...numbered, text: numberedText.replace('<!-- ded: 0.2 ', '<!-- ded: 0.3 ') };
-    const reason = 'This document is written in DED 0.3, and this application reads DED 0.2 and earlier. It is left exactly as it is and cannot be changed here.';
+    const later = { ...numbered, text: numberedText.replace('<!-- ded: 0.2 ', '<!-- ded: 0.4 ') };
+    const reason = 'This document is written in DED 0.4, and this application reads DED 0.3 and earlier. It is left exactly as it is and cannot be changed here.';
     const view = type.view(later, {});
     expect(view).toMatchObject({ readOnly: true, notice: reason });
     expect(view.roots).toHaveLength(3);

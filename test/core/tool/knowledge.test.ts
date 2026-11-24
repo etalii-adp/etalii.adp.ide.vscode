@@ -48,7 +48,7 @@ function after(source: Source, request: TableRequest): string {
 
 /** The id a request gave something new: the one new id of this host's form that the text has after it and not before. */
 function madeIn(before: string, text: string): string | undefined {
-  const ids = /(?<![0-9a-z])[0-9a-z]{25}(?![0-9a-z])/g;
+  const ids = /(?<![0-9a-z])[0-9a-z]{8}(?![0-9a-z])/g;
   const known = new Set(before.match(ids));
   return text.match(ids)?.find((id) => !known.has(id));
 }
@@ -178,7 +178,7 @@ describe.each([['knowledge-yaml', 'cities.yaml'], ['knowledge-json', 'cities.jso
     let text = after(source, request);
     if (as !== undefined) {
       const made = madeIn(source.text, text);
-      expect(made, 'the id of what the gesture made').toMatch(/^[0-9a-z]{25}$/);
+      expect(made, 'the id of what the gesture made').toMatch(/^[0-9a-z]{8}$/);
       text = text.replaceAll(made!, as);
     }
     const expected = step.expect!;
@@ -321,7 +321,7 @@ describe('the Knowledge designer', () => {
     const text = after(without, operation('renameView', ['v2'], { name: 'Atlas' }));
     expect(type.findings({ ...without, text })).toEqual([]);
     // The id is written where the binding puts a key the entry lacks, and the edit that was asked is made with it.
-    expect(text).toMatch(/ {8}text: Antwerp[\s\S]* {4}id: [0-9a-z]{25}\r\n {2}- id: 45ako65f2m2wasyxq3mam8ikt/);
+    expect(text).toMatch(/ {8}text: Antwerp[\s\S]* {4}id: [0-9a-z]{8}\r\n {2}- id: 45ako65f2m2wasyxq3mam8ikt/);
     expect(text).toContain('name: Atlas');
     // An edit of the entry itself is made of the entry under its new id.
     const row = type.view({ ...without, text: without.text.replace('activeView: v1', 'activeView: v2') }, {}).rows[1];

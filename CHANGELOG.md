@@ -8,6 +8,8 @@ All notable changes to **ADP: A Different Perspective** are listed here, newest 
 
 - **Mind map:** link a node to a node of another mind map in your workspace, or of the same one. **Add from another document…** searches the workspace by name and adds a linked node that always shows its target's current name. **Open linked element** takes you to the target, and **Linked from (N)** lists the nodes that link to the one you selected. A link whose target was deleted or cannot be found is marked on the node and listed in the Problems panel. Before you delete a node that other documents link to, you are told how many links the delete breaks. The first time you edit a map, it is given an id of its own, so that other documents can link to it.
 
+- **Knowledge designer:** a relation now links the table it relates to and the rows it holds, so it keeps working when either file is moved or renamed within your workspace, and a link that no longer finds its table or row is listed in the Problems panel. A two-way relation is shown in the other table as a read-only column of the name you give it, without changing that file. A knowledge file made before links is converted the first time you edit it in a workspace, in the same undo step.
+
 ### Fixed
 
 - **Causal loop diagram:** in an exported flow page, variable names are now readable at every heat. A variable just above the middle of the scale showed a dark name on a mid-brown fill; the name now takes whichever of a dark and a light ink stands out more.

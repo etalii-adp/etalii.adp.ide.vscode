@@ -74,6 +74,8 @@ export function settingsOf(table: TableData, view: ModelElement, columns: readon
     // change in place leaves it.
     const replaced = (args: Readonly<Record<string, string | number | boolean>>): TableRequest => steps([operation('addCondition', [parent], args), operation('removeCondition', [condition.id])]);
     const empty = operator === 'is-empty' || operator === 'is-not-empty' || property.valueType === 'checkbox' || key === undefined;
+    const kept = key === undefined ? undefined : condition.attributes[key];
+    const held = typeof kept === 'string' || typeof kept === 'number' || typeof kept === 'boolean' ? kept : undefined;
     const choice = property.valueType === 'selection' || property.valueType === 'multipleSelection';
     const value: TableField = empty
       ? { control: 'none', value: '' }
@@ -86,7 +88,11 @@ export function settingsOf(table: TableData, view: ModelElement, columns: readon
     return {
       id: condition.id,
       properties: properties.map((other) => ({ id: other.id, label: other.name, checked: other.id === property.id, request: replaced({ property: other.id, operator: comparisonsOf(other.valueType)[0] }) })),
-      operators: comparisonsOf(property.valueType).map((key) => ({ id: key, label: words[key] ?? key, checked: key === operator, request: operation('setCondition', [condition.id], { operator: key }) })),
+      // A comparison is set with the value the condition compares, which `setCondition` sets with it in one step; one that compares with nothing takes none.
+      operators: comparisonsOf(property.valueType).map((compared) => ({
+        id: compared, label: words[compared] ?? compared, checked: compared === operator,
+        request: operation('setCondition', [condition.id], { operator: compared, ...(held === undefined || compared === 'is-empty' || compared === 'is-not-empty' ? {} : { [key!]: held }) }),
+      })),
       value,
       remove: operation('removeCondition', [condition.id]),
     };

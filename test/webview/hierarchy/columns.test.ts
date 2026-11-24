@@ -240,7 +240,7 @@ describe('the widths of the columns', () => {
   });
 
   it('offers no edge on a document that cannot be changed', () => {
-    show(page, viewOf({}, { ...source, text: source.text.replace('<!-- ded: 0.2 ', '<!-- ded: 0.3 ') }));
+    show(page, viewOf({}, { ...source, text: source.text.replace('<!-- ded: 0.2 ', '<!-- ded: 0.4 ') }));
     expect(document.querySelectorAll('[role="separator"]')).toHaveLength(0);
   });
 });

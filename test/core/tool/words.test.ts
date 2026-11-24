@@ -81,6 +81,7 @@ const exempt: readonly Exempt[] = [
   { name: 'diagram', use: 'disl', reason: 'a value of Function.uses' },
   { name: 'Direction', use: 'disl', reason: 'a property of PortType' },
   { name: 'display', use: 'disl', reason: 'a property of FormItem' },
+  { name: 'documentId', use: 'desl', reason: 'a property of Persistence: the rule of a document\'s own id (DESL 5.3.6, FBL 17.2)' },
   { name: 'displayName', use: 'english', reason: 'the name a tool type is shown by in a host\'s list of tools, which every host\'s registration of a tool type carries (`ToolType.displayName`)' },
   { name: 'Do', use: 'disl', reason: 'a property of Action' },
   { name: 'done', use: 'english', reason: 'whether a step of the history, an operation or a walk has finished' },

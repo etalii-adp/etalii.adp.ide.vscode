@@ -46,6 +46,12 @@ export type ModelChange =
   | { readonly kind: 'identify'; readonly key: string; readonly id: string }
   | { readonly kind: 'storeId'; readonly id: string; readonly newId: string; readonly replace?: true }
   | { readonly kind: 'setDocumentId'; readonly id: string }
+  /**
+   * *(FBL 0.23, 17.4)* Attributes of an element written past their `readOnly`, as the conversion of a document to
+   * the form that holds links writes them once: its version, its document id. A value already written is left as it is;
+   * one the element has not is written after the attribute `after` names, where it is given.
+   */
+  | { readonly kind: 'migrate'; readonly id: string; readonly attributes: Readonly<Record<string, unknown>>; readonly after?: string }
   | {
     readonly kind: 'setting'; readonly block: string; readonly key: string; readonly value?: string;
     readonly position?: ChangePosition; readonly rename?: string; readonly remove?: boolean;

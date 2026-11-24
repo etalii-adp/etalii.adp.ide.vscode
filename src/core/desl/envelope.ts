@@ -5,7 +5,7 @@
 import { finding, type Finding } from '../disl/model';
 
 /** The DED versions this host reads; the last is the one it writes. */
-export const dedVersions: readonly string[] = ['0.1', '0.2'];
+export const dedVersions: readonly string[] = ['0.1', '0.2', '0.3'];
 
 export interface DedEnvelope {
   readonly version: string;
