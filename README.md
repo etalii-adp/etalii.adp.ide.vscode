@@ -76,7 +76,7 @@ It needs, once:
 
 - A Marketplace publisher whose id is the `publisher` in `package.json` (`etalii`), made at <https://marketplace.visualstudio.com/manage>.
 - A namespace `etalii` on [Open VSX](https://open-vsx.org).
-- A trusted publisher on each store for this repository (`etalii-adp/etalii.adp.ide.vscode`) and its workflow `build.yml`: the publisher's Trusted Publishing policy for GitHub on the Marketplace, and the namespace's trusted publisher on Open VSX. The `release` job then publishes with its own OIDC token (`vsce publish --oidc`, `ovsx publish --trusted-publishing`); no store token is stored as a secret. Open VSX accepts a trusted publisher only for an extension it already holds, so its first version was published with the **Open VSX** workflow (`.github/workflows/open-vsx.yml`, run by hand with a release tag) and the `OVSX_PAT` secret; that workflow also republishes a release whose Open VSX step failed.
+- A trusted publisher on each store for this repository (`etalii-adp/etalii.adp.ide.vscode`) and its workflow `build.yml`: the publisher's Trusted Publishing policy for GitHub on the Marketplace, and the namespace's trusted publisher on Open VSX. The `release` job then publishes with its own OIDC token (`vsce publish --oidc`, `ovsx publish --trusted-publishing`); no store token is stored as a secret. Open VSX accepts a trusted publisher only for an extension it already holds, so its first versions were published by hand with a personal access token; since v0.2.0 both stores take every release from the `release` job. A release whose publish step failed is published again by re-running that job, which leaves a store already holding the version as it is.
 
 ## Debug
 
