@@ -1019,6 +1019,30 @@
         "diagrams/vendored/openslo/examples/treat-low-traffic-as-equally-important/timeslices-slo.yaml": "034ae86fa999d26d41854e48654d3e0e658f113a8d3cbf99eb2fd18806bf0c2a",
         "diagrams/vendored/openslo/specification-samples.yaml": "b9dad644885b2a15f021870e445885c5786e7975d7308c6a8fc489da8e5b5dd5"
       }
+    },
+    {
+      "name": "links-workspace",
+      "repository": "https://github.com/etalii-adp/etalii.adp",
+      "commit": "fe21681e27134462bfd8fb7e040d790aba807aa0",
+      "licence": "Apache-2.0",
+      "from": "specifications/fbl/",
+      "to": "fixtures/fbl/conformance/",
+      "files": {
+        "fixtures/links-workspace/README.md": "4407d323b6e0de0945c40bac73f237d2d30b5eec682e3bbb0487092632810905",
+        "fixtures/links-workspace/archive/roadmap.tml": "6baf0ec0985707bb39707874977cb3bbd83e31abeb1189a445fc24526fe44335",
+        "fixtures/links-workspace/conformance.json": "b370483ddf453ab969761465ef22cdbe06174df6da6bd70e219f4f09209552e0",
+        "fixtures/links-workspace/ideas/ideas.mm": "3c9cd9b29bb6b4470bdd6bd11589d776d72dc0cee8e0cdb040365c8713481ee0",
+        "fixtures/links-workspace/knowledge/cities.converted": "dce92acfe319a59b71d6cf4510b68fefa1988efc50c5d6f40b61d46e7c228d81",
+        "fixtures/links-workspace/knowledge/cities.yaml": "e151bd2b7e56609aa52568412d43f65a211244815ef12f42271f54693f760b3e",
+        "fixtures/links-workspace/knowledge/provinces.yaml": "3c647044d65f0504504c33e97dac200fdcd188e334c292b3781f11001f452457",
+        "fixtures/links-workspace/knowledge/regions.yaml": "651d201c4962c3c65735d5a5368eadaa3568e3b96c7657fd091face5e9c1a955",
+        "fixtures/links-workspace/knowledge/towns.yaml": "03e7ee74640302162f23e2d24b019cf292d704e211cdb0ed091912c31a101e4e",
+        "fixtures/links-workspace/notes/no-id.tml": "b5c4d4d3824d8340a1fd819e9e0e083cccbd83f8cd1cec366f9acc435f8f06ff",
+        "fixtures/links-workspace/plan/release.tml": "c9e84ebf159c1b897de1e79a0417548b21358b248c4d53c7581e25bebc9104af",
+        "fixtures/links-workspace/plan/roadmap.tml": "6baf0ec0985707bb39707874977cb3bbd83e31abeb1189a445fc24526fe44335",
+        "fixtures/links-workspace/teams/services-variant.dgr": "9897b406f13344576491a79acde4650954109a65ac871e6e569688d0141d252c",
+        "fixtures/links-workspace/teams/services.dgr": "b43049b37643d9132e14615e86640dd6c0b5841f1ef11b33e86c3241e0dd823b"
+      }
     }
   ]
 }

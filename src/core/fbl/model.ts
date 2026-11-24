@@ -35,6 +35,9 @@ export interface FblView {
 }
 
 /** What reading a body gives: its elements and relations in document order, and its findings. */
+/** The attribute of its root element by which a persistence plugin reports a body's document id (FBL 0.23, 17.2). */
+export const documentIdAttribute = 'documentId';
+
 export class FblModel {
   constructor(
     readonly elements: readonly FblElement[],
@@ -44,6 +47,8 @@ export class FblModel {
     readonly views: readonly FblView[] = [],
     /** The resources a body holds (FBL 8.2): the values of the binding's resource capture, in document order. */
     readonly resources: readonly string[] = [],
+    /** *(FBL 0.23)* The document id the body holds (FBL 17.2); undefined when it holds none. */
+    readonly documentId?: string,
   ) {}
 
   get nodes(): FblElement[] {

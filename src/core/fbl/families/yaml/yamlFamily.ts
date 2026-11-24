@@ -1,5 +1,5 @@
 import { parseAllDocuments } from 'yaml';
-import { allRules, attributeOf, isComputed, type AttributeBinding, type InsertSettings, type Rule, type Slot } from '../../documents/types';
+import { allRules, attributeOf, isComputed, type AttributeBinding, type DocumentIdSlot, type InsertSettings, type Rule, type Slot } from '../../documents/types';
 import { findingCodes } from '../../finding';
 import { messages } from '../../messages';
 import { formatNumber, isEmpty, isNumber, keepPrecision, keepsEmpty, plain, render, wire } from '../../planning/newText';
@@ -243,6 +243,27 @@ export class YamlFamily extends TreeFamily {
       }
       this.insertKey(plan, mapping, change.binding.key, change);
     }
+  }
+
+  /**
+   * *(FBL 0.23)* The document id written into the root mapping (FBL 17.2), which no rule need bind: its value
+   * replaced where the key is present, else a new line after the root's first key when that holds a scalar, as a
+   * schema marker such as `<type>: 1` does, and before the first key otherwise.
+   */
+  override writeDocumentId(plan: SplicePlan, slot: DocumentIdSlot, id: string): void {
+    const key = slot.key;
+    const mapping = this.root?.value;
+    if (key === undefined || !mapping || mapping.kind !== 'mapping' || mapping.entries.length === 0) refuse(messages.yamlNoMapping(this.binding.name, key ?? ''));
+    if (mapping.style === 'flowMapping') refuse(messages.yamlNoMapping(this.binding.name, key));
+    const member = mapping.member(key);
+    if (member) {
+      const written = this.scalar(id, member.value, undefined, member.indent);
+      if (written !== this.text.textOf(member.value.span)) plan.addAt('replace-value', member.value.span, written);
+      return;
+    }
+    const first = mapping.entries[0];
+    const offset = first.value.kind === 'scalar' ? this.lineEndAfter(first) : first.lineSpan?.start ?? first.own.start;
+    plan.add('insert-key', offset, offset, this.newLine(offset, [`${this.indentation(first.indent)}${key}: ${this.scalar(id, undefined, undefined, first.indent)}`]));
   }
 
   /** A key the entry lacks goes at its place in the rule's key order: after the nearest present key before it, else before the nearest after it. */

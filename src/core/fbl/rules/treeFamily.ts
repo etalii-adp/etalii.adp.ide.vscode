@@ -1,5 +1,5 @@
 import { scalarText } from '../documents/jsonReader';
-import { slotText, type HeaderSettings, type Rule, type Slot } from '../documents/types';
+import { slotText, type DocumentIdSlot, type HeaderSettings, type Rule, type Slot } from '../documents/types';
 import type { CelMap } from '../expressions/cel';
 import { readFlow } from '../families/yaml/flowReader';
 import { messages } from '../messages';
@@ -150,6 +150,12 @@ export abstract class TreeFamily extends FamilyReader {
 
   override celWritten(candidate: Candidate, view: 'text' | 'style'): unknown {
     return celOf((candidate.entry as TreeEntry).value, view);
+  }
+
+  override documentId(slot: DocumentIdSlot): string | undefined {
+    if (slot.key === undefined || this.root?.value.kind !== 'mapping') return undefined;
+    const member = this.root.value.member(slot.key);
+    return member && member.value.kind === 'scalar' && member.value.text !== '' ? member.value.text : undefined;
   }
 
   headerHolds(header: HeaderSettings): boolean {
