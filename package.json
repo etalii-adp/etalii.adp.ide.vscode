@@ -3,7 +3,7 @@
   "publisher": "etalii",
   "displayName": "ADP: A Different Perspective",
   "description": "Specialized tools for text-based files: diagrams, designers and editors, each tuned for one task, including a value stream map, an SLO map and a post-incident review designer for ITIL 4 service management practices.",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "license": "Apache-2.0",
   "icon": "media/icon.png",
   "private": true,
