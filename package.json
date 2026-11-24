@@ -3,7 +3,7 @@
   "publisher": "etalii",
   "displayName": "ADP: A Different Perspective",
   "description": "Specialized tools for text-based files: diagrams, designers and editors, each tuned for one task.",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "license": "Apache-2.0",
   "icon": "media/icon.png",
   "private": true,
