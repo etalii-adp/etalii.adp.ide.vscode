@@ -792,6 +792,8 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     }
   }
   for (const id of filtered) places.delete(id);
+  // What a filter or a fold takes out stays out: the placements computed again after the layout put back only what could not be placed before.
+  const dropped = new Set(filtered);
 
   // ---- folds (DISL 6.9, 11.6) ----
 
@@ -802,7 +804,10 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
   }
   for (const { element } of [...places.values()]) {
     for (let parent = element.parent, seen = 0; parent !== undefined && seen < model.elements.length; parent = elements.get(parent)?.parent, seen++) {
-      if (folds.get(parent) === 'folded') places.delete(element.id);
+      if (folds.get(parent) === 'folded') {
+        places.delete(element.id);
+        dropped.add(element.id);
+      }
     }
   }
 
@@ -911,7 +916,7 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
   // One that could not be placed at all before is placed now, in the order of the model.
   let recomputed = false;
   for (const element of model.elements) {
-    if (!member(element, viewpoint) || isItem(element, viewpoint)) continue;
+    if (!member(element, viewpoint) || isItem(element, viewpoint) || dropped.has(element.id)) continue;
     const before = places.get(element.id);
     const own = before?.notation ?? varied(nodeNotation(notation, metamodel, element.type), element.id);
     if (!isCel(own.placement.x) && !isCel(own.placement.y)) continue;

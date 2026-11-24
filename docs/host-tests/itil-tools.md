@@ -54,7 +54,7 @@ The three ITIL tools in Visual Studio Code, each opened from its examples in bot
 | 2 | ADP Toolbox was empty with no sentence, and ADP Properties asked for "an element or a relation in the diagram". | **Fixed**: a designer's toolbox says it adds nothing and that items are added with the page's buttons, and ADP Properties asks for an item on the page. |
 | 3 | An accepted factor with no action showed a stray "Note". | **Fixed**: a finding is its sentence under the row. That a row says one fault twice, as a mark and as a finding, is [etalii.adp#828](https://github.com/etalii-adp/etalii.adp/issues/828). |
 | 4 | An action has a Done checkbox and a Done button, and ADP Properties showed Done as a list of false and true. | The list is **fixed** (a `bool` is a switch). The two controls are [etalii.adp#828](https://github.com/etalii-adp/etalii.adp/issues/828). |
-| 5 | After "New action for this factor", the page did not scroll to the new action. | Open: [#95](https://github.com/etalii-adp/etalii.adp.ide.vscode/issues/95). The core asks for the new row to be selected and the page reveals it, so this needs a look in a real window. |
+| 5 | After "New action for this factor", the page did not scroll to the new action. | Not seen again: in the second run the page scrolled to the new action and selected it (below). |
 | 6 | Times are shown in ISO form, and the Due field is in the region's date format. | Times: [etalii.adp#828](https://github.com/etalii-adp/etalii.adp/issues/828). The date field is the platform's date input. |
 
 ## A new user
@@ -71,4 +71,9 @@ All of them are fixed here. What is left is listed above with its issue, most of
 
 ## Screenshots
 
-Each fix above changes what the screenshots show, so `value-stream-map.png`, `slo-map.png` and `post-incident-review.png` are taken once the fixes are merged, as [`../screenshots/readme.md`](../screenshots/readme.md) describes.
+Each fix above changes what the screenshots show, so they were taken again on the Mac mini with the fixes in, from `develop` at `f739492` (Dark Modern, 1600×900, device scale 1). Retaking them turned up one more fault: the value stream map drew the future state's steps, without their flows, beside the current state's. Its State filter shows one state at a time. The filter took the steps out, but a step placed by an expression was put back when placements were computed again after the layout. That fault is fixed in `src/core/scene/scene.ts`, so `value-stream-map.png` is taken once that fix is merged. `slo-map.png` and `post-incident-review.png` are in [`../screenshots/`](../screenshots/), described in its [readme](../screenshots/readme.md).
+
+The second run also checked these, and each passed:
+- "15m" in a Wait time is refused with "'15m' is not a duration: write it in ISO 8601, as PT15M for 15 minutes, PT2H for 2 hours or P1D for a day."
+- The post-incident review's ADP Toolbox and ADP Properties now speak of a page.
+- "New action for this factor" in `checkout-latency.md` scrolled to the new action and selected it. The open item in #95 for that scroll is withdrawn.
