@@ -286,6 +286,33 @@ describe('the switch of a filter', () => {
   });
 });
 
+describe('a filter that is a select', () => {
+  // Found by the host test (spec 090, T029): the value stream map's State filter, a `select` kept
+  // with the diagram, had no control at all, so a state could only be changed from the menu.
+  const state = { id: 'state', label: 'State', control: 'select' as const, options: ['current', 'future'], value: 'current', match: 'any' as const, matchToggle: false, kept: true };
+  const select = (): HTMLSelectElement => document.querySelector('.adp-panel [data-filter="state"] select') as HTMLSelectElement;
+
+  it('is shown with its label, its options and its value, and asks for an edit when it is kept', () => {
+    canvas.receive(viewMessage({ ...scene, chrome: { ...scene.chrome!, filters: [state] } }));
+    expect(document.querySelector('.adp-panel [data-filter="state"]')?.textContent).toContain('State');
+    expect([...select().options].map((option) => option.value)).toEqual(['current', 'future']);
+    expect(select().value).toBe('current');
+    select().value = 'future';
+    select().dispatchEvent(new Event('change'));
+    expect(requests()).toEqual([{ kind: 'filter', id: 'state', value: 'future' }]);
+  });
+
+  it('changes the view options when it is each viewer\'s own, and cannot be changed when kept in a scene that cannot be edited', () => {
+    canvas.receive(viewMessage({ ...scene, chrome: { ...scene.chrome!, filters: [{ ...state, kept: false }] } }));
+    select().value = 'future';
+    select().dispatchEvent(new Event('change'));
+    expect(requests()).toEqual([]);
+    expect(sent.filter((message) => message.type === 'viewOptions').map((message) => (message as Extract<FromCanvas, { type: 'viewOptions' }>).options.filters)).toEqual([{ state: { value: 'future' } }]);
+    canvas.receive(viewMessage({ ...scene, readOnly: true, chrome: { ...scene.chrome!, filters: [state] } }));
+    expect(select().disabled).toBe(true);
+  });
+});
+
 describe('a label of one line', () => {
   it('is cut with an ellipsis where it does not fit, and says its text in full when it is hovered', () => {
     const label = group('s1').querySelector('[data-label="name"]')!;

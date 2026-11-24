@@ -329,6 +329,16 @@ export class Canvas {
         this.reportView();
       }
     });
+    // A filter that is a select, the same way: kept with the diagram it is an edit, otherwise this viewer's option.
+    const selects = (chrome?.filters ?? []).filter((candidate) => candidate.control === 'select');
+    this.panel.showSelects(selects.map((entry) => ({ id: entry.id, label: entry.label, options: entry.options.map(String), value: String(entry.value ?? entry.options[0] ?? ''), locked: entry.kept && scene.readOnly === true })), (id, value) => {
+      if (selects.find((entry) => entry.id === id)?.kept) {
+        this.request({ kind: 'filter', id, value });
+      } else {
+        this.options = { ...this.options, filters: { ...this.options.filters, [id]: { value } } };
+        this.reportView();
+      }
+    });
     this.panel.element.querySelectorAll('.adp-legend-swatch').forEach((swatch, index) => swatch.setAttribute('style', `background: ${colourOf(scene.tokens, kind, legend[index].fill, 'fill')}`));
     const named = this.panel.element.querySelector('.adp-compact')?.lastChild;
     if (toggle && named) named.textContent = toggle.label;

@@ -32,12 +32,13 @@ export class Panel {
   private readonly compact = html('input', { type: 'checkbox', id: 'adp-compact' });
   private readonly compactRow = html('label', { class: 'adp-compact', for: 'adp-compact' });
   private readonly switches = html('div', { class: 'adp-switches' });
+  private readonly selects = html('div', { class: 'adp-switches' });
   private tags: string[] = [];
 
   constructor(host: HTMLElement, private readonly changed: (options: Pick<ViewOptions, 'filterTags' | 'filterMode' | 'compact'>) => void) {
     this.filter.append(this.chips, this.input, this.suggestions, this.mode);
     this.compactRow.append(this.compact, 'Compact');
-    this.element.append(this.filter, this.switches, this.legend, this.compactRow);
+    this.element.append(this.filter, this.switches, this.selects, this.legend, this.compactRow);
     this.element.hidden = true;
     host.append(this.element);
 
@@ -94,6 +95,22 @@ export class Panel {
     }));
     this.switches.hidden = switches.length === 0;
     if (switches.length > 0) this.element.hidden = false;
+  }
+
+  /**
+   * Shows a list for each filter whose control is a select: its label, its options, the one chosen,
+   * and whether it can be changed. `changed` is told the filter and the option chosen.
+   */
+  showSelects(selects: readonly { readonly id: string; readonly label: string; readonly options: readonly string[]; readonly value: string; readonly locked: boolean }[], changed: (id: string, value: string) => void): void {
+    this.selects.replaceChildren(...selects.map((entry) => {
+      const list = html('select', { 'aria-label': entry.label }, ...entry.options.map((option) => html('option', { value: option }, option)));
+      list.value = entry.value;
+      list.disabled = entry.locked;
+      list.addEventListener('change', () => changed(entry.id, list.value));
+      return html('label', { class: 'adp-switch', 'data-filter': entry.id }, entry.label, ' ', list);
+    }));
+    this.selects.hidden = selects.length === 0;
+    if (selects.length > 0) this.element.hidden = false;
   }
 
   /** Turns Compact on or off, as its switch does. */
