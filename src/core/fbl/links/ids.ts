@@ -4,9 +4,13 @@
 /** The alphabet `base36`: the digits and the lower-case letters. */
 export const base36 = '0123456789abcdefghijklmnopqrstuvwxyz';
 
-/** The alphabet a `nanoid` rule names: `base36`, `alphanumeric`, or the characters it lists. */
+/** nanoid's own 64 characters (DESL 0.5, 5.3.6): what a `nanoid` rule that names no alphabet draws from. */
+export const nanoidAlphabet = 'useandom-26T198340PX75pxJACKVERYMINDBUSHWOLF_GQZbfghjklqvwyzrict';
+
+/** The alphabet a `nanoid` rule names: `base36`, `nanoid`, `alphanumeric`, or the characters it lists; `base36` when it names none. */
 export function alphabetOf(name: string | undefined): string {
   if (name === undefined || name === 'base36') return base36;
+  if (name === 'nanoid') return nanoidAlphabet;
   if (name === 'alphanumeric') return '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
   return name;
 }

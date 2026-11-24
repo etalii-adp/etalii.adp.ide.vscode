@@ -310,7 +310,7 @@ describe('the template of a new map', () => {
   // The body standalone's MindmapDocumentFactory gives a new map (mindmap.md, section 2), which its
   // plugin's `Template` hands on.
   it('is one root node named after the file\'s base name, with an id of its own, in Freeplane\'s layout', () => {
-    expect(template('plans/roadmap.mm')).toMatch(/^<map version="freeplane 1\.11\.5">\n<node TEXT="roadmap" ID="ID_[0-9a-z]{25}"\/>\n<\/map>$/);
+    expect(template('plans/roadmap.mm')).toMatch(/^<map version="freeplane 1\.11\.5">\n<node TEXT="roadmap" ID="ID_[0-9a-z]{8}"\/>\n<\/map>$/);
     expect(template('roadmap.mm')).not.toBe(template('roadmap.mm'));
   });
 

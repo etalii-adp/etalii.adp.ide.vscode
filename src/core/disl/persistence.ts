@@ -4,6 +4,7 @@
 
 import { allRules, findRule, type FblBinding, type FblDocument, type ReferenceBinding, type Slot } from '../fbl/documents/types';
 import { findingCodes } from '../fbl/finding';
+import { alphabetOf, nanoid } from '../fbl/links/ids';
 import type { FblElement, FblModel, IdRequest } from '../fbl/model';
 import { attributesOf, formatYearMonth, isRelation, parseYearMonth, valueKind, type Metamodel } from './metamodel';
 import { emptyModel, finding, type Finding, type Loaded, type Model, type ModelElement, type ModelRelation, type Value } from './model';
@@ -86,7 +87,7 @@ export function interpretPersistence(specification: Specification, metamodel: Me
   // A derived id is its expression's value (DISL 11.5.2), a natural id its key (11.5.1); any other strategy is read as `uuid-v4`.
   const derived = ids.strategy === 'derived' && (typeof ids.expression === 'string' || isCel(ids.expression));
   if (ids.strategy === 'derived' && !derived) problem('The ids are derived, and `ids.expression` does not say from what.');
-  else if (ids.strategy !== 'uuid-v4' && ids.strategy !== 'natural' && ids.strategy !== 'sequential' && !derived) findings.push(finding('disl.persistence', 'warning', `New elements get an id by the strategy \`uuid-v4\`, not by \`${ids.strategy}\`, which this add-on does not support.`));
+  else if (ids.strategy !== 'uuid-v4' && ids.strategy !== 'natural' && ids.strategy !== 'sequential' && ids.strategy !== 'nanoid' && !derived) findings.push(finding('disl.persistence', 'warning', `New elements get an id by the strategy \`uuid-v4\`, not by \`${ids.strategy}\`, which this add-on does not support.`));
   // A type's own rule is supported where it derives the id from an expression, which reading forms (DISL 11.5.2).
   const unsupported = Object.entries(ids.types ?? {}).filter(([, rule]) => !(rule.strategy === 'derived' && (typeof rule.expression === 'string' || isCel(rule.expression)))).map(([type]) => type);
   if (unsupported.length > 0) findings.push(finding('disl.persistence', 'warning', `The id rules of ${unsupported.map((type) => `\`${type}\``).join(', ')} are not supported; those types follow the one rule.`));
@@ -197,8 +198,8 @@ export const bindingOf = (persistence: InterpretedPersistence, document: FblDocu
  */
 export function newId(persistence: InterpretedPersistence, type: string, taken: Iterable<string> = []): string {
   const { encoding, prefix } = persistence.ids;
+  const before = typeof prefix === 'string' ? prefix : prefix?.[type] ?? '';
   if (persistence.ids.strategy === 'sequential') {
-    const before = typeof prefix === 'string' ? prefix : prefix?.[type] ?? '';
     let greatest = 0;
     for (const id of taken) {
       const number = id.startsWith(before) && /^\d+$/.test(id.slice(before.length)) ? Number(id.slice(before.length)) : 0;
@@ -206,12 +207,14 @@ export function newId(persistence: InterpretedPersistence, type: string, taken: 
     }
     return `${before}${greatest + 1}`;
   }
+  // DISL 0.12, 11.5: `nanoid` ids of `length` characters of `alphabet`, by default 21 of nanoid's own.
+  if (persistence.ids.strategy === 'nanoid') return before + nanoid(alphabetOf(persistence.ids.alphabet ?? 'nanoid'), persistence.ids.length ?? 21);
   const hex = crypto.randomUUID();
   const digits = hex.replace(/-/g, '');
   const text = encoding === 'base36' ? BigInt(`0x${digits}`).toString(36).padStart(25, '0')
     : encoding === 'base64url' ? btoa(String.fromCharCode(...(digits.match(/../g) ?? []).map((byte) => parseInt(byte, 16)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
       : hex;
-  return (typeof prefix === 'string' ? prefix : prefix?.[type] ?? '') + text;
+  return before + text;
 }
 
 /**

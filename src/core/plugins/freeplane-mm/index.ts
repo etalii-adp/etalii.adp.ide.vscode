@@ -2,8 +2,7 @@
 // FBL 11): it reads a Freeplane `.mm` body as standalone's plugin does and, unlike standalone's,
 // plans every edit as splices.
 
-import type { PersistencePlugin } from '../../fbl';
-import { newShortGuid } from '../../text/shortGuid';
+import { base36, nanoid, type PersistencePlugin } from '../../fbl';
 import { plan } from './planner';
 import { read } from './reader';
 
@@ -12,9 +11,10 @@ export const freeplaneMm: PersistencePlugin = {
   read,
   plan,
   // The map a new diagram starts as (the companion document, section 2): one root node named after
-  // the file's base name, LF, no final newline.
+  // the file's base name, LF, no final newline. Its id is `ID_` and 8 characters of `0-9a-z`, as the
+  // definition's `ids` rule gives a node ADP creates (etalii.adp spec 089, FR-003).
   template: ({ name, placeholders }) => {
     const text = (placeholders.get('base') ?? name).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
-    return new TextEncoder().encode(`<map version="freeplane 1.11.5">\n<node TEXT="${text}" ID="ID_${newShortGuid()}"/>\n</map>`);
+    return new TextEncoder().encode(`<map version="freeplane 1.11.5">\n<node TEXT="${text}" ID="ID_${nanoid(base36, 8)}"/>\n</map>`);
   },
 };

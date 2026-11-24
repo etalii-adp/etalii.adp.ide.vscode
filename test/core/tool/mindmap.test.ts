@@ -58,6 +58,11 @@ const architecture = sourceOf(documents[0].path, documents[0].name);
 
 // ---- a menu, a row and a placed node, as the transcript writes them ----
 
+// What the definition gained after the transcript was recorded: Add from another document of etalii.adp spec 089,
+// which standalone does not offer. Its menus are compared without it, and it is tested on its own.
+const sinceTranscript = new Set(['mindmap.add-linked']);
+const recordedOnly = (actions: readonly Action[]): Action[] => actions.filter((action) => !sinceTranscript.has(action.id));
+
 /** `g1 mindmap.add-child | Add child | mdi-subdirectory-arrow-right | Insert | on`. The group is not carried by the frame's `Action`. */
 function actionOf(line: string): Action {
   const [first, label, icon, shortcut, available] = line.split(' | ');
@@ -302,7 +307,7 @@ describe('the mind map, a tool type from its definition', () => {
 
   it('starts a new document as one central topic named after the file, which reads cleanly', () => {
     const created = type.newDocument('plans');
-    expect(created).toMatch(/^<map version="freeplane 1\.11\.5">\n<node TEXT="plans" ID="ID_[0-9a-z]{25}"\/>\n<\/map>\n?$/);
+    expect(created).toMatch(/^<map version="freeplane 1\.11\.5">\n<node TEXT="plans" ID="ID_[0-9a-z]{8}"\/>\n<\/map>\n?$/);
     const source: Source = { fileName: 'plans.mm', text: created };
     expect(type.findings(source)).toEqual([]);
     expect(type.view(source, {}).nodes.map((node) => node.labels[0].text)).toEqual(['plans']);
@@ -362,8 +367,8 @@ describe.each(documents)('$name', ({ name, path, record }) => {
 
     it.each(targets)('of $id, as the file folds it and with every fold flipped', ({ id, menu, flipped: other }) => {
       const selection = id === '' ? [] : [id];
-      expect(type.actions(source, selection, {})).toEqual(expected.menus[menu].map(actionOf));
-      expect(type.actions(source, selection, flipped)).toEqual(expected.menus[other].map(actionOf));
+      expect(recordedOnly(type.actions(source, selection, {}))).toEqual(expected.menus[menu].map(actionOf));
+      expect(recordedOnly(type.actions(source, selection, flipped))).toEqual(expected.menus[other].map(actionOf));
     });
   });
 
@@ -456,7 +461,7 @@ describe('folding, which is this viewer\'s own', () => {
 
   it('opens a folded node that a child is added to, so that the new node is seen', () => {
     const outcome = applied(type.edit(architecture, { kind: 'action', action: 'addChild', id: foldedInFile }, {}, false));
-    expect(outcome.select).toMatch(/^ID_[0-9a-z]{25}$/);
+    expect(outcome.select).toMatch(/^ID_[0-9a-z]{8}$/);
     expect(outcome.viewOptions?.collapsed).toEqual({ [foldedInFile]: false });
   });
 });
@@ -472,7 +477,7 @@ describe('the gestures the transcript has no step for', () => {
     const box = boxOf(linked);
     const dropped = applied(edit({ kind: 'drop', entry: entry.id, x: box.x + box.width / 2, y: box.y + box.height / 2 }));
     const added = linesChanged(architecture.text, spliced(architecture.text, dropped.splices)).added.join('\n');
-    expect(added).toMatch(/<node TEXT="Node" ID="ID_[0-9a-z]{25}"\/>/);
+    expect(added).toMatch(/<node TEXT="Node" ID="ID_[0-9a-z]{8}"\/>/);
     expect(dropped).toMatchObject({ editLabel: true, select: expect.stringMatching(/^ID_/) as unknown });
     expect(type.view({ ...architecture, text: spliced(architecture.text, dropped.splices) }, {}).edges.find((edge) => edge.target === dropped.select)?.source).toBe(linked);
   });

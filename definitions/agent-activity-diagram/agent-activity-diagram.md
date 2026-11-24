@@ -143,7 +143,7 @@ DISL 0.4's `open` action opens an `http` or `https` address in the platform's br
 
 ## Interaction
 
-- **Adding** an element is a drop from the toolbox, one tool per element type, and none for a task or a pull request; the element is locked where it was dropped and its name is edited in place.
+- **Adding** an element is a drop from the toolbox, one tool per element type, and none for a task or a pull request; the element is locked where it was dropped and its name is edited in place. On the wire a tool drops as `add-<tool>` (`x-aad.tools`); every other name is DISL's own.
 - **Connecting** two elements draws the one relation the pair allows. Connecting an agent that already works on a specification is refused with the reason `aad.second-specification` names; the person removes the first line themselves.
 - **Removing** an element clears every key that names it, so its relations go with it in one undoable step, together with its placement and group states.
 - **Tasks and pull requests** are added from their element's menu, renamed with F2 or a double-click, and removed from their own menu. A task's status is set from its menu or the property grid. They are never reordered by hand.
