@@ -142,4 +142,19 @@ suite('A causal loop diagram in Visual Studio Code', () => {
       await vscode.workspace.fs.delete(page);
     }
   });
+
+  // "ADP: Include Causal loop diagram LLM instructions" saves the definition's instructions for an LLM that writes .cld files.
+  test('Include Causal loop diagram LLM instructions saves the instructions where it is told and opens them', async () => {
+    const target = example('causal-loop-diagram.llm.md');
+    await vscode.workspace.fs.delete(target).then(undefined, () => undefined);
+    try {
+      await vscode.commands.executeCommand('etalii.adp.llmInstructions.systems.causal-loop-diagram', target);
+      const text = new TextDecoder().decode(await vscode.workspace.fs.readFile(target));
+      assert.ok(text.startsWith('# Writing a causal loop diagram'), text.slice(0, 80));
+      assert.ok(text.includes('```lark'));
+      assert.strictEqual(vscode.window.activeTextEditor?.document.uri.toString(), target.toString());
+    } finally {
+      await vscode.workspace.fs.delete(target).then(undefined, () => undefined);
+    }
+  });
 });
