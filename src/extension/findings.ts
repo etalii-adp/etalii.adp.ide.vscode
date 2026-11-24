@@ -16,9 +16,12 @@ const severities: Record<Severity, vscode.DiagnosticSeverity> = {
 export class Findings implements vscode.Disposable {
   private readonly collection = vscode.languages.createDiagnosticCollection('ADP');
 
-  /** `related` is the text of the files the document names, where an editor of it has read them. */
-  show(document: vscode.TextDocument, type: AnyToolType, related?: Source['related']): void {
-    const source: Source = { fileName: document.fileName, text: document.getText(), ...(related === undefined ? {} : { related }) };
+  /**
+   * `more` holds the text of the files the document names, where an editor of it has read them, and the
+   * workspace's index its links are resolved against (FBL 17.3), where it takes part in links.
+   */
+  show(document: vscode.TextDocument, type: AnyToolType, more: Pick<Source, 'related' | 'links' | 'linkPath'> = {}): void {
+    const source: Source = { fileName: document.fileName, text: document.getText(), ...more };
     this.collection.set(document.uri, type.findings(source).map((finding) => this.diagnostic(document, finding)));
   }
 

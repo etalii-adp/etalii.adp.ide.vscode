@@ -4,6 +4,10 @@ All notable changes to **ADP: A Different Perspective** are listed here, newest 
 
 ## [Unreleased] (0.2.3)
 
+### Added
+
+- **Mind map:** link a node to a node of another mind map in your workspace, or of the same one. **Add from another document…** searches the workspace by name and adds a linked node that always shows its target's current name. **Open linked element** takes you to the target, and **Linked from (N)** lists the nodes that link to the one you selected. A link whose target was deleted or cannot be found is marked on the node and listed in the Problems panel. Before you delete a node that other documents link to, you are told how many links the delete breaks. The first time you edit a map, it is given an id of its own, so that other documents can link to it.
+
 ### Fixed
 
 - **Causal loop diagram:** in an exported flow page, variable names are now readable at every heat. A variable just above the middle of the scale showed a dark name on a mid-brown fill; the name now takes whichever of a dark and a light ink stands out more.

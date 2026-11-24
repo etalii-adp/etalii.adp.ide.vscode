@@ -12,7 +12,7 @@ import { interpretOperations, readingOf, type RunStep } from '../desl/operations
 import { derivedIds, interpretSettings, settingSteps, withSettings, type SettingSteps, type StoredBlocks } from '../desl/settings';
 import { expressionsOf, loadDesigner } from '../desl/specification';
 import { documentTypesOf, interpretSurface } from '../desl/surface';
-import { applyChanges, baseCoordinate, interpretBehavior, type Change, type EndPlace, type OfferedEntry, type Outcome, type Point, type Situation, type ViewChange } from '../disl/behavior';
+import { applyChanges, baseCoordinate, interpretBehavior, type Change, type EndPlace, type OfferedEntry, type Outcome, type Point, type Situation, NOT_PICKED, type ViewChange } from '../disl/behavior';
 import { interpretConstraints } from '../disl/constraints';
 import { interpretCoordinates, rulerRows } from '../disl/coordinates';
 import { createExpressions, type Scope } from '../disl/expressions';
@@ -20,7 +20,7 @@ import { createTexts, formFor, interpretForms, type FormItem, type Subject } fro
 import { interpretLayout } from '../disl/layout';
 import { indexedDocument, linkedModel, type Refreshed } from '../disl/links';
 import { defaultOf, derivedRelations, interpretMetamodel, isA, isRelation, linkKind, withDerivedNodes, type DerivedRelation } from '../disl/metamodel';
-import { emptyModel, type Finding as Found, type Model, type Value } from '../disl/model';
+import { emptyModel, type Finding as Found, type Model, type ModelElement, type Value } from '../disl/model';
 import { edgeNotation, interpretNotation, nodeNotation, styleOf, type GestureRefusals, type Notation, type Paint } from '../disl/notation';
 import { derivedIds as worldIds, entryOf, foldsOf, interpretPersistence, momentAttributes, naturalId, newDocumentId, newId, readModel, typeIds, viewEntryIds, type StoredView } from '../disl/persistence';
 import { isCel, isObject, loadSpecification, localized, type LocalizedText } from '../disl/specification';
@@ -45,7 +45,9 @@ import type { Edit } from '../fbl/splice';
 import { decode, encode } from '../fbl/text/utf8';
 import { BodyText } from '../fbl/text/bodyText';
 import type { Action, Control, DesignerToolType, DiagramToolType, EditOutcome, EditRequest, ExportOffer, Exported, Field, Finding, Severity, Source, TextSplice, ToolboxEntry, ViewOptions } from '../frame/toolType';
-import { exportAction, exportOf } from '../frame/toolType';
+import { exportAction, exportOf, LINKED_FROM, OPEN_LINKED } from '../frame/toolType';
+import { cachedName, parseLink } from '../fbl/links/link';
+import { backlinksOf, breaksLinks, linkEntries, linkTarget } from './linkActions';
 import { anchorOf, arrangedPlaces, arrangedRows, createScene, type Scene, type SceneChrome, type SceneOptions, type SceneRuler, type SceneTool, type SceneToken } from '../scene/scene';
 import { widthOfText } from '../text/textMetric';
 import { claimingBinding, claimsOf, suggests } from './claims';
@@ -66,6 +68,9 @@ const NOT_HERE = 'This is not possible here.';
 const UNREADABLE = 'The document could not be read, so it cannot be edited.';
 const unreadableFile = (fileName: string): string => `${fileName.slice(Math.max(fileName.lastIndexOf('/'), fileName.lastIndexOf('\\')) + 1)} could not be read, so it cannot be edited.`;
 const NO_LINK = 'There is no link to open.';
+const PICKED_LINK = 'A link is chosen with Add from another document, and opened with Open linked element.';
+const NO_TARGET = 'The link does not lead to an element of the workspace, so there is nothing to open.';
+const NO_WORKSPACE = 'This document is in no folder of the workspace, so there is nothing to link to.';
 const NO_PLACE = 'An end is put on a part of what it is on, on a side of that part, at a share of the side from 0 to 1.';
 
 const severities: Readonly<Record<string, Severity>> = { error: 'error', warning: 'warning', info: 'information', hint: 'hint' };
@@ -158,6 +163,9 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   });
   const texts = createTexts(specification, expressions);
   const wire = wireIdsOf(definition.specification);
+  // The tool types each operation's `lookup` offers the elements of (DISL 9.4, `origins`), by operation.
+  const lookupOrigins = new Map(Object.entries(isObject(specification.behavior) && isObject(specification.behavior.operations) ? specification.behavior.operations : {})
+    .flatMap(([name, declared]) => { const origins = originsOf(declared); return origins === undefined ? [] : [[name, origins] as const]; }));
   // Pins that no entry of the document holds are kept beside it: the layout of its registration, by the top-left corner of each element (DISL 11.6, FBL 8.3).
   const keptBeside = (persistence.value.view.store.includes('pinned') || persistence.value.view.store.includes('bounds')) && persistence.value.view.bind.pinned === undefined;
   // An entry is the point the node's placement anchor names where the binding says so (FBL 0.20 §8.3, `registration.layoutPoint`), else its top-left corner.
@@ -269,7 +277,8 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     const gate = needed.length > 0 ? messages.pluginMissing(needed[0].id) : body.isReadOnly && !read.unreadable ? binding.readOnly || messages.readOnlyFile : undefined;
     const kept = {
       view: typed.view, stale: typed.stale, ...(typed.entries ? { entries: typed.entries } : {}), derived: derived.value, corners: keptBeside ? layoutOf(source.registration) : {}, ...(named === undefined ? {} : { named }),
-      refreshed: linking?.refreshed ?? [], needsId: linking !== undefined && read.documentId === undefined,
+      // A binding that keeps no document id (FBL 17.2) is given none: its document still resolves the links it holds.
+      refreshed: linking?.refreshed ?? [], needsId: linking !== undefined && read.documentId === undefined && (binding.plugin !== undefined || binding.documentId !== undefined),
     };
     // What is said of a document that cannot be read is the definition's sentence for one that cannot be edited, else the reader's finding.
     const readOnly = behavior.value.message('std.readOnly', emptyModel);
@@ -460,13 +469,23 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       const options = marks.length > 0 ? marks : item.options(on).map((option) => option.label);
       const locked = item.readOnly(on);
       // Every attribute of a derived node is read-only (DISL 4.11.2), with its reason.
-      const readOnly = open.refusal ?? element?.derived?.reason ?? (locked.readOnly ? locked.reason ?? NO_ROW : undefined);
+      // A link is shown by its cached name and chosen with the host's lookup, never typed (DISL 0.12, 7.3, `lookup`).
+      const lookup = item.widget === 'lookup';
+      const readOnly = open.refusal ?? element?.derived?.reason ?? (locked.readOnly ? locked.reason ?? NO_ROW : lookup ? PICKED_LINK : undefined);
+      const shown = item.display(on);
       return {
-        id: wire.property(item.rowId(on)), label: item.label(on), group, control: controls[item.widget] ?? 'text', value: item.display(on),
+        id: wire.property(item.rowId(on)), label: item.label(on), group, control: controls[item.widget] ?? 'text', value: lookup && typeof shown === 'string' ? linkShown(element, shown) : shown,
         ...(options.length > 0 ? { options } : {}), ...(placeholders[item.widget] === undefined ? {} : { placeholder: placeholders[item.widget] }), ...(readOnly === undefined ? {} : { readOnly }),
       };
     });
   }
+
+  /** A link as a field shows it (DISL 7.3, `lookup`): its target's current name while it resolves, else the name it caches, else as written. */
+  const linkShown = (element: ModelElement | undefined, text: string): string => {
+    const label = element === undefined ? undefined : metamodel.value.types[element.type]?.labelAttribute;
+    const current = element?.linked !== undefined && label !== undefined ? element.attributes[label] : undefined;
+    return typeof current === 'string' ? current : cachedName(parseLink(text) ?? { documentId: '', documentName: '' }) ?? text;
+  };
 
   /** The entries the menu of a target offers, each with the id it is asked for by. */
   const offersOf = (open: Open, target: string | undefined, situation: Situation): { readonly entry: OfferedEntry; readonly id: string }[] => {
@@ -486,11 +505,14 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     if (line && offered.length === 0 && open.refusal === undefined && Object.hasOwn(line.edits, 'delete')) return [{ id: 'delete', label: 'Delete', shortcut: 'Delete', enabled: true }];
     // What the tool type exports is offered on the diagram itself, after its own entries, in a document that cannot be edited too: an export changes nothing of it.
     const exporting = selection.length === 0 ? exportOffers.map((offer): Action => ({ id: exportAction(offer.id), label: offer.label, enabled: true })) : [];
+    // In a workspace, an element's links are the host's to open, in a document that cannot be edited too (FBL 17.5).
+    const element = target === undefined || line ? undefined : elementOf(open.model, target);
+    const linking = element !== undefined && source.links !== undefined && !open.unreadable && !('source' in element) ? linkEntries(metamodel.value, element, source.links, source.linkPath ?? source.fileName) : [];
     return [...offered.map(({ entry, id }): Action => ({
       id, label: entry.label,
       ...(entry.icon === undefined ? {} : { icon: entry.icon }), ...(entry.shortcut === undefined ? {} : { shortcut: entry.shortcut }),
       enabled: entry.enabled, ...(entry.reason === undefined ? {} : { disabledReason: entry.reason }),
-    })), ...exporting];
+    })), ...linking, ...exporting];
   }
 
   /** The file an export writes: the model as read, and the centre of each node where the canvas draws it with these options. */
@@ -654,8 +676,17 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     const open = opened(source);
     const { model } = open;
     const intents = behavior.value;
+    // The host's entries for links change nothing of the document (FBL 17.5).
+    if (request.kind === 'action' && (request.action === OPEN_LINKED || request.action === LINKED_FROM)) {
+      const element = request.id === undefined ? undefined : elementOf(model, request.id);
+      if (!element || source.links === undefined || 'source' in element) return { kind: 'refused', sentence: GONE };
+      if (request.action === LINKED_FROM) return { kind: 'backlinks', backlinks: backlinksOf(source.links, source.linkPath ?? source.fileName, element.id) };
+      const target = linkTarget(metamodel.value, element, source.links);
+      return target ? { kind: 'openLinked', ...target } : { kind: 'refused', sentence: NO_TARGET };
+    }
     // What changes nothing of the document is not an edit: a fold, and an operation of viewer state, are answered in a read-only document too (DISL 9.4).
-    const situation = situationOf(open, options);
+    const picked = request.kind === 'action' ? request.picked : undefined;
+    const situation: Situation = { ...situationOf(open, options), ...(picked === undefined ? {} : { picked }) };
     // What an action that is asked for is: the entry of the menu that has its id, with the arguments that entry gives; else what the id
     // stands for by the definition's own mapping, the first that applies to what is selected; else the operation or the kind of that name.
     const meant = (action: string, asked: string | undefined): { readonly name: string; readonly args?: Readonly<Record<string, Value>> } => {
@@ -679,7 +710,13 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     if (open.refusal !== undefined && (open.unreadable || !viewing)) return { kind: 'refused', sentence: open.refusal };
     const viewpoint = viewpointOf(options);
     const refused = (sentence: string): EditOutcome => ({ kind: 'refused', sentence });
-    const done = (outcome: Outcome): EditOutcome => carriedOut(source, open, outcome, viewpoint, options);
+    // A `lookup` the host has not answered yet is asked of it (DISL 9.4), over the documents of the workspace.
+    const done = (outcome: Outcome): EditOutcome => {
+      if (outcome.refused !== NOT_PICKED) return carriedOut(source, open, outcome, viewpoint, options);
+      if (source.links === undefined) return refused(NO_WORKSPACE);
+      const origins = acting === undefined ? undefined : lookupOrigins.get(acting.name);
+      return { kind: 'lookup', ...(origins === undefined ? {} : { origins }) };
+    };
     const nodeOf = (id: string) => sceneOf(open, options).nodes.find((node) => node.id === id);
 
     // A gesture that would change a derived node, or join a relation to one, is refused with its reason (DISL 4.11.4);
@@ -866,7 +903,11 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
         if (name === 'delete' && id !== undefined) {
           const removal = intents.deletion(model, selection, situation);
           if (removal.refused !== undefined) return refused(removal.refused);
-          return removal.confirm && !confirmed ? asking(removal.confirm) : done(intents.remove(model, selection, situation));
+          // Before an element with backlinks goes, how many links the delete breaks is said (FBL 17.5).
+          const breaking = source.links === undefined ? 0 : source.links.brokenByDeleting(source.linkPath ?? source.fileName, removal.removes);
+          const confirm = breaking === 0 ? removal.confirm
+            : { title: removal.confirm?.title ?? 'Delete', message: [removal.confirm?.message, breaksLinks(breaking)].filter(Boolean).join(' '), confirmLabel: removal.confirm?.confirmLabel ?? 'Delete', danger: true };
+          return confirm && !confirmed ? asking(confirm) : done(intents.remove(model, selection, situation));
         }
         // The standard entries of DISL 7.3 that a definition lists by their kind.
         if (name === 'pin' && id !== undefined) return done(intents.pin(model, id, situation.at?.(id), situation));
@@ -945,7 +986,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     ...(persistence.value.documentId === undefined ? {} : {
       indexed: (source: Source) => {
         const open = opened(source.links === undefined ? source : { ...source, links: undefined });
-        return open.unreadable ? undefined : indexedDocument(metamodel.value, open.model, source.fileName, open.read.documentId);
+        return open.unreadable ? undefined : indexedDocument(metamodel.value, open.model, source.linkPath ?? source.fileName, open.read.documentId);
       },
     }),
     findings: (source) => {
@@ -976,6 +1017,24 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
  * (`keepsBeside`) that the binding does not let be created by the first change. Without it, the first
  * change of a document made by "New ..." would be refused. Nothing for any other binding.
  */
+/** The `origins` of the first `lookup` among an operation's actions, at any depth. */
+function originsOf(declared: unknown): readonly string[] | undefined {
+  if (Array.isArray(declared)) {
+    for (const item of declared) {
+      const found = originsOf(item);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  if (!isObject(declared)) return undefined;
+  if (isObject(declared.lookup) && Array.isArray(declared.lookup.origins)) return declared.lookup.origins.filter((origin): origin is string => typeof origin === 'string');
+  for (const value of Object.values(declared)) {
+    const found = originsOf(value);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
 function registrationOfNew(binding: FblBinding, origin: string, keepsBeside: boolean, text: string): string | undefined {
   if (!binding.claims.registrationOnly && (!keepsBeside || binding.registration.createOnFirstPlacement)) return undefined;
   return `${origin}${new BodyText(encode(text)).dominantEnding ?? binding.text.newline}`;

@@ -24,6 +24,7 @@ import type { Expressions, Scope, World } from './expressions';
 import { createTexts, type FormItem } from './forms';
 import type { Layout, LayoutConfig } from './layout';
 import { attributesOf, defaultOf, defaultsOf, derivedRelations, formatMoment, isA, isRelation, linkKind, parseYearMonth, valueKind, type DerivedRelation, type Metamodel } from './metamodel';
+import { linkedOf } from './links';
 import { finding, type Attributes, type Finding, type Loaded, type Model, type ModelElement, type ModelRelation, type Value } from './model';
 import { edgeNotation, interpretNotation, nodeNotation, type EndAnchor, type Label, type Notation } from './notation';
 import { derivedIds, foldsOf, newId, type InterpretedPersistence, type StoredView } from './persistence';
@@ -208,6 +209,8 @@ export interface Situation {
   at?(id: string): Point | undefined;
   /** The box a node is drawn in now: `self.view.bounds` (DISL 12.2), and what a parent placement and a drag in a tree measure by. */
   bounds?(id: string): { readonly x: number; readonly y: number; readonly width: number; readonly height: number } | undefined;
+  /** *(DISL 0.12, 9.4)* What the host's lookup picked for a `lookup` action: the element's link, and its name. Without it, a `lookup` is refused. */
+  readonly picked?: { readonly link: string; readonly name: string };
 }
 
 /** A point of the canvas, in canvas units at zoom 1, in the coordinate system of the viewpoint. */
@@ -561,6 +564,9 @@ class Ends {
 const skips = ['move', 'resize', 'plugin'];
 // The actions that change nothing of the model: an operation of these alone is offered in a read-only document and is no undo step (DISL 9.4).
 const viewing = ['view', 'select', 'reveal', 'highlight', 'open'];
+/** The refusal of a `lookup` that the host's lookup has not answered yet (DISL 9.4): the host asks, and runs the operation again with what was picked. */
+export const NOT_PICKED = 'Pick an element of the workspace to link to.';
+
 const asks = ['select', 'reveal', 'highlight', 'editLabel', 'openForm'] as const;
 const defaultLabels: Readonly<Record<string, string>> = {
   delete: 'Delete', editLabel: 'Rename', duplicate: 'Duplicate', openForm: 'Properties', moveUp: 'Move up', moveDown: 'Move down',
@@ -1198,8 +1204,22 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
         } else if (isObject(action.abort)) {
           refuse(said(action.abort.message, 'This is not possible here.'));
         } else if (isObject(action.lookup)) {
-          // DISL 0.12, 9.4: the host's lookup over the workspace, which this host does not offer yet (etalii.adp spec 089).
-          refuse('Picking an element of another document is not offered by this add-on yet.');
+          // DISL 0.12, 9.4: an element of `create`, a type with `linked`, whose link is the one the host's lookup picked, with its name; as the last child of `self`, or at the point.
+          const type = typeof action.lookup.create === 'string' ? action.lookup.create : undefined;
+          const linked = type === undefined ? undefined : linkedOf(metamodel, type);
+          const picked = situation?.picked;
+          if (!type || !linked) { refuse(`This could not be done: \`${type ?? ''}\` holds no link.`); continue; }
+          if (!picked) { refuse(NOT_PICKED); continue; }
+          const label = metamodel.types[type]?.labelAttribute;
+          const values = { ...defaultsOf(metamodel, type), [linked.attribute]: picked.link, ...(label === undefined || label === linked.attribute ? {} : { [label]: picked.name }) };
+          const invoked = variables.position;
+          const point = action.lookup.as === 'at' && isObject(invoked) && typeof invoked.x === 'number' && typeof invoked.y === 'number' ? { x: invoked.x, y: invoked.y } : undefined;
+          if (point) {
+            const { position, placed } = dropped(type, point);
+            if (check({ kind: 'create', values: { elementType: type, position, parent: null, dropTarget: null, tool: null } })) kept(action.as, add(type, { ...placed, ...values }));
+          } else if (self !== '' && check({ kind: 'create', elements: { parent: self }, values: { elementType: type, position: null, parent: self, dropTarget: null, tool: null } })) {
+            kept(action.as, add(type, values, undefined, self));
+          }
         } else if (typeof action.call === 'string' && Object.hasOwn(declared, action.call)) {
           act(declared[action.call].actions ?? [], self, { ...variables, p: each(action.args) ?? {} }, source);
         } else if (isObject(action.view)) {
