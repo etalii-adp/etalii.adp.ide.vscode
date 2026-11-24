@@ -5,7 +5,7 @@ import { exportCommand, exportContext, exportingOf, lastExport, writeExport } fr
 import { keepAsText } from './opening';
 import { PropertiesView } from './propertiesView';
 import { entriesOf, ToolboxView } from './toolboxView';
-import type { OpenTool, Tools } from './toolEditor';
+import { registrationUriOf, type OpenTool, type Tools } from './toolEditor';
 import type { Scene } from '../core/scene/scene';
 import type { HierarchyRequest } from '../core/tool/hierarchyView';
 import type { SectionsRequest } from '../core/tool/sectionsView';
@@ -106,16 +106,24 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
     }
     if (!contributed.has(`etalii.adp.new.${name}`)) continue;
     const extensions = type.claims.flatMap((claim) => claim.extensions);
-    register(`etalii.adp.new.${name}`, async () => {
+    // Given a file, as a test gives one, it makes that file without asking where.
+    register(`etalii.adp.new.${name}`, async (uri?: unknown) => {
       const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
-      const target = await vscode.window.showSaveDialog({
+      const target = uri instanceof vscode.Uri ? uri : await vscode.window.showSaveDialog({
         title: `New ${type.displayName}`,
         filters: { [type.displayName]: extensions },
         ...(folder ? { defaultUri: vscode.Uri.joinPath(folder, `untitled.${extensions[0]}`) } : {}),
       });
       if (!target) return;
       const fileName = target.path.slice(target.path.lastIndexOf('/') + 1);
-      await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(type.newDocument(fileName)));
+      const text = type.newDocument(fileName);
+      await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(text));
+      // A tool type that keeps its view data only in a registration it does not create, or that claims a file only when
+      // it is registered, gets one with the new document, so that its first change is kept and it opens in its tool again.
+      // One already there is the user's and is left as it is.
+      const registration = type.newRegistration(text, fileName);
+      const registrationUri = registrationUriOf(target);
+      if (registration !== undefined && !(await exists(registrationUri))) await vscode.workspace.fs.writeFile(registrationUri, new TextEncoder().encode(registration));
       await vscode.commands.executeCommand('vscode.openWith', target, viewTypeOf(type));
       // A new document begins from the ADP Toolbox and ADP Properties, so their side bar is shown beside it, and the focus
       // goes back to the tool, where its keys work.
@@ -206,5 +214,15 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
       active.selection = ids as string[];
       tools.refresh(active);
     });
+  }
+}
+
+/** Whether a file or folder is at `uri`. */
+async function exists(uri: vscode.Uri): Promise<boolean> {
+  try {
+    await vscode.workspace.fs.stat(uri);
+    return true;
+  } catch {
+    return false;
   }
 }

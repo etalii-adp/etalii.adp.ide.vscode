@@ -273,6 +273,11 @@ export interface ToolType<View, Request> {
   edit(source: Source, request: Request, options: ViewOptions, confirmed: boolean): EditOutcome;
   /** The text of a new document, from the binding's template. */
   newDocument(name: string): string;
+  /**
+   * The text of the registration to write beside a new document `text` named `name`, when one cannot
+   * be kept without it; undefined when it needs none (FBL 8.4).
+   */
+  newRegistration(text: string, name: string): string | undefined;
   /** What the tool type exports of a document; none when absent. */
   readonly exports?: readonly ExportOffer[];
   /** The file an export writes of the document as the canvas shows it with these options, at a moment of local time; nothing for an export the type does not have. */
