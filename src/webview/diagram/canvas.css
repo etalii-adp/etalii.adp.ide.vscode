@@ -99,6 +99,18 @@ body {
   pointer-events: none;
 }
 
+/* An edge's label is ringed in the editor's background, so that a line under it does not cross its letters. */
+text.adp-relation-label {
+  paint-order: stroke;
+  stroke: var(--vscode-editor-background);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.adp-relation-label .adp-scene-text {
+  text-shadow: 0 0 2px var(--vscode-editor-background), 0 0 2px var(--vscode-editor-background), 0 0 4px var(--vscode-editor-background);
+}
+
 .adp-scene-text {
   display: flex;
   flex-direction: column;

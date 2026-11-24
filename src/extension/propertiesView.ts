@@ -2,9 +2,9 @@ import * as vscode from 'vscode';
 import type { FromProperties, ToProperties } from '../core/frame/protocol';
 import type { Tools, OpenTool } from './toolEditor';
 import { webviewHtml } from './webviewHtml';
+import { nothingSelected } from '../core/frame/panels';
 
-const nothingOpen = 'Open a diagram to see the properties of what you select in it.';
-const nothingSelected = 'Select an element or a relation in the diagram to see its properties.';
+const nothingOpen = 'Open a diagram or a designer to see the properties of what you select in it.';
 const severalSelected = 'Several items are selected. Select one to see its properties.';
 
 /**
@@ -62,6 +62,6 @@ export function describe(active: OpenTool | undefined): ToProperties {
   if (active.selection.length > 1) return { v: 2, type: 'fields', fields: [], empty: severalSelected };
   const fields = active.fields().map((field) => (active.readOnly && field.readOnly === undefined ? { ...field, readOnly: 'This file is read-only.' } : field));
   // With nothing selected, the diagram's own form where its definition declares one, edited under the id ''.
-  if (active.selection.length === 0) return fields.length === 0 ? { v: 2, type: 'fields', fields: [], empty: nothingSelected } : { v: 2, type: 'fields', fields, target: '' };
+  if (active.selection.length === 0) return fields.length === 0 ? { v: 2, type: 'fields', fields: [], empty: nothingSelected(active.type) } : { v: 2, type: 'fields', fields, target: '' };
   return { v: 2, type: 'fields', fields, target: active.selection[0] };
 }

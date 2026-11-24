@@ -56,6 +56,12 @@ describe('the page of sections', () => {
     expect(row('F-0004').getAttribute('aria-description')).toContain('Unaddressed');
   });
 
+  it('shows a row\'s finding as its sentence, not as a word with the sentence in a tooltip', () => {
+    // Found by the host test (spec 090, T029): an unaddressed factor showed a stray "Note".
+    expect([...row('F-0004').querySelectorAll<HTMLElement>('.adp-sections-finding')].map((finding) => `${finding.dataset.severity}: ${finding.textContent}`)).toEqual(['information: No action addresses this accepted factor.']);
+    expect(row('F-0004').textContent).not.toContain('Note');
+  });
+
   it('stands the timeline\'s entries on its time strip, the milestones labelled, and selects a row from its mark', () => {
     const marks = [...part('timeline').querySelectorAll<HTMLButtonElement>('.adp-sections-strip-mark')];
     expect(marks).toHaveLength(9);
@@ -65,6 +71,18 @@ describe('the page of sections', () => {
     expect(detection.style.left).toBe(`${(47 / 180) * 100}%`);
     detection.click();
     expect(sent.at(-1)).toEqual({ v: 2, type: 'selection', ids: ['E-0003'] });
+  });
+
+  it('stands the strip\'s labels level, two that would overlap on levels of their own', () => {
+    // Found by the host test (spec 090, T029): the labels were turned and printed over each other,
+    // "Trigger" on "Start", both at the strip's start.
+    const lane = (name: string): string | undefined => [...part('timeline').querySelectorAll<HTMLElement>('.adp-sections-strip-label')].find((label) => label.textContent === name)?.dataset.lane;
+    expect(lane('Trigger')).toBe('0');
+    expect(lane('Start')).toBe('1');
+    expect(lane('Detection')).toBe('0');
+    expect(lane('Engagement')).not.toBe(lane('Detection'));
+    expect(lane('Mitigation start')).not.toBe(lane('Mitigated'));
+    expect(part('timeline').querySelector<HTMLElement>('.adp-sections-strip-axis')!.style.height).toBe(`${22 + 2 * 18}px`);
   });
 
   it('selects a row by the pointer, and highlights what it mentions and what mentions it', () => {

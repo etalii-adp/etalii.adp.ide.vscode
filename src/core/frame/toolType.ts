@@ -71,6 +71,8 @@ export interface Field {
   readonly value: string;
   /** The candidates of a choice or a slider, in order, or the suggestions of a tags field. */
   readonly options?: readonly string[];
+  /** The form a value is written in, shown in an empty field, where its type has one. */
+  readonly placeholder?: string;
   /** Why the field is shown and not edited; absent for an editable field. */
   readonly readOnly?: string;
 }

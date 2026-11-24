@@ -44,9 +44,16 @@ export function controlFor(field: Field, commit: (value: string) => void): HTMLE
     return area;
   }
 
-  const input = html('input', { ...common, type: field.control === 'number' ? 'number' : 'text' });
+  // A number is a line of text, so that it shows as the file writes it rather than in the region's
+  // format, and entering it selects it, so that what is typed replaces it.
+  const input = html('input', { ...common, type: 'text' });
   input.value = field.value;
   input.readOnly = locked;
+  if (field.placeholder !== undefined) input.placeholder = field.placeholder;
+  if (field.control === 'number') {
+    input.inputMode = 'decimal';
+    input.addEventListener('focus', () => input.select());
+  }
   if (field.control === 'tags' && field.options) {
     // Tags are typed separated by commas; the tags already in use are offered.
     const list = html('datalist', { id: `${field.id}-suggestions` }, ...field.options.map((option) => html('option', { value: option })));

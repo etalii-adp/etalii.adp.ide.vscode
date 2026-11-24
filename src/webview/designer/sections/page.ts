@@ -1,6 +1,10 @@
 import type { FromCanvas, ToCanvas } from '../../../core/frame/protocol';
 import type { SectionsFieldView, SectionsOperation, SectionsPartView, SectionsRequest, SectionsRow, SectionsTimeStrip, SectionsView } from '../../../core/tool/sectionsView';
 import { html } from '../../diagram/dom';
+import { placeLabels } from './strip';
+
+// The height of one level of a time strip's labels.
+const laneHeight = 18;
 
 // The page of a designer of the `sections` kind (DESL 7.8): one titled part below another, a record
 // as a form of its fields, a list as its rows under their groups, with the time strip above them,
@@ -105,9 +109,10 @@ export class Sections {
     html('div', { class: 'adp-sections-row-head' },
       html('span', { class: 'adp-sections-id' }, row.id),
       ...row.marks.map((mark) => html('span', { class: 'adp-sections-badge', 'data-style': mark.style }, mark.label)),
-      ...row.findings.map((finding) => html('span', { class: 'adp-sections-finding', 'data-severity': finding.severity, title: finding.message }, finding.severity === 'error' ? 'Error' : finding.severity === 'warning' ? 'Warning' : 'Note')),
       ...(readOnly ? [] : row.operations.map((operation) => this.operationButton(operation, [row.id], 'adp-sections-operation')))),
-    html('div', { class: 'adp-sections-fields' }, ...part.fields.map((field) => this.fieldOf(field, row, readOnly))));
+    html('div', { class: 'adp-sections-fields' }, ...part.fields.map((field) => this.fieldOf(field, row, readOnly))),
+    // A finding is its sentence under the row, not a word whose sentence only a tooltip shows.
+    ...row.findings.map((finding) => html('p', { class: 'adp-sections-finding', 'data-severity': finding.severity }, finding.message)));
     return element;
   }
 
@@ -150,14 +155,21 @@ export class Sections {
     const band = html('div', { class: 'adp-sections-strip', role: 'group', 'aria-label': `${part.title}: from ${strip.from} to ${strip.to}` },
       html('span', { class: 'adp-sections-strip-from' }, strip.from), html('span', { class: 'adp-sections-strip-to' }, strip.to));
     const axis = html('div', { class: 'adp-sections-strip-axis' });
-    for (const mark of strip.marks) {
+    // The labels stand level, each on the nearest level over the axis where it overlaps no other.
+    const placed = placeLabels(strip.marks, this.root.clientWidth > 0 ? this.root.clientWidth - 48 : 640);
+    strip.marks.forEach((mark, index) => {
+      const at = placed[index];
+      const label = mark.label === undefined || at === undefined ? undefined
+        : html('span', { class: `adp-sections-strip-label${at.leftward ? ' adp-sections-strip-leftward' : ''}`, 'data-lane': at.lane, style: `bottom: ${14 + at.lane * laneHeight}px` }, mark.label);
       const button = html('button', {
         class: `adp-sections-strip-mark${mark.emphasised ? ' adp-sections-strip-emphasised' : ''}`, type: 'button', 'data-row': mark.row,
         'aria-label': `${mark.label === undefined ? '' : `${mark.label}, `}${mark.at}, ${mark.row}`, title: `${mark.label === undefined ? '' : `${mark.label}: `}${mark.at}`,
-      }, mark.label === undefined ? undefined : html('span', { class: 'adp-sections-strip-label' }, mark.label));
+      }, label);
       button.style.left = `${mark.offset * 100}%`;
       axis.append(button);
-    }
+    });
+    const lanes = Math.max(0, ...placed.map((at) => (at === undefined ? -1 : at.lane))) + 1;
+    axis.style.height = `${22 + lanes * laneHeight}px`;
     band.append(axis);
     if (strip.untimed.length > 0) band.append(html('p', { class: 'adp-sections-untimed' }, `No time: ${strip.untimed.join(', ')}`));
     return band;

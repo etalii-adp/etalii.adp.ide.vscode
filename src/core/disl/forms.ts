@@ -2,7 +2,7 @@
 // its items as data a panel can show without knowing DISL. What depends on the document (whether an
 // item is shown, what it shows, what an entered text means) is a function over a model and an element.
 
-import type { Expressions, Scope, World } from './expressions';
+import { durationOf, type Expressions, type Scope, type World } from './expressions';
 import { attributesOf, defaultOf, formatYearMonth, parseYearMonth, takesLink, valueKind, type Metamodel } from './metamodel';
 import { finding, type Finding, type Loaded, type Model, type Value } from './model';
 import { isCel, isObject, labelOf, localized, type Attribute, type CelValue, type Doc, type Expression, type LocalizedText, type Message, type Reason, type Specification } from './specification';
@@ -300,6 +300,8 @@ export function interpretForms(specification: Specification, metamodel: Metamode
       case 'int': return /^\s*[-+]?\d+\s*$/.test(text) ? { value: Number(text) } : not('a whole number');
       case 'number': return text.trim() !== '' && Number.isFinite(Number(text)) ? { value: Number(text) } : not('a number');
       case 'bool': return /^\s*(true|false)\s*$/.test(text) ? { value: text.trim() === 'true' } : not('true or false');
+      case 'duration':
+        return durationOf(text.trim()) === undefined ? not('a duration: write it in ISO 8601, as PT15M for 15 minutes, PT2H for 2 hours or P1D for a day') : { value: text.trim() };
       case 'yearMonth': {
         const index = parseYearMonth(text.trim());
         return index === undefined ? not('a year and a month, written as YYYY-MM') : { value: index };

@@ -96,6 +96,10 @@ describe('the value stream map', () => {
   it('renames a step, sets its waiting time and connects two elements', () => {
     expect(edited(twoSteps, { kind: 'rename', id: 's2', text: 'Fix it' })).toBe(twoSteps.text.replace('name: Resolve', 'name: Fix it'));
     expect(edited(twoSteps, { kind: 'setField', id: 's2', field: 'waitTime', value: 'PT3H' })).toBe(twoSteps.text.replace('waitTime: PT1H', 'waitTime: PT3H'));
+    // Found by the host test (spec 090, T029): "15m" was written, and the step's times then vanished.
+    const shorthand = type.edit(twoSteps, { kind: 'setField', id: 's2', field: 'waitTime', value: '15m' }, {}, true);
+    expect(shorthand).toMatchObject({ kind: 'refused', sentence: expect.stringContaining('PT15M') });
+    expect(type.fields(twoSteps, ['s2']).find((field) => field.id === 'waitTime')).toMatchObject({ placeholder: 'PT15M, PT2H or P1D' });
     expect(edited(twoSteps, { kind: 'connect', from: 's1', to: 'o1' })).toBe(twoSteps.text.replace('      to: o1\n', '      to: o1\n    - from: s1\n      to: o1\n'));
   });
 

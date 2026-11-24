@@ -75,6 +75,9 @@ describe('a scene', () => {
     const label = { id: 'polarity', text: '+', editText: '+', box: { x: 10, y: 20, width: 8, height: 15 }, position: 'outside', align: 'center', fontSize: 15, style: {}, editable: false, wrap: 'none', overflow: 'ellipsis' } as const;
     const root = drawn(withEdge({ ...edge('i-12'), labels: [label] }));
     expect(group(root, 'i-12').querySelector('[data-label="polarity"]')?.textContent).toBe('+');
+    // Found by the host test (spec 090, T029): an edge's label is drawn across its own line, so it
+    // carries the class that rings its letters in the editor's background.
+    expect(group(root, 'i-12').querySelector('[data-label="polarity"]')?.classList.contains('adp-relation-label')).toBe(true);
   });
 
   it('gives a selected element the colour its notation\'s `states.selected` states, and leaves the others to the host\'s highlight', () => {

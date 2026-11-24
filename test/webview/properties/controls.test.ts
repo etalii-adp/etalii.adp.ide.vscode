@@ -68,4 +68,24 @@ describe('ADP Properties', () => {
     toggle.dispatchEvent(new Event('change'));
     expect(commits).toEqual([['causal-loop.link-delayed', 'false']]);
   });
+
+  it('shows a number as the text it is written in, and selects it on entering, so typing replaces it', () => {
+    // Found by the host test (spec 090, T029): a number box showed 0.98 as 0,98 in a Dutch region,
+    // and a click put the caret in it, so what was typed was added to the old value.
+    const commits: [string, string][] = [];
+    const root = document.createElement('div');
+    root.append(...gridOf([{ id: 'target', label: 'Target', group: '', control: 'number', value: '0.98' }], undefined, (field, value) => commits.push([field, value])));
+    const input = root.querySelector('[id="target"]') as HTMLInputElement;
+    expect([input.type, input.inputMode, input.value]).toEqual(['text', 'decimal', '0.98']);
+    document.body.append(root);
+    input.dispatchEvent(new FocusEvent('focus'));
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, 4]);
+    root.remove();
+  });
+
+  it('shows the form a value is written in where its type has one', () => {
+    const root = document.createElement('div');
+    root.append(...gridOf([{ id: 'wait', label: 'Wait time', group: '', control: 'text', value: '', placeholder: 'PT15M, PT2H or P1D' }], undefined, () => undefined));
+    expect((root.querySelector('[id="wait"]') as HTMLInputElement).placeholder).toBe('PT15M, PT2H or P1D');
+  });
 });

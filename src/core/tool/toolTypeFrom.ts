@@ -68,8 +68,11 @@ const NO_PLACE = 'An end is put on a part of what it is on, on a side of that pa
 
 const severities: Readonly<Record<string, Severity>> = { error: 'error', warning: 'warning', info: 'information', hint: 'hint' };
 const controls: Readonly<Record<string, Control>> = {
-  textarea: 'multiline', tags: 'tags', slider: 'slider', number: 'number', select: 'choice', segmented: 'choice', combobox: 'choice', checkbox: 'choice', switch: 'toggle',
+  textarea: 'multiline', tags: 'tags', slider: 'slider', number: 'number', select: 'choice', segmented: 'choice', combobox: 'choice', checkbox: 'toggle', switch: 'toggle',
 };
+
+// The form a value of a widget is written in (DISL B.7), shown in its empty field: a duration is ISO 8601.
+const placeholders: Readonly<Record<string, string>> = { duration: 'PT15M, PT2H or P1D', date: 'YYYY-MM-DD', month: 'YYYY-MM' };
 
 /** A finding of the interpreter or the library as the frame's: its line counted from zero. */
 const framed = (found: Found): Finding => ({ rule: found.code, severity: severities[found.severity] ?? 'warning', message: found.message, line: Math.max(0, found.location.line - 1), ...(found.element === undefined ? {} : { element: found.element }) });
@@ -448,7 +451,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       const readOnly = open.refusal ?? element?.derived?.reason ?? (locked.readOnly ? locked.reason ?? NO_ROW : undefined);
       return {
         id: wire.property(item.rowId(on)), label: item.label(on), group, control: controls[item.widget] ?? 'text', value: item.display(on),
-        ...(options.length > 0 ? { options } : {}), ...(readOnly === undefined ? {} : { readOnly }),
+        ...(options.length > 0 ? { options } : {}), ...(placeholders[item.widget] === undefined ? {} : { placeholder: placeholders[item.widget] }), ...(readOnly === undefined ? {} : { readOnly }),
       };
     });
   }

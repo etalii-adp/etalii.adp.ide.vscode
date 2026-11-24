@@ -76,6 +76,15 @@ describe('the SLO map', () => {
     expect(type.fields(source, ['missing:Service:payments']).every((field) => field.readOnly === refusal)).toBe(true);
   });
 
+  it('offers a switch for a yes-or-no attribute, and its number fields as they are written', () => {
+    // Found by the host test (spec 090, T029): Rolling was a free text "true", and Target a number
+    // box in the region's format. A bool is a switch; a number keeps the text the file holds.
+    const source: Source = { fileName: 'specification-samples.yaml', text: readFileSync('examples/openslo-slo/specification-samples.yaml', 'utf8') };
+    const field = (id: string, name: string) => type.fields(source, [id]).find((one) => one.id === name);
+    expect(field('SLO:foo-slo', 'isRolling')).toMatchObject({ control: 'toggle', value: 'true' });
+    expect(field('SLO:foo-slo/objective:1', 'targetRatio')).toMatchObject({ control: 'number', value: '0.98' });
+  });
+
   it('draws a data source as a cylinder and the lines of a reference with rounded corners, as its notation says', () => {
     const text = [
       'apiVersion: openslo/v1', 'kind: DataSource', 'metadata:', '  name: prometheus', 'spec:', '  type: Prometheus', '  connectionDetails: {}',

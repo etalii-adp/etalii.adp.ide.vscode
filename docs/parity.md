@@ -94,8 +94,29 @@ The graph is read from its definition and held to the standalone host's recorded
 
 | Difference | Why |
 |---|---|
-| X and Row are edited in a number box, where the standalone host has a line of text. What is typed is checked as it was typed, so `1e21`, `-2` and `0.00001` are taken, and `1.5` for a row is refused with "'1.5' is not a number this graph can place a node at." | The definition states `widget: number`, which is VS Code's number box here; the check reads the text the user typed, as the standalone host's does, so the two accept and refuse the same values. |
+| X and Row are edited in a line of text, as in the standalone host. What is typed is checked as it was typed, so `1e21`, `-2` and `0.00001` are taken, and `1.5` for a row is refused with "'1.5' is not a number this graph can place a node at." | The definition states `widget: number`; this host shows every number as the text the file holds rather than in a number box, which wrote it in the region's format (spec 090's host test), and the check reads the text the user typed, as the standalone host's does. |
 | "Add node", with no point to place the node at, asks its label in an input box with "New node" filled in. | The standalone host asks in a dialog; an input box is Visual Studio Code's way to ask one value. |
+
+## Value stream map
+
+The map is read from its definition alone (etalii.adp spec 090). Where its definition, its binding's fixtures and FBL differ, the row is in [docs/disl-support.md](disl-support.md), "Value stream map"; what follows is this host's own.
+
+| Difference | Why |
+|---|---|
+| Each state's totals and the comparison of the two are drawn as nodes of the definition's derived node types, read-only, a gesture on one refused with the definition's reason. | DISL 4.11.2: they are computed from the steps and flows, so nothing about them is stored or edited. |
+
+## Post-incident review designer
+
+The designer is read from its definition alone (etalii.adp spec 090). Where its definition and its binding's fixtures differ, the row is in [docs/disl-support.md](disl-support.md), "Post-incident review designer"; there is no difference of this host's own.
+
+## SLO map
+
+The map is read from its definition alone (etalii.adp spec 090). Where its definition and FBL differ, the row is in [docs/disl-support.md](disl-support.md), "SLO map"; what follows is this host's own.
+
+| Difference | Why |
+|---|---|
+| A `.yaml` file opens as text, and **Open as SLO map** opens it in the map. | Every YAML file is claimed by the binding's extension and not by a marker, so the map is offered, not chosen, as for the other tool types that read a format many tools share. |
+| A folder of OpenSLO files, opened through the registration in it, is read once when it opens: a change to one of its files shows when the map is opened again. | FBL 10.3, watching a folder subject and settling, is not built here ([docs/fbl.md](fbl.md), "Not implemented"). |
 
 ## Native dialogs, seen in a real window
 
