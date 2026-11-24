@@ -354,6 +354,11 @@ export function createExpressions(specification: Specification, metamodel: Metam
   const declared = Object.entries(specification.functions ?? {});
   const bodies = new Map<string, (scope: Scope) => unknown>();
   const body = (cel: string): ((scope: Scope) => unknown) => bodies.get(cel) ?? bodies.set(cel, parse(cel)).get(cel)!;
+  const nested = new Map<string, (scope: Scope) => unknown>();
+  const bodyAt = (cel: string, level: number): ((scope: Scope) => unknown) => {
+    const key = `${level}\u0000${cel}`;
+    return nested.get(key) ?? nested.set(key, parse(cel)).get(key)!;
+  };
   for (const [name, declaration] of declared) {
     let depth = 0;
     try {
@@ -362,8 +367,12 @@ export function createExpressions(specification: Specification, metamodel: Metam
         const scope: Record<string, unknown> = Object.fromEntries(declaration.params.map((parameter, index) => [parameter.name, values[index]]));
         for (const used of declaration.uses ?? []) scope[used] = active[used];
         if (declaration.recursion && depth >= declaration.recursion.maxDepth) return body(declaration.recursion.atMaxDepth)(scope);
+        // A parsed program keeps the state of its comprehensions while it runs, so a recursive call made
+        // from inside a `map` or `filter` of the same body runs a copy parsed for its own level of the
+        // recursion; one shared program would have the inner call overwrite the outer one's iteration.
+        const level = depth;
         depth++;
-        try { return body(declaration.cel)(scope); } finally { depth--; }
+        try { return (level === 0 ? body(declaration.cel) : bodyAt(declaration.cel, level))(scope); } finally { depth--; }
       });
     } catch (failure) {
       findings.push(finding('disl.function', 'error', `The function \`${name}\` of the specification cannot be used: ${reason(failure)}`));
