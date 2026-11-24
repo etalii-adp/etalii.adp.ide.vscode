@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { EditOutcome, EditRequest, Source } from '../../../src/core/frame/toolType';
+import { LinkWorkspace } from '../../../src/core/fbl/links/workspace';
 import { plugins as registry } from '../../../src/core/plugins/index';
 import { definitionOf, diagramOf, spliced } from './support';
 
@@ -380,5 +381,21 @@ describe('a node made by a gesture that selects nothing', () => {
     const nodes = made.filter((id) => new RegExp(`id: ${id}\\r?\\n\\s+label:`).test(after));
     expect(nodes).toHaveLength(1);
     expect(outcome.show).toBe(nodes[0]);
+  });
+});
+
+// This host's binding of the dependency graph keeps no document id yet (FBL 17.2): in a workspace, its first edit is made
+// without one, rather than refused for the id the load-time step would write (spec 089).
+describe('a dependency graph in a workspace', () => {
+  it('takes its first edit without a document id, which its binding cannot keep', () => {
+    const text = readFileSync('examples/dependency-graph/example-1/services.dgr', 'utf8');
+    const plain: Source = { fileName: '/w/services.dgr', text, linkPath: '/w/services.dgr' };
+    const source: Source = { ...plain, links: new LinkWorkspace('/w', [type.indexed!(plain)!]) };
+    const action = type.toolbox(source)[0].id;
+    const outcome = type.edit(source, { kind: 'action', action, params: { label: 'Search cache' } }, {}, false);
+    expect(outcome.kind).toBe('applied');
+    const after = spliced(text, outcome.kind === 'applied' ? outcome.splices : []);
+    expect(after).toMatch(/label: Search cache\r?\n\s+x: 0\r?\n\s+row: 0/);
+    expect(after.startsWith(text.slice(0, 200))).toBe(true);
   });
 });

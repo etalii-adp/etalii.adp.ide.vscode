@@ -277,7 +277,8 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     const gate = needed.length > 0 ? messages.pluginMissing(needed[0].id) : body.isReadOnly && !read.unreadable ? binding.readOnly || messages.readOnlyFile : undefined;
     const kept = {
       view: typed.view, stale: typed.stale, ...(typed.entries ? { entries: typed.entries } : {}), derived: derived.value, corners: keptBeside ? layoutOf(source.registration) : {}, ...(named === undefined ? {} : { named }),
-      refreshed: linking?.refreshed ?? [], needsId: linking !== undefined && read.documentId === undefined,
+      // A binding that keeps no document id (FBL 17.2) is given none: its document still resolves the links it holds.
+      refreshed: linking?.refreshed ?? [], needsId: linking !== undefined && read.documentId === undefined && (binding.plugin !== undefined || binding.documentId !== undefined),
     };
     // What is said of a document that cannot be read is the definition's sentence for one that cannot be edited, else the reader's finding.
     const readOnly = behavior.value.message('std.readOnly', emptyModel);

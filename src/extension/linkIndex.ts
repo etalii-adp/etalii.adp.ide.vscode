@@ -37,7 +37,8 @@ export class LinkIndex implements vscode.Disposable {
       const watcher = vscode.workspace.createFileSystemWatcher(this.glob);
       const read = (uri: vscode.Uri): void => void this.readFile(uri);
       this.subscriptions.push(
-        watcher, watcher.onDidCreate(read), watcher.onDidChange(read), watcher.onDidDelete((uri) => this.remove(uri)),
+        // A deletion is read too: its event can come after the file was written again, and only what is there is taken out.
+        watcher, watcher.onDidCreate(read), watcher.onDidChange(read), watcher.onDidDelete((uri) => void this.deleted(uri)),
         // What an editor holds is what the document is, saved or not.
         vscode.workspace.onDidChangeTextDocument((event) => { if (event.contentChanges.length > 0) this.put(event.document.uri, event.document.getText()); }),
         vscode.workspace.onDidChangeWorkspaceFolders(() => void this.readAll()),
@@ -77,6 +78,16 @@ export class LinkIndex implements vscode.Disposable {
     const found = await vscode.workspace.findFiles(this.glob, '**/node_modules/**', 5000);
     await Promise.all(found.map((uri) => this.readFile(uri, false)));
     this.changed.fire();
+  }
+
+  /** A file reported deleted is taken out, unless it is there again by now. */
+  private async deleted(uri: vscode.Uri): Promise<void> {
+    try {
+      await vscode.workspace.fs.stat(uri);
+    } catch {
+      return this.remove(uri);
+    }
+    return this.readFile(uri);
   }
 
   private async readFile(uri: vscode.Uri, announce = true): Promise<void> {

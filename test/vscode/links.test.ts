@@ -120,8 +120,9 @@ suite('Links between documents in Visual Studio Code', () => {
     const document = await open(consumerUri);
     await until('the target\'s name', async () => (await labelOf('ID_c2')) === 'Target');
     await quickPicks(['Target']);
-    assert.deepStrictEqual(await edit({ kind: 'action', action: 'addLinked', id: 'ID_c1' }), { result: 'applied' });
+    const added = await edit({ kind: 'action', action: 'addLinked', id: 'ID_c1' });
     const [lookup] = await offered();
+    assert.deepStrictEqual(added, { result: 'applied' }, `the lookup offered ${JSON.stringify(lookup?.items.map((item) => [item.label, item.description]))}`);
     assert.ok(lookup.items.some((item) => item.label === 'Target' && item.description === 'target.mm' && item.detail === 'links-test'), 'the lookup offers the target with its document and folder');
     const after = await until('the linked node', () => (/<attribute NAME="adp-link" VALUE="\$tgt00001@target\.mm#ID_t2\.text=Target"\/>\n<\/node>\n<\/node>\n<\/map>$/.test(document.getText()) ? document.getText() : undefined));
     assert.match(after, /<node TEXT="Target" ID="ID_[0-9a-z]{8}">\n<attribute NAME="adp-link"/);
