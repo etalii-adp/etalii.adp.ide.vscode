@@ -13,6 +13,8 @@ import { definitionOf, diagramOf, spliced } from './support';
 const type = diagramOf(definitionOf('value-stream-map'), registry);
 
 const example = (name: string): Source => ({ fileName: `${name}.vsm`, text: readFileSync(`examples/value-stream-map/${name}.vsm`, 'utf8') });
+// The same example with its future state shown: the State filter shows one state at a time, kept as `view.state`.
+const future = (source: Source): Source => ({ ...source, text: source.text.includes('view:\n  state: current\n') ? source.text.replace('view:\n  state: current\n', 'view:\n  state: future\n') : `${source.text}view:\n  state: future\n` });
 const twoSteps: Source = { fileName: 'two-steps.vsm', text: readFileSync('fixtures/fbl/conformance/fixtures/value-stream-map-future/two-steps.vsm', 'utf8') };
 
 function edited(source: Source, request: EditRequest): string {
@@ -28,17 +30,29 @@ describe('the value stream map', () => {
     expect(type.findings(source)).toEqual([]);
     const scene = type.view(source, {});
     expect(scene.findings).toEqual([]);
-    const types = new Set(scene.nodes.map((node) => node.type));
+    const nodes = [...scene.nodes, ...type.view(future(source), {}).nodes.filter((node) => node.id !== 'comparison')];
+    const types = new Set(nodes.map((node) => node.type));
     // The two summaries and the comparison are derived nodes (DISL 4.11.2), drawn from the steps and flows.
     expect([...types].sort()).toEqual(['Comparison', 'Outcome', 'Step', 'Summary', 'Trigger']);
     // Ids by kind: the steps of the future state go on from those of the current one.
-    expect(scene.nodes.filter((node) => node.type === 'Step').map((node) => node.id)).toEqual(Array.from({ length: 12 }, (_, i) => `s${i + 1}`));
+    expect(nodes.filter((node) => node.type === 'Step').map((node) => node.id)).toEqual(Array.from({ length: 12 }, (_, i) => `s${i + 1}`));
+  });
+
+  it('shows one state at a time, as its State filter says, the current one first', () => {
+    // Found by the screenshots of the host test (spec 090, T029): the future state's steps were drawn
+    // without their flows. A filter took the steps out, and a step placed by an expression was put
+    // back when placements were computed again after the layout; the flows stayed hidden.
+    const source = example('request-fulfilment');
+    const shown = (text: string): string[] => type.view({ ...source, text }, {}).nodes.map((node) => node.id);
+    expect(shown(source.text)).toEqual(['t1', 's1', 's2', 's3', 's4', 's5', 's6', 'o1', 'summary-current', 'comparison']);
+    expect(shown(future(source).text)).toEqual(['t2', 's7', 's8', 's9', 's10', 's11', 's12', 'o2', 'summary-future', 'comparison']);
+    expect(type.view(source, {}).edges.filter((edge) => edge.hidden === undefined).map((edge) => edge.source)).toEqual(['t1', 's1', 's2', 's2', 's4', 's5', 's5', 's3', 's6']);
   });
 
   it('draws each state\'s totals and the comparison of the two, computed and not editable', () => {
     const source = example('request-fulfilment');
-    const scene = type.view(source, {});
-    const label = (id: string): string | undefined => scene.nodes.find((node) => node.id === id)?.labels[0]?.text;
+    const nodes = [...type.view(source, {}).nodes, ...type.view(future(source), {}).nodes];
+    const label = (id: string): string | undefined => nodes.find((node) => node.id === id)?.labels[0]?.text;
     // The figures the companion works by hand for this example (value-stream-map.md, "Request fulfilment").
     expect(label('summary-current')).toBe('Lead time 11.51 h\nProcess time 1.05 h\nFlow efficiency 9.1 %\nHand-offs 2.2');
     expect(label('summary-future')).toBe('Lead time 3.56 h\nProcess time 1.05 h\nFlow efficiency 29.5 %\nHand-offs 2.2');
@@ -48,8 +62,8 @@ describe('the value stream map', () => {
   });
 
   it('computes the figures the companion works by hand for the restore-service example', () => {
-    const scene = type.view(example('restore-service'), {});
-    const label = (id: string): string | undefined => scene.nodes.find((node) => node.id === id)?.labels[0]?.text;
+    const nodes = [...type.view(example('restore-service'), {}).nodes, ...type.view(future(example('restore-service')), {}).nodes];
+    const label = (id: string): string | undefined => nodes.find((node) => node.id === id)?.labels[0]?.text;
     expect(label('summary-current')).toBe('Lead time 5.92 h\nProcess time 1.42 h\nFlow efficiency 23.9 %\nHand-offs 3');
     expect(label('summary-future')).toBe('Lead time 3.75 h\nProcess time 1.42 h\nFlow efficiency 37.8 %\nHand-offs 2');
   });
