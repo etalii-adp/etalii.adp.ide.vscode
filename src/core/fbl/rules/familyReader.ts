@@ -1,4 +1,4 @@
-import type { AttributeBinding, BlockRule, FblBinding, HeaderSettings, Rule, Slot } from '../documents/types';
+import type { AttributeBinding, BlockRule, DocumentIdSlot, FblBinding, HeaderSettings, Rule, Slot } from '../documents/types';
 import { BoundedRegex } from '../expressions/regexMatcher';
 import type { Finding, FindingSeverity, SourceLocation } from '../finding';
 import { messages } from '../messages';
@@ -285,6 +285,20 @@ export abstract class FamilyReader {
 
   /** The header check (FBL 5.6): whether the mark is there with the right value. */
   abstract headerHolds(header: HeaderSettings): boolean;
+
+  /** *(FBL 0.23)* The document id the body's root holds in `slot` (FBL 17.2); undefined for none, an empty value included. */
+  documentId(slot: DocumentIdSlot): string | undefined {
+    void slot;
+    return undefined;
+  }
+
+  /** *(FBL 0.23)* Writes the document id into the body's root (FBL 17.2), or refuses where the family cannot. */
+  writeDocumentId(plan: SplicePlan, slot: DocumentIdSlot, id: string): void {
+    void plan;
+    void slot;
+    void id;
+    refuse(messages.keepsNoDocumentId);
+  }
 
   /** Findings about entries no rule claimed, once reading is done. */
   afterRead(claimedBy: (entry: Entry) => string | undefined): void {

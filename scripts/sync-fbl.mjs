@@ -52,6 +52,14 @@ const pinned = [
     why: 'the SLO map, etalii.adp spec 090',
     files: (file) => /^specifications\/fbl\/fixtures\/openslo-slo-[^/]+\//.test(file),
   },
+  // links-workspace: etalii.adp spec 089, the workspace of documents that link to each other (FBL 0.23
+  // section 17) and what resolving and validating its links yields, at the merge of etalii.adp #821.
+  {
+    name: 'links-workspace',
+    commit: 'fe21681e27134462bfd8fb7e040d790aba807aa0',
+    why: 'links between documents of FBL 0.23, etalii.adp spec 089',
+    files: (file) => /^specifications\/fbl\/fixtures\/links-workspace\//.test(file),
+  },
 ];
 if (!adp || !standalone) {
   console.error('Usage: node scripts/sync-fbl.mjs <path to etalii.adp> <path to etalii.adp.ide.standalone> [<etalii.adp ref>] [<standalone ref>]');

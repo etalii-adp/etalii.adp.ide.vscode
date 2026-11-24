@@ -41,6 +41,11 @@ export function planEdit(reading: BodyReading, change: ModelChange, added: Reado
       case 'retype':
         planRetype(plan, reading, change);
         break;
+      case 'setDocumentId':
+        if (!reading.binding.documentId) refuse(messages.keepsNoDocumentId);
+        if (change.id.length === 0) refuse(messages.emptyDocumentId);
+        reading.family.writeDocumentId(plan, reading.binding.documentId, change.id);
+        break;
       default:
         throw new Error(messages.registrationEdit);
     }

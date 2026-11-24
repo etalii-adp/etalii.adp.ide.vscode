@@ -198,6 +198,8 @@ export class BodyReading implements Reading {
     if (at === '/') {
       // The root also holds the marks a file is known by, and may name its schema.
       if (this.binding.header?.key !== undefined) names.keys.add(this.binding.header.key);
+      // The document id (FBL 0.23, 17.2), which no rule need bind.
+      if (this.binding.documentId?.key !== undefined) names.keys.add(this.binding.documentId.key);
       if (this.binding.claims.marker?.rootKey !== undefined) names.keys.add(this.binding.claims.marker.rootKey);
       names.keys.add('$schema');
     }
@@ -651,6 +653,7 @@ export class BodyReading implements Reading {
       this.unreadable !== undefined,
       [...this.views],
       [...this.resources],
+      this.binding.documentId && this.unreadable === undefined ? this.family.documentId(this.binding.documentId) : undefined,
     );
   }
 }

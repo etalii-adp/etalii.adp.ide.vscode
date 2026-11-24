@@ -191,6 +191,9 @@ function readBinding(name: string, json: JsonNode, pointer: string, problems: Lo
 
   const header = memberOf(json, 'header');
   const template = memberOf(json, 'template');
+  const documentIdSlot = memberOf(memberOf(json, 'document'), 'id');
+  const idKey = str(documentIdSlot, 'key');
+  const idAttribute = str(documentIdSlot, 'attribute');
   return {
     name,
     title: localized(memberOf(json, 'title')),
@@ -200,6 +203,7 @@ function readBinding(name: string, json: JsonNode, pointer: string, problems: Lo
     readOnly: readOnlyOf(json),
     text: readText(json),
     header: header ? { key: str(header, 'key'), value: memberOf(header, 'value'), line: str(header, 'line'), required: bool(header, 'required') } : undefined,
+    ...(idKey !== undefined ? { documentId: { key: idKey } } : idAttribute !== undefined ? { documentId: { attribute: idAttribute } } : {}),
     comment: str(json, 'comment'),
     reportUnmatched: str(json, 'unmatched') === 'report',
     blocks: array(json, 'blocks').map((block): BlockRule => ({

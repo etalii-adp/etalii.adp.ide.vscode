@@ -166,6 +166,8 @@ export const messages = {
   yamlFlowQuotedNotClosed: 'A quoted scalar in a flow collection is never closed.',
   yamlNotWellFormed: (detail: string) => `The body is not well-formed YAML: ${detail}`,
   yamlDuplicateKey: (name: string) => `The key '${name}' appears again in this mapping; only the first is read.`,
+  keepsNoDocumentId: 'This file keeps no document id.',
+  emptyDocumentId: 'A document id is not empty.',
   yamlNoMapping: (binding: string, key: string) => `The ${binding} file has no mapping to write '${key}' in.`,
   yamlNoKeys: (type: string) => `A new ${type} would have no keys to write.`,
   yamlNotAList: (selector: string, type: string) => `The ${selector} of this file is not a list a ${type} can be added to.`,

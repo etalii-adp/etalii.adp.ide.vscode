@@ -2,7 +2,7 @@ import type { FblBinding } from '../documents/types';
 import { findingCodes } from '../finding';
 import { SplicedFile } from '../history/splicedFile';
 import { messages } from '../messages';
-import { FblModel } from '../model';
+import { documentIdAttribute, FblModel } from '../model';
 import type { ModelChange } from '../planning/modelChange';
 import type { PlanResult } from '../planning/plan';
 import { orderSplices } from '../splice';
@@ -33,7 +33,10 @@ export class PluginBody extends SplicedFile {
   }
 
   get model(): FblModel {
-    return new FblModel(this.last.elements, this.last.findings, this.last.unreadable);
+    // A plugin reports the document id as its root's attribute `documentId` (FBL 0.23, 17.2).
+    const root = this.last.elements.find((element) => !element.isRelation && element.parentId === undefined);
+    const documentId = root?.attributes[documentIdAttribute];
+    return new FblModel(this.last.elements, this.last.findings, this.last.unreadable, [], [], typeof documentId === 'string' && documentId !== '' ? documentId : undefined);
   }
 
   /** Read-only without the plugin, when the plugin reports the body unreadable, or when the binding is read-only. */

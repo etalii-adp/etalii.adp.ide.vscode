@@ -26,6 +26,8 @@ export type ChangePosition = { readonly index: number } | { readonly after: stri
  *   yet: the entry is from then on found by `newId`, and can be named by it. With `replace`, the
  *   entry may hold an id already, which is replaced where it is written: a placeholder, or the id
  *   of an entry that another holds first (DESL 5.3.4, 5.3.5).
+ * - `setDocumentId` *(FBL 0.23)*: writes the document id into the body's root (FBL 17.2), as load-time
+ *   validation gives a body without one (FBL 17.4).
  * - `setting` *(FBL 0.7)*: changes the entry `key` of a block the binding declares in the registration
  *   (FBL 8.1, 8.4, 15.3): `value` sets or adds it, `rename` renames its key, `remove` removes it,
  *   and `position` places it in a `kept` block, among its entries as they are without it.
@@ -43,6 +45,7 @@ export type ModelChange =
   | { readonly kind: 'place'; readonly id: string; readonly x: number; readonly y: number }
   | { readonly kind: 'identify'; readonly key: string; readonly id: string }
   | { readonly kind: 'storeId'; readonly id: string; readonly newId: string; readonly replace?: true }
+  | { readonly kind: 'setDocumentId'; readonly id: string }
   | {
     readonly kind: 'setting'; readonly block: string; readonly key: string; readonly value?: string;
     readonly position?: ChangePosition; readonly rename?: string; readonly remove?: boolean;

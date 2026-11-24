@@ -21,6 +21,8 @@ export interface FblBinding {
   readonly readOnly?: string;
   readonly text: TextDefaults;
   readonly header?: HeaderSettings;
+  /** *(FBL 0.23)* The slot of the body's root that holds the document id (FBL 17.2): a root key, or an attribute of an xml body's root element. */
+  readonly documentId?: DocumentIdSlot;
   readonly comment?: string;
   readonly reportUnmatched: boolean;
   readonly blocks: readonly BlockRule[];
@@ -94,6 +96,9 @@ export interface TextDefaults {
   readonly finalNewline: boolean;
   readonly quote: string;
 }
+
+/** *(FBL 0.23)* Where a body keeps its document id (FBL 17.2). */
+export type DocumentIdSlot = { readonly key: string; readonly attribute?: undefined } | { readonly key?: undefined; readonly attribute: string };
 
 export interface HeaderSettings {
   readonly key?: string;
