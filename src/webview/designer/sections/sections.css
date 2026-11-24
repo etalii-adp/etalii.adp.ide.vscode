@@ -235,10 +235,11 @@ body {
 
 .adp-sections-badge,
 .adp-sections-finding {
-  padding: 0 6px;
-  border-radius: 8px;
+  margin: 4px 0 0;
+  padding-left: 8px;
   font-size: 0.85em;
-  border: 1px solid transparent;
+  border-left: 2px solid var(--vscode-editorInfo-foreground);
+  color: var(--vscode-descriptionForeground);
 }
 
 .adp-sections-badge[data-style="info"] {
@@ -249,12 +250,10 @@ body {
 .adp-sections-badge[data-style="warning"],
 .adp-sections-finding[data-severity="warning"] {
   border-color: var(--vscode-editorWarning-foreground);
-  color: var(--vscode-editorWarning-foreground);
 }
 
 .adp-sections-finding[data-severity="error"] {
   border-color: var(--vscode-editorError-foreground);
-  color: var(--vscode-editorError-foreground);
 }
 
 .adp-sections-row-head .adp-sections-operation:first-of-type {
@@ -280,7 +279,7 @@ body {
 
 .adp-sections-strip-axis {
   position: relative;
-  height: 46px;
+  height: 46px; /* raised by the page to hold every level of labels */
   margin-top: 4px;
   border-bottom: 2px solid var(--adp-sections-line);
 }
@@ -303,12 +302,25 @@ body {
   background: var(--vscode-focusBorder);
 }
 
+/* A label stands level, on the level placeLabels gives it, reading from its mark. */
 .adp-sections-strip-label {
   position: absolute;
   bottom: 14px;
-  left: 50%;
-  transform: translateX(-50%) rotate(-30deg);
-  transform-origin: bottom left;
+  left: 4px;
   white-space: nowrap;
-  font-size: 0.8em;
+  font-size: 0.85em;
+  line-height: 16px;
+  color: var(--vscode-editor-foreground);
+  border-left: 1px solid var(--adp-sections-line);
+  padding-left: 3px;
+  pointer-events: none;
+}
+
+.adp-sections-strip-leftward {
+  left: auto;
+  right: 4px;
+  border-left: none;
+  border-right: 1px solid var(--adp-sections-line);
+  padding-left: 0;
+  padding-right: 3px;
 }

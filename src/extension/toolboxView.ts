@@ -2,9 +2,9 @@ import * as vscode from 'vscode';
 import type { FromToolbox, ToToolbox } from '../core/frame/protocol';
 import type { Tools, OpenTool } from './toolEditor';
 import { webviewHtml } from './webviewHtml';
+import { noEntries, readOnlyEntries } from '../core/frame/panels';
 
-const nothingOpen = 'Open a diagram to see what can be added to it.';
-const readOnly = 'This diagram is read-only, so nothing can be added to it.';
+const nothingOpen = 'Open a diagram or a designer to see what can be added to it.';
 
 /**
  * The ADP Toolbox: a view of its own, which the user can drag wherever Visual Studio Code puts views,
@@ -50,6 +50,7 @@ export class ToolboxView implements vscode.WebviewViewProvider {
 /** The entries for the active diagram, or the sentence that says why there are none. */
 export function entriesOf(active: OpenTool | undefined): ToToolbox {
   if (!active) return { v: 2, type: 'entries', entries: [], empty: nothingOpen };
-  if (active.readOnly || active.lastView?.readOnly) return { v: 2, type: 'entries', entries: [], empty: readOnly };
-  return { v: 2, type: 'entries', entries: active.type.toolbox(active.source) };
+  if (active.readOnly || active.lastView?.readOnly) return { v: 2, type: 'entries', entries: [], empty: readOnlyEntries(active.type) };
+  const entries = active.type.toolbox(active.source);
+  return entries.length === 0 ? { v: 2, type: 'entries', entries, empty: noEntries(active.type) } : { v: 2, type: 'entries', entries };
 }
