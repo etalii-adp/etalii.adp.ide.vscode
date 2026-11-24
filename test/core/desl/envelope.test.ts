@@ -30,7 +30,7 @@ describe('a version this host does not read', () => {
     expect(dedRefusal({ version: '0.2', designer: 'a/b' })).toBeUndefined();
     expect(dedRefusal({ version: '0.1', designer: 'a/b' })).toBeUndefined();
     expect(dedRefusal(undefined)).toBeUndefined();
-    expect(dedRefusal({ version: '1.0', designer: 'a/b' })).toBe('This document is written in DED 1.0, and this application reads DED 0.2 and earlier. It is left exactly as it is and cannot be changed here.');
+    expect(dedRefusal({ version: '1.0', designer: 'a/b' })).toBe('This document is written in DED 1.0, and this application reads DED 0.3 and earlier. It is left exactly as it is and cannot be changed here.');
   });
 });
 

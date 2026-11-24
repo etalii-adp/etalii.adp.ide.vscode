@@ -17,6 +17,16 @@ const exampleText = (name: string): string => fs.readFileSync(example('knowledge
 const tabsOn = (uri: vscode.Uri): vscode.Tab[] => vscode.window.tabGroups.all.flatMap((group) => group.tabs)
   .filter((tab) => (tab.input instanceof vscode.TabInputText || tab.input instanceof vscode.TabInputCustom) && tab.input.uri.toString() === uri.toString());
 const inDesigner = (uri: vscode.Uri): boolean => tabsOn(uri).some((tab) => tab.input instanceof vscode.TabInputCustom && tab.input.viewType === viewType);
+/**
+ * A file made before links, as its first edit in the workspace writes it (etalii.adp spec 089; FBL 17.4): DED 0.3 and
+ * the document id it is given, after the designer, read from what was written. Its relation to provinces.yaml stays a
+ * path, because that file has no document id.
+ */
+function converted(original: string, written: string): string {
+  const id = /^id: ([0-9a-z]{8})\r$/m.exec(written)?.[1];
+  assert.ok(id, 'the first edit gives the file its document id');
+  return original.replace('ded: "0.1"\r\ndesigner: etalii/knowledge\r\n', `ded: "0.3"\r\ndesigner: etalii/knowledge\r\nid: ${id}\r\n`);
+}
 /** Long enough for a claimed file to have been reopened: a tab that is still text after it stays text. */
 const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 1500));
 
@@ -129,8 +139,8 @@ suite('The Knowledge designer in Visual Studio Code', () => {
     const { uri, document, original } = await open();
     assert.deepStrictEqual(await edit({ kind: 'cell', row: 'r1', property: 'p1', value: 'Mokum' }), { result: 'applied' });
 
-    const changed = original.replace('text: Amsterdam', 'text: Mokum');
-    assert.strictEqual(document.getText(), changed, 'nothing but the value changed');
+    const changed = converted(original, document.getText()).replace('text: Amsterdam', 'text: Mokum');
+    assert.strictEqual(document.getText(), changed, 'nothing but the value and the conversion changed');
     assert.strictEqual(document.isDirty, true);
     const state = await drawn(document.version);
     assert.strictEqual(state.table!.rows.find((row) => row.id === 'r1')?.title, 'Mokum', 'the table follows');
@@ -147,8 +157,9 @@ suite('The Knowledge designer in Visual Studio Code', () => {
     const { document, original } = await open();
     assert.deepStrictEqual(await edit({ kind: 'operation', operation: 'addRow' }), { result: 'applied' });
     const added = document.getText();
-    assert.match(added.slice(original.length), /^ {2}- id: [0-9a-z]{25}\r\n$/, 'a row is appended, and nothing else changes');
-    assert.ok(added.startsWith(original));
+    const before = converted(original, added);
+    assert.match(added.slice(before.length), /^ {2}- id: [0-9a-z]{8}\r\n$/, 'a row is appended, and nothing else changes');
+    assert.ok(added.startsWith(before));
     await vscode.commands.executeCommand('undo');
     await until('the undo', () => document.getText() === original);
   });
@@ -159,8 +170,9 @@ suite('The Knowledge designer in Visual Studio Code', () => {
     const request = { kind: 'steps', steps: [{ kind: 'operation', operation: 'addRow', on: [], args: {} }, { kind: 'operation', operation: 'setOption', on: ['$created:0'], args: { property: 'p2', value: 'o1' } }] };
     assert.deepStrictEqual(await edit(request), { result: 'applied' });
     const added = document.getText();
-    assert.ok(added.startsWith(original), 'the row is appended, and nothing before it changes');
-    assert.match(added.slice(original.length), /^ {2}- id: [0-9a-z]{25}\r\n {4}cells:\r\n {6}- property: p2\r\n {8}option: o1\r\n$/, 'the new row is in the group');
+    const before = converted(original, added);
+    assert.ok(added.startsWith(before), 'the row is appended, and nothing before it changes');
+    assert.match(added.slice(before.length), /^ {2}- id: [0-9a-z]{8}\r\n {4}cells:\r\n {6}- property: p2\r\n {8}option: o1\r\n$/, 'the new row is in the group');
     await vscode.commands.executeCommand('undo');
     await until('the one undo', () => document.getText() === original);
   });
@@ -169,7 +181,7 @@ suite('The Knowledge designer in Visual Studio Code', () => {
     const { document, original } = await open(exampleText('cities.yaml').replace('activeView: v1', 'activeView: v2'));
     // The request of the entry (the plugin's own, held by test/core/plugins/knowledgeGestures.test.ts).
     assert.deepStrictEqual(await edit({ kind: 'operation', operation: 'addSort', on: ['v2'], args: { property: 'p3', direction: 'descending' } }), { result: 'applied' });
-    assert.strictEqual(document.getText(), original.replace('    name: Map\r\n', '    name: Map\r\n    sorts:\r\n      - property: p3\r\n        direction: descending\r\n'), 'one sort, and nothing else');
+    assert.strictEqual(document.getText(), converted(original, document.getText()).replace('    name: Map\r\n', '    name: Map\r\n    sorts:\r\n      - property: p3\r\n        direction: descending\r\n'), 'one sort, and nothing else');
     await vscode.commands.executeCommand('undo');
     await until('the one undo', () => document.getText() === original);
   });
@@ -208,41 +220,25 @@ suite('The Knowledge designer in Visual Studio Code', () => {
     await vscode.commands.executeCommand('workbench.action.files.revert');
   });
 
-  test('a two-way relation is made in both files in one edit, and neither file is saved by it', async () => {
-    const provinces = example('knowledge-test', 'provinces.yaml');
-    fs.writeFileSync(provinces.fsPath, exampleText('provinces.yaml'));
-    const { document, original } = await open();
-    await until('the province by its title', async () => (await provinceOf('r1')) === 'Noord-Holland');
-    // The request the new-property panel makes (held by test/webview/table/related.test.ts).
-    const request = { kind: 'operation', operation: 'createRelation', on: [], args: { name: 'Seat of', targetFile: 'provinces.yaml', limit: 'none', counterpartName: 'Seats' } };
-    assert.deepStrictEqual(await edit(request), { result: 'applied' });
-    const other = await vscode.workspace.openTextDocument(provinces);
-    assert.match(document.getText().slice(0, document.getText().indexOf('views:')), /name: Seat of\r\n {4}type: relation\r\n {4}target: provinces\.yaml\r\n {4}counterpart: [0-9a-z]{25}\r\n/);
-    assert.match(other.getText(), /name: Seats\r\n {4}type: relation\r\n {4}target: work-\d+\.yaml\r\n {4}counterpart: [0-9a-z]{25}\r\n {4}computed: true\r\n/);
-    assert.ok(document.getText() !== original && other.isDirty, 'both files are changed, and neither is saved');
-    // The other file's change is taken back, so that closing every editor asks nothing.
-    await vscode.window.showTextDocument(other);
-    await vscode.commands.executeCommand('workbench.action.files.revert');
-  });
-
-  test('one Undo after a two-way relation is made restores both files\' bytes, and one Redo makes it in both again', async () => {
+  // Its other side is a backlink column the target computes (etalii.adp spec 089, FR-026): only this file is written.
+  test('a two-way relation is made in this file alone, with the name its backlinks are shown by, and one Undo takes it back', async () => {
     const provinces = example('knowledge-test', 'provinces.yaml');
     fs.writeFileSync(provinces.fsPath, exampleText('provinces.yaml'));
     const { document, original } = await open();
     await until('the province by its title', async () => (await provinceOf('r1')) === 'Noord-Holland');
     const other = await vscode.workspace.openTextDocument(provinces);
     const otherOriginal = other.getText();
-    const request = { kind: 'operation', operation: 'createRelation', on: [], args: { name: 'Seat of', targetFile: 'provinces.yaml', limit: 'none', counterpartName: 'Seats' } };
+    // The request the new-property panel makes (held by test/webview/table/related.test.ts).
+    const request = { kind: 'operation', operation: 'createRelation', on: [], args: { name: 'Seat of', targetFile: 'provinces.yaml', limit: 'none', backlinkName: 'Seats' } };
     assert.deepStrictEqual(await edit(request), { result: 'applied' });
-    const made = [document.getText(), other.getText()];
-    assert.ok(made[0] !== original && made[1] !== otherOriginal, 'both files are changed');
+    const made = document.getText();
+    assert.match(made.slice(0, made.indexOf('views:')), /name: Seat of\r\n {4}type: relation\r\n {4}target: provinces\.yaml\r\n {4}backlinkName: Seats\r\n/);
+    assert.strictEqual(other.getText(), otherOriginal, 'the target is not written');
+    assert.strictEqual(other.isDirty, false);
     await vscode.commands.executeCommand('undo');
-    await until('both files as they were', () => document.getText() === original && other.getText() === otherOriginal);
+    await until('the file as it was', () => document.getText() === original);
     await vscode.commands.executeCommand('redo');
-    await until('both files made again', () => document.getText() === made[0] && other.getText() === made[1]);
-    // The other file's change is taken back, so that closing every editor asks nothing.
-    await vscode.window.showTextDocument(other);
-    await vscode.commands.executeCommand('workbench.action.files.revert');
+    await until('the relation made again', () => document.getText() === made);
   });
 
   test('renaming provinces.yaml rewrites the relation\'s target in a file that names it, in one step with the rename', async () => {

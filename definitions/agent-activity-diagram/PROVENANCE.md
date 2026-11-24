@@ -7,6 +7,6 @@ They are the definition of one tool type, copied unchanged, byte for byte, from 
 
 | File | Repository | Path | Commit | SHA-256 |
 |---|---|---|---|---|
-| `agent-activity-diagram.dis` | `etalii.adp` | `definitions/diagrams/agent-activity-diagram.dis` | `18e7aad501b4ea043a1e51f2ff84abb200934774` | `0ccc9a58445acc042cdf8be77aa142d98b4353c9794bf9e286a927bcdffaaf01` |
-| `agent-activity-diagram.fbl` | `etalii.adp` | `definitions/diagrams/agent-activity-diagram.fbl` | `18e7aad501b4ea043a1e51f2ff84abb200934774` | `d7a80b9f7cd439ec0e4fbf8b36d1a30d40e6238affd64368a91371f0ee24d366` |
-| `agent-activity-diagram.md` | `etalii.adp` | `definitions/diagrams/agent-activity-diagram.md` | `18e7aad501b4ea043a1e51f2ff84abb200934774` | `34b7b40b48c003b0248cacac9aabfea63d682f379f1aecb0c780da17974c9ac5` |
+| `agent-activity-diagram.dis` | `etalii.adp` | `definitions/diagrams/agent-activity-diagram.dis` | `aa2b6a7e6606de7733ffdfff6398bda488989613` | `0ccc9a58445acc042cdf8be77aa142d98b4353c9794bf9e286a927bcdffaaf01` |
+| `agent-activity-diagram.fbl` | `etalii.adp` | `definitions/diagrams/agent-activity-diagram.fbl` | `aa2b6a7e6606de7733ffdfff6398bda488989613` | `d7a80b9f7cd439ec0e4fbf8b36d1a30d40e6238affd64368a91371f0ee24d366` |
+| `agent-activity-diagram.md` | `etalii.adp` | `definitions/diagrams/agent-activity-diagram.md` | `aa2b6a7e6606de7733ffdfff6398bda488989613` | `34b7b40b48c003b0248cacac9aabfea63d682f379f1aecb0c780da17974c9ac5` |

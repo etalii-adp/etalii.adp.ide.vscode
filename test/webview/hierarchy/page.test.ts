@@ -547,11 +547,11 @@ describe('the rest of the page', () => {
     page.receive({ v: 2, type: 'outcome', seq: 1, result: 'refused', sentence: 'Not now.' });
     expect(document.querySelector('.adp-hierarchy-status')!.textContent).toBe('Not now.');
 
-    const later = { ...source, text: source.text.replace('<!-- ded: 0.2 ', '<!-- ded: 0.3 ') };
+    const later = { ...source, text: source.text.replace('<!-- ded: 0.2 ', '<!-- ded: 0.4 ') };
     show(type.view(later, {}), 2);
     const notice = document.querySelector('.adp-hierarchy-notice')!;
     expect(notice.hasAttribute('hidden')).toBe(false);
-    expect(notice.textContent).toContain('DED 0.3');
+    expect(notice.textContent).toContain('DED 0.4');
     const toggle = box('ITEM-0001').querySelector<HTMLButtonElement>('.hs-toggle')!;
     expect(toggle.disabled).toBe(true);
     expect(document.querySelectorAll('.hs-add, .hs-grip, .hs-delete-place')).toHaveLength(0);

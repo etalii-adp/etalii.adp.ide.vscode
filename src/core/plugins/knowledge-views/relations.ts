@@ -1,23 +1,19 @@
 // The relations of the Knowledge designer (etalii.adp `definitions/designers/knowledge.md`,
-// "Relations and the steps that write two files"): a relation property names its target file by a
-// path relative to its own (`.` for itself) and holds, per cell, row ids of that file, which the
-// designer resolves and shows by their titles. DESL cannot say this, because the target is another
-// file; the companion leaves it to each host, with the two findings that only a host can raise.
+// "Relations and the steps that write two files"): a relation names its target file by a link to its
+// document, or, in a file made before links, by a path relative to its own (`.` for itself), and holds,
+// per cell, links to rows of that file, or their ids, which the designer resolves and shows by their
+// titles. DESL cannot say this, because the target is another file; the companion leaves it to each host,
+// with the findings that only a host can raise.
 
-import type { Model, ModelElement, Value } from '../../disl/model';
+import type { Model, ModelElement } from '../../disl/model';
 import type { Change } from '../../disl/behavior';
-import type { TableAcross, TableConfirm, TableData, TableFound, TableRelation, TableStep } from '../../tool/tableView';
+import { parseLink } from '../../fbl/links/link';
+import type { TableAcross, TableConfirm, TableData, TableFound, TableLinking, TableRelation, TableStep } from '../../tool/tableView';
+import { fileOfTarget, isLink, ownIdOf, relationsOf, rowIdOf, rowLink, SELF, targetLink, text } from './links';
 
-const text = (value: Value | undefined): string => (value === undefined || value === null ? '' : String(value));
-const SELF = '.';
-
-/** The relation properties of a document, a computed counterpart among them. */
-const relationsOf = (model: Model): ModelElement[] =>
-  model.elements.filter((element) => element.type === 'Property' && element.attributes.valueType === 'relation' && text(element.attributes.targetFile) !== '');
-
-/** The files other than itself that a document's relations name, each once: a counterpart's too, which its rows come from. */
-export function targets(model: Model): string[] {
-  return [...new Set(relationsOf(model).map((property) => text(property.attributes.targetFile)).filter((file) => file !== SELF))];
+/** The files other than itself that a document's relations name, each once, as it names them: a counterpart's too, which its rows come from. */
+export function targets(model: Model, linking?: TableLinking): string[] {
+  return [...new Set(relationsOf(model).flatMap((property) => fileOfTarget(text(property.attributes.targetFile), model, linking).file ?? []).filter((file) => file !== SELF))];
 }
 
 const COMPUTED = 'The other side of a two-way relation is duplicated from its own table.';
@@ -30,14 +26,17 @@ const COMPUTED = 'The other side of a two-way relation is duplicated from its ow
 export function relations(table: TableData): Record<string, TableRelation> {
   const held: Record<string, TableRelation> = {};
   for (const property of relationsOf(table.model)) {
-    const file = text(property.attributes.targetFile);
-    const other = file === SELF ? { rows: table.rows.map((row) => ({ id: row.id, name: row.title })), model: table.model } : table.related?.(file);
+    const written = text(property.attributes.targetFile);
+    const file = fileOfTarget(written, table.model, table.linking).file;
+    const other = file === SELF ? { rows: table.rows.map((row) => ({ id: row.id, name: row.title })), model: table.model } : file === undefined ? undefined : table.related?.(file);
     const rows = other?.rows;
+    // A link that does not resolve names its file by the name it caches.
+    const named = file ?? (isLink(written) ? parseLink(written)?.documentName ?? written : written);
     if (property.attributes.computed !== true) {
-      held[property.id] = { file, single: property.attributes.limit === 'one', ...(rows ? { rows } : {}) };
+      held[property.id] = { file: named, single: property.attributes.limit === 'one', idOf: rowIdOf, ...(rows ? { rows } : {}) };
       continue;
     }
-    held[property.id] = { file, single: false, readOnly: COMPUTED, ...(rows ? { rows } : {}), ...(other ? { values: pointingAt(other.model, text(property.attributes.counterpart)) } : {}) };
+    held[property.id] = { file: named, single: false, readOnly: COMPUTED, idOf: rowIdOf, ...(rows ? { rows } : {}), ...(other ? { values: pointingAt(other.model, text(property.attributes.counterpart)) } : {}) };
   }
   return held;
 }
@@ -48,7 +47,7 @@ function pointingAt(model: Model, property: string): Record<string, string[]> {
   const values: Record<string, string[]> = {};
   for (const item of model.elements) {
     const row = item.type === 'CellItem' && item.parent !== undefined ? cells.get(item.parent) : undefined;
-    const named = text(item.attributes.row);
+    const named = rowIdOf(text(item.attributes.row));
     if (row === undefined || named === '') continue;
     const rows = (values[named] ??= []);
     if (!rows.includes(row)) rows.push(row);
@@ -57,55 +56,57 @@ function pointingAt(model: Model, property: string): Record<string, string[]> {
 }
 
 /**
- * The host's two findings of relations (`knowledge.md`, Findings): `knowledge.unresolved-target` on a
- * relation whose file is missing, unreadable or not a knowledge file, and `knowledge.unresolved-row`
- * on a value naming a row its file does not hold. Neither removes a value. Where the host gives no
- * other file, nothing is said of one.
+ * The host's findings of relations (`knowledge.md`, Findings): `knowledge.unresolved-target` on a relation whose
+ * file is missing, unreadable or not a knowledge file, `knowledge.unresolved-row` on a value naming a row its file
+ * does not hold, and, for a relation or a value that is a link, the link's own finding where it does not resolve
+ * (FBL 17.6). None removes a value. Where the host gives no other file, nothing is said of one.
  */
 export function findings(table: TableData, held: Readonly<Record<string, TableRelation>>): TableFound[] {
   const found: TableFound[] = [];
   const names = new Map(table.properties.map((property) => [property.id, property.name]));
+  const linkFound = (element: string, link: string): boolean => {
+    const finding = table.linking?.links.resolve(link).finding;
+    if (finding) found.push({ code: finding.code, severity: finding.code === 'link.malformed' ? 'error' : 'warning', element, message: finding.message });
+    return finding !== undefined;
+  };
   for (const [id, relation] of Object.entries(held)) {
+    const property = table.model.elements.find((element) => element.id === id);
+    const target = text(property?.attributes.targetFile);
     if (relation.values !== undefined || relation.readOnly !== undefined) {
-      if (!relation.rows && table.related) found.push({ code: 'knowledge.unresolved-target', severity: 'warning', element: id, message: `${names.get(id) ?? id} relates to ${relation.file}, which is missing, cannot be read or is not a knowledge file.` });
+      if (!relation.rows && table.related && property !== undefined) found.push({ code: 'knowledge.unresolved-target', severity: 'warning', element: id, message: `${names.get(id) ?? id} relates to ${relation.file}, which is missing, cannot be read or is not a knowledge file.` });
       continue;
     }
+    if (isLink(target) && linkFound(id, target)) continue;
     const shown = relation.file === SELF ? 'this file' : relation.file;
     if (!relation.rows) {
-      if (table.related) found.push({ code: 'knowledge.unresolved-target', severity: 'warning', element: id, message: `${names.get(id) ?? id} relates to ${relation.file}, which is missing, cannot be read or is not a knowledge file. Its values are kept.` });
+      if (table.related && !isLink(target)) found.push({ code: 'knowledge.unresolved-target', severity: 'warning', element: id, message: `${names.get(id) ?? id} relates to ${relation.file}, which is missing, cannot be read or is not a knowledge file. Its values are kept.` });
       continue;
     }
     const known = new Set(relation.rows.map((row) => row.id));
     for (const row of table.rows) {
       for (const item of row.cells[id]?.items ?? []) {
-        if (!known.has(item.value)) found.push({ code: 'knowledge.unresolved-row', severity: 'warning', element: item.id, message: `${item.value} is no row of ${shown}. The value is kept.` });
+        if (isLink(item.value) && table.linking) {
+          linkFound(item.id, item.value);
+          continue;
+        }
+        const named = rowIdOf(item.value);
+        if (!known.has(named)) found.push({ code: 'knowledge.unresolved-row', severity: 'warning', element: item.id, message: `${named} is no row of ${shown}. The value is kept.` });
       }
     }
   }
   return found;
 }
 
-/** `name` when no other is called that, ignoring case, else with the smallest number from 2 that none has (DESL 9.4). */
-function uniqueName(name: string, names: readonly string[]): string {
-  const taken = new Set(names.map((other) => other.toLowerCase()));
-  if (!taken.has(name.toLowerCase())) return name;
-  let count = 2;
-  while (taken.has(`${name} ${count}`.toLowerCase())) count++;
-  return `${name} ${count}`;
-}
-
-const propertyNames = (model: Model): string[] => model.elements.filter((element) => element.type === 'Property').map((element) => text(element.attributes.name));
 const UNREAD = (file: string): string => `${file} is missing, cannot be read or is not a knowledge file, so neither file is changed.`;
 export const CHOOSE_OTHER_SIDE = 'Choose whether the other side of the relation goes too or stays as a one-way relation.';
 
 /**
- * The steps of `knowledge.md` that write two files, beyond what the operation itself does: a two-way
- * relation made, with its other side in the target, and one side of it deleted, with the other
- * deleted too or kept as a one-way relation, as the user chose (`otherSide`). Each is planned in
- * full before either file is written. Any other operation writes one file.
+ * The steps of `knowledge.md` that write two files, beyond what the operation itself does: one side of a
+ * two-way relation made before links deleted, with the other deleted too or kept as a one-way relation,
+ * as the user chose (`otherSide`). Each is planned in full before either file is written. Any other
+ * operation writes one file: a relation's other side is now its backlink column, computed in the target.
  */
 export function across(step: TableStep): TableAcross | { readonly refused: string } | { readonly confirm: TableConfirm } | undefined {
-  if (step.operation === 'createRelation') return twoWay(step);
   if (step.operation === 'deleteProperty') return oneSideDeleted(step);
   if (step.operation === 'deleteRows' && !step.confirmed) return relating(step);
   if (step.operation === SET_LIMIT) return limited(step);
@@ -144,37 +145,33 @@ function limited(step: TableStep): TableAcross | { readonly refused: string } {
 }
 
 /**
- * Whether a relation is shown in the file it relates to as well: made two-way, its other side is
- * added there under the name given, or this table's; made one-way, that side is removed. The values
- * are this side's own either way, so no row changes.
+ * Whether a relation is shown in the file it relates to as well: made two-way, its target shows its backlinks in a
+ * column of the name given, or this table's (`backlinkName`); made one-way, it shows none. Neither file holds that
+ * column, so only this one is written. A relation made before links with a counterpart in its target keeps the steps
+ * it had: made one-way, that counterpart is removed there.
  */
 function otherSide(step: TableStep): TableAcross | { readonly refused: string } {
   const property = ownRelation(step);
   if ('refused' in property) return property;
-  const file = text(property.attributes.targetFile);
-  const self = file === SELF;
-  const target = self ? step.before : step.related?.(file)?.model;
-  if (!target) return { refused: UNREAD(file) };
-  const counterpart = text(property.attributes.counterpart);
-  const other = counterpart === '' ? undefined : target.elements.find((element) => element.id === counterpart && element.type === 'Property');
   const twoWay = step.args.twoWay === true || step.args.twoWay === 'true';
-  if (twoWay === (other !== undefined)) return { file: SELF, here: [], there: [] };
-  let mine: Change;
-  let theirs: Change;
-  if (other) {
-    mine = { kind: 'set', id: property.id, attributes: { counterpart: null } };
-    theirs = { kind: 'remove', id: other.id };
-  } else {
-    const id = step.newId('Property');
-    const asked = text(step.args.counterpartName).trim();
-    const own = text(step.before.diagram.name).trim();
-    mine = { kind: 'set', id: property.id, attributes: { counterpart: id } };
-    theirs = {
-      kind: 'add', id, type: 'Property',
-      attributes: { name: uniqueName(asked !== '' ? asked : own !== '' ? own : 'Relation', propertyNames(target)), valueType: 'relation', targetFile: self ? SELF : step.back(file), computed: true, counterpart: property.id },
-    };
+  const counterpart = text(property.attributes.counterpart);
+  if (counterpart !== '' && !twoWay) {
+    const file = text(property.attributes.targetFile);
+    const self = file === SELF;
+    const target = self ? step.before : step.related?.(file)?.model;
+    if (!target) return { refused: UNREAD(file) };
+    const other = target.elements.find((element) => element.id === counterpart && element.type === 'Property');
+    const mine: Change = { kind: 'set', id: property.id, attributes: { counterpart: null } };
+    if (!other) return { file: SELF, here: [mine], there: [] };
+    const theirs: Change = { kind: 'remove', id: other.id };
+    return self ? { file, here: [mine, theirs], there: [] } : { file, here: [mine], there: [theirs] };
   }
-  return self ? { file, here: [mine, theirs], there: [] } : { file, here: [mine], there: [theirs] };
+  const named = text(property.attributes.backlinkName);
+  if (twoWay === (named !== '' || counterpart !== '')) return { file: SELF, here: [], there: [] };
+  if (!twoWay) return { file: SELF, here: [{ kind: 'set', id: property.id, attributes: { backlinkName: null } }], there: [] };
+  const asked = text(step.args.backlinkName ?? step.args.counterpartName).trim();
+  const own = text(step.before.diagram.name).trim();
+  return { file: SELF, here: [{ kind: 'set', id: property.id, attributes: { backlinkName: asked !== '' ? asked : own !== '' ? own : 'Relation' } }], there: [] };
 }
 
 /** A file's name without a leading `./`, so that two spellings of one name compare equal. */
@@ -193,10 +190,12 @@ function relating(step: TableStep): { readonly confirm: TableConfirm } | undefin
     const model = step.related?.(peer)?.model;
     if (!model) continue;
     // The side of a two-way relation that holds no values of its own names nothing.
-    const naming = new Set(relationsOf(model).filter((property) => property.attributes.computed !== true && plain(text(property.attributes.targetFile)) === plain(step.back(peer))).map((property) => property.id));
+    const own = ownIdOf(step.before);
+    const toThis = (target: string): boolean => (isLink(target) ? own !== '' && parseLink(target)?.documentId === own : plain(target) === plain(step.back(peer)));
+    const naming = new Set(relationsOf(model).filter((property) => property.attributes.computed !== true && toThis(text(property.attributes.targetFile))).map((property) => property.id));
     if (naming.size === 0) continue;
     const cells = new Map(model.elements.filter((element) => element.type === 'Cell' && naming.has(text(element.attributes.property))).map((cell) => [cell.id, cell.parent ?? '']));
-    const rows = new Set(model.elements.filter((item) => item.type === 'CellItem' && item.parent !== undefined && cells.has(item.parent) && gone.has(text(item.attributes.row))).map((item) => cells.get(item.parent!)!));
+    const rows = new Set(model.elements.filter((item) => item.type === 'CellItem' && item.parent !== undefined && cells.has(item.parent) && gone.has(rowIdOf(text(item.attributes.row)))).map((item) => cells.get(item.parent!)!));
     count += rows.size;
   }
   if (count === 0) return undefined;
@@ -208,24 +207,6 @@ function relating(step: TableStep): { readonly confirm: TableConfirm } | undefin
       confirmLabel: 'Delete', danger: true,
     },
   };
-}
-
-/** A relation asked for with the name of its other side: that side added to the target, computed, each side naming the other. */
-function twoWay(step: TableStep): TableAcross | { readonly refused: string } | undefined {
-  const name = text(step.args.counterpartName).trim();
-  const property = step.after.elements.find((element) => element.type === 'Property' && step.created.includes(element.id));
-  if (name === '' || !property) return undefined;
-  const file = text(property.attributes.targetFile);
-  const self = file === SELF;
-  const target = self ? step.after : step.related?.(file)?.model;
-  if (!target) return { refused: UNREAD(file) };
-  const other = step.newId('Property');
-  const here: Change[] = [{ kind: 'set', id: property.id, attributes: { counterpart: other } }];
-  const side: Change = {
-    kind: 'add', id: other, type: 'Property',
-    attributes: { name: uniqueName(name, propertyNames(target)), valueType: 'relation', targetFile: self ? SELF : step.back(file), computed: true, counterpart: property.id },
-  };
-  return self ? { file, here: [...here, side], there: [] } : { file, here, there: [side] };
 }
 
 /** One side of a two-way relation deleted: the other goes too, or stays as a one-way relation that holds the values it showed. */
@@ -260,9 +241,43 @@ function oneSideDeleted(step: TableStep): TableAcross | { readonly refused: stri
   return self ? { file, here: theirs, there: [] } : { file, here: [], there: theirs };
 }
 
-/** The target of a new relation: this file first, then each other knowledge file the host knows of (spec 080, FR-006). */
+/**
+ * The target of a new relation: this file first, then each other knowledge file the host knows of (spec 080, FR-006),
+ * each as a link to its document where it has a document id (spec 089), else by its path, as a file made before links
+ * names it.
+ */
 export function choices(table: TableData): Record<string, Record<string, { value: string; label: string }[]>> {
-  return { createRelation: { targetFile: [{ value: SELF, label: 'This file' }, ...(table.peers ?? []).map((peer) => ({ value: peer, label: peer }))] } };
+  const own = ownIdOf(table.model);
+  const self = own !== '' && table.linking ? targetLink(own, table.linking.path) : SELF;
+  return {
+    createRelation: {
+      targetFile: [{ value: self, label: 'This file' }, ...(table.peers ?? []).map((peer) => {
+        const other = table.related?.(peer);
+        const id = other === undefined ? '' : ownIdOf(other.model);
+        return { value: id === '' ? peer : targetLink(id, peer), label: peer };
+      })],
+    },
+  };
+}
+
+/**
+ * What a related row picked in a relation's cell is written as (`knowledge.md`, the relation picker): a link to it
+ * where the relation's target is a link, else its id, as a file made before links holds it. A value taken away is
+ * the one the cell holds for that row, as it is written.
+ */
+export function itemValue(table: TableData, property: string, row: string, value: string, present: boolean): string {
+  const element = table.model.elements.find((candidate) => candidate.id === property && candidate.type === 'Property');
+  if (!element || element.attributes.valueType !== 'relation') return value;
+  if (!present) {
+    const held = table.rows.find((candidate) => candidate.id === row)?.cells[property]?.items ?? [];
+    return held.find((item) => rowIdOf(item.value) === value)?.value ?? value;
+  }
+  const target = text(element.attributes.targetFile);
+  if (!isLink(target)) return value;
+  const file = fileOfTarget(target, table.model, table.linking).file;
+  const other = file === SELF ? { rows: table.rows.map((candidate) => ({ id: candidate.id, name: candidate.title })), model: table.model } : file === undefined ? undefined : table.related?.(file);
+  if (other === undefined || file === undefined) return value;
+  return rowLink(other, file === SELF ? table.linking?.path ?? parseLink(target)?.documentName ?? '' : file, value);
 }
 
 /**

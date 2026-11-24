@@ -21,7 +21,7 @@ describe('a gesture of several steps', () => {
     const steps: TableRequest = { kind: 'steps', steps: [operation('addOption', ['p2'], { name: 'Luxembourg', colour: 'green' }), operation('setOption', ['r2'], { property: 'p2', value: '$created:0' })] };
     const text = textOf(source, steps);
     const added = textOf(source, operation('addOption', ['p2'], { name: 'Luxembourg', colour: 'green' }));
-    const id = /(?<![0-9a-z])[0-9a-z]{25}(?![0-9a-z])/g;
+    const id = /(?<![0-9a-z])[0-9a-z]{8}(?![0-9a-z])/g;
     const known = new Set(source.text.match(id));
     const made = added.match(id)?.find((found) => !known.has(found));
     expect(made).toBeDefined();

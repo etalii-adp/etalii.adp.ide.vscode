@@ -37,42 +37,30 @@ function both(source: Source, outcome: EditOutcome, file: string): [string, stri
   const other = done.others?.find((candidate) => candidate.file === file);
   return [spliced(source.text, done.splices), spliced(source.related![file]!.text, other?.splices ?? [])];
 }
-const ids = (text: string): string[] => [...text.matchAll(/^ {2}- id: ([0-9a-z]{25})$/gm)].map((match) => match[1]);
+const ids = (text: string): string[] => [...text.matchAll(/^ {2}- id: ([0-9a-z]{8})$/gm)].map((match) => match[1]);
 
 describe('a two-way relation made', () => {
-  it('adds the property here with its counterpart, and the computed other side in the target, naming this file back', () => {
+  // Its other side is a backlink column the target computes (spec 089, FR-026): only this file is written.
+  it('adds the property here with the name its backlinks are shown by, and writes nothing to the target', () => {
     const source = citiesWith(provinces);
-    const [here, there] = both(source, type.edit(source, op('createRelation', [], { name: 'Seat of', targetFile: 'provinces.yaml', limit: 'none', counterpartName: 'Seats' }), {}, false), 'provinces.yaml');
-    const mine = ids(here).find((id) => !cities.includes(id))!;
-    const theirs = ids(there).find((id) => !provinces.includes(id))!;
-    expect(here).toContain(`  - id: ${mine}\n    name: Seat of\n    type: relation\n    target: provinces.yaml\n    counterpart: ${theirs}\n`);
-    expect(there).toBe(provinces.replace('views:\n', `  - id: ${theirs}\n    name: Seats\n    type: relation\n    target: cities.yaml\n    counterpart: ${mine}\n    computed: true\nviews:\n`));
-  });
-
-  it('names its other side uniquely among the target\'s properties', () => {
-    const source = citiesWith(provinces);
-    const [, there] = both(source, type.edit(source, op('createRelation', [], { name: 'Seat of', targetFile: 'provinces.yaml', counterpartName: 'name' }), {}, false), 'provinces.yaml');
-    expect(there).toContain('    name: name 2\n');
-  });
-
-  it('writes neither file when the target cannot be read', () => {
-    const source = citiesWith(null);
-    expect(refusal(type.edit(source, op('createRelation', [], { name: 'Seat of', targetFile: 'provinces.yaml', counterpartName: 'Seats' }), {}, false)))
-      .toBe('provinces.yaml is missing, cannot be read or is not a knowledge file, so neither file is changed.');
-  });
-
-  it('is one file\'s step when it relates to the file itself, with both sides in it', () => {
-    const source = citiesWith(provinces);
-    const done = applied(type.edit(source, op('createRelation', [], { name: 'Rival of', targetFile: '.', counterpartName: 'Rivalled by' }), {}, false));
+    const done = applied(type.edit(source, op('createRelation', [], { name: 'Seat of', targetFile: 'provinces.yaml', limit: 'none', backlinkName: 'Seats' }), {}, false));
     expect(done.others).toBeUndefined();
-    const text = spliced(cities, done.splices);
-    expect(text).toMatch(/ {4}name: Rival of\n {4}type: relation\n {4}target: \.\n {4}counterpart: [0-9a-z]{25}\n/);
-    expect(text).toMatch(/ {4}name: Rivalled by\n {4}type: relation\n {4}target: \.\n {4}counterpart: [0-9a-z]{25}\n {4}computed: true\n/);
+    const here = spliced(cities, done.splices);
+    const mine = ids(here).find((id) => !cities.includes(id))!;
+    expect(here).toBe(cities.replace('views:\n', `  - id: ${mine}\n    name: Seat of\n    type: relation\n    target: provinces.yaml\n    backlinkName: Seats\nviews:\n`));
   });
 
-  it('stays one-way, in one file, without a name for its other side', () => {
+  it('is one file\'s step when it relates to the file itself', () => {
+    const done = applied(type.edit(citiesWith(provinces), op('createRelation', [], { name: 'Rival of', targetFile: '.', backlinkName: 'Rivalled by' }), {}, false));
+    expect(done.others).toBeUndefined();
+    expect(spliced(cities, done.splices)).toMatch(/ {4}name: Rival of\n {4}type: relation\n {4}target: \.\n {4}backlinkName: Rivalled by\n/);
+  });
+
+  it('stays one-way, in one file, without a backlink name', () => {
     const source = citiesWith(provinces);
-    expect(applied(type.edit(source, op('createRelation', [], { name: 'Seat of', targetFile: 'provinces.yaml' }), {}, false)).others).toBeUndefined();
+    const done = applied(type.edit(source, op('createRelation', [], { name: 'Seat of', targetFile: 'provinces.yaml' }), {}, false));
+    expect(done.others).toBeUndefined();
+    expect(spliced(cities, done.splices)).not.toContain('backlinkName');
   });
 });
 
@@ -118,7 +106,7 @@ describe('the gestures of a two-way relation', () => {
     const view = type.view({ ...citiesWith(provinces), peers: ['provinces.yaml', 'sub/towns.yaml'] }, {});
     const target = view.operations.createRelation.params.find((param) => param.name === 'targetFile')!;
     expect([target.control, target.value, target.options]).toEqual(['choice', undefined, [{ value: '.', label: 'This file' }, { value: 'provinces.yaml', label: 'provinces.yaml' }, { value: 'sub/towns.yaml', label: 'sub/towns.yaml' }]]);
-    expect(view.operations.createRelation.params.map((param) => param.name)).toEqual(['name', 'targetFile', 'limit', 'counterpartName']);
+    expect(view.operations.createRelation.params.map((param) => param.name)).toEqual(['name', 'targetFile', 'limit', 'backlinkName']);
   });
 
   it('offer, for deleting one side, the choice between deleting both and keeping the other one-way', () => {
@@ -189,12 +177,15 @@ describe('a relation edited', () => {
     expect(spliced(cities, done.splices)).toBe(cities.replace('    target: provinces.yaml\n    limit: one\n', '    target: provinces.yaml\n'));
   });
 
-  it('is made two-way with its other side in the target, called after this table', () => {
-    const source = citiesWith(provinces);
-    const [here, there] = both(source, type.edit(source, { kind: 'operation', operation: 'setRelationOtherSide', on: ['p5'], args: { twoWay: true } }, {}, false), 'provinces.yaml');
-    const theirs = ids(there).find((id) => !provinces.includes(id))!;
-    expect(here).toBe(cities.replace('    limit: one\n', `    limit: one\n    counterpart: ${theirs}\n`));
-    expect(there).toBe(provinces.replace('views:\n', `  - id: ${theirs}\n    name: Cities\n    type: relation\n    target: cities.yaml\n    counterpart: p5\n    computed: true\nviews:\n`));
+  it('is made two-way in this file alone, its backlinks shown in the target under this table\'s name', () => {
+    const done = applied(type.edit(citiesWith(provinces), { kind: 'operation', operation: 'setRelationOtherSide', on: ['p5'], args: { twoWay: true } }, {}, false));
+    expect(done.others).toBeUndefined();
+    expect(spliced(cities, done.splices)).toBe(cities.replace('    limit: one\n', '    limit: one\n    backlinkName: Cities\n'));
+  });
+
+  it('is made two-way under the backlink name asked', () => {
+    const done = applied(type.edit(citiesWith(provinces), { kind: 'operation', operation: 'setRelationOtherSide', on: ['p5'], args: { twoWay: true, backlinkName: 'Towns' } }, {}, false));
+    expect(spliced(cities, done.splices)).toBe(cities.replace('    limit: one\n', '    limit: one\n    backlinkName: Towns\n'));
   });
 
   it('is made one-way, its other side removed from the target', () => {

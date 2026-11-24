@@ -8,11 +8,13 @@
 import type { ModelElement, Value } from '../../disl/model';
 import { ROW, TYPED, type TableBarItem, type TableData, type TableEntry, type TableField, type TableGestures, type TableGroup, type TableMenu, type TableMoves, type TableNest, type TableOperation, type TableProperty, type TableRequest, type ThemedColour } from '../../tool/tableView';
 import { calculationsFor, movesOf, optionsOf, settingsOf, type Group } from './settings';
+import { parseLink } from '../../fbl/links/link';
+import { isLink, ownIdOf, SELF } from './links';
 import { SET_LIMIT, SET_OTHER_SIDE } from './relations';
 
 const operation = (name: string, on: readonly string[] = [], args: Readonly<Record<string, string | number | boolean>> = {}): TableRequest => ({ kind: 'operation', operation: name, on, args });
-/** What making a relation two-way asks first, as the standalone host's relation editor does: the name its other side is shown by. */
-const OTHER_SIDE: TableOperation = { id: SET_OTHER_SIDE, label: 'Make two-way', params: [{ name: 'counterpartName', label: 'Name in the other table', control: 'text', required: false }] };
+/** What making a relation two-way asks first, as the standalone host's relation editor does: the name its backlinks are shown by in the target. */
+const OTHER_SIDE: TableOperation = { id: SET_OTHER_SIDE, label: 'Make two-way', params: [{ name: 'backlinkName', label: 'Backlink name', control: 'text', required: false }] };
 const text = (value: Value | undefined): string => (value === undefined || value === null ? '' : String(value));
 const icon = (name: unknown): { readonly icon?: string } => (typeof name !== 'string' ? {} : { icon: name.replace(/^mdi-/, '') });
 
@@ -78,7 +80,7 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
     const frozenUpTo = text(view.attributes.freeze) === property.id;
     const selecting = property.valueType === 'selection' || property.valueType === 'multipleSelection';
     const element = model.elements.find((found) => found.id === property.id);
-    const parentable = property.valueType === 'relation' && text(element?.attributes.targetFile) === '.';
+    const parentable = property.valueType === 'relation' && relatesToItself(text(element?.attributes.targetFile), ownIdOf(model));
     const twoWay = property.valueType === 'relation' && text(element?.attributes.counterpart) !== '';
     const ownRelation = property.valueType === 'relation' && element !== undefined && element.attributes.computed !== true && text(element.attributes.targetFile) !== '';
     const menu: TableEntry[][] = [
@@ -90,7 +92,7 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
           entries: types.filter((type) => type.key !== 'relation').map((type): TableEntry => ({ id: type.key, label: type.label, ...icon(type.icon), request: operation('changePropertyType', [property.id], { valueType: type.key }) })),
         },
         ...(selecting ? [{ id: 'options', label: 'Edit options', icon: 'format-list-bulleted-square', opens: { panel: 'options' as const, property: property.id } }] : []),
-        ...(ownRelation ? [editRelation(property.id, element!)] : []),
+        ...(ownRelation ? [editRelation(property.id, element!, ownIdOf(model))] : []),
       ],
       [
         { id: 'filter', label: 'Filter', icon: 'filter-outline', request: operation('addCondition', [view.id], { property: property.id }) },
@@ -256,17 +258,23 @@ export function gesturesOf(table: TableData, groups: readonly TableGroup[] | und
   };
 }
 
+/** Whether a relation's target is the document itself: `.`, or a link to its own id (FBL 17.1). */
+function relatesToItself(target: string, own: string): boolean {
+  return target === SELF || (own !== '' && isLink(target) && parseLink(target)?.documentId === own);
+}
+
 /**
  * "Edit relation" (spec 079, FR-011; spec 080, FR-011): the file the relation relates to, which is
  * said and never changed, how many rows a cell holds, and whether the other file shows it too.
  */
-function editRelation(property: string, element: ModelElement): TableEntry {
+function editRelation(property: string, element: ModelElement, own: string): TableEntry {
   const target = text(element.attributes.targetFile);
   const one = element.attributes.limit === 'one';
-  const twoWay = text(element.attributes.counterpart) !== '';
+  const twoWay = text(element.attributes.counterpart) !== '' || text(element.attributes.backlinkName) !== '';
+  const named = relatesToItself(target, own) ? 'this table' : isLink(target) ? parseLink(target)?.documentName ?? target : target;
   return {
     id: 'relation', label: 'Edit relation', icon: 'arrow-top-right', entries: [
-      { id: 'target', label: `Related to ${target === '.' ? 'this table' : target}`, disabled: 'The file a relation relates to is chosen when it is made.' },
+      { id: 'target', label: `Related to ${named}`, disabled: 'The file a relation relates to is chosen when it is made.' },
       { id: 'limitNone', label: 'No limit', checked: !one, request: operation(SET_LIMIT, [property], { limit: 'none' }) },
       { id: 'limitOne', label: '1 row', checked: one, request: operation(SET_LIMIT, [property], { limit: 'one' }) },
       // Made two-way, the other side's name is asked first; left empty, it is this table's (spec 080, FR-011).

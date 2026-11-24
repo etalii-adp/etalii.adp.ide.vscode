@@ -77,17 +77,17 @@ describe('a column\'s menu', () => {
     ]);
   });
 
-  it('asks the other side\'s name before making a relation two-way, as the standalone relation editor does', () => {
+  it('asks the name its backlinks are shown by before making a relation two-way, as the standalone relation editor does', () => {
     press(header('p5'));
     press(entry('relation'));
     press(entry('twoWay'));
     expect(edits()).toEqual([]);
     const name = one<HTMLInputElement>('form.adp-table-params input');
     expect(one('form.adp-table-params').getAttribute('aria-label')).toBe('Make two-way');
-    expect(name.closest('label')?.textContent).toContain('Name in the other table');
+    expect(name.closest('label')?.textContent).toContain('Backlink name');
     name.value = 'Cities';
     one<HTMLFormElement>('form.adp-table-params').requestSubmit();
-    expect(edits()).toEqual([{ kind: 'operation', operation: 'setRelationOtherSide', on: ['p5'], args: { twoWay: true, counterpartName: 'Cities' } }]);
+    expect(edits()).toEqual([{ kind: 'operation', operation: 'setRelationOtherSide', on: ['p5'], args: { twoWay: true, backlinkName: 'Cities' } }]);
   });
 
   it('inserts a property beside the column through the panel of a new property: its name, then its type', () => {

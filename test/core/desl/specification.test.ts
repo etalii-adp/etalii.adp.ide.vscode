@@ -29,7 +29,7 @@ describe('a DESL specification', () => {
     // The attributes of the document are those of the table as a whole (DESL 4.1).
     expect(Object.keys(metamodel.diagram)).toEqual(keys(object(object(knowledge.metamodel).document).attributes));
     expect(loaded.bindings).toEqual(object(knowledge.persistence).bindings);
-    expect(loaded.persistence.ids).toMatchObject({ strategy: 'uuid-v4', encoding: 'base36', missing: 'assign' });
+    expect(loaded.persistence.ids).toMatchObject({ strategy: 'nanoid', alphabet: 'base36', length: 8, missing: 'assign' });
     expect(keys(loaded.persistence.ids.types)).toEqual(keys(object(object(knowledge.persistence).ids).types));
   });
 
@@ -45,7 +45,7 @@ describe('a DESL specification', () => {
     const major = loadDesigner({ ...knowledge, desl: '1.0' });
     expect(major.findings.map((found) => [found.code, found.severity])).toEqual([['desl.specification', 'error']]);
     expect(interpretSurface(major.value.surface, interpretMetamodel(major.value.interpreted).value).value).toBeUndefined();
-    const minor = loadDesigner({ ...knowledge, desl: '0.5' });
+    const minor = loadDesigner({ ...knowledge, desl: '0.6' });
     expect(minor.findings.map((found) => [found.code, found.severity])).toEqual([['desl.specification', 'warning']]);
     expect(minor.value.surface).toEqual(knowledge.surface);
   });

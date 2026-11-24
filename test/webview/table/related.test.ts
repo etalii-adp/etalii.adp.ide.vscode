@@ -124,7 +124,7 @@ describe('a new relation', () => {
           { name: 'name', label: 'Name', control: 'text', required: true },
           { name: 'targetFile', label: 'Target file', control: 'choice', required: true, options: [{ value: '.', label: 'This file' }, { value: 'provinces.yaml', label: 'provinces.yaml' }] },
           { name: 'limit', label: 'Limit', control: 'choice', required: false, value: 'none', options: [{ value: 'none', label: 'No limit' }, { value: 'one', label: '1 row' }] },
-          { name: 'counterpartName', label: 'Other side', control: 'text', required: false },
+          { name: 'backlinkName', label: 'Backlink name', control: 'text', required: false },
         ] },
       },
     }));
@@ -132,12 +132,12 @@ describe('a new relation', () => {
     one<HTMLInputElement>('.adp-table-property-name').value = 'Seat of';
     press(one('.adp-table-types [data-entry="relation"]'));
     const form = one<HTMLFormElement>('.adp-table-params');
-    expect([...form.querySelectorAll<HTMLElement>('[name]')].map((field) => field.getAttribute('name'))).toEqual(['targetFile', 'limit', 'counterpartName']);
+    expect([...form.querySelectorAll<HTMLElement>('[name]')].map((field) => field.getAttribute('name'))).toEqual(['targetFile', 'limit', 'backlinkName']);
     const target = form.querySelector<HTMLSelectElement>('select[name="targetFile"]')!;
     expect(target.value).toBe('.');
     target.value = 'provinces.yaml';
-    form.querySelector<HTMLInputElement>('input[name="counterpartName"]')!.value = 'Seats';
+    form.querySelector<HTMLInputElement>('input[name="backlinkName"]')!.value = 'Seats';
     form.requestSubmit();
-    expect(edits()).toEqual([{ kind: 'operation', operation: 'createRelation', on: [], args: { name: 'Seat of', targetFile: 'provinces.yaml', limit: 'none', counterpartName: 'Seats' } }]);
+    expect(edits()).toEqual([{ kind: 'operation', operation: 'createRelation', on: [], args: { name: 'Seat of', targetFile: 'provinces.yaml', limit: 'none', backlinkName: 'Seats' } }]);
   });
 });

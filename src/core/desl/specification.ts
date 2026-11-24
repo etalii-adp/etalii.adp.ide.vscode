@@ -11,7 +11,7 @@ import type { InterpretedPersistence } from '../disl/persistence';
 import { emptySpecification, isObject, type IdStrategy, type Specification, type TypeMapEntry } from '../disl/specification';
 
 /** The minor version of DESL this interpreter reads; its major version is 0. */
-export const deslMinor = 4;
+export const deslMinor = 5;
 
 /** The name the interpreter of `../disl/` has for the document as a whole. */
 const whole = 'diagram';
@@ -140,7 +140,7 @@ export function loadDesigner(json: unknown): Loaded<DesignerSpecification> {
   return {
     value: {
       interpreted, bindings, surface: json.surface, operations: isObject(json.operations) ? json.operations : {}, settings: isObject(persistence.settings) ? persistence.settings : {},
-      persistence: { format: 'fbl', ids, typeMap, view: { store: [], viewer: [], initial: {}, bind: {} } },
+      persistence: { format: 'fbl', ids, typeMap, view: { store: [], viewer: [], initial: {}, bind: {} }, ...(isObject(persistence.documentId) ? { documentId: persistence.documentId as InterpretedPersistence['documentId'] } : {}) },
     },
     findings,
   };
