@@ -22,6 +22,9 @@ The three ITIL tools in Visual Studio Code, each opened from its examples in bot
 | 6 | The wait icon covers the time line, and the trigger's name runs past the chevron. | Definition: [etalii.adp#826](https://github.com/etalii-adp/etalii.adp/issues/826). |
 | 7 | Lines and text look dim in Dark Modern. | Open: [#95](https://github.com/etalii-adp/etalii.adp.ide.vscode/issues/95). |
 | 8 | Seen once: both documents held their text twice, with no change marked on the tab. | Open, not reproduced: [#94](https://github.com/etalii-adp/etalii.adp.ide.vscode/issues/94). |
+| 9 | The State filter, which shows the current or the future state, had no control: a state could be changed only from the menu. | **Fixed**: a filter whose control is a `select` is a list in the diagram's panel, an edit where the diagram keeps it and the viewer's own option otherwise. |
+| 10 | After **Show future state**, **Show current state** stays unavailable, and a step added from the toolbox goes to the current state. | Definition: [etalii.adp#829](https://github.com/etalii-adp/etalii.adp/issues/829). |
+| 11 | The view does not move to the other state's steps after a switch. | Open: [#95](https://github.com/etalii-adp/etalii.adp.ide.vscode/issues/95). |
 
 ## SLO map
 
@@ -65,13 +68,14 @@ The test opened each tool from its example as someone who has not used ADP would
 - the times that accepted "15m" and then broke;
 - the region-formatted number box;
 - the unreadable timeline labels;
-- the empty toolbox with no sentence.
+- the empty toolbox with no sentence;
+- the State filter with no control.
 
 All of them are fixed here. What is left is listed above with its issue, most of it in the definitions.
 
 ## Screenshots
 
-Each fix above changes what the screenshots show, so they were taken again on the Mac mini with the fixes in, from `develop` at `f739492` (Dark Modern, 1600×900, device scale 1). Retaking them turned up one more fault: the value stream map drew the future state's steps, without their flows, beside the current state's. Its State filter shows one state at a time. The filter took the steps out, but a step placed by an expression was put back when placements were computed again after the layout. That fault is fixed in `src/core/scene/scene.ts`, so `value-stream-map.png` is taken once that fix is merged. `slo-map.png` and `post-incident-review.png` are in [`../screenshots/`](../screenshots/), described in its [readme](../screenshots/readme.md).
+Each fix above changes what the screenshots show, so they were taken again on the Mac mini with the fixes in, from `develop` at `f739492` (Dark Modern, 1600×900, device scale 1). Retaking them turned up one more fault: the value stream map drew the future state's steps, without their flows, beside the current state's. Its State filter shows one state at a time. The filter took the steps out, but a step placed by an expression was put back when placements were computed again after the layout. That fault is fixed in `src/core/scene/scene.ts` ([#97](https://github.com/etalii-adp/etalii.adp.ide.vscode/pull/97)), and `value-stream-map.png` was taken with it in, from `develop` at `17b8810`, showing the current state alone. That run found findings 9 to 11 of the value stream map. The three screenshots are in [`../screenshots/`](../screenshots/), described in its [readme](../screenshots/readme.md).
 
 The second run also checked these, and each passed:
 - "15m" in a Wait time is refused with "'15m' is not a duration: write it in ISO 8601, as PT15M for 15 minutes, PT2H for 2 hours or P1D for a day."
