@@ -681,13 +681,21 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     switch (request.kind) {
       case 'drop': {
         // A tool that runs an operation runs it on the element the point is on, the topmost there. Where the
-        // operation needs an element and there is none, nothing happens: a host rule, see docs/disl-support.md.
+        // operation needs an element and the point is on none, nothing happens, but for an entry activated in ADP
+        // Toolbox's view, which runs on the selection or the first element drawn: a host rule, see docs/disl-support.md.
         // A tool with `drop.targets` is resolved by what it lands on, so the core is told that too (DISL 7.2).
         const entry = wire.toolOf(request.entry);
         const used = Object.hasOwn(toolbox.value.tools, entry) ? toolbox.value.tools[entry] : undefined;
         const operation = used?.operation;
         const targeted = used?.drop?.place === undefined && (used?.drop?.targets?.length ?? 0) > 0;
-        const under = operation === undefined && !targeted ? undefined : [...sceneOf(open, options).nodes].reverse().find((node) => request.x >= node.box.x && request.x <= node.box.x + node.box.width && request.y >= node.box.y && request.y <= node.box.y + node.box.height)?.id;
+        const nodes = operation === undefined && !targeted ? [] : sceneOf(open, options).nodes;
+        const hit = [...nodes].reverse().find((node) => request.x >= node.box.x && request.x <= node.box.x + node.box.width && request.y >= node.box.y && request.y <= node.box.y + node.box.height)?.id;
+        // An entry activated in ADP Toolbox's view lands at a free point, on no element: an operation that needs one runs on the
+        // selected element it is offered on, else on the first element drawn that it is, so a new mind map's Node entry adds a
+        // node under its central topic rather than nothing at all.
+        const offeredOn = (id: string): boolean => operation !== undefined && intents.availability(model, operation, [id], situation).offered;
+        const under = hit ?? (request.selected === undefined || operation === undefined || targeted || intents.availability(model, operation, [], situation).offered ? undefined
+          : request.selected.find(offeredOn) ?? nodes.map((node) => node.id).find(offeredOn));
         // A target that runs an operation on what it lands on is that operation's entry there, its form and its refusals included.
         const landed = targeted && under !== undefined ? elementOf(model, under) : undefined;
         const target = landed && used?.drop?.targets?.find((candidate) => candidate.on.some((type) => isA(metamodel.value, landed.type, type)));

@@ -110,7 +110,7 @@ describe('the canvas, sent a scene', () => {
     Object.assign(drop, { clientX: 120, clientY: 64, dataTransfer: { getData: (kind: string) => (kind === 'application/x-adp-toolbox' ? 'trend' : '') } });
     surface().dispatchEvent(drop);
     canvas.receive({ v: 2, type: 'addAtCentre', entry: 'note' });
-    expect(requests()).toEqual([{ kind: 'drop', entry: 'trend', x: 120, y: 64 }, { kind: 'drop', entry: 'note', x: 0, y: 0 }]);
+    expect(requests()).toEqual([{ kind: 'drop', entry: 'trend', x: 120, y: 64 }, { kind: 'drop', entry: 'note', x: 0, y: 0, selected: [] }]);
   });
 });
 

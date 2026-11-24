@@ -90,8 +90,12 @@ export interface Action {
 
 /** Every gesture a canvas, the toolbox or the property grid can ask of a diagram. */
 export type EditRequest =
-  /** A toolbox entry dropped at a point. */
-  | { readonly kind: 'drop'; readonly entry: string; readonly x: number; readonly y: number; readonly params?: Readonly<Record<string, string>>; readonly check?: boolean }
+  /**
+   * A toolbox entry dropped at a point. `selected`, what the canvas has selected, is sent with an entry activated in ADP
+   * Toolbox's view rather than dragged: one that runs an operation on an element and lands on none runs it on the first of
+   * those it is offered on, else on the first element drawn that it is offered on.
+   */
+  | { readonly kind: 'drop'; readonly entry: string; readonly x: number; readonly y: number; readonly params?: Readonly<Record<string, string>>; readonly check?: boolean; readonly selected?: readonly string[] }
   /** An element dropped with its top-left at a point. */
   | { readonly kind: 'move'; readonly id: string; readonly x: number; readonly y: number }
   /** An element resized by one of its sides to new bounds. */
