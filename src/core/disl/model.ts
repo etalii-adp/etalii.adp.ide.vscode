@@ -28,6 +28,8 @@ export interface ModelElement {
   readonly line: number;
   /** *(DISL 4.11.2)* Of a derived node: the elements it is computed from, and why a gesture on it is refused. A stored element has none. */
   readonly derived?: DerivedOf;
+  /** *(DISL 0.12, 4.12)* Of a linked element whose link resolves: the target's `shows` attributes by name, which CEL reads as `self.linked`. Never stored. */
+  readonly linked?: Readonly<Record<string, unknown>>;
 }
 
 /** What a derived node is computed from (DISL 4.11.4): its sources, by id, and the sentence a refused gesture on it says. */

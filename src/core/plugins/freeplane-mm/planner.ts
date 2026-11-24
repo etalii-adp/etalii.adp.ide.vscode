@@ -6,7 +6,7 @@
 // its recorded transcript do.
 
 import { applyEdit, type FblSplice, type ModelChange, type PluginPlanRequest, type PluginPlanResult, type SpliceOperation } from '../../fbl';
-import { attributeOf, isWhiteText, readMap, richContent, type XmlElement, type XmlNode } from './reader';
+import { attributeOf, DOCUMENT_ID, freeplaneAttribute, isWhiteText, LINK, readMap, richContent, type XmlElement, type XmlNode } from './reader';
 
 /** A change that cannot be made, with the sentence the host shows (FBL 6.4). */
 class Refusal extends Error {}
@@ -32,6 +32,8 @@ const escapeAttribute = (value: string, quote = '"'): string => {
 /** Notes as Freeplane keeps them: one paragraph for each line. */
 const htmlOf = (notes: string): string => `<html><head/><body>${notes.split('\n').map((line) => `<p>${escapeText(line)}</p>`).join('')}</body></html>`;
 const noteOf = (notes: string): string => `<richcontent TYPE="NOTE">${htmlOf(notes)}</richcontent>`;
+/** A Freeplane attribute of a node, as the companion document writes `adp-id` and `adp-link` (section 3.8). */
+const freeplaneAttributeOf = (name: string, value: string): string => `<attribute NAME="${escapeAttribute(name)}" VALUE="${escapeAttribute(value)}"/>`;
 
 /** A value of a change as text; null and nothing are the empty text. */
 const textOf = (value: unknown): string => (value === null || value === undefined ? '' : String(value));
@@ -158,11 +160,27 @@ export function plan(request: PluginPlanRequest): PluginPlanResult {
       }
     }
     if ('notes' in attributes) setNotes(element, textOf(attributes.notes));
+    if ('linkedElement' in attributes) setFreeplaneAttribute(element, LINK, textOf(attributes.linkedElement));
+  }
+
+  /**
+   * Writes the value of a Freeplane attribute of a node (section 3.8): the `VALUE` of the first of that name, or a
+   * new one as the node's first child element, after its `richcontent` elements, on a line of its own.
+   */
+  function setFreeplaneAttribute(element: XmlElement, name: string, value: string): void {
+    const existing = freeplaneAttribute(element, name);
+    if (existing) return setAttribute(existing, 'VALUE', value);
+    const text = freeplaneAttributeOf(name, value);
+    const rich = remaining(element).filter((child): child is XmlElement => child.kind === 'element' && child.name === 'richcontent').at(-1);
+    const first = remaining(element).find((child): child is XmlElement => child.kind === 'element' && child.name !== 'richcontent');
+    if (rich) contentOf(element, false).inserts.push({ at: rich.end, text: newline + text });
+    else if (first) contentOf(element, false).inserts.push({ at: first.start, text: text + newline });
+    else append(element, text, false);
   }
 
   /** The attributes a change may give a node. `folded` and `position` are the file's, and ADP never writes them. */
   function checked(attributes: Readonly<Record<string, unknown>>): void {
-    for (const name of Object.keys(attributes)) if (!['text', 'notes', 'link'].includes(name)) refuse(`The \`${name}\` of a node cannot be changed.`);
+    for (const name of Object.keys(attributes)) if (!['text', 'notes', 'link', 'linkedElement'].includes(name)) refuse(`The \`${name}\` of a node cannot be changed.`);
   }
 
   /** The content changes as splices: an element left with nothing is self-closed, one given its first content is opened (FBL 6.1). */
@@ -201,7 +219,7 @@ export function plan(request: PluginPlanRequest): PluginPlanResult {
   try {
     switch (change.kind) {
       case 'add': {
-        if (change.type !== 'Node') refuse(`A mind map holds only nodes, so no \`${change.type}\` is added.`);
+        if (change.type !== 'Node' && change.type !== 'LinkedNode') refuse(`A mind map holds only nodes, so no \`${change.type}\` is added.`);
         if (change.id === undefined) return refuse('A new node needs an id.');
         checked(change.attributes);
         if (change.parent === undefined) refuse(NO_SIBLING);
@@ -211,7 +229,9 @@ export function plan(request: PluginPlanRequest): PluginPlanResult {
         const link = textOf(change.attributes.link);
         const notes = textOf(change.attributes.notes);
         const tag = `<node TEXT="${escapeAttribute(textOf(change.attributes.text))}" ID="${escapeAttribute(change.id)}"${link === '' ? '' : ` LINK="${escapeAttribute(link)}"`}`;
-        place(parent, notes === '' ? `${tag}/>` : `${tag}>${newline}${noteOf(notes)}${newline}</node>`, change.position);
+        // A linked node holds its link as the Freeplane attribute `adp-link` (section 3.8), before its notes.
+        const content = [...(change.type === 'LinkedNode' ? [freeplaneAttributeOf(LINK, textOf(change.attributes.linkedElement))] : []), ...(notes === '' ? [] : [noteOf(notes)])];
+        place(parent, content.length === 0 ? `${tag}/>` : `${tag}>${newline}${content.join(newline)}${newline}</node>`, change.position);
         break;
       }
       case 'set': {
@@ -235,6 +255,12 @@ export function plan(request: PluginPlanRequest): PluginPlanResult {
         // The node's own bytes, unchanged (FBL 11.2), and an index counted once it is taken out.
         detach(element, true);
         place(parent, written(element.start, element.end), change.position);
+        break;
+      }
+      case 'setDocumentId': {
+        // The map's document id is the central topic's `adp-id` (section 3.8, FBL 17.2).
+        const root = nodes.map((node) => node.element).find(isRoot) ?? refuse(GONE);
+        setFreeplaneAttribute(root, DOCUMENT_ID, change.id);
         break;
       }
       case 'storeId': {

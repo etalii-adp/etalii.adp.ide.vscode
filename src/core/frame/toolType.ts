@@ -1,3 +1,4 @@
+import type { IndexedDocument, LinkWorkspace } from '../fbl/links/workspace';
 import type { Scene } from '../scene/scene';
 import type { HierarchyRequest, HierarchyView } from '../tool/hierarchyView';
 import type { SectionsRequest, SectionsView } from '../tool/sectionsView';
@@ -214,6 +215,12 @@ export interface Source {
    * document is then the registration, and the diagram is drawn from these files, read-only.
    */
   readonly folder?: Readonly<Record<string, string>>;
+  /**
+   * The index of the workspace the document is in (FBL 17.3), for a tool type whose documents hold links: its
+   * links are resolved against it, each linked element is shown by its target, and what does not resolve is
+   * reported. Without it, links are shown as they are written and not checked.
+   */
+  readonly links?: LinkWorkspace;
 }
 
 /** A file a document names, as the host found it: open in an editor, unsaved changes and all, or on disk. */
@@ -264,6 +271,11 @@ export interface ToolType<View, Request> {
   retargeted?(source: Source, moved: (file: string) => string | undefined): readonly TextSplice[] | undefined;
   /** Whether a file of a shared extension looks like this type, from the binding's `claims.suggest`. */
   suggests(fileName: string, text: string): boolean;
+  /**
+   * The document as the workspace's index holds it (FBL 17.3), with the path the host gives it, for a tool type
+   * whose documents take part in links; undefined for another, or a document that cannot be read.
+   */
+  indexed?(source: Source): IndexedDocument | undefined;
   /** Everything wrong with the document. Never throws. */
   findings(source: Source): Finding[];
   /** What to show. Never throws. */

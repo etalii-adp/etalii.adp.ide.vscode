@@ -479,6 +479,8 @@ export function createExpressions(specification: Specification, metamodel: Metam
           case 'slot': return Object.hasOwn(attributesOf(metamodel, element.type), 'slot') ? undefined : element.slot ?? '';
           // Its provenance (DISL 4.11.4, 12.2): whether it is derived, and the elements it is computed from.
           case 'derived': return element.derived !== undefined;
+          // What a linked element shows of its target (DISL 4.12), absent while its link does not resolve, unless its type has an attribute of that name.
+          case 'linked': return Object.hasOwn(attributesOf(metamodel, element.type), 'linked') ? undefined : element.linked;
           case 'sources': return all(model.elements.filter((other) => element.derived?.sources.includes(other.id) === true));
           default: return undefined;
         }

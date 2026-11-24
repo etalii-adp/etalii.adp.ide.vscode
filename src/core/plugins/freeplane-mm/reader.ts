@@ -81,6 +81,14 @@ export const elementsOf = (element: XmlElement, name?: string): XmlElement[] =>
   element.children.filter((child): child is XmlElement => child.kind === 'element' && (name === undefined || child.name === name));
 export const attributeOf = (element: XmlElement, name: string): XmlAttribute | undefined => element.attributes.find((attribute) => attribute.name === name);
 
+/** The first Freeplane attribute of that name a node holds, `<attribute NAME="…" VALUE="…"/>` (the companion document, section 3.8). */
+export const freeplaneAttribute = (element: XmlElement, name: string): XmlElement | undefined =>
+  elementsOf(element, 'attribute').find((candidate) => attributeOf(candidate, 'NAME')?.text === name);
+
+/** The Freeplane attribute that holds the map's document id, on the central topic, and the one that holds a linked node's link (FBL 17.2, 17.1). */
+export const DOCUMENT_ID = 'adp-id';
+export const LINK = 'adp-link';
+
 /** The `richcontent` of a node that holds its formatted text (`NODE`) or its notes (`NOTE`). */
 export const richContent = (element: XmlElement, type: string): XmlElement | undefined =>
   elementsOf(element, 'richcontent').find((candidate) => attributeOf(candidate, 'TYPE')?.text.toUpperCase() === type);
@@ -313,10 +321,13 @@ export function read(request: PluginReadRequest): PluginReadResult {
     const link = attributeOf(element, 'LINK')?.text;
     const position = attributeOf(element, 'POSITION')?.text;
     const parent = element.parent && ids.get(element.parent);
+    // A node with an `adp-link` is a linked node, and the central topic's `adp-id` is the map's document id (section 3.8).
+    const linked = freeplaneAttribute(element, LINK);
+    const documentId = parent === undefined ? freeplaneAttribute(element, DOCUMENT_ID) : undefined;
     return {
       id,
       idIsStored: id === stored,
-      type: 'Node',
+      type: linked ? 'LinkedNode' : 'Node',
       rule: NODE,
       isRelation: false,
       attributes: {
@@ -327,6 +338,8 @@ export function read(request: PluginReadRequest): PluginReadResult {
         // Only when the file writes one, empty or not: `has(self.link)` is "the node is linked".
         ...(link === undefined ? {} : { link }),
         ...(position === undefined ? {} : { position }),
+        ...(linked ? { linkedElement: attributeOf(linked, 'VALUE')?.text ?? '' } : {}),
+        ...(documentId ? { documentId: attributeOf(documentId, 'VALUE')?.text ?? '' } : {}),
       },
       ...(parent === undefined ? {} : { parentId: parent, parentSlot: 'children' }),
       ownSpan: { start: element.start, end: element.end },
