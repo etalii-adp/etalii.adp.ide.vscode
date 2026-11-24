@@ -12,7 +12,7 @@ Specs say *what* and *why*; plans say *how*. Do not put implementation choices i
 
 ## A tool type is its definition
 
-Every tool type is read from its definition, never written in code (etalii.adp spec 027). `README.md` says how one is added; these rules hold for every change.
+Every tool type is read from its definition, never written in code (etalii.adp spec 027). `docs/development.md` says how one is added; these rules hold for every change.
 
 - `definitions/<tool>/` holds a tool type's specification, binding and companion, copied unchanged by `npm run sync-definitions`, which also writes the tool types' entries of `package.json`. Never edit a file under `definitions/`, nor those entries by hand: a correction goes to the repository the file came from and arrives with a newer copy. `npm run sync-definitions -- --check` holds both, and the Build workflow runs it.
 - Nothing under `src/core/disl/`, `src/core/desl/`, `src/core/scene/` or `src/core/tool/` names a tool type, one of its element types, attributes or message ids; `test/core/tool/words.test.ts` reads those folders for every such name. What a definition needs is built there once, for every tool type.
@@ -21,6 +21,14 @@ Every tool type is read from its definition, never written in code (etalii.adp s
 - An edit is the FBL library's splices, applied as one edit of the text document, so Visual Studio Code's undo takes it back.
 - `docs/disl-support.md` is changed by the change that builds a construct, carries a plugin, or meets a difference; `test/core/tool/supportRecord.test.ts` holds it to the code. `docs/tools.md` gets a row with a new tool type.
 - Where a definition and the standalone host disagree, or DISL, DESL or FBL cannot state what a tool needs, follow the definition, file an issue in etalii.adp, and add it to "Differences raised and not settled here". Do not settle it here.
+
+## The Marketplace page and release notes
+
+`README.md` is the extension's page on the Visual Studio Marketplace and Open VSX, and `CHANGELOG.md` its release notes; both ship in the package (Peter, 2026-11-24). Write them as an extension listing for a Visual Studio Code user: what each tool does, how to create and open its files, how to edit and export, and its commands, with no technicalities (no DISL, DESL, FBL, spec numbers, language versions or internal architecture). Build, test, release and the layout of the code go in `docs/development.md`.
+
+- A pull request that changes what a user sees adds a line to the `Unreleased` section of `CHANGELOG.md`.
+- A release turns `Unreleased` into `## [<version>] - <date>`, adds its compare link, and starts a new empty `Unreleased`; no version is published without its release notes.
+- A new tool type gets its own section, with its screenshot from `docs/screenshots/`, in `README.md`, and a row in its Commands table for any new command.
 
 ## Branches and delivery
 
