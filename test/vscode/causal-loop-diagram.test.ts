@@ -77,7 +77,8 @@ suite('A causal loop diagram in Visual Studio Code', () => {
     assert.deepStrictEqual(await edit({ kind: 'drop', entry: 'causal-loop.add-variable', x: 40, y: 40 }), { result: 'applied' });
     const after = await until('the variable to be drawn', async () => ((await drawn()).view?.elements.length ?? 0) > before || undefined);
     assert.ok(after);
-    await until('its place to be kept in the registration', async () => new TextDecoder().decode(await vscode.workspace.fs.readFile(registration)).includes('layout') || undefined);
+    // The registration is saved with the document, so until then its place is in the registration as it is open.
+    await until('its place to be kept in the registration', async () => (await vscode.workspace.openTextDocument(registration)).getText().includes('layout:') || undefined);
   });
 
   test('with nothing selected, ADP Properties shows the diagram\'s own form, and a row of it writes the document', async () => {
