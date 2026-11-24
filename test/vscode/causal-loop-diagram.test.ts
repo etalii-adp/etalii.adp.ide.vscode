@@ -63,6 +63,23 @@ suite('A causal loop diagram in Visual Studio Code', () => {
     assert.strictEqual(document.isDirty, false);
   });
 
+  // A new user's first steps: "ADP: New Causal loop diagram", then a variable placed on it. The command makes the file's
+  // registration with it, since the tool type keeps where a variable is only there; without it every variable placed
+  // was refused with "'untitled.cld' has no registration, and its tool type keeps its view data only in one".
+  test('a new diagram made by its "New ..." command takes the first variable placed on it, and keeps where it is in the registration it came with', async () => {
+    const uri = example('new-causal-loop-diagram.cld');
+    const registration = example('new-causal-loop-diagram.adp');
+    for (const made of [uri, registration]) await vscode.workspace.fs.delete(made).then(undefined, () => undefined);
+    await vscode.commands.executeCommand('etalii.adp.new.systems.causal-loop-diagram', uri);
+    const current = await drawn();
+    assert.strictEqual(new TextDecoder().decode(await vscode.workspace.fs.readFile(registration)).split(/\r?\n/)[0], 'systems/causal-loop-diagram');
+    const before = current.view?.elements.length ?? 0;
+    assert.deepStrictEqual(await edit({ kind: 'drop', entry: 'causal-loop.add-variable', x: 40, y: 40 }), { result: 'applied' });
+    const after = await until('the variable to be drawn', async () => ((await drawn()).view?.elements.length ?? 0) > before || undefined);
+    assert.ok(after);
+    await until('its place to be kept in the registration', async () => new TextDecoder().decode(await vscode.workspace.fs.readFile(registration)).includes('layout') || undefined);
+  });
+
   test('with nothing selected, ADP Properties shows the diagram\'s own form, and a row of it writes the document', async () => {
     const uri = example('causal-loop-diagram', 'on-call', 'on-call.cld');
     await vscode.commands.executeCommand('vscode.openWith', uri, viewType);

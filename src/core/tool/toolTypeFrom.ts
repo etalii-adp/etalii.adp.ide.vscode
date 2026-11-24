@@ -42,6 +42,7 @@ import { folderFiles as selectedFiles, recogniseFolder } from '../fbl/routing/fo
 import { produceTemplate } from '../fbl/routing/templateWriter';
 import type { Edit } from '../fbl/splice';
 import { decode, encode } from '../fbl/text/utf8';
+import { BodyText } from '../fbl/text/bodyText';
 import type { Action, Control, DesignerToolType, DiagramToolType, EditOutcome, EditRequest, ExportOffer, Exported, Field, Finding, Severity, Source, TextSplice, ToolboxEntry, ViewOptions } from '../frame/toolType';
 import { exportAction, exportOf } from '../frame/toolType';
 import { anchorOf, arrangedPlaces, arrangedRows, createScene, type Scene, type SceneChrome, type SceneOptions, type SceneRuler, type SceneTool, type SceneToken } from '../scene/scene';
@@ -925,9 +926,22 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       const made = produceTemplate(bindings[0], undefined, name, () => crypto.randomUUID(), bindings[0].plugin && plugins.persistence(bindings[0].plugin.plugin));
       return made ? decode(made) : '';
     },
+    newRegistration: (text) => registrationOfNew(bindings[0], origin, keptBeside, text),
     // A diagram's registration keeps nothing outside the history.
     restoreRegistration: (snapshot) => snapshot,
   };
+}
+
+/**
+ * The registration a new document is created with (FBL 8.4): its origin line, in the new body's line
+ * ending, when a document of the binding cannot be kept without one, because the binding claims a
+ * file only when it is registered, or because the tool type keeps something in a registration
+ * (`keepsBeside`) that the binding does not let be created by the first change. Without it, the first
+ * change of a document made by "New ..." would be refused. Nothing for any other binding.
+ */
+function registrationOfNew(binding: FblBinding, origin: string, keepsBeside: boolean, text: string): string | undefined {
+  if (!binding.claims.registrationOnly && (!keepsBeside || binding.registration.createOnFirstPlacement)) return undefined;
+  return `${origin}${new BodyText(encode(text)).dominantEnding ?? binding.text.newline}`;
 }
 
 // ---- a designer ----
@@ -1691,6 +1705,11 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
       const binding = bindings.find((candidate) => candidate.claims.extensions.some((claimed) => claimed.toUpperCase() === extension)) ?? bindings[0];
       const made = produceTemplate(binding, undefined, name, (rule) => newId(persistence, entryOf(persistence, findRule(binding, rule)?.type ?? rule).as), binding.plugin && plugins.persistence(binding.plugin.plugin));
       return made ? decode(made) : '';
+    },
+    newRegistration: (text, name) => {
+      const extension = extensionOf(nameOf(name)).toUpperCase();
+      const binding = bindings.find((candidate) => candidate.claims.extensions.some((claimed) => claimed.toUpperCase() === extension)) ?? bindings[0];
+      return registrationOfNew(binding, origin, binding.registration.blocks.length > 0, text);
     },
     restoreRegistration,
   };
