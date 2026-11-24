@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { EditRequest, ViewOptions } from '../core/frame/toolType';
 import { viewTypeOf } from '../core/frame/toolType';
 import { exportCommand, exportContext, exportingOf, lastExport, writeExport } from './exports';
+import { registerLlmInstructions } from './llmInstructions';
 import { keepAsText } from './opening';
 import { PropertiesView } from './propertiesView';
 import { entriesOf, ToolboxView } from './toolboxView';
@@ -131,6 +132,8 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
       await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
     });
   }
+
+  registerLlmInstructions(context, contributed);
 
   // An export of a tool type (etalii.adp spec 082, research R5): one command for each export the tool types carry,
   // reached from the Command Palette, the Explorer, an editor's tab and the ADP menu of its title bar alike. The

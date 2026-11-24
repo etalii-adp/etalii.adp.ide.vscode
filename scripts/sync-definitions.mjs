@@ -17,6 +17,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 const adpName = 'etalii.adp';
 const standaloneName = 'etalii.adp.ide.standalone';
 const record = 'PROVENANCE.md';
+// A tool type's LLM instructions: `<type>/README.md` beside its specification in etalii.adp, copied under this name.
+const instructionsFile = 'llm-instructions.md';
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const nameOf = (path) => path.slice(path.lastIndexOf('/') + 1);
 const folderOf = (path) => path.slice(0, path.lastIndexOf('/') + 1);
@@ -50,13 +52,15 @@ function toolTypeIn(tool) {
     shared: extensions(true),
     // FBL 13: a new body comes from the binding's template or from the `template` operation of its plugin.
     template: claimed.some((one) => one.template || one.reader?.plugin),
+    // The instructions an LLM follows to write a valid document of the type, where etalii.adp has them.
+    instructions: existsSync(folder + instructionsFile),
   };
 }
 
 // The script owns the entries that carry a tool type's <vendor>.<type>, also those of a tool type whose
 // folder is gone. etalii.adp.registration and etalii.adp.openAsText have no second part and are not its.
 const ownsEditor = (entry) => /^etalii\.adp\.[^.]+\../.test(entry.viewType ?? '');
-const ownsCommand = (entry) => /^etalii\.adp\.(new|openAs)\../.test(entry.command ?? '');
+const ownsCommand = (entry) => /^etalii\.adp\.(new|openAs|llmInstructions)\../.test(entry.command ?? '');
 
 /** package.json as it should be: what the script does not own first, as it was, then its own in the folders' order. */
 function manifestText() {
@@ -75,6 +79,7 @@ function manifestText() {
       commands.push({ command: `etalii.adp.new.${type.id}`, title: `New ${type.label}`, category: 'ADP' });
       menus['file/newFile'].push({ command: `etalii.adp.new.${type.id}` });
     }
+    if (type.instructions) commands.push({ command: `etalii.adp.llmInstructions.${type.id}`, title: `Include ${type.label} LLM instructions`, category: 'ADP' });
     if (type.shared.length > 0) {
       const command = `etalii.adp.openAs.${type.id}`;
       const extension = `resourceExtname =~ /^\\.(${type.shared.join('|')})$/`;
@@ -172,6 +177,8 @@ for (const [tool, path] of [...specifications].sort(([a], [b]) => ordinal(a, b))
   const files = [{ from: fromAdp, path }];
   const companion = `${withoutExtension(path)}.md`;
   if (fromAdp.has.has(companion)) files.push({ from: fromAdp, path: companion });
+  const instructions = `${withoutExtension(path)}/README.md`;
+  if (fromAdp.has.has(instructions)) files.push({ from: fromAdp, path: instructions, name: instructionsFile });
   const { binding, bindings = binding ? [binding] : [] } = JSON.parse(fromAdp.bytes(path).toString('utf8')).persistence ?? {};
   for (const reference of new Set(bindings.map((one) => one.split('#')[0]))) {
     const url = /^https?:\/\/[^/]+\/etalii-adp\/etalii\.adp\.ide\.standalone\/[^/]+\/(.+)$/.exec(reference);
@@ -190,7 +197,7 @@ for (const [tool, path] of [...specifications].sort(([a], [b]) => ordinal(a, b))
       failures.push(`${path} names ${reference}: ${named.length === 0 ? `no such file beside it, and none of that name in ${standaloneName}` : `no such file beside it, and ${named.length} of that name in ${standaloneName} (${named.join(', ')})`}`);
     }
   }
-  copies.set(tool, files.map((file) => ({ ...file, name: nameOf(file.path), bytes: file.from.bytes(file.path) })).sort((a, b) => ordinal(a.name, b.name)));
+  copies.set(tool, files.map((file) => ({ ...file, name: file.name ?? nameOf(file.path), bytes: file.from.bytes(file.path) })).sort((a, b) => ordinal(a.name, b.name)));
 }
 if (failures.length > 0) {
   console.error(['Nothing was written. A file a specification names cannot be found:', ...failures.map((line) => `- ${line}`)].join('\n'));

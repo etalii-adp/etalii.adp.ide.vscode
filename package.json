@@ -3,7 +3,7 @@
   "publisher": "etalii",
   "displayName": "ADP: A Different Perspective",
   "description": "Specialized tools for text-based files: diagrams, designers and editors, each tuned for one task.",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "license": "Apache-2.0",
   "icon": "media/icon.png",
   "private": true,
@@ -297,6 +297,11 @@
       {
         "command": "etalii.adp.new.systems.causal-loop-diagram",
         "title": "New Causal loop diagram",
+        "category": "ADP"
+      },
+      {
+        "command": "etalii.adp.llmInstructions.systems.causal-loop-diagram",
+        "title": "Include Causal loop diagram LLM instructions",
         "category": "ADP"
       },
       {
