@@ -120,7 +120,11 @@ export type EditRequest =
    * answers the form an `ask` showed, by parameter; with `check`, they are only validated: the
    * outcome is the refusal of the first that is not accepted, else an applied outcome of no splice.
    */
-  | { readonly kind: 'action'; readonly action: string; readonly id?: string; readonly x?: number; readonly y?: number; readonly params?: Readonly<Record<string, string>>; readonly check?: boolean }
+  | {
+    readonly kind: 'action'; readonly action: string; readonly id?: string; readonly x?: number; readonly y?: number; readonly params?: Readonly<Record<string, string>>; readonly check?: boolean;
+    /** *(DISL 0.12, 9.4)* What the host's lookup picked, the answer to a `lookup` outcome: the element's link and its name. */
+    readonly picked?: LookupPick;
+  }
   /** A node dragged onto another node, to become its child, at a position among its children when given. */
   | { readonly kind: 'reparent'; readonly id: string; readonly parent: string; readonly index?: number }
   /** The children of a node hidden or shown; with `group`, the items of one group of the node's, by the group's key. */
@@ -176,8 +180,32 @@ export type EditOutcome =
   }
   /** A path is asked with the platform's file and folder dialog; chosen, it is set as the named field, relative to the document. */
   | { readonly kind: 'pickPath'; readonly id: string; readonly field: string }
+  /** *(DISL 0.12, 9.4)* The host's lookup is asked for, over the linkable elements of the workspace of the tool types `origins` names, all when it is absent: picked, the same request is made again with `picked`. */
+  | { readonly kind: 'lookup'; readonly origins?: readonly string[] }
+  /** *(FBL 17.5)* A linked element is opened: the document at `path`, as the workspace's index holds it, with the element `select` selected when there is one. */
+  | { readonly kind: 'openLinked'; readonly path: string; readonly select?: string }
+  /** *(FBL 17.5)* The backlinks of an element are listed, for the user to open one. */
+  | { readonly kind: 'backlinks'; readonly backlinks: readonly BacklinkEntry[] }
   /** The named export of the tool type is asked for: the extension has it written beside the document (`ToolType.exported`); nothing of the document changes. */
   | { readonly kind: 'export'; readonly export: string };
+
+/** What a lookup picked (DISL 9.4): the element's link, with its cached name, and that name. */
+export interface LookupPick {
+  readonly link: string;
+  readonly name: string;
+}
+
+/** A backlink as the host lists it (FBL 17.5): the consuming document, by its index path and its name, and the element that holds the link, by its id and its name. */
+export interface BacklinkEntry {
+  readonly path: string;
+  readonly document: string;
+  readonly holder: string;
+  readonly name: string;
+}
+
+/** The host's own entries of an element's menu for links (FBL 17.5): opening a linked element, and listing an element's backlinks. */
+export const OPEN_LINKED = 'link:open';
+export const LINKED_FROM = 'link:backlinks';
 
 /** What a tool type exports of a document, as its menu offers it. */
 export interface ExportOffer {
@@ -221,6 +249,8 @@ export interface Source {
    * reported. Without it, links are shown as they are written and not checked.
    */
   readonly links?: LinkWorkspace;
+  /** The document's path as the index holds it, where it is not `fileName` (FBL 17.3): what its own backlinks are found by. */
+  readonly linkPath?: string;
 }
 
 /** A file a document names, as the host found it: open in an editor, unsaved changes and all, or on disk. */

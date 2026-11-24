@@ -45,7 +45,12 @@ function written(text: string): vscode.Uri {
   return uri;
 }
 
-async function open(text = fs.readFileSync(example('mindmap', 'example 1', 'mindmap.mm').fsPath, 'utf8')): Promise<{ uri: vscode.Uri; document: vscode.TextDocument; original: string }> {
+// The example as a map that already holds its document id: in a workspace, the first edit of a map without one gives
+// it one (FBL 17.4, etalii.adp spec 089), which `links.test.ts` tests; these tests are of the edit alone.
+const exampleMap = (): string => fs.readFileSync(example('mindmap', 'example 1', 'mindmap.mm').fsPath, 'utf8')
+  .replace(/^(<node [^>]*[^/]>)(\r?\n)/m, '$1$2<attribute NAME="adp-id" VALUE="t3st0map"/>$2');
+
+async function open(text = exampleMap()): Promise<{ uri: vscode.Uri; document: vscode.TextDocument; original: string }> {
   const uri = written(text);
   await vscode.commands.executeCommand('vscode.open', uri);
   await drawn();

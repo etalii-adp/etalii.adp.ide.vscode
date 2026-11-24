@@ -5,6 +5,7 @@ import { startAtd } from './atd/client';
 import { registerAtdCommands } from './atd/commands';
 import { registerCommands } from './commands';
 import { Findings } from './findings';
+import { LinkIndex } from './linkIndex';
 import { claimantOf } from './opening';
 import { PropertiesView } from './propertiesView';
 import { RegistrationEditorProvider } from './registrationEditor';
@@ -25,8 +26,10 @@ export function activate(context: vscode.ExtensionContext): AdpApi {
   // The tool types are the definitions the package ships, read once, now.
   const types = toolTypesAt(context.extensionPath);
   const findings = new Findings();
-  const tools = new Tools(findings);
-  context.subscriptions.push(findings, tools);
+  // The documents of the workspace that link to each other, indexed by folder (etalii.adp spec 089, FBL 17.3).
+  const links = new LinkIndex(types);
+  const tools = new Tools(findings, links);
+  context.subscriptions.push(findings, links, tools);
 
   for (const type of types) {
     context.subscriptions.push(ToolEditorProvider.register(context, type, tools));
@@ -50,9 +53,16 @@ export function activate(context: vscode.ExtensionContext): AdpApi {
   // none until it is opened in that tool, and a file no type claims has none at all.
   const show = (document: vscode.TextDocument): void => {
     const type = claimantOf(types, document.fileName, document.getText());
-    if (type) findings.show(document, type);
+    if (type) findings.show(document, type, type.indexed === undefined ? {} : links.sourceOf(document.uri));
   };
   vscode.workspace.textDocuments.forEach(show);
+  // The findings of a document that links to others follow those others: a link resolves, or no longer does (FBL 17.6).
+  let relinking: ReturnType<typeof setTimeout> | undefined;
+  context.subscriptions.push(links.onDidChange(() => {
+    if (relinking !== undefined) clearTimeout(relinking);
+    // One open in a tool is shown again by its editor.
+    relinking = setTimeout(() => vscode.workspace.textDocuments.filter((document) => tools.editorOn(document.uri) === undefined).forEach(show), 200);
+  }));
   context.subscriptions.push(
     vscode.workspace.onDidOpenTextDocument(show),
     vscode.workspace.onDidChangeTextDocument((event) => {

@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import type { Action, EditRequest, Field, Source, TextSplice, ViewOptions } from '../core/frame/toolType';
-import { exportOf, viewTypeOf } from '../core/frame/toolType';
+import { exportOf, LINKED_FROM, OPEN_LINKED, viewTypeOf } from '../core/frame/toolType';
+import { lookupItems } from '../core/tool/linkActions';
+import type { LinkIndex } from './linkIndex';
 import type { FromCanvas, ToCanvas, ViewCause } from '../core/frame/protocol';
 import { linkKind } from '../core/disl/metamodel';
 import { placesOf, type Scene } from '../core/scene/scene';
@@ -58,6 +60,8 @@ export class OpenTool {
   peers: readonly string[] | undefined;
   /** For a registration that opens a folder subject: the texts of the files the tool type reads in its folder. */
   folder: Readonly<Record<string, string>> | undefined;
+  /** The workspace's index of documents that link to each other, for a tool type that takes part in links (FBL 17.3). */
+  links: LinkIndex | undefined;
 
   constructor(readonly type: AnyToolType, readonly document: vscode.TextDocument, readonly panel: vscode.WebviewPanel) {
     this.registrationUri = registrationUriOf(document.uri);
@@ -70,6 +74,7 @@ export class OpenTool {
       ...source, ...(this.registration === undefined ? {} : { registration: this.registration }), ...(related === undefined ? {} : { related }),
       ...(this.peers === undefined ? {} : { peers: this.peers }),
       ...(this.folder === undefined ? {} : { folder: this.folder }),
+      ...(this.links === undefined ? {} : this.links.sourceOf(this.document.uri)),
     };
   }
 
@@ -186,7 +191,19 @@ export class Tools implements vscode.Disposable {
   /** Fires when the active diagram, its selection or its document changes. */
   readonly onDidChange = this.changed.event;
 
-  constructor(private readonly findings: Findings) {}
+  constructor(private readonly findings: Findings, readonly links?: LinkIndex) {
+    // A document that links to others is drawn again when they change: a name, a link that now resolves (FBL 17.4).
+    let pending: ReturnType<typeof setTimeout> | undefined;
+    this.linking = links?.onDidChange(() => {
+      if (pending !== undefined) clearTimeout(pending);
+      pending = setTimeout(() => {
+        pending = undefined;
+        for (const diagram of this.open) if (diagram.links !== undefined) this.refresh(diagram);
+      }, 200);
+    });
+  }
+
+  private readonly linking: vscode.Disposable | undefined;
 
   get active(): OpenTool | undefined {
     return this.current;
@@ -194,6 +211,7 @@ export class Tools implements vscode.Disposable {
 
   dispose(): void {
     this.changed.dispose();
+    this.linking?.dispose();
     for (const files of this.toolFiles.values()) files.dispose();
   }
 
@@ -241,7 +259,9 @@ export class Tools implements vscode.Disposable {
       actions: this.actionsOf(diagram, view.readOnly === true),
       version: diagram.document.version, ...(cause === undefined ? {} : { cause }),
     });
-    this.findings.show(diagram.document, diagram.type, source.related);
+    this.findings.show(diagram.document, diagram.type, {
+      ...(source.related === undefined ? {} : { related: source.related }), ...(source.links === undefined ? {} : { links: source.links }), ...(source.linkPath === undefined ? {} : { linkPath: source.linkPath }),
+    });
     if (diagram === this.current) this.changed.fire();
   }
 
@@ -250,7 +270,8 @@ export class Tools implements vscode.Disposable {
    * and an export of a document never saved is offered disabled, since its file is written beside the document.
    */
   private actionsOf(diagram: OpenTool, readOnly: boolean): Action[] {
-    const actions = diagram.type.actions(diagram.source, diagram.selection, diagram.options).filter((action) => !readOnly || exportOf(action.id) !== undefined);
+    // What changes nothing of the document stays: an export, and the host's entries for links (FBL 17.5).
+    const actions = diagram.type.actions(diagram.source, diagram.selection, diagram.options).filter((action) => !readOnly || exportOf(action.id) !== undefined || action.id === OPEN_LINKED || action.id === LINKED_FROM);
     return diagram.document.isUntitled ? actions.map((action) => (exportOf(action.id) === undefined ? action : { ...action, enabled: false, disabledReason: UNSAVED })) : actions;
   }
 
@@ -588,6 +609,38 @@ export class Tools implements vscode.Disposable {
     return edit;
   }
 
+  /** How the lookup and the backlinks are picked from: Visual Studio Code's quick pick, which a test answers in its place. */
+  quickPick: <T extends vscode.QuickPickItem>(items: readonly T[], options: vscode.QuickPickOptions) => Thenable<T | undefined> = (items, options) => vscode.window.showQuickPick(items, options);
+
+  /**
+   * Opens a document of the workspace a link leads to (FBL 17.5), by its path in the index: in the tool its type
+   * names, brought to the front where an editor of it is open, with the element selected; a document no tool
+   * of this plug-in claims, in Visual Studio Code's own editor.
+   */
+  private async openLinked(path: string, select: string | undefined): Promise<Performed> {
+    const folder = vscode.workspace.workspaceFolders?.find((candidate) => path.startsWith(`${candidate.uri.path}/`));
+    const target = folder ? folder.uri.with({ path }) : vscode.Uri.file(path);
+    const shown = this.editorOn(target);
+    if (shown) {
+      shown.panel.reveal();
+      if (select !== undefined) shown.post({ v: 2, type: 'reveal', id: select });
+      return { result: 'applied' };
+    }
+    const type = this.links?.typeOf(path);
+    try {
+      await vscode.workspace.fs.stat(target);
+    } catch {
+      return { result: 'refused', sentence: `${target.fsPath} is not there, so it is not opened.` };
+    }
+    if (type === undefined) {
+      await vscode.commands.executeCommand('vscode.open', target);
+      return { result: 'applied' };
+    }
+    if (select !== undefined) this.selecting.set(target.toString(), select);
+    await vscode.commands.executeCommand('vscode.openWith', target, viewTypeOf(type));
+    return { result: 'applied' };
+  }
+
   /** How an operation's form asks a value: Visual Studio Code's input box, which a test answers in its place. */
   inputBox: (options: vscode.InputBoxOptions) => Thenable<string | undefined> = (options) => vscode.window.showInputBox(options);
 
@@ -601,7 +654,7 @@ export class Tools implements vscode.Disposable {
     let outcome = diagram.type.edit(diagram.source, request, diagram.options, confirmed);
     // A file that cannot be written takes no edit, which the tool type does not know. What changes
     // only this viewer's state, such as a fold, is still its to do.
-    if (diagram.readOnly && outcome.kind !== 'export' && !(outcome.kind === 'applied' && outcome.viewOptions !== undefined && outcome.splices.length === 0 && outcome.registration === undefined)) {
+    if (diagram.readOnly && outcome.kind !== 'export' && outcome.kind !== 'openLinked' && outcome.kind !== 'backlinks' && !(outcome.kind === 'applied' && outcome.viewOptions !== undefined && outcome.splices.length === 0 && outcome.registration === undefined)) {
       return { result: 'cancelled' };
     }
     if (outcome.kind === 'confirm') {
@@ -641,6 +694,25 @@ export class Tools implements vscode.Disposable {
         }
         if (version !== undefined && version !== diagram.document.version) return { result: 'cancelled' };
         return this.perform(diagram, { ...request, params });
+      }
+      case 'lookup': {
+        // The workspace's elements, searched by name as the user types (DISL 9.4): picked, the operation runs again with the pick, as one undo step.
+        if (request.kind !== 'action') return { result: 'cancelled' };
+        const links = diagram.source.links;
+        if (links === undefined) return { result: 'cancelled' };
+        const origins = outcome.origins;
+        const items = lookupItems(links, (path) => origins === undefined || origins.includes(this.links?.originOf(path) ?? ''));
+        const picked = await this.quickPick(items.map((item) => ({ label: item.pick.name || '(unnamed)', description: item.document, detail: item.folder, item })), { title: 'Add from another document', placeHolder: 'Type to search the elements of the workspace by name', matchOnDescription: true });
+        if (picked === undefined) return { result: 'cancelled' };
+        if (version !== undefined && version !== diagram.document.version) return { result: 'cancelled' };
+        return this.perform(diagram, { ...request, picked: picked.item.pick });
+      }
+      case 'openLinked':
+        return this.openLinked(outcome.path, outcome.select);
+      case 'backlinks': {
+        // Linked from (N): each link by its document and the element that holds it; the one picked is opened with that element selected (FBL 17.5).
+        const picked = await this.quickPick(outcome.backlinks.map((backlink) => ({ label: backlink.name, description: backlink.document, backlink })), { title: 'Linked from', placeHolder: 'Open the element that links here' });
+        return picked === undefined ? { result: 'cancelled' } : this.openLinked(picked.backlink.path, picked.backlink.holder);
       }
       case 'export':
         // An export changes nothing of the document: the extension writes it beside the document, as the editor holds it.
@@ -773,6 +845,7 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
       return;
     }
     const diagram = new OpenTool(this.type, document, panel);
+    if (this.type.indexed !== undefined) diagram.links = this.tools.links;
     if (this.type.related) diagram.related = new RelatedFiles(document.uri, () => this.tools.refresh(diagram));
     diagram.selectOnReady = this.tools.selecting.get(document.uri.toString());
     this.tools.selecting.delete(document.uri.toString());

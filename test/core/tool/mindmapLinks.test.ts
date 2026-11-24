@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { PluginPlanRequest } from '../../../src/core/fbl';
 import { LinkWorkspace } from '../../../src/core/fbl/links/workspace';
-import type { DiagramToolType, Source } from '../../../src/core/frame/toolType';
+import { LINKED_FROM, OPEN_LINKED, type DiagramToolType, type Source } from '../../../src/core/frame/toolType';
+import { lookupItems } from '../../../src/core/tool/linkActions';
 import { plan } from '../../../src/core/plugins/freeplane-mm/planner';
 import { read } from '../../../src/core/plugins/freeplane-mm/reader';
 import { plugins as registry } from '../../../src/core/plugins/index';
@@ -100,8 +101,61 @@ describe('a map that links, in its workspace', () => {
     const plain = '<map version="freeplane 1.11.5">\n<node TEXT="Plain" ID="ID_1">\n<node TEXT="Child" ID="ID_2"/>\n</node>\n</map>';
     const source: Source = { fileName: `${root}/ideas/plain.mm`, text: plain, links: workspace() };
     const after = spliced(plain, applied(type.edit(source, { kind: 'rename', id: 'ID_2', text: 'Kid' }, {}, false)).splices);
-    expect(after).toMatch(/^<map version="freeplane 1\.11\.5">\n<node TEXT="Plain" ID="ID_1">\n<attribute NAME="adp-id" VALUE="[0-9a-z]{8}"\/>\n<node TEXT="Kid" ID="ID_2"\/>\n<\/node>\n<\/map>$/);
+    expect(after).toMatch(/^<map version="freeplane 1\.11\.5">\n<node TEXT="Plain" ID="ID_1">\n<attribute NAME="adp-id" VALUE="[0-9a-z]{8}"\/>\n<node TEXT="Kid" ID="ID_2"\/>\n<\/node>\n<\/map>\n?$/);
     expect(type.indexed!({ fileName: source.fileName, text: after })!.documentId).toMatch(/^[0-9a-z]{8}$/);
+  });
+});
+
+describe('what the host offers for links (FBL 17.5, DISL 9.4)', () => {
+  const ids = (source: Source, id: string): string[] => type.actions(source, [id]).map((action) => action.id);
+
+  it('offers Open linked element on a linked node whose link resolves, and opens its target with it selected', () => {
+    const source = inWorkspace();
+    expect(ids(source, 'ID_7')).toContain(OPEN_LINKED);
+    expect(ids(source, 'ID_4')).not.toContain(OPEN_LINKED);
+    expect(ids(ideas, 'ID_7')).not.toContain(OPEN_LINKED);
+    expect(type.edit(source, { kind: 'action', action: OPEN_LINKED, id: 'ID_7' }, {}, false)).toEqual({ kind: 'openLinked', path, select: 'ID_2' });
+    expect(type.edit(source, { kind: 'action', action: OPEN_LINKED, id: 'ID_6' }, {}, false)).toEqual({ kind: 'openLinked', path: `${root}/knowledge/provinces.yaml`, select: 'ut' });
+  });
+
+  it('lists the backlinks of a node as Linked from (N), each with its document and the element that holds it', () => {
+    const source = inWorkspace();
+    const entry = type.actions(source, ['ID_5']).find((action) => action.id === LINKED_FROM);
+    expect(entry?.label).toBe('Linked from (1)');
+    expect(type.edit(source, { kind: 'action', action: LINKED_FROM, id: 'ID_5' }, {}, false)).toEqual({
+      kind: 'backlinks', backlinks: [{ path: `${root}/teams/services.dgr`, document: 'services.dgr', holder: 'l3', name: expect.any(String) }],
+    });
+    expect(ids(source, 'ID_9')).not.toContain(LINKED_FROM);
+  });
+
+  it('says how many links a delete breaks before it deletes', () => {
+    const outcome = type.edit(inWorkspace(), { kind: 'action', action: 'mindmap.delete', id: 'ID_2' }, {}, false);
+    expect(outcome.kind).toBe('confirm');
+    expect(outcome.kind === 'confirm' && outcome.message).toContain('This breaks 1 link in the workspace');
+    expect(type.edit(inWorkspace(), { kind: 'action', action: 'mindmap.delete', id: 'ID_9' }, {}, false).kind).toBe('applied');
+  });
+
+  it('asks the host\'s lookup for Add from another document, and adds a linked node for what was picked', () => {
+    const source = inWorkspace();
+    expect(type.edit(source, { kind: 'action', action: 'mindmap.add-linked', id: 'ID_1' }, {}, false)).toEqual({ kind: 'lookup' });
+    expect(type.edit(ideas, { kind: 'action', action: 'mindmap.add-linked', id: 'ID_1' }, {}, false).kind).toBe('refused');
+    const item = lookupItems(source.links!).find((candidate) => candidate.pick.name === 'Noord-Holland')!;
+    expect(item).toMatchObject({ document: 'provinces.yaml', folder: 'knowledge', pick: { link: '$k3f9x2ma@provinces.yaml#nh.Name=Noord-Holland' } });
+    const outcome = applied(type.edit(source, { kind: 'action', action: 'mindmap.add-linked', id: 'ID_1', picked: item.pick }, {}, false));
+    const after = spliced(text, outcome.splices);
+    expect(after).toMatch(/<node TEXT="Noord-Holland" ID="ID_[0-9a-z]{8}">\n<attribute NAME="adp-link" VALUE="\$k3f9x2ma@provinces.yaml#nh.Name=Noord-Holland"\/>\n<\/node>\n<\/node>\n<\/map>\n?$/);
+    expect(outcome.select).toMatch(/^ID_[0-9a-z]{8}$/);
+  });
+
+  it('shows a linked node\'s link in ADP Properties by its target\'s name, chosen and not typed', () => {
+    const row = (source: Source) => type.fields(source, ['ID_7']).find((field) => field.id === 'mindmap.linked-element');
+    expect(row(inWorkspace())).toMatchObject({ value: 'Launch', readOnly: expect.stringContaining('Add from another document') });
+    expect(row(ideas)?.value).toBe('Start');
+    expect(type.fields(inWorkspace(), ['ID_9']).find((field) => field.id === 'mindmap.linked-element')?.value).toBe('release.tml#launch');
+  });
+
+  it('offers in the lookup the map\'s own nodes, by their link', () => {
+    expect(lookupItems(workspace()).map((item) => item.pick.link)).toContain('$m8c1u4wa@ideas.mm#ID_2.text=Launch');
   });
 });
 

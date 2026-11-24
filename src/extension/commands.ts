@@ -210,6 +210,19 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
       return asked;
     });
     register('etalii.adp.test.inputBoxesAsked', () => asked);
+    // The lookup and the backlinks: each quick pick answered by the label of the item to pick (undefined cancels), and what it offered kept.
+    const offered: { title?: string; items: { label: string; description?: string; detail?: string }[] }[] = [];
+    register('etalii.adp.test.quickPicks', (script: unknown) => {
+      const answers = [...(script as (string | undefined)[])];
+      offered.length = 0;
+      tools.quickPick = async (items, options) => {
+        offered.push({ title: options.title, items: items.map((item) => ({ label: item.label, description: item.description, detail: item.detail })) });
+        const answer = answers.shift();
+        return items.find((item) => item.label === answer);
+      };
+      return offered;
+    });
+    register('etalii.adp.test.quickPicksOffered', () => offered);
     register('etalii.adp.test.layoutSteps', () => ({ undo: tools.layoutStepNext('undo'), redo: tools.layoutStepNext('redo') }));
     register('etalii.adp.test.select', (ids: unknown) => {
       const active = tools.active;
