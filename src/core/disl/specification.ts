@@ -232,6 +232,10 @@ export interface TypeMapEntry {
 export interface IdRule {
   readonly strategy?: 'uuid-v4' | 'uuid-v7' | 'ulid' | 'nanoid' | 'sequential' | 'natural' | 'cel' | 'derived' | 'counter';
   readonly encoding?: 'hex' | 'base64url' | 'base36';
+  /** *(DISL 0.12, 11.5)* With `nanoid`: the alphabet, `base36`, `alphanumeric` or the characters it lists. */
+  readonly alphabet?: string;
+  /** *(DISL 0.12, 11.5)* With `nanoid`: the number of characters. */
+  readonly length?: number;
   readonly prefix?: string | Readonly<Record<string, string>>;
   readonly expression?: Expression;
   readonly stable?: boolean;

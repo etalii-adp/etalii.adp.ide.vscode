@@ -393,7 +393,9 @@ export function interpretForms(specification: Specification, metamodel: Metamode
       if (on.env?.readOnly === true) return { readOnly: true };
       const attribute = attributeOf(on);
       const bound = scope(on, { value: held(on) });
-      const reason = applicable(own.readOnlyReasons, bound) ?? applicable(attribute?.readOnlyReasons, bound);
+      // A field's reasons apply while its own `readOnly`, when it states one, holds: they say why it is read-only then.
+      const ownApply = own.readOnly === undefined || (isObject(own.readOnly) && typeof own.readOnly.attribute === 'string' ? subject(on).attributes[own.readOnly.attribute] === true : holds(own.readOnly, bound, false));
+      const reason = (ownApply ? applicable(own.readOnlyReasons, bound) : undefined) ?? applicable(attribute?.readOnlyReasons, bound);
       if (reason !== undefined) return { readOnly: true, reason };
       const bindable = isObject(own.readOnly) && typeof own.readOnly.attribute === 'string' ? subject(on).attributes[own.readOnly.attribute] === true : holds(own.readOnly, bound, false);
       const locked = bindable || attribute?.readOnly === true || attribute?.derived !== undefined || 'fixed' in (attribute ?? {}) || !holds(own.enabled, bound, true);

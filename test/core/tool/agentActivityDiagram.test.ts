@@ -139,8 +139,10 @@ describe.each(examples)('the example %s', (name) => {
 describe('what the diagram offers for a file', () => {
   it('a toolbox entry for each of the five element types, as the definition\'s toolbox states them, and none for a task or a pull request', () => {
     const declared = array(at(specification, 'toolbox', 'groups')).flatMap((group) => array(object(group).tools)).map(object);
-    expect(type.toolbox(oneDay)).toEqual(declared.map((tool) => ({ id: tool.id, label: tool.label, icon: tool.icon, description: tool.doc })));
-    expect(type.toolbox(oneDay).map((entry) => entry.id)).toEqual(['project', 'specification', 'agent', 'location', 'environment']);
+    // Each entry is given out under the wire id the definition's `x-aad` maps its tool to.
+    const wire = (id: unknown): string => String(object(object(at(specification, 'x-aad', 'tools'))[String(id)]).drop);
+    expect(type.toolbox(oneDay)).toEqual(declared.map((tool) => ({ id: wire(tool.id), label: tool.label, icon: tool.icon, description: tool.doc })));
+    expect(type.toolbox(oneDay).map((entry) => entry.id)).toEqual(['add-project', 'add-specification', 'add-agent', 'add-location', 'add-environment']);
   });
 
   it('the properties of an element, a task and a pull request, in the groups and the order the definition gives', () => {

@@ -114,7 +114,7 @@ export class BodyReading implements Reading {
     if (family.entries.length > options.maxEntries) return this.makeUnreadable(0, messages.tooManyEntries(options.maxEntries));
     const header = binding.header;
     if (header && !family.headerHolds(header)) {
-      const mark = header.key !== undefined ? messages.headerKeyMark(header.key, header.value ? scalarText(header.value) : '') : messages.headerLineMark;
+      const mark = header.key !== undefined ? messages.headerKeyMark(header.key, header.value ? (header.value.kind === 'array' ? header.value.items.map((item) => scalarText(item.value)).join(' or ') : scalarText(header.value)) : '') : messages.headerLineMark;
       if (header.required) return this.makeUnreadable(0, messages.headerRequired(mark));
       family.report(findingCodes.headerMismatch, 'warning', messages.headerMismatch(mark), { start: text.bomLength, end: text.lines[0].contentEnd });
     }

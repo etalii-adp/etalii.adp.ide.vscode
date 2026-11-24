@@ -52,3 +52,20 @@ describe('a document id (FBL 17.2)', () => {
     expect(OpenBody.open(utf8('items: []\n'), binding()).change({ kind: 'setDocumentId', id: '' })).toEqual({ refused: 'A document id is not empty.' });
   });
 });
+
+describe('a header that accepts a list of values (FBL 0.23, 5.6)', () => {
+  const versioned = (): FblBinding => {
+    const json = `{ "fbl": "0.23", "bindings": { "t": { "claims": { "extensions": [".t"] }, "body": { "kind": "file", "family": "yaml" }, "reader": "declared",
+      "header": { "key": "ded", "value": ["0.1", "0.3"], "required": true },
+      "elements": [ { "name": "item", "type": "Item", "at": "/items/*", "id": { "from": { "key": "id" } } } ] } } }`;
+    return loadDocument(utf8(json)).document!.bindings.get('t')!;
+  };
+
+  it('reads a body with any of them, and refuses one with another', () => {
+    expect(OpenBody.open(utf8('ded: "0.1"\nitems:\n  - id: a\n'), versioned()).model.unreadable).toBe(false);
+    expect(OpenBody.open(utf8('ded: "0.3"\nitems:\n  - id: a\n'), versioned()).model.unreadable).toBe(false);
+    const other = OpenBody.open(utf8('ded: "0.2"\nitems:\n  - id: a\n'), versioned()).model;
+    expect(other.unreadable).toBe(true);
+    expect(other.findings[0].message).toBe("The body does not start with the mark the binding requires ('ded: 0.1 or 0.3').");
+  });
+});

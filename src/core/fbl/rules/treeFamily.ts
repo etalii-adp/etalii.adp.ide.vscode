@@ -163,7 +163,9 @@ export abstract class TreeFamily extends FamilyReader {
     const member = this.root?.value.member(header.key);
     if (!member) return false;
     if (!header.value) return true;
-    return scalarText(header.value) === member.value.text;
+    // FBL 0.23, 5.6: a list accepts any of its values.
+    const accepted = header.value.kind === 'array' ? header.value.items.map((item) => scalarText(item.value)) : [scalarText(header.value)];
+    return accepted.includes(member.value.text);
   }
 
   /** The mapping a slot is read in: the entry's own, or the one `child` reaches from it. */

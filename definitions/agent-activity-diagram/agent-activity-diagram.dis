@@ -1877,6 +1877,25 @@
     },
     "doc": "One YAML file, `.aad`, read and written through the FBL binding `agent-activity-diagram.fbl#aad` with byte-preserving splices; its `.adp` registration beside it identifies it. The file's format, written for agents, is in agent-activity-diagram.md, and its JSON Schema is agent-activity-diagram.schema.json."
   },
+  "x-aad": {
+    "tools": {
+      "project": {
+        "drop": "add-project"
+      },
+      "specification": {
+        "drop": "add-specification"
+      },
+      "agent": {
+        "drop": "add-agent"
+      },
+      "location": {
+        "drop": "add-location"
+      },
+      "environment": {
+        "drop": "add-environment"
+      }
+    }
+  },
   "x-adp": {
     "kind": "Diagram",
     "companion": "agent-activity-diagram.md"

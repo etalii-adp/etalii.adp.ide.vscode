@@ -12,7 +12,7 @@ export type { Edit, FblSplice, SpliceOperation } from './splice';
 export { findingCodes } from './finding';
 export type { Finding, FindingSeverity, SourceLocation } from './finding';
 export { documentIdAttribute, FblModel } from './model';
-export { base36, alphabetOf, nanoid } from './links/ids';
+export { base36, alphabetOf, nanoid, nanoidAlphabet } from './links/ids';
 export { cachedName, linkText, linkToDocument, linkToElement, parseLink } from './links/link';
 export type { ElementPart, Link } from './links/link';
 export { attributeOf, fileNameOf, linkCodes, LinkWorkspace } from './links/workspace';
