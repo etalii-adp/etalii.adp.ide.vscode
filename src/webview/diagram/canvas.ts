@@ -830,7 +830,9 @@ export class Canvas {
         // A right-button drag ends in a context menu event, which this gesture has already answered.
         if (rightButton) this.suppressMenu = true;
         this.drawHandles();
-        const target = this.idAt(document.elementFromPoint(last.clientX, last.clientY));
+        // Let go on a node, or on one of the dots drawn over it.
+        const under = document.elementFromPoint(last.clientX, last.clientY);
+        const target = this.idAt(under) ?? under?.closest?.('[data-node]')?.getAttribute('data-node') ?? undefined;
         // Out of a named anchor, a line let go on empty canvas asks for what the line makes there.
         if (!target && fromAnchor !== undefined) {
           this.request({ kind: 'connect', from: from.id, to: '', fromAnchor, toPoint: point });

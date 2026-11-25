@@ -93,6 +93,15 @@ describe('the dependency graph\'s canvas', () => {
     expect(requestsOf(sent)).toEqual([{ kind: 'connect', from: 'checkout-web', to: 'api-gateway', fromAnchor: 'right' }]);
   });
 
+  // A host test of the timeline found a line let go on another node's dot read as let go on empty canvas, which made a new node.
+  it('draws a line to the node whose dot it is let go on', () => {
+    open([]);
+    const dot = document.querySelector('.adp-anchor[data-node="api-gateway"][data-anchor="left"]')!;
+    document.elementFromPoint = () => dot;
+    drag(group('checkout-web'), screen(anchorOf('checkout-web', 'right')), screen(anchorOf('api-gateway', 'left')));
+    expect(requestsOf(sent)).toEqual([{ kind: 'connect', from: 'checkout-web', to: 'api-gateway', fromAnchor: 'right' }]);
+  });
+
   it('asks for a node where a line out of an anchor is let go on empty canvas', () => {
     open([]);
     document.elementFromPoint = () => null;

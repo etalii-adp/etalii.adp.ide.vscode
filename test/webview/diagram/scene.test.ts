@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { tokensOf } from '../../../src/core/disl/notation';
 import { pathData, pointOn } from '../../../src/core/scene/geometry';
 import { createScene, type Scene, type SceneEdge, type SceneNode, type SceneToken } from '../../../src/core/scene/scene';
-import { drawHandles, drawScene, themeKind, type ThemeKind } from '../../../src/webview/diagram/scene';
+import { colourOf, drawHandles, drawScene, themeKind, type ThemeKind } from '../../../src/webview/diagram/scene';
 import { canvasTool } from '../../core/scene/tool';
 
 // The scene renderer in a simulated browser (etalii.adp spec 027, research R3 and R13). The scene
@@ -60,6 +60,16 @@ describe('the theme kind', () => {
     // High contrast light carries the class of high contrast as well.
     expect(of('vscode-high-contrast vscode-high-contrast-light')).toBe('high-contrast-light');
     expect(of('')).toBe('light');
+  });
+});
+
+describe('a paint', () => {
+  // A host test of the timeline found its moments filled with the editor's background: `color.accent` has no value in its definition.
+  it('takes the theme\'s own accent for a well-known token the definition gives no value, and the editor\'s colour for any other', () => {
+    expect(colourOf({}, 'light', { token: 'color.accent' }, 'fill')).toBe('var(--vscode-focusBorder)');
+    expect(colourOf({}, 'dark', { token: 'color.text.muted' }, 'text')).toBe('var(--vscode-descriptionForeground)');
+    expect(colourOf({}, 'light', { token: 'color.unheard.of' }, 'fill')).toBe(editorBackground);
+    expect(colourOf({ 'color.accent': { light: '#534AB7', dark: '#7F77DD' } }, 'dark', { token: 'color.accent' }, 'fill')).toBe('#7F77DD');
   });
 });
 
