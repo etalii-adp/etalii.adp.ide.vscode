@@ -1,0 +1,393 @@
+timeline: 1
+# The key events of the Marvel Cinematic Universe's story, in story order; the full story is in ../marvel-universe/.
+# Only what happens in the story world: no release dates, castings or studio news.
+# Time runs left to right but the dates mean nothing: each box is as long as its label needs, and a box starts after the events it follows from.
+# Boxes that belong together share a row, end to end; a group that no longer fits across continues in a new block of rows below, one empty row apart.
+# A connection leads from an event to one that follows from it.
+elements:
+  - id: e22
+    label: "Schmidt takes the Tesseract"
+    begin: 2000-01-01
+    end: 2005-09-11
+    row: 0
+  - id: e26
+    label: "Erskine's serum works"
+    begin: 2000-01-01
+    end: 2004-09-06
+    row: 1
+  - id: e33
+    label: "Hydra makes Winter Soldier"
+    begin: 2004-12-15
+    end: 2010-08-16
+    row: 1
+  - id: e35
+    label: "Steve crashes the Valkyrie"
+    begin: 2005-12-20
+    end: 2011-05-23
+    row: 0
+  - id: e37
+    label: "Howard finds the Tesseract"
+    begin: 2011-08-31
+    end: 2017-03-02
+    row: 0
+  - id: e43
+    label: "Peggy and Howard form SHIELD"
+    begin: 2017-06-10
+    end: 2023-10-27
+    row: 0
+  - id: e66
+    label: "Carol absorbs the core"
+    begin: 2017-06-10
+    end: 2022-02-24
+    row: 1
+  - id: e68
+    label: "Winter Soldier kills Starks"
+    begin: 2017-06-10
+    end: 2022-09-12
+    row: 2
+  - id: e79
+    label: "Carol unlocks her power"
+    begin: 2000-01-01
+    end: 2005-01-04
+    row: 4
+  - id: e83
+    label: "Fury plans the Avengers"
+    begin: 2005-04-14
+    end: 2010-04-18
+    row: 4
+  - id: e93
+    label: "Gamma test makes the Hulk"
+    begin: 2005-04-14
+    end: 2011-01-23
+    row: 5
+  - id: e99
+    label: "Tony builds Mark I in cave"
+    begin: 2005-04-14
+    end: 2010-07-27
+    row: 6
+  - id: e105
+    label: "Tony says I am Iron Man"
+    begin: 2010-11-04
+    end: 2015-10-29
+    row: 6
+  - id: e119
+    label: "Odin banishes Thor to Earth"
+    begin: 2010-11-04
+    end: 2016-07-15
+    row: 4
+  - id: e124
+    label: "Bifrost breaks; Loki falls"
+    begin: 2016-10-23
+    end: 2021-10-07
+    row: 4
+  - id: e128
+    label: "Steve Rogers thawed from ice"
+    begin: 2016-10-23
+    end: 2022-11-11
+    row: 5
+  - id: e134
+    label: "Battle of New York"
+    begin: 2023-02-19
+    end: 2027-02-08
+    row: 4
+  - id: e148
+    label: "Jane absorbs the Aether"
+    begin: 2000-01-01
+    end: 2004-12-25
+    row: 8
+  - id: e161
+    label: "Hydra exposed in SHIELD"
+    begin: 2000-01-01
+    end: 2005-03-25
+    row: 9
+  - id: e169
+    label: "Ronan beaten at Xandar"
+    begin: 2000-01-01
+    end: 2005-01-14
+    row: 10
+  - id: e180
+    label: "Vision is born"
+    begin: 2005-07-03
+    end: 2008-08-06
+    row: 9
+  - id: e181
+    label: "Battle of Sokovia"
+    begin: 2008-11-14
+    end: 2012-08-05
+    row: 9
+  - id: e184
+    label: "Thanos takes the Gauntlet"
+    begin: 2008-11-14
+    end: 2014-04-17
+    row: 8
+  - id: e194
+    label: "Nations sign Sokovia Accords"
+    begin: 2012-11-13
+    end: 2018-10-13
+    row: 9
+  - id: e198
+    label: "Avengers clash at airport"
+    begin: 2019-01-21
+    end: 2024-03-25
+    row: 9
+  - id: e214
+    label: "Strange trains at Kamar-Taj"
+    begin: 2019-01-21
+    end: 2024-07-23
+    row: 8
+  - id: e230
+    label: "Surtur destroys Asgard"
+    begin: 2019-01-21
+    end: 2023-11-06
+    row: 10
+  - id: e238
+    label: "Thanos kills Loki, Heimdall"
+    begin: 2000-01-01
+    end: 2005-06-03
+    row: 12
+  - id: e240
+    label: "Gamora sacrificed on Vormir"
+    begin: 2005-09-11
+    end: 2011-06-22
+    row: 12
+  - id: e244
+    label: "Thanos kills Vision"
+    begin: 2005-09-11
+    end: 2009-08-31
+    row: 13
+  - id: e245
+    label: "Thanos snaps half of life"
+    begin: 2009-12-09
+    end: 2014-12-23
+    row: 13
+  - id: e254
+    label: "Thor beheads Thanos"
+    begin: 2015-04-02
+    end: 2019-10-18
+    row: 13
+  - id: e264
+    label: "Tony cracks time travel"
+    begin: 2015-04-02
+    end: 2020-02-05
+    row: 12
+  - id: e267
+    label: "The Time Heist begins"
+    begin: 2020-05-15
+    end: 2025-01-09
+    row: 12
+  - id: e268
+    label: "Loki escapes with Tesseract"
+    begin: 2000-01-01
+    end: 2005-08-12
+    row: 15
+  - id: e269
+    label: "Natasha dies on Vormir"
+    begin: 2000-01-01
+    end: 2004-11-05
+    row: 16
+  - id: e270
+    label: "Hulk snaps everyone back"
+    begin: 2005-02-13
+    end: 2010-07-07
+    row: 16
+  - id: e273
+    label: "Battle of Earth"
+    begin: 2010-10-15
+    end: 2014-01-27
+    row: 16
+  - id: e275
+    label: "Tony dies saving everyone"
+    begin: 2014-05-07
+    end: 2019-10-08
+    row: 16
+  - id: e278
+    label: "Steve returns the Stones"
+    begin: 2020-01-16
+    end: 2025-02-28
+    row: 16
+  - id: e279
+    label: "Sam takes up the shield"
+    begin: 2000-01-01
+    end: 2004-12-25
+    row: 18
+  - id: e283
+    label: "Wanda hexes Westview"
+    begin: 2000-01-01
+    end: 2004-11-15
+    row: 19
+  - id: e335
+    label: "Strange's spell goes wrong"
+    begin: 2000-01-01
+    end: 2005-07-03
+    row: 20
+  - id: e339
+    label: "World forgets Peter Parker"
+    begin: 2005-10-11
+    end: 2011-02-22
+    row: 20
+  - id: e396
+    label: "Council of Kangs gathers"
+    begin: 2005-10-11
+    end: 2010-12-04
+    row: 18
+  - id: e434
+    label: "Team hailed New Avengers"
+    begin: 2005-10-11
+    end: 2011-04-13
+    row: 19
+  - id: e435
+    label: "Fantastic Four ship arrives"
+    begin: 2011-07-22
+    end: 2016-12-02
+    row: 19
+connections:
+  - id: link-1
+    from: e26
+    to: e33
+  - id: link-2
+    from: e22
+    to: e35
+  - id: link-3
+    from: e26
+    to: e35
+  - id: link-4
+    from: e35
+    to: e37
+  - id: link-5
+    from: e37
+    to: e43
+  - id: link-6
+    from: e33
+    to: e68
+  - id: link-7
+    from: e66
+    to: e79
+  - id: link-8
+    from: e79
+    to: e83
+  - id: link-9
+    from: e68
+    to: e99
+  - id: link-10
+    from: e99
+    to: e105
+  - id: link-11
+    from: e119
+    to: e124
+  - id: link-12
+    from: e35
+    to: e128
+  - id: link-13
+    from: e124
+    to: e134
+  - id: link-14
+    from: e128
+    to: e134
+  - id: link-15
+    from: e134
+    to: e148
+  - id: link-16
+    from: e33
+    to: e161
+  - id: link-17
+    from: e128
+    to: e161
+  - id: link-18
+    from: e161
+    to: e180
+  - id: link-19
+    from: e180
+    to: e181
+  - id: link-20
+    from: e181
+    to: e194
+  - id: link-21
+    from: e194
+    to: e198
+  - id: link-22
+    from: e148
+    to: e230
+  - id: link-23
+    from: e181
+    to: e230
+  - id: link-24
+    from: e184
+    to: e238
+  - id: link-25
+    from: e230
+    to: e238
+  - id: link-26
+    from: e184
+    to: e240
+  - id: link-27
+    from: e238
+    to: e240
+  - id: link-28
+    from: e238
+    to: e244
+  - id: link-29
+    from: e244
+    to: e245
+  - id: link-30
+    from: e79
+    to: e254
+  - id: link-31
+    from: e245
+    to: e254
+  - id: link-32
+    from: e245
+    to: e264
+  - id: link-33
+    from: e264
+    to: e267
+  - id: link-34
+    from: e267
+    to: e268
+  - id: link-35
+    from: e267
+    to: e269
+  - id: link-36
+    from: e254
+    to: e270
+  - id: link-37
+    from: e269
+    to: e270
+  - id: link-38
+    from: e270
+    to: e273
+  - id: link-39
+    from: e273
+    to: e275
+  - id: link-40
+    from: e275
+    to: e278
+  - id: link-41
+    from: e278
+    to: e279
+  - id: link-42
+    from: e244
+    to: e283
+  - id: link-43
+    from: e270
+    to: e283
+  - id: link-44
+    from: e214
+    to: e335
+  - id: link-45
+    from: e275
+    to: e335
+  - id: link-46
+    from: e335
+    to: e339
+  - id: link-47
+    from: e268
+    to: e396
+  - id: link-48
+    from: e270
+    to: e434
+  - id: link-49
+    from: e279
+    to: e434
+  - id: link-50
+    from: e434
+    to: e435

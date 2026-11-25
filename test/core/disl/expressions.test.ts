@@ -350,3 +350,26 @@ describe('a failure', () => {
     expect(own.evaluate('[longest(1), longest(2), longest(4), longest(6)]')).toMatchObject({ value: [1, 2, 4, 6] });
   });
 });
+
+describe('a date in a diagram and in a designer', () => {
+  // DISL's CEL has no timestamps, so a diagram's functions read a date as the text the file writes (the timeline's
+  // `readableTime(self.begin)` trims it); a designer's are CEL timestamps, as DESL 4.2 makes them.
+  const dated = (): ReturnType<typeof tool> & { model: { diagram: object; elements: { id: string; type: string; attributes: Record<string, string> }[]; relations: never[] } } => {
+    const source = hypeCycleJson() as { metamodel: { types: Record<string, unknown> } };
+    source.metamodel.types.Dated = { attributes: { begin: { type: 'datetime' }, day: { type: 'date' } } };
+    return { ...tool(source), model: { diagram: {}, elements: [{ id: 'd', type: 'Dated', attributes: { begin: '2025-04-27', day: '0079-08-24' } }], relations: [] } };
+  };
+
+  it('reaches a diagram\'s expressions as its written text', () => {
+    const { expressions, model } = dated();
+    const world = expressions.over(model as never);
+    expect(expressions.evaluate('[self.begin.trim(), self.day.trim()]', world.scope('d'))).toMatchObject({ ok: true, value: ['2025-04-27', '0079-08-24'] });
+  });
+
+  it('is a timestamp in a designer\'s expressions', () => {
+    const { specification, metamodel, model } = dated();
+    const designer = createExpressions(specification, metamodel, { timestamps: true });
+    const world = designer.over(model as never);
+    expect(designer.evaluate('self.day.getFullYear()', world.scope('d'))).toMatchObject({ ok: true, value: 79 });
+  });
+});

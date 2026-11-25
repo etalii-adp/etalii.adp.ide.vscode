@@ -68,6 +68,11 @@ export interface ExpressionOptions {
   library?(register: (signature: string, handler: (...args: never[]) => unknown) => void): void;
   /** The host's implementation of a plugin function a specification declares (DISL 13.1.1), by the plugin's id and the function's name. */
   pluginFunction?(plugin: string, name: string): PluginFunction | undefined;
+  /**
+   * Whether a date and a date and time are CEL timestamps, as DESL 4.2 makes them. DISL's CEL has no timestamps, so a
+   * diagram's dates reach its expressions as the text the file writes, which its functions read as text.
+   */
+  readonly timestamps?: boolean;
 }
 
 /**
@@ -89,7 +94,10 @@ interface Facts {
   /** Whether a member holds a value of its own, which is what `has()` and `.?` ask (DISL 4.3). */
   stored(name: string): boolean;
   find(id: string): Entity | null;
-  /** A host attribute of the element (DISL 11.2), for a plugin function. */
+  /**
+   * A host attribute of the element (DISL 11.2), for a plugin function. Of a relation, `source` and `target` are its
+   * ends as the file writes them, which the model holds as null where they name no element (DISL 4.9).
+   */
   host?(name: string): unknown;
 }
 
@@ -431,8 +439,8 @@ export function createExpressions(specification: Specification, metamodel: Metam
         const integer = kind.kind === 'primitive' && (kind.primitive === 'int' || kind.primitive === 'yearMonth');
         // A duration is written in ISO 8601 and is a CEL duration (DISL 4.2), so it has `getSeconds()` and arithmetic.
         if (kind.kind === 'primitive' && kind.primitive === 'duration' && typeof item === 'string') return durationOf(item) ?? item;
-        // A date and a date and time are CEL timestamps (DESL 4.2), so two of them give the duration between them.
-        if (kind.kind === 'primitive' && (kind.primitive === 'datetime' || kind.primitive === 'date') && typeof item === 'string') return timestampOf(item) ?? item;
+        // In a designer a date and a date and time are CEL timestamps (DESL 4.2), so two of them give the duration between them.
+        if (options.timestamps === true && kind.kind === 'primitive' && (kind.primitive === 'datetime' || kind.primitive === 'date') && typeof item === 'string') return timestampOf(item) ?? item;
         return integer && typeof item === 'number' && Number.isInteger(item) ? BigInt(item) : item;
       };
       const present = value ?? defaultOf(attribute) ?? zeroOf(kind, attribute.many === true);
@@ -503,7 +511,7 @@ export function createExpressions(specification: Specification, metamodel: Metam
         return Object.hasOwn(attributes, name) && attributes[name].derived !== undefined;
       };
       const created: Entity = entity(
-        { id: element.id, type: element.type, stored: (name) => Object.hasOwn(element.attributes, name) || (built(name) ?? null) !== null, host: (name) => element.host[name] },
+        { id: element.id, type: element.type, stored: (name) => Object.hasOwn(element.attributes, name) || (built(name) ?? null) !== null, host: (name) => (relation && (name === 'source' || name === 'target') && !Object.hasOwn(element.host, name) ? (element as ModelRelation)[name] : element.host[name]) },
         (name) => { const value = built(name); return value !== undefined ? value : isDerived(name) ? derivedOf(name) : attribute(element.type, element.attributes, name); },
       );
       entities.set(element.id, created);

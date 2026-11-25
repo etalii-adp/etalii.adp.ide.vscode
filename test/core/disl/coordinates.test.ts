@@ -109,15 +109,28 @@ describe('coordinates in general', () => {
     expect(value.default).toBe('plan');
   });
 
+  it('place a date at its days since the origin, a time of day as a fraction (DISL 5.4, `datetime`)', () => {
+    const { value, findings } = interpret(withCoordinates({
+      axes: { time: { kind: 'time', valueType: 'datetime', origin: '1970-01-01T00:00:00Z', scale: { unit: 'day', size: 20 } }, weeks: { kind: 'time', scale: { unit: 'week', size: 70 } } },
+      systems: { timeline: { kind: 'cartesian', x: 'time', y: 'weeks' } },
+    }));
+    expect(findings).toEqual([]);
+    const { x, y } = scalesOf(value.systems.timeline);
+    expect([x.valueOf('1970-01-11'), x.valueOf('2025-04-27T18:00'), x.valueOf('2025-04-27T20:00:00+02:00'), x.valueOf('0079-08-24'), x.valueOf('2026-02-30'), x.valueOf(3)])
+      .toEqual([10, 20205.75, 20205.75, new Date(0).setUTCFullYear(79, 7, 24) / 86_400_000, undefined, undefined]);
+    expect([x.toCanvas(10), x.toValue(210), y.perUnit]).toEqual([200, 10.5, 10]);
+  });
+
   it('report what they cannot draw, and draw the nearest thing', () => {
     const { value, findings } = interpret(withCoordinates({
-      axes: { lanes: { kind: 'ordinal' }, when: { kind: 'time' }, months: { kind: 'time', valueType: 'yearMonth', origin: 'soon', scale: { unit: 'day', size: 2 } } },
+      axes: { lanes: { kind: 'ordinal' }, when: { kind: 'time', origin: 'now', scale: { unit: 'month' } }, months: { kind: 'time', valueType: 'yearMonth', origin: 'soon', scale: { unit: 'day', size: 2 } } },
       systems: { wheel: { kind: 'polar', x: 'lanes', y: 'nowhere', snapping: 'missing' } },
       default: 'other',
     }));
     expect(findings.map((finding) => finding.message)).toEqual([
       'The axis `lanes` is a `ordinal` axis, which this add-on does not draw; it is read as a linear axis.',
-      'The axis `when` is a time axis of `datetime` values, which this add-on does not draw; it is read as a linear axis.',
+      'The axis `when` places dates by `month`, a unit of no fixed length; it is drawn in days.',
+      'The origin of the axis `when` is not a date, so the axis starts at 1970-01-01.',
       'The axis `months` places by month, and the unit `day` of its scale is finer than a month; it is drawn in months.',
       'The origin of the axis `months` is not a year and a month, so the axis starts at year 0.',
       'The coordinate system `wheel` is `polar`, which this add-on does not draw; it is read as cartesian.',

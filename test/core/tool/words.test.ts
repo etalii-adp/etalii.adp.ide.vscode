@@ -26,6 +26,10 @@ interface Exempt {
 }
 
 const exempt: readonly Exempt[] = [
+  { name: 'Moment', use: 'english', reason: 'an instant of the clock, as `Date` holds it: when an export or a stamp was made' },
+  { name: 'Connection', use: 'disl', reason: 'a value of a context menu\'s `appliesTo` (DISL 7.3): a relation drawn between two nodes, or one being drawn' },
+  { name: 'connections', use: 'english', reason: 'the relations a layout follows between the nodes it places: the plural of a connection' },
+  { name: 'relate', use: 'english', reason: 'to relate two things is to record that one is linked to the other: two rows of a section, two items of a list' },
   { name: 'found', use: 'english', reason: 'what a check or a reading has found: the findings it gives (DISL 8.6, FBL 7.4)' },
   { name: 'info', use: 'disl', reason: 'a value of Budget.notice.severity' },
   { name: 'inline', use: 'disl', reason: 'a value of Label.editable' },

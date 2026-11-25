@@ -22,6 +22,8 @@ The files under `examples/` and `fixtures/` are copied unchanged, byte for byte,
 | `examples/dependency-graph/` | `etalii.adp.ide.standalone` | `src/diagrams/dependency-graph/examples/` | `004723646580644bac7dc0949d60f5dcfb7c92d5` |
 | `fixtures/tools/dependency-graph/` | `etalii.adp.ide.standalone` | `src/diagrams/dependency-graph/backend/EtAlii.Adp.Diagram.DependencyGraph.Tests/Fixtures/` | `004723646580644bac7dc0949d60f5dcfb7c92d5` |
 | `fixtures/tools/dependency-graph/dependency-graph.transcript.json` | `etalii.adp.ide.standalone` | `src/diagrams/dependency-graph/backend/EtAlii.Adp.Diagram.DependencyGraph.Tests/Parity/dependency-graph.transcript.json` | `004723646580644bac7dc0949d60f5dcfb7c92d5` |
+| `examples/timeline/` | `etalii.adp.ide.standalone` | `src/diagrams/timeline/examples/` | `9555565b585dcd55d23d16c5b7008aa59ba30c1c` |
+| `fixtures/tools/timeline/` | `etalii.adp` | `definitions/diagrams/conformance/timeline/` | `3fb0884c875d52805a22a5560b4ea0d5fc528ca6` |
 | `examples/hierarchical-requirement/web-shop.md` | `etalii.adp` | `definitions/designers/examples/web-shop.md` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
 | `examples/hierarchical-requirement/web-shop.adp` | `etalii.adp` | `definitions/designers/examples/web-shop.adp` | `4f5b96df0c243be44469cab9e58a8c2512ae5513` |
 | `examples/hierarchical-requirement/nist-sp-800-53/` | `etalii.adp.ide.standalone` | `src/examples/designers/hierarchical-requirement/nist-sp-800-53/` | `80ad865b9ab14f48bc23cb77daeccab9b89df513` |

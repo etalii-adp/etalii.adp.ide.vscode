@@ -42,6 +42,7 @@ const nothing: DesignerSpecification = {
  * its other functions under the same names, with the one function only DESL has.
  */
 export const expressionsOf = (designer: DesignerSpecification, metamodel: Metamodel): Expressions => createExpressions(designer.interpreted, metamodel, {
+  timestamps: true,
   library: (register) => {
     register('uniqueName(string, list<dyn>): string', (name: string, names: unknown[]) => {
       // `name` when no string of `names` equals it ignoring case, else with the smallest number from 2 that none has (DESL 9.4).

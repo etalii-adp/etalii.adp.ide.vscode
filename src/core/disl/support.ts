@@ -7,6 +7,7 @@ import type { Specification } from './specification';
  * lists both. A feature is added here by the change that builds it, never before.
  */
 export const supportedFeatures: readonly string[] = [
+  'axis.time',
   'axis.yearMonth',
   'ruler.adaptive',
   'snap.byGesture',
