@@ -14,6 +14,7 @@ All notable changes to **ADP: A Different Perspective** are listed here, newest 
 - **Timeline:** a Begin later than the element's End is refused in ADP Properties with a sentence saying why, as an End before the Begin already was, instead of the element disappearing.
 - **All tools:** a second new document offers the next free name, such as `untitled-2.tml`, instead of offering to overwrite the first.
 - **Timeline:** `Tab` and `Enter` select the element they add, so pressing them again goes on along the row or down instead of stacking a second element on the first.
+- **Causal loop diagram:** in an exported flow page, clicking a selected loop in the Loops list again now deselects it at once; a Clear button beside the list, `Esc`, or a click on an empty part of the diagram also deselect it.
 
 ## [0.2.4] - 2026-11-25
 
