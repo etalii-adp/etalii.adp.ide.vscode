@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { EditRequest, Source } from '../../../src/core/frame/toolType';
 import { plugins as registry } from '../../../src/core/plugins/index';
-import { applied, definitionOf, diagramOf, spliced } from './support';
+import { applied, definitionOf, diagramOf, refusal, spliced } from './support';
 
 // The timeline's gestures (etalii.adp spec 091, tasks T019 to T022), held to the bytes of the `roadmap` conformance
 // fixture: the step before a gesture is the source, the step after it the file the gesture must write. The fixture
@@ -101,6 +101,16 @@ describe('the timeline\'s time axis, fitted to the document', () => {
   });
 
   // The host test of task T031 found a new timeline starting in 1970 (etalii.adp #853): what a new user drops lands near today.
+  // The second re-check found the empty timeline's date ruler blank (vscode #129).
+  it('labels the ruler of an empty timeline with the days around today', () => {
+    const empty: Source = { fileName: 'empty.tml', text: 'timeline: 1\r\nelements: []\r\n' };
+    const today = Date.UTC(2026, 10, 25) / 86_400_000;
+    const ruler = type.view(empty, { scales: type.fittedScales!(empty, today) }).chrome!.rulers.find((candidate) => candidate.axis === 'x')!;
+    const labels = ruler.levels.flatMap((level) => level.ticks.map((tick) => tick.label));
+    expect(labels.length).toBeGreaterThan(0);
+    expect(labels.join(' ')).toMatch(/2026|Nov|Dec/);
+  });
+
   it('fits an empty timeline to the weeks around today, so a drop in its middle writes a day near today', () => {
     const empty: Source = { fileName: 'empty.tml', text: 'timeline: 1\r\nelements: []\r\n' };
     const today = Date.UTC(2026, 10, 25) / 86_400_000;
@@ -116,10 +126,19 @@ describe('the timeline\'s time axis, fitted to the document', () => {
 describe('the timeline\'s properties', () => {
   it('bring the element whose dates they change into view', () => {
     const source: Source = { fileName: 'roadmap.tml', text: fixture('roadmap.tml') };
-    const begin = type.fields(source, ['build']).find((row) => row.label === 'Begin')!;
-    const outcome = applied(type.edit(source, { kind: 'setField', id: 'build', field: begin.id, value: '2031-03-02' }, {}, false));
+    const end = type.fields(source, ['build']).find((row) => row.label === 'End')!;
+    const outcome = applied(type.edit(source, { kind: 'setField', id: 'build', field: end.id, value: '2031-03-02' }, {}, false));
     expect(outcome.splices.length).toBeGreaterThan(0);
     expect(outcome.show).toBe('build');
+  });
+
+  // The second re-check found the element vanishing when its Begin was typed past its End (vscode #130); the companion
+  // refuses that from either row, as the standalone host does.
+  it('refuse a begin after the element\'s end, as they refuse an end before its begin', () => {
+    const source: Source = { fileName: 'roadmap.tml', text: fixture('roadmap.tml') };
+    const begin = type.fields(source, ['build']).find((row) => row.label === 'Begin')!;
+    expect(refusal(type.edit(source, { kind: 'setField', id: 'build', field: begin.id, value: '2025-11-01' }, {}, false))).toBe('An element cannot end before it begins.');
+    expect(applied(type.edit(source, { kind: 'setField', id: 'build', field: begin.id, value: '2025-10-27' }, {}, false)).splices.length).toBeGreaterThan(0);
   });
 });
 

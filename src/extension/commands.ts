@@ -12,6 +12,7 @@ import type { HierarchyRequest } from '../core/tool/hierarchyView';
 import type { SectionsRequest } from '../core/tool/sectionsView';
 import type { TableRequest } from '../core/tool/tableView';
 import type { AnyToolType } from './toolTypes';
+import { untitledName } from './untitledName';
 
 /** The commands the plug-in adds, all in the category "ADP". */
 export function registerCommands(context: vscode.ExtensionContext, tools: Tools, types: readonly AnyToolType[]): void {
@@ -110,10 +111,11 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
     // Given a file, as a test gives one, it makes that file without asking where.
     register(`etalii.adp.new.${name}`, async (uri?: unknown) => {
       const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
+      const offered = folder && !(uri instanceof vscode.Uri) ? await untitledName(extensions[0], (name) => exists(vscode.Uri.joinPath(folder, name))) : undefined;
       const target = uri instanceof vscode.Uri ? uri : await vscode.window.showSaveDialog({
         title: `New ${type.displayName}`,
         filters: { [type.displayName]: extensions },
-        ...(folder ? { defaultUri: vscode.Uri.joinPath(folder, `untitled.${extensions[0]}`) } : {}),
+        ...(folder && offered ? { defaultUri: vscode.Uri.joinPath(folder, offered) } : {}),
       });
       if (!target) return;
       const fileName = target.path.slice(target.path.lastIndexOf('/') + 1);
