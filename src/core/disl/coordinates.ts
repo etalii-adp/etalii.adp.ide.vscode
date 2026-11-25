@@ -244,8 +244,10 @@ export function interpretCoordinates(specification: Specification, metamodel: Me
       if (days === undefined) report(`The axis \`${name}\` places dates by \`${String(scale.unit)}\`, a unit of no fixed length; it is drawn in days.`);
       const origin = typeof declared.origin === 'string' ? daysOf(declared.origin) : undefined;
       if (declared.origin !== undefined && origin === undefined) report(`The origin of the axis \`${name}\` is not a date, so the axis starts at 1970-01-01.`);
+      // A ruler that lists no levels steps through the calendar as the zoom allows (`ruler.adaptive`), never finer than a day.
+      const ruler = common.ruler && common.ruler.levels === undefined ? { ...common.ruler, levels: dateLadder } : common.ruler;
       return {
-        ...common, kind: 'time', valueType: 'datetime', origin: origin ?? 0, size: number(scale.size, 1) / (days ?? 1),
+        ...common, ruler, kind: 'time', valueType: 'datetime', origin: origin ?? 0, size: number(scale.size, 1) / (days ?? 1),
         unit: 'day', min: typeof declared.min === 'string' ? daysOf(declared.min) : undefined, max: typeof declared.max === 'string' ? daysOf(declared.max) : undefined,
       };
     }
@@ -332,8 +334,8 @@ const most = 2000;
  */
 export function rulerRows(axis: Axis, diagram: Attributes, view: { readonly from: number; readonly to: number; readonly zoom: number }, locale = 'en'): RulerRow[] {
   const ruler = axis.ruler;
-  // A ruler of dates comes with its levels finer than a month (etalii.adp spec 091, pull request E).
-  if (axis.kind !== 'time' || axis.valueType === 'datetime' || !ruler || ruler.visible === false) return [];
+  if (axis.kind !== 'time' || !ruler || ruler.visible === false) return [];
+  if (axis.valueType === 'datetime') return dateRows(axis, ruler, view);
   const scale = scaleOf(axis, diagram);
   const least = ruler.minUnit === undefined ? 0 : monthsIn(unitOf(ruler.minUnit, diagram, axis.fallbackUnit)) ?? 0;
   const perMonth = Math.abs(scale.perUnit);
@@ -350,6 +352,57 @@ export function rulerRows(axis: Axis, diagram: Attributes, view: { readonly from
       ticks.push({ value, at: scale.toCanvas(value), label: formatPattern(value, level.format ?? 'uuuu-MM', locale) });
     }
     rows.push({ unit: level.unit, step, format: level.format ?? 'uuuu-MM', spacing, ticks });
+  }
+  return rows;
+}
+
+// ---- the ruler of a date axis ----
+
+/** The levels of a ruler of dates that lists none: a day, a week, a month, a quarter, a year and runs of years, each a label 80 pixels from the next at least. */
+const dateLadder: readonly RulerLevel[] = [
+  ...(['day', 'week', 'month', 'quarter'] as const).map((unit) => ({ unit, step: 1, minSpacingPx: 80 })),
+  ...[1, 2, 5, 10, 25, 50, 100, 250, 500, 1000].map((step) => ({ unit: 'year' as const, step, minSpacingPx: 80 })),
+];
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DAY_MS = 86_400_000;
+const utc = (year: number, month: number, day = 1): number => new Date(0).setUTCFullYear(year, month, day) / DAY_MS;
+
+/**
+ * The rows of a ruler of dates, as standalone's timeline ruler labels them (`timelineTicks.ts`): a day or a week at
+ * whole days since 1970, named by its month and day, or its month and year on the first; a month or a quarter on its
+ * first day, named by its month and year, or its year in January; a run of years on the first of January of a year
+ * divisible by the run. A level with more ticks than the view can hold is left out, the page showing a coarser one.
+ */
+function dateRows(axis: Axis, ruler: Ruler, view: { readonly from: number; readonly to: number; readonly zoom: number }): RulerRow[] {
+  const scale = scaleOf(axis);
+  const [low, high] = [scale.toValue(view.from), scale.toValue(view.to)].sort((a, b) => a - b);
+  const rows: RulerRow[] = [];
+  for (const level of ruler.levels ?? []) {
+    const step = Math.max(1, level.step ?? 1);
+    const fixed = daysIn(level.unit);
+    const months = monthsIn(level.unit);
+    const days = fixed === undefined ? (months ?? 0) * step * (365.2425 / 12) : fixed * step;
+    const spacing = days * Math.abs(scale.perUnit);
+    if (days === 0 || fixed !== undefined && fixed < 1 || spacing * view.zoom < (level.minSpacingPx ?? 0)) continue;
+    if (view.zoom < (level.minZoom ?? 0) || view.zoom > (level.maxZoom ?? Infinity) || (high - low) / days > most) continue;
+    const ticks: RulerTick[] = [];
+    const tick = (value: number, label: string): void => { if (value >= low && value <= high) ticks.push({ value, at: scale.toCanvas(value), label }); };
+    if (fixed !== undefined) {
+      for (let value = Math.ceil(low / days) * days; value <= high; value += days) {
+        const date = new Date(value * DAY_MS);
+        tick(value, date.getUTCDate() === 1 ? `${MONTH_NAMES[date.getUTCMonth()]} ${date.getUTCFullYear()}` : `${MONTH_NAMES[date.getUTCMonth()]} ${date.getUTCDate()}`);
+      }
+    } else {
+      const span = months! * step;
+      const first = new Date(low * DAY_MS);
+      let index = Math.ceil((first.getUTCFullYear() * 12 + first.getUTCMonth()) / span) * span;
+      for (let value = utc(Math.floor(index / 12), index % 12); value <= high; index += span, value = utc(Math.floor(index / 12), index % 12)) {
+        const [year, month] = [Math.floor(index / 12), index % 12];
+        tick(value, month === 0 ? String(year) : `${MONTH_NAMES[month]} ${year}`);
+      }
+    }
+    rows.push({ unit: level.unit, step, format: 'adaptive', spacing, ticks });
   }
   return rows;
 }

@@ -994,7 +994,7 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
       const path = definition?.path ?? (typeof shape === 'object' && 'path' in shape ? shape.path : undefined);
       const called = definition?.name ?? (typeof shape === 'string' ? shape : shape && 'type' in shape ? shape.type : 'rect');
       if (path) return { kind: 'path', name: called, box: within, commands: commandsOf(path, within, self, scope(within)), fillRule: path.fillRule };
-      if (!definition && (called === 'hexagon' || called === 'chevron' || called === 'folder' || called === 'parallelogram' || called === 'superellipse')) {
+      if (!definition && (called === 'diamond' || called === 'hexagon' || called === 'chevron' || called === 'folder' || called === 'parallelogram' || called === 'superellipse')) {
         // The built-in shapes that are no rectangle, by their parameters or the defaults of DISL B.2; a fraction is of the width.
         const stated = typeof shape === 'object' && 'type' in shape ? shape.params ?? {} : {};
         const param = (name: string, fallback: number): number => number(bound(stated[name], self)) ?? fallback;
@@ -1024,6 +1024,9 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
             const d = Math.min(w / 2, depth > 1 ? depth : depth * w);
             points = direction === 'left' ? [[d, 0], [w, 0], [w - d, h / 2], [w, h], [d, h], [0, h / 2]] : [[0, 0], [w - d, 0], [w, h / 2], [w - d, h], [0, h], [d, h / 2]];
           }
+        } else if (called === 'diamond') {
+          // Through the middles of the four sides of its box (DISL B.2).
+          points = [[w / 2, 0], [w, h / 2], [w / 2, h], [0, h / 2]];
         } else if (called === 'hexagon') {
           const inset = param('inset', 0.25);
           points = bound(stated.orientation, self) === 'pointy'

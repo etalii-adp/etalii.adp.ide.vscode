@@ -18,7 +18,6 @@ const sourceOf = (path: string): Source => ({ fileName: path.split('/').slice(-1
 const pending = [
   'disl.unsupported-feature: This tool needs the DISL feature `persist.yaml`, which this add-on does not support, so a part of it is missing or works differently.',
   'disl.unsupported-feature: This tool needs the DISL feature `snap.calendar`, which this add-on does not support, so a part of it is missing or works differently.',
-  'disl.notation: A node of the type `Moment` is drawn as the shape `diamond`, which this add-on does not draw; a rectangle is drawn.',
 ];
 const shown = (source: Source): string[] => type.findings(source).map((finding) => `${finding.rule}: ${finding.message}`).sort();
 
@@ -37,6 +36,15 @@ describe('the timeline, read from its definition', () => {
     expect(boxes.get('discovery')).toEqual({ x: 20_205 * 20, y: 11 * 60, width: 39 * 20, height: 36 });
     expect(boxes.get('launch')).toMatchObject({ x: 20_426 * 20, width: 18, height: 18 });
   });
+
+  it('draws a moment as a diamond through the middles of its box\'s sides', () => {
+    const launch = type.view(sourceOf('example-1/roadmap.tml'), {}).nodes.find((node) => node.id === 'launch')!;
+    const { x, y } = (launch.shape as { box: { x: number; y: number } }).box;
+    expect(launch.shape).toMatchObject({ kind: 'path', name: 'diamond' });
+    expect((launch.shape as { readonly commands: readonly unknown[] }).commands).toEqual([
+      { op: 'M', x: x + 9, y }, { op: 'L', x: x + 18, y: y + 9 }, { op: 'L', x: x + 9, y: y + 18 }, { op: 'L', x, y: y + 9 }, { op: 'Z' },
+    ]);
+  });
 });
 
 describe('the Marvel universe, the largest example', () => {
@@ -45,5 +53,21 @@ describe('the Marvel universe, the largest example', () => {
     const scene = type.view(sourceOf('marvel-universe/marvel-universe.tml'), {});
     expect(scene.nodes.length).toBe(428);
     expect(performance.now() - started).toBeLessThan(2000);
+  });
+});
+
+describe('the drawing of the roadmap fixture', () => {
+  interface Drawn { readonly id: string; readonly type: string; readonly labels?: readonly { readonly text: string }[] }
+  const drawing = JSON.parse(readFileSync('fixtures/tools/timeline/roadmap/drawing.read.json', 'utf8')) as { elements: readonly Drawn[]; edges: readonly { id: string; source: string; target: string }[] };
+  const scene = type.view({ fileName: 'roadmap.tml', text: readFileSync('fixtures/tools/timeline/roadmap/roadmap.tml', 'utf8') }, {});
+
+  it('has its elements, a period as a rounded bar and a moment as a diamond', () => {
+    const shapes = new Map(scene.nodes.map((node) => [node.id, (node.shape as { name: string }).name]));
+    expect(scene.nodes.map((node) => node.id).sort()).toEqual(drawing.elements.map((element) => element.id).sort());
+    expect(drawing.elements.filter((element) => shapes.get(element.id) !== (element.type === 'Moment' ? 'diamond' : 'roundedRect')).map((element) => element.id)).toEqual([]);
+  });
+
+  it('has its connections, each between the two elements it names', () => {
+    expect(scene.edges.map((edge) => `${edge.id} ${edge.source}→${edge.target}`).sort()).toEqual(drawing.edges.map((edge) => `${edge.id} ${edge.source}→${edge.target}`).sort());
   });
 });
