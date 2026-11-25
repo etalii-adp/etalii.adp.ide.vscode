@@ -10,6 +10,7 @@ All notable changes to **ADP: A Different Perspective** are listed here, newest 
 
 ### Fixed
 
+- **All diagrams:** a line let go on a dot of another node now connects to that node instead of making a new one.
 - **Causal loop diagram:** an exported flow page now shows each loop's name under its loop marker, as the diagram does, not only its R1 or B2 tag.
 - **Causal loop diagram:** in an exported flow page, links now curve as deeply as on the canvas, so a page looks like the diagram it was exported from.
 

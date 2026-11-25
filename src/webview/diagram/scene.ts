@@ -27,10 +27,18 @@ const editor: Readonly<Record<Role, string>> = { fill: 'var(--vscode-editor-back
 const contrast: Readonly<Partial<Record<Role, string>>> = { line: 'var(--vscode-contrastBorder)', text: 'var(--vscode-foreground)' };
 const high = (kind: ThemeKind): boolean => kind === 'high-contrast' || kind === 'high-contrast-light';
 
+// The host's colour for a well-known token a definition uses without giving it a value (DISL 6.2): the accent, which a
+// definition fills what it marks with, is the theme's own accent, as the standalone host's theme supplies its own.
+const hosted: Readonly<Record<string, string>> = {
+  'color.accent': 'var(--vscode-focusBorder)',
+  'color.primary': 'var(--vscode-button-background)',
+  'color.text.muted': 'var(--vscode-descriptionForeground)',
+};
+
 /**
  * A paint as a CSS colour (research R13). A token is read in `light` for the light kinds and in
- * `dark` for the dark ones; one without a value there, and a paint that is absent, is the editor's
- * colour for the role. In high contrast a line and a text are the editor's, whatever the paint says.
+ * `dark` for the dark ones; one without a value there is the host's colour for a well-known token, and that and a paint
+ * that is absent are otherwise the editor's colour for the role. In high contrast a line and a text are the editor's, whatever the paint says.
  * The colour may be a `var()`, so it is set through `style` and never as an attribute.
  */
 export function colourOf(tokens: Tokens, kind: ThemeKind, paint: unknown, role: Role): string {
@@ -40,7 +48,7 @@ export function colourOf(tokens: Tokens, kind: ThemeKind, paint: unknown, role: 
   if (typeof paint === 'string') return paint;
   const token = typeof paint === 'object' && paint !== null ? (paint as { token?: unknown }).token : undefined;
   const value = typeof token === 'string' ? tokens?.[token]?.[kind === 'light' || kind === 'high-contrast-light' ? 'light' : 'dark'] : undefined;
-  return typeof value === 'string' ? value : editor[role];
+  return typeof value === 'string' ? value : (typeof token === 'string' ? hosted[token] : undefined) ?? editor[role];
 }
 
 const number = (value: unknown): number | undefined => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);
