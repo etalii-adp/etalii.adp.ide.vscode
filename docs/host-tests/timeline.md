@@ -160,3 +160,45 @@ None of these is fixed in this change:
 - **VS Code: the fit leaves the last row under the ruler.** `marvel-universe-overview.tml` opens with its drawing reaching 790 pixels into a 777 pixel surface whose ruler starts at 754, so row 20 is hidden.
 - **VS Code: the view does not follow an element moved through ADP Properties**, and there is no command to show the whole document or the selection.
 - **etalii.adp #853**: a new timeline starts at the Unix epoch.
+
+## Second re-check, after #127
+
+On 2026-11-25, after [#127](https://github.com/etalii-adp/etalii.adp.ide.vscode/pull/127) (a new timeline on the weeks around today, an element changed in ADP Properties brought into view, a timeline that all but fits placed above the ruler): `develop` at `b1e5850`, packaged as `etalii-adp-0.2.4.vsix` and installed into fresh profiles, on the same Mac and Visual Studio Code 1.147.0, in both themes. The standalone host is unchanged (`9555565`), so its pictures above still stand beside these.
+
+### The three hurdles
+
+| # | Hurdle | Now | Result |
+|---|---|---|---|
+| 1 | A new timeline starts in 1970 | The first element from ADP Toolbox is dated **2026-12-11 to 2026-12-25**, about two weeks after today, and the ruler then shows November 2026 to February 2027 ([picture](timeline/recheck2-new-element.png)). But the new, empty timeline itself shows **a blank ruler with no dates** and no hint ([picture](timeline/recheck2-new-empty.png), [dark](timeline/recheck2-new-user-dark.png)) | Half: the first element is near today, but the empty canvas does not show the weeks around today ([#129](https://github.com/etalii-adp/etalii.adp.ide.vscode/issues/129)) |
+| 2 | An element changed in ADP Properties leaves the view | Begin set to 2027-03-01, then End to 2027-04-15: the element is drawn in the middle of the view, which has moved to February to May 2027 ([picture](timeline/recheck2-end-typed.png)) | Passes |
+| 3 | `marvel-universe-overview`'s last row under the ruler | Measured at four editor heights. **777 pixels** (1600×900 window, the screenshots' size): the drawing reaches 790, the ruler starts at 754, so row 20 is still under it ([picture](timeline/recheck2-overview-777.png)). **799 pixels** (breadcrumbs hidden): placed clear, 17 to 759 above a ruler at 776 ([picture](timeline/recheck2-overview-799.png)). 481 and 503 pixels (panel open): the overview is taller than the room, so it opens at the readable size from the top and scrolls, as intended | Fails at 777 pixels: at 60 percent the overview is 742 pixels tall, and #127 places it above the ruler only with 8 pixels to spare at each end, 758 in a room of 754 ([#128](https://github.com/etalii-adp/etalii.adp.ide.vscode/issues/128)) |
+
+### Rows 1 to 3 and the timing
+
+Rows 1 to 3 hold in both themes: `example-1` and `example-2` open whole and clear of the ruler; every overview opens with its whole span of time; moments are diamonds in the accent colour (`#005fb8` in Light Modern); every connection's arrowhead lies before its target and points into it. `marvel-universe.tml`: first drawn in 300 to 449 ms, all 907 shapes in 526 to 678 ms over three runs; panning and zooming at a median of 16.7 ms between frames, maximum 20.2 ms, none over 50 ms.
+
+### The full onboarding, again
+
+A fresh profile, an empty folder, Light Modern, then Dark Modern.
+
+| Step | What happened |
+|---|---|
+| "New Timeline" in the Command Palette | Two matches, the ADP command and Explorer: Focus on Timeline View. |
+| ADP: New Timeline diagram, OK | `untitled.tml` opens with ADP Toolbox, on a blank canvas with **an empty ruler** (#129). |
+| Element from ADP Toolbox | "New element", 2026-12-11 to 2026-12-25, in view. |
+| Begin set to 2027-03-01 in ADP Properties | **The element disappears**; a warning in the status bar is the only sign why ([picture](timeline/recheck2-begin-typed.png), [#130](https://github.com/etalii-adp/etalii.adp.ide.vscode/issues/130)). |
+| End set to 2027-04-15 | The element is back, in view. Its selection frame is gone, though ADP Properties still shows it. |
+| Double-click, typed "Design", Enter | Renamed in place; F2 does the same. |
+| Tab, Enter, Moment from ADP Toolbox | A period after it, one below it, each connected, and a moment as a diamond. The line from Design to the period below, which begins on Design's own begin, runs back underneath Design to its begin, where the standalone host loops forward. |
+| A line from the lower period's end dot to the right period's begin dot | Connected. |
+| Dragged the right period by its body; dragged Design's right edge | Moved 9 days and lengthened 5 days, snapped to whole days. |
+| Undo twice, Redo once, Save | Undone and redone step by step; the saved file says what the canvas shows. |
+| Closed the tab and opened the file again | Opens fitted, as left. |
+| Dark Modern | The same drawing in the dark theme ([picture](timeline/recheck2-new-user-dark.png)). |
+| ADP: New Timeline diagram again, OK | **"untitled.tml already exists. Are you sure you want to overwrite it?"**: the second new timeline is offered the first one's name ([#131](https://github.com/etalii-adp/etalii.adp.ide.vscode/issues/131)). |
+
+No error appeared, and every edit saved and undid as it should. The hurdles a new user still meets are an empty ruler on a new timeline (#129), an element that vanishes while its dates are typed (#130), an overwrite prompt on the second new timeline (#131), and the Explorer's own Timeline view in the Command Palette.
+
+### Verdict of the second re-check
+
+Not yet ⚗️ Prototype. Hurdle 2 is cleared; hurdle 1 is half cleared and hurdle 3 still fails at the 1600×900 window the screenshots are taken in; rows 1 to 3 and the timing hold. The new-user rule asks for no errors and no hurdles: there are no errors, but #128, #129 and #130 are hurdles on the way from creating a timeline to editing it, and #131 on making a second one. The row in [tools.md](../tools.md) stays 🛠️ Work-in-progress until they are settled. Each is its own issue, and none is fixed in this change.
