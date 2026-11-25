@@ -384,10 +384,10 @@ describe('a node made by a gesture that selects nothing', () => {
   });
 });
 
-// This host's binding of the dependency graph keeps no document id yet (FBL 17.2): in a workspace, its first edit is made
-// without one, rather than refused for the id the load-time step would write (spec 089).
+// The dependency graph's binding keeps a document id (FBL 17.2, etalii.adp spec 092): in a workspace, a graph without
+// one is given one with its first edit, written as the key after the header, and the rest of the text is kept.
 describe('a dependency graph in a workspace', () => {
-  it('takes its first edit without a document id, which its binding cannot keep', () => {
+  it('is given its document id with its first edit, after the header', () => {
     const text = readFileSync('examples/dependency-graph/example-1/services.dgr', 'utf8');
     const plain: Source = { fileName: '/w/services.dgr', text, linkPath: '/w/services.dgr' };
     const source: Source = { ...plain, links: new LinkWorkspace('/w', [type.indexed!(plain)!]) };
@@ -395,7 +395,8 @@ describe('a dependency graph in a workspace', () => {
     const outcome = type.edit(source, { kind: 'action', action, params: { label: 'Search cache' } }, {}, false);
     expect(outcome.kind).toBe('applied');
     const after = spliced(text, outcome.kind === 'applied' ? outcome.splices : []);
+    expect(after).toMatch(/^dependencies: 1\r?\nid: [0-9a-z]{8}\r?\n/);
     expect(after).toMatch(/label: Search cache\r?\n\s+x: 0\r?\n\s+row: 0/);
-    expect(after.startsWith(text.slice(0, 200))).toBe(true);
+    expect(after.replace(/^id: [0-9a-z]{8}\r?\n/m, '').startsWith(text.slice(0, 200))).toBe(true);
   });
 });
