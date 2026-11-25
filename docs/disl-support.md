@@ -39,7 +39,7 @@ The conformance class is `standard`.
 | `placement.bound` | A node placed by its attributes on both axes, with `x2`, `y2`, `width`, `height`, `offset` and an anchor |
 | `shape.custom` | A shape declared as path segments with parameters and handles |
 | `shape.composite` | A shape made of parts, each with its own shape, box, style, condition and tooltip |
-| `edge.bezier` | An edge drawn as a cubic curve, with `startDirection`, `endDirection`, `reach` and `maxReach` |
+| `edge.bezier` | An edge drawn as a cubic curve, with `startDirection`, `endDirection` (each the side of its node the line leaves or enters by, etalii.adp #852), `reach` and `maxReach` |
 | `label.parse` | A label whose edited text is parsed and written by the specification's own rule |
 | `label.editText` | A label whose editor in place starts from a text of its own rather than the text drawn |
 | `persistence.fbl` | A document read and written through an FBL binding |
@@ -536,5 +536,4 @@ The plug-in changes neither a specification nor a binding. Where they and the ho
 | [526](https://github.com/etalii-adp/etalii.adp/issues/526) | The Hierarchical Requirement Designer: what DESL 0.2 and the definition leave a second host to decide (which gesture runs which operation, the looks and colours of the labels, how filter words combine, a move without a parent, what opens the mention lookup, a side pane beside a hierarchy), and where the plug-in and standalone differ |
 | [846](https://github.com/etalii-adp/etalii.adp/issues/846) | *(spec 091)* The timeline's Give it an end… and Remove its end change an element between two rules of one entry, which the standalone host writes in place as one line and FBL plans as a remove and an add; this host refuses a retype through a declared YAML binding, so the two steps of the `roadmap` fixture do not pass yet |
 | [848](https://github.com/etalii-adp/etalii.adp/issues/848) | *(spec 091)* The timeline's `findings` fixture leaves out `timeline.duplicate-id` and `timeline.missing-id`, which the companion says are reported and this host reports ahead of the rest; the fixture is replayed with those set apart |
-| [852](https://github.com/etalii-adp/etalii.adp/issues/852) | *(spec 091)* DISL 6.11 does not say whether `endDirection` is the way a line runs or the side it enters by; this host reads the first, so the timeline's `"endDirection": "left"` enters its target from the right and the arrowhead lies under the bar, where the standalone host enters from the left |
 | [853](https://github.com/etalii-adp/etalii.adp/issues/853) | *(spec 091)* An empty timeline opens at its axis's origin, 1970, in both hosts, and its first element is dated there; neither the definition nor its companion says where an empty timeline is shown |

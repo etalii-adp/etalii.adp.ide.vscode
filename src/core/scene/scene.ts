@@ -1432,10 +1432,9 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
       edges.push({ ...common, from, to, path: [{ op: 'M', x: from.x, y: from.y }, { op: 'L', x: to.x, y: to.y }] });
       continue;
     }
-    // A named direction is the way the line runs: out of its source, and into its target.
+    // A named direction is the side of its node the line leaves or enters by, pointing out of the node (DISL 6.10, etalii.adp #852).
     const leave = directions[own.line.startDirection ?? ''] ?? from.normal;
-    const enter = directions[own.line.endDirection ?? ''];
-    const back = enter ? { x: -enter.x || 0, y: -enter.y || 0 } : to.normal;
+    const back = directions[own.line.endDirection ?? ''] ?? to.normal;
     const reach = own.line.bezier?.reach;
     const auto = Math.max(30, Math.abs((to.x - from.x) * leave.x + (to.y - from.y) * leave.y) / 2);
     const curve = cubicBetween({ point: from, normal: leave }, { point: to, normal: back }, reach === 'auto' ? Math.min(auto, own.line.bezier?.maxReach ?? Infinity) : reach);
