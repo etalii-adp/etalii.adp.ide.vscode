@@ -898,7 +898,12 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
           // Where the request names no point, the middle of what is shown is the point.
           const shown = options.viewport;
           const at = request.x !== undefined && request.y !== undefined ? { x: request.x, y: request.y } : shown ? { x: shown.x + shown.width / 2, y: shown.y + shown.height / 2 } : undefined;
-          return done(intents.operate(model, name, selection, situation, at && inBase(at), args));
+          // Parameters the operation states and no row of ADP Properties holds are asked in a dialog, each with its default, and come back as `params` (DISL 9.4).
+          const parameters = state.offered && state.available ? intents.parameters(model, name, selection, situation).filter((parameter) => args === undefined || !Object.hasOwn(args, parameter.name)) : [];
+          if (parameters.length > 0 && request.params === undefined) {
+            return { kind: 'ask', title: state.label, confirmLabel: 'OK', fields: parameters.map((parameter) => ({ param: parameter.name, label: parameter.label, initial: parameter.initial })) };
+          }
+          return done(intents.operate(model, name, selection, situation, at && inBase(at), { ...args, ...request.params }));
         }
         if (name === 'delete' && id !== undefined) {
           const removal = intents.deletion(model, selection, situation);

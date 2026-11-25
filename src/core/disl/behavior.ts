@@ -351,6 +351,11 @@ export interface Behavior {
   shift(model: Model, element: string, by: number, situation?: Situation): Outcome;
   /** An operation run on a selection, at the point it was invoked at when there is one. */
   operate(model: Model, operation: string, selection: readonly string[], situation?: Situation, at?: Point, args?: Readonly<Record<string, Value>>): Outcome;
+  /**
+   * The parameters an operation asks before it runs (DISL 9.4), in their order, each with its label and the text its
+   * default gives on the selection: what a host without a form for them asks in a dialog. None when it asks none.
+   */
+  parameters(model: Model, operation: string, selection: readonly string[], situation?: Situation): readonly { readonly name: string; readonly label: string; readonly initial: string }[];
   /** A child added to an element by the first `create-child` entry its menu offers (DISL 7.3), in the slot the entry names. */
   createChild(model: Model, parent: string, situation?: Situation): Outcome;
   /** A node pinned at a position, in the coordinates of its placement: a layout that respects pins leaves it there (DISL 7.3, 10.4). */
@@ -1491,6 +1496,17 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     return { x: scales.x.toValue(at.x), y: scales.y.toValue(at.y) };
   };
 
+  const parameters: Behavior['parameters'] = (model, id, selection, situation) => {
+    const params = Object.hasOwn(declared, id) && isObject(declared[id].params) ? declared[id].params : {};
+    const run = open(model, situation, 'change');
+    const scope = run.scopeOf(selection[0], { p: {} });
+    return Object.entries(params).map(([name, param]) => {
+      const stated = isObject(param) ? param : {};
+      const given = isCel(stated.default) ? run.evaluated(stated.default, scope)?.value : stated.default;
+      return { name, label: localized(stated.label as Attribute['label'], locale) ?? labelOf(name), initial: given === undefined || given === null ? '' : String(given) };
+    });
+  };
+
   const operate: Behavior['operate'] = (model, id, selection, situation, at, args) => {
     const state = availability(model, id, selection, situation);
     const position = at ? domain(model, viewOf(situation, true).system, at) : null;
@@ -1978,7 +1994,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
   return {
     value: {
       messages, message, operations, ...(isObject(section.clipboard) ? { clipboard: section.clipboard } : {}),
-      availability, menu, deletion, create, connect, connectNew, change, edit, editLabel, move, resize, dragHandle, reattach, remove, reparent, shift, operate, createChild, pin, unpin, fold, filter,
+      availability, menu, deletion, create, connect, connectNew, change, edit, editLabel, move, resize, dragHandle, reattach, remove, reparent, shift, operate, parameters, createChild, pin, unpin, fold, filter,
     },
     findings,
   };

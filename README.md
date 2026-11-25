@@ -8,7 +8,7 @@
 
 ## Highlights
 
-- **Eleven tools in one extension**: eight diagrams and three designers, for thinking, planning, requirements and service management.
+- **Twelve tools in one extension**: nine diagrams and three designers, for thinking, planning, requirements and service management.
 - **Your files stay yours.** Every tool reads and writes a plain text file (Markdown, YAML, JSON, XML or a small text format), so it diffs cleanly, lives in Git and can be edited by hand or by an AI agent at the same time.
 - **Only what you changed is changed.** An edit rewrites just the lines it concerns and leaves the rest of the file exactly as it was, including what the tool itself does not understand.
 - **Feels like VS Code.** Every change is one step of the normal Undo and Redo, the tab shows the unsaved dot, **Save** saves, and problems in a file show up in the Problems panel.
@@ -22,7 +22,7 @@
 2. Create a document with **File > New File...** and pick one of the ADP tools, or run **ADP: New ...** from the Command Palette (`Ctrl+Shift+P`, `Cmd+Shift+P` on macOS). Or simply open a file the tool already knows, such as a `.mm` mind map.
 3. Open the **ADP** view in the activity bar. **ADP Toolbox** lists what you can add to the open tool: drag an item onto the canvas. **ADP Properties** shows and edits whatever you selected.
 
-Files with their own extension (`.ghg`, `.mm`, `.cld`, `.dgr`, `.aad`, `.vsm`) open in their tool straight away. Markdown, YAML, JSON and XML files keep opening as text as they always did; to open one in a tool, right-click it and choose **Open With...**, or use the tool's **ADP: Open as ...** command.
+Files with their own extension (`.ghg`, `.mm`, `.cld`, `.dgr`, `.tml`, `.aad`, `.vsm`) open in their tool straight away. Markdown, YAML, JSON and XML files keep opening as text as they always did; to open one in a tool, right-click it and choose **Open With...**, or use the tool's **ADP: Open as ...** command.
 
 ## The tools
 
@@ -49,6 +49,10 @@ Understand how a system behaves: variables joined by cause-and-effect links, eac
 ![A dependency graph in Visual Studio Code](docs/screenshots/dependency-graph.png)
 
 Named items on rows, joined by arrows that show what depends on what: services, work packages, modules or anything else. Drag a dependency out of a node's right side to what it depends on, or out of its left side from what depends on it; let go on empty canvas and a new node appears there. `Tab` and `Enter` add a node to the right or below, and **ADP: Add Node** asks for a label. Missing, repeated or dangling references and self-dependencies are reported as problems.
+
+### Timeline (`.tml`)
+
+Lay out plans, histories and roadmaps against a ruler of dates. An element runs from its begin to its end as a bar on its row, a moment is a diamond on a single day, and arrows connect what follows from what. Drag an element or a moment from **ADP Toolbox** onto the day it starts, drag a bar to move it in time or to another row, and drag its ends to change its dates; dates snap to whole days. `Tab` and `Enter` add an element after or below the selected one, **Give it an end...** turns a moment into an element and **Remove its end** turns it back, and **ADP: Arrange Diagram** packs everything into as few rows as fit without overlaps. Edit a label, a date or a row in **ADP Properties**. Dates may be written in many common forms; one that cannot be read, an end before its begin, or a connection to something that is not there is reported as a problem.
 
 ### Gartner hype cycle graph (`.ghg`)
 

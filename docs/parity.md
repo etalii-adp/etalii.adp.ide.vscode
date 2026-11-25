@@ -131,3 +131,14 @@ A test in a real Visual Studio Code cannot answer a native dialog, so each one t
 | Mind map, agent activity diagram, Knowledge | Visual Studio Code's save prompt | Closing a document that was edited |
 
 A tool type that is added, or a definition that gains a dialog, gets its row here when a person has seen it.
+
+## Timeline diagram
+
+The diagram is read from its definition (etalii.adp spec 091) and replayed against the timeline's ATD conformance fixtures in `test/core/tool/timelineConformance.test.ts`. Where the definition, FBL or a fixture disagree, the row is in [docs/disl-support.md](disl-support.md), "Differences raised and not settled here" (etalii.adp #846 and #848); what follows is this host's own.
+
+| Difference | Why |
+|---|---|
+| The `add` fixture is not replayed. | It adds documents to a folder's registration through the standalone host's project hierarchy, which this host does not have: a timeline is made with **ADP: New Timeline diagram** or opened from the Explorer. |
+| The undo and redo steps of the `roadmap` fixture are taken by Visual Studio Code's own Undo and Redo, held by `test/vscode/timeline.test.ts`, rather than by the replay. | Every edit is one edit of the text document, so the document's undo history is the only one there is. |
+| **Add from another document...** is offered, as the definition states, and adds a linked moment. | Links between timelines and other documents wait for the standalone binding to keep a document id (spec 091, G1), so what this command writes is not yet compared with the standalone host. |
+| A gesture is placed at 20 canvas units a day and 60 a row, where the fixtures count seconds and the standalone host's own units. | The axis's scale is the definition's; only the unit the canvas counts in differs, and the replay converts it. |
