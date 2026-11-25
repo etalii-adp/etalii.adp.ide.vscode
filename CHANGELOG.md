@@ -4,6 +4,8 @@ All notable changes to **ADP: A Different Perspective** are listed here, newest 
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-11-25
+
 ### Fixed
 
 - **Timeline:** a new timeline now opens on the weeks around today, so what you add first is dated near today rather than in 1970.
@@ -116,7 +118,8 @@ First release on the Visual Studio Marketplace and Open VSX.
 - **ADP Toolbox** and **ADP Properties** in the ADP view of the activity bar, **ADP: Open as Text**, and full Undo and Redo for every change.
 - Language support for `.atd` tool descriptions: colouring, completion, hover, rename, formatting and live problem checking, with **ADP: New Tool Description**, **ADP: Check Tool Description** and **ADP: Validate Tool Description**.
 
-[Unreleased]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.4...develop
+[Unreleased]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.5...develop
+[0.2.5]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.1...v0.2.2
