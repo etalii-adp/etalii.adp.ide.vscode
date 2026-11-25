@@ -70,4 +70,10 @@ describe('the timeline\'s gestures, as the roadmap fixture records them', () => 
     const arranged = spliced(text, applied(type.edit({ fileName: 'apart.tml', text }, { kind: 'action', action: 'arrange' }, {}, false)).splices);
     expect(arranged).toBe(text.replace('row: 3', 'row: 0').replace('row: 3', 'row: 1'));
   });
+
+  it('asks the end a moment is given in a dialog, starting from its begin, and gives it that end', () => {
+    const text = fixture('after-5.tml');
+    expect(type.edit({ fileName: 'roadmap.tml', text }, { kind: 'action', action: 'giveEnd', id: 'launch' }, {}, false))
+      .toEqual({ kind: 'ask', title: 'Give it an end…', confirmLabel: 'OK', fields: [{ param: 'end', label: 'End', initial: '2026-01-13' }] });
+  });
 });

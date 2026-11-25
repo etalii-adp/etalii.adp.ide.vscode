@@ -490,7 +490,11 @@ export function readModel(
   const model: Model = {
     diagram,
     elements: elements.map(resolved),
-    relations: relations.map((relation) => ({ ...resolved(relation), source: end(relation, 'source'), target: end(relation, 'target') })),
+    // An end that names no element is held as none; the id it is written with stays a host attribute, for a plugin to read (DISL 13.1.1).
+    relations: relations.map((relation) => {
+      const written = Object.fromEntries((['source', 'target'] as const).filter((side) => relation[side] !== undefined && !ids.has(relation[side]!)).map((side) => [side, relation[side]]));
+      return { ...resolved(relation), host: { ...relation.host, ...written }, source: end(relation, 'source'), target: end(relation, 'target') };
+    }),
   };
   // The view data: the first entry for an element, or for a group of one, is the one that counts.
   const drawn = new Set(elements.map((element) => element.id));
