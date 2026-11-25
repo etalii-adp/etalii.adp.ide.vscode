@@ -707,24 +707,24 @@ export function createScene(tool: SceneTool, model: Model, options: SceneOptions
     const scales = scalesOf(system, diagram);
 
     // A coordinate in the units of its axis: nothing when its attribute holds none, so the node cannot be placed.
-    const source = (from: PlacementSource | undefined): number | undefined | 'layout' => {
+    const source = (from: PlacementSource | undefined, read: (value: unknown) => number | undefined = number): number | undefined | 'layout' => {
       if (from === undefined || from === 'free') return 0;
-      if (isCel(from)) return number(run(from, element.id));
+      if (isCel(from)) return read(run(from, element.id));
       if ('layout' in from) return 'layout';
-      const value = number(stored(element, from.attribute));
+      const value = read(stored(element, from.attribute));
       return value === undefined ? undefined : value + (typeof from.offset === 'number' ? from.offset : 0);
     };
     const along = (axis: 'x' | 'y'): { at: number; extent: number; layout: boolean } | undefined => {
       const index = axis === 'x' ? 0 : 1;
       const scale = scales[axis];
-      const start = source(placement[axis]);
+      const start = source(placement[axis], scale.valueOf);
       if (start === undefined) return undefined;
       const at = start === 'layout' ? 0 : scale.toCanvas(start);
       const end = placement[axis === 'x' ? 'x2' : 'y2'];
       const span = placement[axis === 'x' ? 'width' : 'height'];
       let extent: number | undefined;
       if (end !== undefined && start !== 'layout') {
-        const value = source(end);
+        const value = source(end, scale.valueOf);
         if (typeof value !== 'number') return undefined;
         extent = scale.toCanvas(value) - at;
       } else if (span !== undefined) {

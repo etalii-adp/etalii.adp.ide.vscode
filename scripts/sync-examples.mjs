@@ -53,6 +53,9 @@ const copies = [
   [standaloneName, `${dependencyGraph}examples/`, 'examples/dependency-graph/'],
   [standaloneName, `${dependencyGraph}backend/EtAlii.Adp.Diagram.DependencyGraph.Tests/Fixtures/`, 'fixtures/tools/dependency-graph/'],
   [standaloneName, `${dependencyGraph}backend/EtAlii.Adp.Diagram.DependencyGraph.Tests/Parity/dependency-graph.transcript.json`, 'fixtures/tools/dependency-graph/dependency-graph.transcript.json'],
+  // The timeline's examples, and the ATD conformance fixtures it is held to (etalii.adp spec 091, research R9).
+  [standaloneName, 'src/diagrams/timeline/examples/', 'examples/timeline/'],
+  [adpName, 'definitions/diagrams/conformance/timeline/', 'fixtures/tools/timeline/'],
   // The Hierarchical Requirement Designer's example document and its registration, beside its definition in etalii.adp.
   ...['web-shop.md', 'web-shop.adp'].map((name) => [adpName, `definitions/designers/examples/${name}`, `examples/hierarchical-requirement/${name}`]),
   // Its large example, NIST SP 800-53's controls with their licence and readme, which the performance guard opens; the script that wrote it is left out.

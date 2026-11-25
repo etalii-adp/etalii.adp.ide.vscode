@@ -85,8 +85,10 @@ export interface Placement {
 
 export interface Axis {
   readonly name: string;
-  /** `linear`, or `time` over months; another kind is read as `linear` and reported. */
+  /** `linear`, or `time` over months or over dates; another kind is read as `linear` and reported. */
   readonly kind: 'linear' | 'time';
+  /** What a time axis holds (DISL 5.4): months (`yearMonth`), or dates and times (`datetime`), whose domain value is days since 1970. */
+  readonly valueType?: 'yearMonth' | 'datetime';
   readonly label?: LocalizedText;
   /** The domain value at canvas 0: a number, or the month index of a month axis. */
   readonly origin: number;
@@ -128,6 +130,8 @@ export interface Scale {
   readonly perUnit: number;
   toCanvas(value: number): number;
   toValue(canvas: number): number;
+  /** The domain value of what an attribute stores: a date or a date and time on a `datetime` axis, else a number. */
+  valueOf(stored: unknown): number | undefined;
 }
 
 export interface RulerTick {
@@ -147,6 +151,29 @@ export interface RulerRow {
 }
 
 // ---- time units ----
+
+const daysByUnit: Partial<Record<UnitOfTime, number>> = { millisecond: 1 / 86_400_000, second: 1 / 86_400, minute: 1 / 1440, hour: 1 / 24, day: 1, week: 7 };
+
+/** The days in one step of a unit of fixed length, or nothing for a month and coarser. */
+export const daysIn = (unit: unknown): number | undefined => (typeof unit === 'string' && Object.hasOwn(daysByUnit, unit) ? daysByUnit[unit as UnitOfTime] : undefined);
+
+const instant = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-]\d{2}:\d{2})?)?$/i;
+
+/**
+ * The days since 1970-01-01 of an ISO 8601 date or date and time, a time of day as a fraction (DISL 4.2, `datetime`),
+ * taken at face value: an offset is read, and a time without one is at offset zero. Nothing for another text.
+ */
+export function daysOf(text: string): number | undefined {
+  const parts = instant.exec(text.trim());
+  if (!parts) return undefined;
+  const [year, month, day, hour, minute, second] = parts.slice(1, 7).map((part) => (part === undefined ? 0 : Number(part)));
+  const at = new Date(0);
+  at.setUTCFullYear(year, month - 1, day);
+  at.setUTCHours(hour, minute, second, parts[7] === undefined ? 0 : Math.floor(Number(`0.${parts[7]}`) * 1000));
+  if (at.getUTCMonth() !== month - 1 || at.getUTCDate() !== day) return undefined;
+  const offset = parts[8] === undefined || parts[8].toUpperCase() === 'Z' ? 0 : (parts[8].startsWith('-') ? -1 : 1) * (Number(parts[8].slice(1, 3)) * 60 + Number(parts[8].slice(4, 6)));
+  return (at.getTime() - offset * 60_000) / 86_400_000;
+}
 
 const monthsByUnit: Partial<Record<UnitOfTime, number>> = { month: 1, quarter: 3, year: 12, decade: 120, century: 1200, millennium: 12000 };
 
@@ -205,10 +232,21 @@ export function interpretCoordinates(specification: Specification, metamodel: Me
       const fallback = bound === undefined ? undefined : defaultOf(metamodel.diagram[bound] ?? { type: 'string' });
       if (declared.origin !== undefined && month(declared.origin) === undefined) report(`The origin of the axis \`${name}\` is not a year and a month, so the axis starts at year 0.`);
       return {
-        ...common, kind: 'time', origin: month(declared.origin) ?? 0, size: number(scale.size, 1),
+        ...common, kind: 'time', valueType: 'yearMonth', origin: month(declared.origin) ?? 0, size: number(scale.size, 1),
         unit: bound === undefined ? unitOf(unit, {}) : unit,
         fallbackUnit: unitOf(fallback as UnitOfTime | undefined, {}),
         min: month(declared.min), max: month(declared.max),
+      };
+    }
+    if (declared.kind === 'time' && (declared.valueType ?? 'datetime') === 'datetime') {
+      const scale = isObject(declared.scale) ? declared.scale : {};
+      const days = daysIn(scale.unit ?? 'day');
+      if (days === undefined) report(`The axis \`${name}\` places dates by \`${String(scale.unit)}\`, a unit of no fixed length; it is drawn in days.`);
+      const origin = typeof declared.origin === 'string' ? daysOf(declared.origin) : undefined;
+      if (declared.origin !== undefined && origin === undefined) report(`The origin of the axis \`${name}\` is not a date, so the axis starts at 1970-01-01.`);
+      return {
+        ...common, kind: 'time', valueType: 'datetime', origin: origin ?? 0, size: number(scale.size, 1) / (days ?? 1),
+        unit: 'day', min: typeof declared.min === 'string' ? daysOf(declared.min) : undefined, max: typeof declared.max === 'string' ? daysOf(declared.max) : undefined,
       };
     }
     if (declared.kind !== 'linear') {
@@ -260,13 +298,19 @@ export function interpretCoordinates(specification: Specification, metamodel: Me
 
 /** An axis as one diagram draws it: a bound unit is read from the diagram's attributes. */
 export function scaleOf(axis: Axis, diagram: Attributes = {}): Scale {
-  const unit = axis.kind === 'time' ? unitOf(axis.unit, diagram, axis.fallbackUnit) : undefined;
-  const months = monthsIn(unit);
+  const dates = axis.kind === 'time' && axis.valueType === 'datetime';
+  const unit = dates ? 'day' : axis.kind === 'time' ? unitOf(axis.unit, diagram, axis.fallbackUnit) : undefined;
+  const months = dates ? undefined : monthsIn(unit);
+  // A date axis's size is already per day; a month axis's is per step of its unit.
   const perUnit = (axis.reversed ? -1 : 1) * (axis.size / (months ?? 1));
   return {
     unit, months, perUnit,
     toCanvas: (value) => (value - axis.origin) * perUnit,
     toValue: (at) => (perUnit === 0 ? axis.origin : at / perUnit + axis.origin),
+    valueOf: (stored) => {
+      if (dates) return typeof stored === 'string' ? daysOf(stored) : undefined;
+      return typeof stored === 'number' && Number.isFinite(stored) ? stored : undefined;
+    },
   };
 }
 
@@ -288,7 +332,8 @@ const most = 2000;
  */
 export function rulerRows(axis: Axis, diagram: Attributes, view: { readonly from: number; readonly to: number; readonly zoom: number }, locale = 'en'): RulerRow[] {
   const ruler = axis.ruler;
-  if (axis.kind !== 'time' || !ruler || ruler.visible === false) return [];
+  // A ruler of dates comes with its levels finer than a month (etalii.adp spec 091, pull request E).
+  if (axis.kind !== 'time' || axis.valueType === 'datetime' || !ruler || ruler.visible === false) return [];
   const scale = scaleOf(axis, diagram);
   const least = ruler.minUnit === undefined ? 0 : monthsIn(unitOf(ruler.minUnit, diagram, axis.fallbackUnit)) ?? 0;
   const perMonth = Math.abs(scale.perUnit);

@@ -197,6 +197,16 @@
         "priority": "option"
       },
       {
+        "viewType": "etalii.adp.generic.timeline",
+        "displayName": "Timeline diagram",
+        "selector": [
+          {
+            "filenamePattern": "*.tml"
+          }
+        ],
+        "priority": "default"
+      },
+      {
         "viewType": "etalii.adp.generic.value-stream-map",
         "displayName": "Value stream map",
         "selector": [
@@ -370,6 +380,11 @@
         "category": "ADP"
       },
       {
+        "command": "etalii.adp.new.generic.timeline",
+        "title": "New Timeline diagram",
+        "category": "ADP"
+      },
+      {
         "command": "etalii.adp.new.generic.value-stream-map",
         "title": "New Value stream map",
         "category": "ADP"
@@ -440,6 +455,9 @@
         },
         {
           "command": "etalii.adp.new.etalii.post-incident-review"
+        },
+        {
+          "command": "etalii.adp.new.generic.timeline"
         },
         {
           "command": "etalii.adp.new.generic.value-stream-map"
