@@ -51,6 +51,11 @@ export interface ViewOptions {
   readonly query?: string;
   /** The level a viewer narrowed a page of boxes to, by id. */
   readonly focus?: string;
+  /**
+   * The scale of each time axis of dates as this viewer first saw it, by the axis's name: its origin in days since
+   * 1970 and its canvas units a day. Fitted once to the document and kept, so an edit never rescales the drawing.
+   */
+  readonly scales?: Readonly<Record<string, { readonly origin: number; readonly size: number }>>;
 }
 
 export interface ToolboxEntry {
@@ -306,6 +311,8 @@ export interface ToolType<View, Request> {
    * whose documents take part in links; undefined for another, or a document that cannot be read.
    */
   indexed?(source: Source): IndexedDocument | undefined;
+  /** The scales that fit a diagram's time axes of dates to the document, for a viewer to keep in `scales`; none for an empty one or a type without such an axis. */
+  fittedScales?(source: Source): ViewOptions['scales'];
   /** Everything wrong with the document. Never throws. */
   findings(source: Source): Finding[];
   /** What to show. Never throws. */

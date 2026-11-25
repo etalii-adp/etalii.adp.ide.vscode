@@ -14,7 +14,7 @@ import { expressionsOf, loadDesigner } from '../desl/specification';
 import { documentTypesOf, interpretSurface } from '../desl/surface';
 import { applyChanges, baseCoordinate, interpretBehavior, type Change, type EndPlace, type OfferedEntry, type Outcome, type Point, type Situation, NOT_PICKED, type ViewChange } from '../disl/behavior';
 import { interpretConstraints } from '../disl/constraints';
-import { interpretCoordinates, rulerRows } from '../disl/coordinates';
+import { fittedScale, interpretCoordinates, rulerRows, scaleOf, type Axis } from '../disl/coordinates';
 import { createExpressions, type Scope } from '../disl/expressions';
 import { createTexts, formFor, interpretForms, type FormItem, type Subject } from '../disl/forms';
 import { interpretLayout } from '../disl/layout';
@@ -152,6 +152,13 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   const constraints = interpretConstraints(specification, metamodel.value, expressions);
   const forms = interpretForms(specification, metamodel.value, expressions, { numberText: readingLogic?.numberText });
   const toolbox = interpretToolbox(specification, metamodel.value);
+  // The time axes of dates, whose scale a viewer fits to the document once and keeps (`ViewOptions.scales`), as the
+  // standalone host does: each request is answered on the scale its viewer holds, else on the one the definition declares.
+  const dateAxes = Object.values(coordinates.value.axes).filter((axis) => axis.kind === 'time' && axis.valueType === 'datetime');
+  const declaredScales = new Map(dateAxes.map((axis) => [axis.name, { origin: axis.origin, size: axis.size }]));
+  const scaled = (options: ViewOptions): void => {
+    for (const axis of dateAxes) Object.assign(axis as { origin: number; size: number }, options.scales?.[axis.name] ?? declaredScales.get(axis.name));
+  };
   const sceneTool: SceneTool = { metamodel: metamodel.value, expressions, coordinates: coordinates.value, viewpoints: viewpoints.value, layouts: (id) => plugins.layout(id), routings: (id) => plugins.routing(id) };
   // The core has no browser to measure a text with: for a definition whose text metric is the host's, it is the estimate every ADP host shares.
   const measured: SceneOptions = { textWidth: widthOfText, ...(readingLogic?.underlineStyle === undefined ? {} : { underlineStyle: readingLogic.underlineStyle }) };
@@ -413,6 +420,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   }
 
   function view(source: Source, options: ViewOptions): Scene {
+    scaled(options);
     const open = opened(source);
     const scene = sceneOf(open, options);
     const empty = open.notice === undefined ? emptyMessage(open, scene.viewpoint) : undefined;
@@ -420,6 +428,26 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
       ...scene, readOnly: open.refusal !== undefined, ...(open.notice === undefined ? {} : { notice: open.notice }), ...(empty === undefined ? {} : { empty }),
       tokens: tokensOf(scene.viewpoint), chrome: chromeOf(open, scene, options),
     };
+  }
+
+  // The scale of each time axis of dates that shows the whole document across about 1200 canvas units, read from where
+  // its nodes are drawn on the declared scale; none for an empty document.
+  function fittedScales(source: Source): ViewOptions['scales'] {
+    if (dateAxes.length === 0) return undefined;
+    scaled({});
+    const open = opened(source);
+    if (open.unreadable) return undefined;
+    const scene = createScene(sceneTool, open.model, measured);
+    const system = coordinates.value.systems[scene.system];
+    if (!system || scene.nodes.length === 0) return undefined;
+    const fitted: Record<string, { origin: number; size: number }> = {};
+    for (const [axis, across] of [[system.x, true], [system.y, false]] as [Axis, boolean][]) {
+      if (!dateAxes.includes(axis)) continue;
+      const scale = scaleOf(axis);
+      const days = scene.nodes.flatMap((node) => (across ? [node.box.x, node.box.x + node.box.width] : [node.box.y, node.box.y + node.box.height]).map((at) => scale.toValue(at)));
+      fitted[axis.name] = fittedScale(Math.min(...days), Math.max(...days));
+    }
+    return Object.keys(fitted).length === 0 ? undefined : fitted;
   }
 
   // What the canvas says while it has nothing to show (DISL 6.13, `canvas.empty`): its text, where its `when` holds, in its style.
@@ -495,6 +523,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   };
 
   function actions(source: Source, selection: readonly string[], options: ViewOptions = {}): Action[] {
+    scaled(options);
     const open = opened(source);
     const line = selection.length === 1 ? open.derived.find((relation) => relation.id === selection[0]) : undefined;
     const target = selection.length === 1 && (line ?? elementOf(open.model, selection[0])) ? selection[0] : undefined;
@@ -517,6 +546,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
 
   /** The file an export writes: the model as read, and the centre of each node where the canvas draws it with these options. */
   function exported(source: Source, id: string, options: ViewOptions, moment: Date): Exported | undefined {
+    scaled(options);
     const writer = exportLogic?.exports.find((offer) => offer.id === id);
     if (!writer) return undefined;
     const open = opened(source);
@@ -670,6 +700,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   }
 
   function edit(source: Source, request: EditRequest, options: ViewOptions, confirmed: boolean): EditOutcome {
+    scaled(options);
     // An export asked for from the menu is the extension's to write: it changes nothing of the document, which may be read-only.
     const asked = request.kind === 'action' ? exportOf(request.action) : undefined;
     if (asked !== undefined && exportOffers.some((offer) => offer.id === asked)) return { kind: 'export', export: asked };
@@ -987,6 +1018,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
         return recogniseFolder(folderBinding, '/', files) ? selectedFiles(folderBinding, '/', files).map((file) => file.relativePath) : [];
       },
     }),
+    ...(dateAxes.length === 0 ? {} : { fittedScales }),
     // The index holds a document as its body says it (FBL 17.3), so it is read without the workspace.
     ...(persistence.value.documentId === undefined ? {} : {
       indexed: (source: Source) => {

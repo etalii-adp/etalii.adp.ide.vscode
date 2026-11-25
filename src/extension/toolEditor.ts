@@ -249,6 +249,12 @@ export class Tools implements vscode.Disposable {
     // from where the nodes are on screen, so that what the change did not touch moves little (DISL 10.4).
     const shown = diagram.lastView;
     if (shown && 'nodes' in shown && diagram.lastVersion !== diagram.document.version) diagram.options = { ...diagram.options, placed: placesOf(shown) };
+    // A time axis of dates is fitted to the document the first time it holds something, and kept from then on, so an edit
+    // never rescales the drawing under the user (the standalone host's timeline does the same).
+    if (diagram.options.scales === undefined) {
+      const scales = diagram.type.fittedScales?.(source);
+      if (scales !== undefined) diagram.options = { ...diagram.options, scales };
+    }
     const computed = diagram.type.view(source, diagram.options);
     const view = diagram.readOnly ? { ...computed, readOnly: true } : computed;
     diagram.lastView = view;
@@ -331,8 +337,8 @@ export class Tools implements vscode.Disposable {
    * `query` and `focus`, and are never written.
    */
   setOptions(diagram: OpenTool, options: ViewOptions): void {
-    const { collapsed, placed } = diagram.options;
-    diagram.options = { ...options, ...(collapsed === undefined ? {} : { collapsed }), ...(placed === undefined ? {} : { placed }) };
+    const { collapsed, placed, scales } = diagram.options;
+    diagram.options = { ...options, ...(collapsed === undefined ? {} : { collapsed }), ...(placed === undefined ? {} : { placed }), ...(scales === undefined ? {} : { scales }) };
     this.refresh(diagram);
   }
 
