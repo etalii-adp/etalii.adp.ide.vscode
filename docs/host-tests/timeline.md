@@ -202,3 +202,60 @@ No error appeared, and every edit saved and undid as it should. The hurdles a ne
 ### Verdict of the second re-check
 
 Not yet ⚗️ Prototype. Hurdle 2 is cleared; hurdle 1 is half cleared and hurdle 3 still fails at the 1600×900 window the screenshots are taken in; rows 1 to 3 and the timing hold. The new-user rule asks for no errors and no hurdles: there are no errors, but #128, #129 and #130 are hurdles on the way from creating a timeline to editing it, and #131 on making a second one. The row in [tools.md](../tools.md) stays 🛠️ Work-in-progress until they are settled. Each is its own issue, and none is fixed in this change.
+
+## Third re-check, after #133
+
+On 2026-11-25, after [#133](https://github.com/etalii-adp/etalii.adp.ide.vscode/pull/133), which answers [#128](https://github.com/etalii-adp/etalii.adp.ide.vscode/issues/128) to [#131](https://github.com/etalii-adp/etalii.adp.ide.vscode/issues/131). Setup:
+- `develop` at `a35c75e`, packaged as `etalii-adp-0.2.4.vsix`, installed into fresh profiles.
+- The same Mac and Visual Studio Code 1.147.0, both themes, the window's viewport at 1600 pixels wide.
+- The standalone host from the same worktree (`9555565`).
+
+### What #133 changed
+
+| Issue | Check | Result |
+|---|---|---|
+| #128, the overview's last row | `marvel-universe-overview` measured at five editor heights: 577, 677, 777 (1600×900 with breadcrumbs), 877 and 977 pixels. At **777** every shape lies between 6 and 748 pixels, clear of the ruler at 754 ([light](timeline/recheck3-overview-777-light.png), [dark](timeline/recheck3-overview-777-dark.png)). At 877 and 977 it is fitted whole at 61 and 69 percent, clear of the ruler. At 577 and 677 the overview is taller than the room, so it opens from the top at the readable size and scrolls, as intended. | Passes |
+| #129, an empty timeline's ruler | A new timeline opens with a ruler from November 2026 to February 2027, around today, 2026-11-25 ([picture](timeline/recheck3-new-empty.png)). The first element from ADP Toolbox is dated 2026-12-16 to 2026-12-30. | Passes |
+| #130, a Begin later than the End | Typing Begin `2027-03-01` on an element ending 2026-12-30 is refused under the field with "An element cannot end before it begins." The element stays drawn and selected, and the file keeps its dates ([picture](timeline/recheck3-begin-refused.png)). Setting End first, then Begin, moves it to March–April 2027 and brings it into view. | Passes |
+| #131, a second new timeline | A second **ADP: New Timeline diagram** in the same folder offers `untitled-2.tml`, with no overwrite prompt ([picture](timeline/recheck3-second-new.png)). | Passes |
+
+### Rows 1 to 3 and the timing
+
+All three rows hold in both themes:
+- **Row 1:** `example-1` (2025 to October 2026) and `example-2` (2024 to 2030) open whole, clear of the ruler.
+- **Row 2:** moments are diamonds in the accent colour, `#005fb8` in Light Modern and `#0078d4` in Dark Modern.
+- **Row 3:** all ten arrowheads of `example-1` point into their targets.
+
+`marvel-universe.tml` timing, three runs:
+- First drawn in 300 to 309 ms.
+- All 907 shapes drawn in 518 to 543 ms.
+- Panning and zooming: a median of 16.7 ms between frames, a maximum of 22.5 ms, no frame over 50 ms.
+
+### The full onboarding, again
+
+A fresh profile, an empty folder, Light Modern; the toolbox, the canvas and ADP Properties only.
+
+1. **ADP: New Timeline diagram, OK.** `untitled.tml` opens on the months around today, with ADP Toolbox in the side bar.
+2. **Element from ADP Toolbox.** "New element", 2026-12-16 to 2026-12-30, in the middle of the view.
+3. **Begin set to 2027-03-01.** Refused with "An element cannot end before it begins."
+4. **End set to 2027-04-15, then Begin to 2027-03-01.** The element moves there and the view follows it.
+5. **Double-click, typed "Design", Enter.** Renamed in place.
+6. **Tab, Enter, Moment from ADP Toolbox.** A connected period after it, one below it, and a moment as a diamond.
+7. **A line from one period's end dot to another's begin dot.** Connected.
+8. **Dragged a period by its body; dragged Design's right edge.** Moved 5 days and shortened 4 days, snapped to whole days ([picture](timeline/recheck3-new-user-done.png)).
+9. **Undo three times, Redo three times, Save.** The file is byte for byte what it was before the undos.
+10. **Closed the tab and opened the file again.** All six elements and four connections, as saved.
+11. **ADP: New Timeline diagram again.** `untitled-2.tml`, opened beside it.
+
+No error appeared and no step needed anything outside the toolbox, the canvas and ADP Properties.
+
+### Notes, not blocking
+
+- **"New Timeline" also finds Visual Studio Code's own Timeline view** in the Command Palette, under the ADP command.
+- **The definition gives no hint text for an empty canvas.** A new timeline is a blank canvas over its ruler until the first element is added.
+- **Tab twice on the same element stacks the second new element on the first.** This came up in step 6. The selection stays on the element Tab grew from, and the definition's `addAfter` always starts six days after that element's end. So two Tabs make two identical elements on the same dates and row, connected from the same element, and the canvas shows one. This is the definition's rule, so every host that follows it does the same: [etalii.adp #856](https://github.com/etalii-adp/etalii.adp/issues/856). Undo takes the second one away.
+- When Begin is refused, the field shows the old date again, so the typed date has to be typed again after End is set.
+
+### Verdict of the third re-check
+
+Passes. #128 to #131 are settled, rows 1 to 3 and the timing hold, and a new user goes from **ADP: New Timeline diagram** to an edited, saved and reopened timeline with no error and no hurdle that blocks them. The timeline moves to ⚗️ Prototype in [tools.md](../tools.md), with the notes above left open.
