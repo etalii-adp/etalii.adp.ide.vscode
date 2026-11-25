@@ -2,7 +2,7 @@
 
 All notable changes to **ADP: A Different Perspective** are listed here, newest first.
 
-## [Unreleased] (0.2.3)
+## [0.2.3] - 2026-11-25
 
 ### Added
 
@@ -12,6 +12,7 @@ All notable changes to **ADP: A Different Perspective** are listed here, newest 
 
 ### Fixed
 
+- **Mind map:** a new mind map now takes its first nodes. Clicking **Node** in the ADP Toolbox adds a node under the selected node, or under the central topic when nothing is selected, and **Tab** adds a child like **Insert**, which Mac keyboards do not have.
 - **Causal loop diagram:** in an exported flow page, variable names are now readable at every heat. A variable just above the middle of the scale showed a dark name on a mid-brown fill; the name now takes whichever of a dark and a light ink stands out more.
 - **Causal loop diagram:** in an exported flow page, each link now curves to the same side as on the canvas, and a link whose curve you flipped is flipped on the page too. Before, every curve was drawn on the other side.
 
