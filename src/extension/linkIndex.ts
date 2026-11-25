@@ -20,6 +20,9 @@ export class LinkIndex implements vscode.Disposable {
   private readonly folders = new Map<string, LinkWorkspace>();
   /** The tool type of each indexed document, by its path: what a lookup's `origins` narrows by. */
   private readonly origins = new Map<string, string>();
+  /** Every file of the glob this index has read, a tool type's or not: what catching up leaves alone. */
+  private readonly read = new Set<string>();
+  private catching: Promise<void> | undefined;
   private readonly subscriptions: vscode.Disposable[] = [];
   private readonly changed = new vscode.EventEmitter<void>();
   private readonly types: readonly AnyToolType[];
@@ -70,9 +73,30 @@ export class LinkIndex implements vscode.Disposable {
     return origin === undefined ? undefined : this.types.find((type) => type.origin === origin);
   }
 
+  /**
+   * Reads the files of the workspace this index has not read yet. A file watcher can miss a file created in a folder
+   * made a moment before (inotify sets its watch on the folder after the file is there), so an editor of a tool type
+   * that takes part in links asks for this when it opens: a document it links to is then found however it came.
+   */
+  catchUp(): Promise<void> {
+    if (this.glob === undefined) return Promise.resolve();
+    this.catching ??= (async () => {
+      try {
+        const found = await vscode.workspace.findFiles(this.glob!, '**/node_modules/**', 5000);
+        const missed = found.filter((uri) => !this.read.has(uri.toString()));
+        await Promise.all(missed.map((uri) => this.readFile(uri, false)));
+        if (missed.length > 0) this.changed.fire();
+      } finally {
+        this.catching = undefined;
+      }
+    })();
+    return this.catching;
+  }
+
   private async readAll(): Promise<void> {
     this.folders.clear();
     this.origins.clear();
+    this.read.clear();
     for (const folder of vscode.workspace.workspaceFolders ?? []) this.folders.set(folder.uri.toString(), new LinkWorkspace(folder.uri.path));
     if (this.glob === undefined) return;
     const found = await vscode.workspace.findFiles(this.glob, '**/node_modules/**', 5000);
@@ -85,12 +109,14 @@ export class LinkIndex implements vscode.Disposable {
     try {
       await vscode.workspace.fs.stat(uri);
     } catch {
+      this.read.delete(uri.toString());
       return this.remove(uri);
     }
     return this.readFile(uri);
   }
 
   private async readFile(uri: vscode.Uri, announce = true): Promise<void> {
+    this.read.add(uri.toString());
     const open = vscode.workspace.textDocuments.find((document) => document.uri.toString() === uri.toString());
     if (open) return this.put(uri, open.getText(), announce);
     try {

@@ -845,7 +845,11 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
       return;
     }
     const diagram = new OpenTool(this.type, document, panel);
-    if (this.type.indexed !== undefined) diagram.links = this.tools.links;
+    if (this.type.indexed !== undefined) {
+      diagram.links = this.tools.links;
+      // What the file watcher missed is read now; the index announces it, and the diagram is drawn again.
+      void this.tools.links?.catchUp();
+    }
     if (this.type.related) diagram.related = new RelatedFiles(document.uri, () => this.tools.refresh(diagram));
     diagram.selectOnReady = this.tools.selecting.get(document.uri.toString());
     this.tools.selecting.delete(document.uri.toString());
