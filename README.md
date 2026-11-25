@@ -52,6 +52,8 @@ Named items on rows, joined by arrows that show what depends on what: services, 
 
 ### Timeline (`.tml`)
 
+![A timeline in Visual Studio Code](docs/screenshots/timeline.png)
+
 Lay out plans, histories and roadmaps against a ruler of dates. An element runs from its begin to its end as a bar on its row, a moment is a diamond on a single day, and arrows connect what follows from what. Drag an element or a moment from **ADP Toolbox** onto the day it starts, drag a bar to move it in time or to another row, and drag its ends to change its dates; dates snap to whole days. `Tab` and `Enter` add an element after or below the selected one, **Give it an end...** turns a moment into an element and **Remove its end** turns it back, and **ADP: Arrange Diagram** packs everything into as few rows as fit without overlaps. Edit a label, a date or a row in **ADP Properties**. Dates may be written in many common forms; one that cannot be read, an end before its begin, or a connection to something that is not there is reported as a problem.
 
 ### Gartner hype cycle graph (`.ghg`)

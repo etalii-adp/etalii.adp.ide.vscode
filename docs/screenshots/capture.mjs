@@ -43,6 +43,7 @@ const images = [
   { file: 'agent-activity-diagram.png', document: 'agent-activity-diagram/adp-one-day/adp-one-day.aad', theme: 'dark', nearest: '.adp-content .adp-element' },
   { file: 'causal-loop.png', document: 'causal-loop-diagram/on-call/on-call.cld', theme: 'dark', nearest: '.adp-content .adp-element[data-type="Variable"]' },
   { file: 'dependency-graph.png', document: 'dependency-graph/example-1/services.dgr', theme: 'light', nearest: '.adp-content .adp-element' },
+  { file: 'timeline.png', document: 'timeline/example-1/roadmap.tml', theme: 'light', nearest: '.adp-content .adp-element' },
   { file: 'hierarchical-requirement.png', document: 'hierarchical-requirement/web-shop.md', theme: 'dark', editor: 'etalii.adp.etalii.hierarchical-requirement', drawn: '.hs-box[data-id]', nearest: '.hs-box[data-id="REQ-0004"] .hs-box-header' },
 ];
 
