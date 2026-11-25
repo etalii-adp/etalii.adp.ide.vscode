@@ -575,6 +575,9 @@ type Position = Readonly<Record<'x' | 'y', number | string>>;
 const skips = ['move', 'resize', 'plugin'];
 // The actions that change nothing of the model: an operation of these alone is offered in a read-only document and is no undo step (DISL 9.4).
 const viewing = ['view', 'select', 'reveal', 'highlight', 'open'];
+/** The point an operation was invoked at, in the domain values of its axes, which a `create` with `place` and a `lookup` place by; no CEL name can reach it. */
+const INVOKED = '#invoked';
+
 /** The refusal of a `lookup` that the host's lookup has not answered yet (DISL 9.4): the host asks, and runs the operation again with what was picked. */
 export const NOT_PICKED = 'Pick an element of the workspace to link to.';
 
@@ -1148,7 +1151,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
           const point = isObject(at) && typeof at.x === 'number' && typeof at.y === 'number' ? { x: at.x, y: at.y } : undefined;
           if (typeof action.create.place === 'string') {
             // The parent is chosen by a placement, at the point the operation was invoked at (DISL 9.1, 9.4).
-            const invoked = variables.position;
+            const invoked = variables[INVOKED] ?? variables.position;
             const under = placedBy(action.create.place, type, isObject(invoked) && typeof invoked.x === 'number' && typeof invoked.y === 'number' ? { x: invoked.x, y: invoked.y } : null);
             if (under && check({ kind: 'create', ...(under.parent === undefined ? {} : { elements: { parent: under.parent } }), values: { elementType: type, position: invoked ?? null, dropTarget: null, tool: null } })) {
               kept(action.as, add(type, values, undefined, under.parent, under.index === undefined ? undefined : { index: under.index }));
@@ -1245,7 +1248,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
           if (!picked) { refuse(NOT_PICKED); continue; }
           const label = metamodel.types[type]?.labelAttribute;
           const values = { ...defaultsOf(metamodel, type), [linked.attribute]: picked.link, ...(label === undefined || label === linked.attribute ? {} : { [label]: picked.name }) };
-          const invoked = variables.position;
+          const invoked = variables[INVOKED] ?? variables.position;
           const point = action.lookup.as === 'at' && isObject(invoked) && typeof invoked.x === 'number' && typeof invoked.y === 'number' ? { x: invoked.x, y: invoked.y } : undefined;
           if (point) {
             const { position, placed } = dropped(type, point);
@@ -1490,6 +1493,10 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
   };
 
   const done = (outcome: Outcome): outcome is Exclude<Outcome, { readonly refused: string }> => outcome.refused === undefined;
+  const shownAt = (model: Model, system: CoordinateSystem, point: Point): Record<'x' | 'y', number | string> => {
+    const scales = scalesOf(system, model.diagram);
+    return { x: scales.x.textOf(point.x), y: scales.y.textOf(point.y) };
+  };
   const domain = (model: Model, system: CoordinateSystem | undefined, at: Point): Point => {
     if (!system) return at;
     const scales = scalesOf(system, model.diagram);
@@ -1509,7 +1516,10 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
 
   const operate: Behavior['operate'] = (model, id, selection, situation, at, args) => {
     const state = availability(model, id, selection, situation);
-    const position = at ? domain(model, viewOf(situation, true).system, at) : null;
+    const system = viewOf(situation, true).system;
+    const point = at ? domain(model, system, at) : null;
+    // Where the operation was invoked, as its axes count it: on an axis of dates the date (DISL 5.4), as a drop's `position` is.
+    const position = point && system ? shownAt(model, system, point) : point;
     if (!state.offered) return { refused: message('std.notApplicable', model, situation, { operationId: id, position }) ?? 'This cannot be done with what is selected.' };
     if (!state.available) return { refused: state.reason ?? `${state.label} cannot be done now.` };
     const run = open(model, situation, 'change', free(declared[id].actions));
@@ -1526,7 +1536,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       else if (typeof value !== 'string' || !find(model, value)) return { refused: 'That is no longer in this diagram.' };
       else p[name] = new Reference(value);
     }
-    run.act(declared[id].actions ?? [], state.target ?? '', { position, p, ...whole }, 'operation');
+    run.act(declared[id].actions ?? [], state.target ?? '', { position, p, ...whole, ...(point ? { [INVOKED]: point } : {}) }, 'operation');
     return run.finish();
   };
 

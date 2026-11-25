@@ -4,6 +4,10 @@ All notable changes to **ADP: A Different Perspective** are listed here, newest 
 
 ## [Unreleased]
 
+### Added
+
+- **Timeline** and **Dependency graph:** an element can now stand for an element of another file in your workspace, such as a knowledge row, a mind map node or an element of another timeline or graph. Choose **Add from another document…** on the canvas, and the linked element shows its target's current name. **Open linked element** and **Linked from** in its menu take you to the other side, and a link whose target was deleted or cannot be found is listed in the Problems panel.
+
 ## [0.2.5] - 2026-11-25
 
 ### Fixed

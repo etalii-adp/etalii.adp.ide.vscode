@@ -4,6 +4,7 @@
 // for them, one after the other, become the splices of the text as it was before the request.
 
 import type { Change, ViewChange } from '../disl/behavior';
+import { linkedOf } from '../disl/links';
 import { attributesOf, type Metamodel } from '../disl/metamodel';
 import type { Model, Value } from '../disl/model';
 import { toBinding, type InterpretedPersistence, type ViewBind } from '../disl/persistence';
@@ -80,9 +81,11 @@ export function modelChangesOf(changes: readonly Change[], context: ChangeContex
     const known = new Set([...reading.flatMap((rule) => rule.attributes.map(([name]) => name)), ...(reading.some((rule) => rule.isRelation) ? ['source', 'target'] : [])]);
     // A value of nothing (null, the empty text, the empty list) needs no place: an attribute the document does not keep is left out.
     const nothing = (value: unknown): boolean => value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
+    // A linked element shows its target's name (DISL 4.12): where the document keeps no label for it, the name the lookup gave is not written.
+    const shown = linkedOf(metamodel, type) === undefined ? undefined : metamodel.types[type]?.labelAttribute;
     const kept: Record<string, unknown> = {};
     for (const [name, value] of Object.entries(found.attributes)) {
-      if (!known.has(name) && nothing(value)) continue;
+      if (!known.has(name) && (nothing(value) || name === shown)) continue;
       if (!known.has(name)) return { refused: `The document has no place for \`${name}\` of ${named}, so the change cannot be written.` };
       if (!takes(value)) return { refused: `The document cannot hold the value given for \`${name}\` of ${named}.` };
       kept[name] = value;
