@@ -142,6 +142,18 @@ describe('the timeline\'s properties', () => {
   });
 });
 
+// The third re-check found a second Tab on one element stacking a second new element exactly on the first (etalii.adp #856):
+// the element Tab or Enter adds is selected, so the key pressed again goes on from it.
+describe('the timeline\'s Tab and Enter', () => {
+  it.each(['addAfter', 'addBelow'])('select the element %s adds', (action) => {
+    const source: Source = { fileName: 'roadmap.tml', text: fixture('roadmap.tml') };
+    const outcome = applied(type.edit(source, { kind: 'action', action, id: 'build' }, {}, false));
+    const added = type.view({ fileName: 'roadmap.tml', text: spliced(source.text, outcome.splices) }, {}).nodes.map((node) => node.id).find((id) => !type.view(source, {}).nodes.some((node) => node.id === id));
+    expect(added).toBeDefined();
+    expect(outcome.select).toBe(added);
+  });
+});
+
 // The host test of task T031 found no arrowheads: the curve entered its target from the right, under the bar. `endDirection: "left"`
 // names the side the line enters by (DISL 6.10, as ruled in etalii.adp #852), so the curve arrives from the left of its target.
 describe('the timeline\'s connections', () => {
