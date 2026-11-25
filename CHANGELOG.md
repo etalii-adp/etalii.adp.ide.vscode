@@ -8,7 +8,7 @@ All notable changes to **ADP: A Different Perspective** are listed here, newest 
 
 ### Added
 
-- **Timeline** (`.tml`): plans, histories and roadmaps against a ruler of dates. Elements are bars from their begin to their end, moments are diamonds, and arrows connect them. Drop an element or a moment on its day, move and resize with the mouse, add one after or below with `Tab` and `Enter`, give a moment an end or take it away, and let **ADP: Arrange Diagram** pack the rows. Unreadable dates, an end before its begin and broken connections are listed in the Problems panel. A timeline opens showing all of it. Create one with **ADP: New Timeline diagram**.
+- **Timeline** (`.tml`): plans, histories and roadmaps against a ruler of dates. Elements are bars from their begin to their end, moments are diamonds, and arrows connect them. Drop an element or a moment on its day, move and resize with the mouse, add one after or below with `Tab` and `Enter`, give a moment an end or take it away, and let **ADP: Arrange Diagram** pack the rows. Unreadable dates, an end before its begin and broken connections are listed in the Problems panel. A timeline opens showing all of it. Connections enter an element from its left, with their arrowhead in front of it. Create one with **ADP: New Timeline diagram**.
 
 ### Fixed
 

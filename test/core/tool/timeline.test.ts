@@ -104,3 +104,18 @@ describe('the timeline\'s time axis, fitted to the document', () => {
     expect(type.fittedScales!({ fileName: 'empty.tml', text: 'timeline: 1\r\nelements: []\r\n' })).toBeUndefined();
   });
 });
+
+// The host test of task T031 found no arrowheads: the curve entered its target from the right, under the bar. `endDirection: "left"`
+// names the side the line enters by (DISL 6.10, as ruled in etalii.adp #852), so the curve arrives from the left of its target.
+describe('the timeline\'s connections', () => {
+  it('enter their target through its left side and leave their source through its right', () => {
+    const scene = type.view({ fileName: 'roadmap.tml', text: fixture('roadmap.tml') }, {});
+    const curved = scene.edges.filter((edge) => edge.curve !== undefined);
+    expect(curved.length).toBeGreaterThan(0);
+    for (const edge of curved) {
+      const [start, leaving, entering, end] = edge.curve!;
+      expect(leaving.x).toBeGreaterThan(start.x);
+      expect(entering.x).toBeLessThan(end.x);
+    }
+  });
+});
