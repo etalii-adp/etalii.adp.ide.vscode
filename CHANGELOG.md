@@ -4,6 +4,8 @@ All notable changes to **ADP: A Different Perspective** are listed here, newest 
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-11-25
+
 ### Added
 
 - **Timeline** (`.tml`): plans, histories and roadmaps against a ruler of dates. Elements are bars from their begin to their end, moments are diamonds, and arrows connect them. Drop an element or a moment on its day, move and resize with the mouse, add one after or below with `Tab` and `Enter`, give a moment an end or take it away, and let **ADP: Arrange Diagram** pack the rows. Unreadable dates, an end before its begin and broken connections are listed in the Problems panel. A timeline opens showing all of it. Create one with **ADP: New Timeline diagram**.
@@ -102,7 +104,8 @@ First release on the Visual Studio Marketplace and Open VSX.
 - **ADP Toolbox** and **ADP Properties** in the ADP view of the activity bar, **ADP: Open as Text**, and full Undo and Redo for every change.
 - Language support for `.atd` tool descriptions: colouring, completion, hover, rename, formatting and live problem checking, with **ADP: New Tool Description**, **ADP: Check Tool Description** and **ADP: Validate Tool Description**.
 
-[Unreleased]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.3...develop
+[Unreleased]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.4...develop
+[0.2.4]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.0...v0.2.1
