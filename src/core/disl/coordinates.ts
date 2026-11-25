@@ -38,7 +38,7 @@ export interface Ruler {
 /** `$defs/SnapRule`, as far as it is declared with a coordinate system or a node (DISL 5.10). */
 export interface SnapRule {
   readonly grid?: { readonly spacing: number | { readonly unit: UnitOfTime }; readonly offset?: number };
-  readonly calendar?: { readonly unit: BoundUnit; readonly step?: number };
+  readonly calendar?: { readonly unit: BoundUnit; readonly step?: number; readonly align?: 'start' | 'end' | 'nearest' };
   readonly values?: readonly number[];
   readonly cel?: string;
   readonly direction?: 'nearest' | 'floor' | 'ceil';
@@ -132,6 +132,13 @@ export interface Scale {
   toValue(canvas: number): number;
   /** The domain value of what an attribute stores: a date or a date and time on a `datetime` axis, else a number. */
   valueOf(stored: unknown): number | undefined;
+  /**
+   * What an attribute stores for a domain value, the inverse of `valueOf`: on a `datetime` axis the date (`2025-04-27`)
+   * where `like`, the value it replaces, is a date or there is none, else the date and time in whole seconds; else the number.
+   */
+  textOf(value: number, like?: unknown): number | string;
+  /** Whether a stored value is a date and a time of day on a `datetime` axis, which calendar snapping leaves where it is. */
+  timed(stored: unknown): boolean;
 }
 
 export interface RulerTick {
@@ -313,6 +320,8 @@ export function scaleOf(axis: Axis, diagram: Attributes = {}): Scale {
       if (dates) return typeof stored === 'string' ? daysOf(stored) : undefined;
       return typeof stored === 'number' && Number.isFinite(stored) ? stored : undefined;
     },
+    textOf: (value, like) => (dates ? dateTextOf(value, timed(like)) : value),
+    timed: (stored) => dates && timed(stored),
   };
 }
 
@@ -354,6 +363,17 @@ export function rulerRows(axis: Axis, diagram: Attributes, view: { readonly from
     rows.push({ unit: level.unit, step, format: level.format ?? 'uuuu-MM', spacing, ticks });
   }
   return rows;
+}
+
+/** A day count since 1970 as ISO 8601: the date of its day, or the date and time in whole seconds. */
+// A date and a time of day, as written: the date, then `T` or a space, then the time.
+const timed = (stored: unknown): boolean => typeof stored === 'string' && /\d[T ]\d/i.test(stored.trim());
+
+export function dateTextOf(days: number, withTime = false): string {
+  const at = new Date(Math.round(days * 86_400) * 1000);
+  const two = (n: number): string => String(n).padStart(2, '0');
+  const date = `${String(at.getUTCFullYear()).padStart(4, '0')}-${two(at.getUTCMonth() + 1)}-${two(at.getUTCDate())}`;
+  return withTime ? `${date}T${two(at.getUTCHours())}:${two(at.getUTCMinutes())}:${two(at.getUTCSeconds())}` : date;
 }
 
 // ---- the ruler of a date axis ----

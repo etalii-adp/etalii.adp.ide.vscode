@@ -11,6 +11,7 @@ export const supportedFeatures: readonly string[] = [
   'axis.yearMonth',
   'ruler.adaptive',
   'snap.byGesture',
+  'snap.calendar',
   'anchor.part',
   'anchor.sides',
   'canvas.filters',

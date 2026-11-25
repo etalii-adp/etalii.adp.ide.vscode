@@ -9,7 +9,7 @@
 
 import type { Box, Point } from './geometry';
 import type { SceneTool } from './scene';
-import { monthsIn, scalesOf, unitOf, type Axis, type CoordinateSystem, type SnapRule, type Snapping } from '../disl/coordinates';
+import { daysIn, monthsIn, scalesOf, unitOf, type Axis, type CoordinateSystem, type SnapRule, type Snapping } from '../disl/coordinates';
 import type { Scope } from '../disl/expressions';
 import type { Attributes, Model } from '../disl/model';
 import { nodeNotation, type NodeNotation } from '../disl/notation';
@@ -36,7 +36,8 @@ export function snapValue(rule: SnapRule | undefined, value: number, axis: Axis 
   } else if (Array.isArray(rule.values) && rule.values.length > 0) {
     result = (rule.values as number[]).reduce((best, candidate) => (Math.abs(candidate - value) < Math.abs(best - value) ? candidate : best));
   } else {
-    const months = rule.calendar ? (monthsIn(unitOf(rule.calendar.unit, diagram, axis?.fallbackUnit)) ?? 1) * Math.max(1, rule.calendar.step ?? 1) : undefined;
+    // A calendar step on an axis of dates is in days (DISL 5.10, `snap.calendar`); one on an axis of months, in months.
+    const months = rule.calendar ? (axis?.valueType === 'datetime' ? daysIn(isObject(rule.calendar.unit) ? undefined : rule.calendar.unit) ?? 1 : monthsIn(unitOf(rule.calendar.unit, diagram, axis?.fallbackUnit)) ?? 1) * Math.max(1, rule.calendar.step ?? 1) : undefined;
     const step = months ?? (typeof rule.grid?.spacing === 'number' ? rule.grid.spacing : 0);
     if (step > 0) {
       const offset = rule.grid?.offset ?? 0;
@@ -44,8 +45,10 @@ export function snapValue(rule: SnapRule | undefined, value: number, axis: Axis 
       const upper = lower + step;
       const tie = Math.abs((value - lower) - (upper - value)) < 1e-9;
       const away = Math.abs(upper - zero) >= Math.abs(lower - zero) ? upper : lower;
-      if (value === lower || rule.direction === 'floor') result = lower;
-      else if (rule.direction === 'ceil') result = upper;
+      // A calendar rule's `align` says the same as `direction`: the start of the unit, its end, or the nearer (DISL 5.10).
+      const direction = rule.calendar?.align === 'start' ? 'floor' : rule.calendar?.align === 'end' ? 'ceil' : rule.direction;
+      if (value === lower || direction === 'floor') result = lower;
+      else if (direction === 'ceil') result = upper;
       else if (!tie) result = value - lower < upper - value ? lower : upper;
       else if (rule.ties === 'up') result = upper;
       else if (rule.ties === 'down') result = lower;

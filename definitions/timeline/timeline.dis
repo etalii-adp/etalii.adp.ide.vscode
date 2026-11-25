@@ -3,7 +3,7 @@
   "disl": "0.12",
   "language": {
     "id": "net.etalii.adp.generic.timeline",
-    "version": "1.2.0",
+    "version": "1.2.2",
     "origin": "generic/timeline",
     "label": "Timeline diagram",
     "doc": {
@@ -23,7 +23,7 @@
     "fileExtension": "tml",
     "requires": {
       "conformance": "standard",
-      "features": ["axis.time", "placement.bound", "snap.calendar", "edge.bezier", "persist.yaml"]
+      "features": ["axis.time", "placement.bound", "snap.calendar", "edge.bezier"]
     }
   },
 
@@ -262,6 +262,14 @@
             "x": {
               "calendar": { "unit": "day", "align": "nearest" },
               "doc": "Dragging an edge of a date-only period lands on a day."
+            }
+          },
+          "byGesture": {
+            "drop": {
+              "x": {
+                "calendar": { "unit": "day", "align": "start" },
+                "doc": "Something dropped or added at a point begins at the start of the day under it, as the toolbox drop, Add element here and the relation released on empty canvas say (see timeline.md)."
+              }
             }
           },
           "targets": ["rule"],

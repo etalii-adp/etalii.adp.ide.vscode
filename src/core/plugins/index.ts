@@ -16,9 +16,10 @@ import { freeplaneMm } from './freeplane-mm/index';
 import { knowledgeViews } from './knowledge-views/index';
 import { mindmapLayout } from './mindmap-layout/index';
 import { projectLinkPicker } from './project-link-picker/index';
+import { timelineRowArrange } from './timeline-row-arrange/index';
 import { timelineTimes } from './timeline-times/index';
 
 /** Every plugin this host carries. */
-export const carried: Plugins = { persistence: [freeplaneMm, abmMarkdown], layout: [mindmapLayout, cldLayout], action: [projectLinkPicker, abmArrange], celFunctions: [cldCycles, dependencyEnds, timelineTimes], views: [knowledgeViews], reading: [cldReading, dependencyReading], exports: [cldFlowPage], routing: [dependencyCurve] };
+export const carried: Plugins = { persistence: [freeplaneMm, abmMarkdown], layout: [mindmapLayout, cldLayout, timelineRowArrange], action: [projectLinkPicker, abmArrange], celFunctions: [cldCycles, dependencyEnds, timelineTimes], views: [knowledgeViews], reading: [cldReading, dependencyReading], exports: [cldFlowPage], routing: [dependencyCurve] };
 
 export const plugins: PluginRegistry = pluginRegistry(carried);

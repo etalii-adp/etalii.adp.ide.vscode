@@ -19,7 +19,7 @@
 // and nothing is done with it. Simulations are not read, and an action of another kind is reported and skipped.
 
 import type { Constraints, Gesture } from './constraints';
-import { anchorOf, monthsIn, scalesOf, unitOf, type Axis, type Coordinates, type CoordinateSystem, type Placement, type PlacementSource, type SnapRule, type Snapping } from './coordinates';
+import { anchorOf, daysIn, monthsIn, scalesOf, unitOf, type Axis, type Coordinates, type CoordinateSystem, type Placement, type PlacementSource, type SnapRule, type Snapping } from './coordinates';
 import type { Expressions, Scope, World } from './expressions';
 import { createTexts, type FormItem } from './forms';
 import type { Layout, LayoutConfig } from './layout';
@@ -463,7 +463,8 @@ function snapped(rule: SnapRule | undefined, value: number, axis: Axis | undefin
   } else if (Array.isArray(rule.values) && rule.values.length > 0) {
     result = (rule.values as number[]).reduce((best, candidate) => (Math.abs(candidate - value) < Math.abs(best - value) ? candidate : best));
   } else {
-    const months = rule.calendar ? (monthsIn(unitOf(rule.calendar.unit, diagram, axis?.fallbackUnit)) ?? 1) * Math.max(1, rule.calendar.step ?? 1) : undefined;
+    // A calendar step on an axis of dates is in days (DISL 5.10, `snap.calendar`); one on an axis of months, in months.
+    const months = rule.calendar ? (axis?.valueType === 'datetime' ? daysIn(isObject(rule.calendar.unit) ? undefined : rule.calendar.unit) ?? 1 : monthsIn(unitOf(rule.calendar.unit, diagram, axis?.fallbackUnit)) ?? 1) * Math.max(1, rule.calendar.step ?? 1) : undefined;
     const step = months ?? (typeof rule.grid?.spacing === 'number' ? rule.grid.spacing : 0);
     if (step > 0) {
       const offset = rule.grid?.offset ?? 0;
@@ -471,8 +472,10 @@ function snapped(rule: SnapRule | undefined, value: number, axis: Axis | undefin
       const upper = lower + step;
       const tie = Math.abs((value - lower) - (upper - value)) < 1e-9;
       const away = Math.abs(upper - zero) >= Math.abs(lower - zero) ? upper : lower;
-      if (value === lower || rule.direction === 'floor') result = lower;
-      else if (rule.direction === 'ceil') result = upper;
+      // A calendar rule's `align` says the same as `direction`: the start of the unit, its end, or the nearer (DISL 5.10).
+      const direction = rule.calendar?.align === 'start' ? 'floor' : rule.calendar?.align === 'end' ? 'ceil' : rule.direction;
+      if (value === lower || direction === 'floor') result = lower;
+      else if (direction === 'ceil') result = upper;
       else if (!tie) result = value - lower < upper - value ? lower : upper;
       else if (rule.ties === 'up') result = upper;
       else if (rule.ties === 'down') result = lower;
@@ -561,6 +564,9 @@ class Ends {
   constructor(readonly source: string, readonly target: string) {}
 }
 
+
+/** Where a gesture lands as an expression sees it (`position`): a number on each axis, or the date on an axis of dates. */
+type Position = Readonly<Record<'x' | 'y', number | string>>;
 const skips = ['move', 'resize', 'plugin'];
 // The actions that change nothing of the model: an operation of these alone is offered in a read-only document and is no undo step (DISL 9.4).
 const viewing = ['view', 'select', 'reveal', 'highlight', 'open'];
@@ -895,22 +901,27 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     };
 
     // The snapped point of a drop of an element of a type, in domain values, and what its placement binds to it.
-    const dropped = (type: string, at: Point | undefined): { readonly position: Point | null; readonly placed: Record<string, Value> } => {
-      if (!at) return { position: null, placed: {} };
+    // Where a drop lands, as its axes count it: a number, or on an axis of dates the date (DISL 5.4), which `position` holds as CEL sees it.
+    const dropped = (type: string, at: Point | undefined): { readonly position: Position | null; readonly point: Point | null; readonly placed: Record<string, Value> } => {
+      if (!at) return { position: null, point: null, placed: {} };
       const view = viewOf(situation, true);
       const node = nodeNotation(view.notation, metamodel, type);
       const system = coordinates.systems[node.placement.system ?? ''] ?? view.system;
-      const position = { x: at.x, y: at.y };
+      const scales = system ? scalesOf(system, working.diagram) : undefined;
+      const position: Record<'x' | 'y', number | string> = { x: at.x, y: at.y };
+      const point = { x: at.x, y: at.y };
       const placed: Record<string, Value> = {};
       for (const axis of ['x', 'y'] as const) {
-        position[axis] = snapped(ruleFor(system, node.snapping, 'drop', axis), at[axis], system?.[axis], working.diagram, (cel, value) => {
+        const landed = snapped(ruleFor(system, node.snapping, 'drop', axis), at[axis], system?.[axis], working.diagram, (cel, value) => {
           const result = expressions.evaluate(cel, scopeOf(undefined, { value }));
           return result.ok && typeof result.value === 'number' ? result.value : undefined;
         });
+        point[axis] = landed;
+        position[axis] = scales ? scales[axis].textOf(landed) : landed;
         const source = bound(node.placement[axis]);
-        if (source) placed[source.attribute] = position[axis] - source.offset;
+        if (source) placed[source.attribute] = scales ? scales[axis].textOf(landed - source.offset) : landed - source.offset;
       }
-      return { position, placed };
+      return { position, point, placed };
     };
 
     const add = (type: string, attributes: Readonly<Record<string, Value | null>>, ends?: { readonly source: string; readonly target: string }, parent?: string, position?: Beside | AtIndex, slot?: string): string | undefined => {
@@ -991,6 +1002,23 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     const laidOut = (action: Readonly<Record<string, unknown>>, scope: Scope): void => {
       const config = typeof action.algorithm === 'string' && Object.hasOwn(parts.layout.algorithms, action.algorithm) ? parts.layout.algorithms[action.algorithm] : undefined;
       const refusals = isObject(action.refusals) ? action.refusals : {};
+      // A plugin that gives rows writes each to the attribute its node's `y` is bound to, as one step (DISL 13.1).
+      const given = config?.plugin === undefined ? undefined : parts.rows?.(config, working);
+      if (given !== undefined && given.size > 0) {
+        const view = viewOf(situation, false);
+        let written = false;
+        for (const element of working.elements) {
+          const row = given.get(element.id);
+          const source = bound(nodeNotation(view.notation, metamodel, element.type).placement.y);
+          if (row === undefined || !source) continue;
+          const attribute = attributesOf(metamodel, element.type)[source.attribute] as Attribute | undefined;
+          if (!attribute || same(element.attributes[source.attribute] ?? defaultOf(attribute), row)) continue;
+          written = true;
+          write(element.id, { [source.attribute]: row }, 'layout');
+        }
+        if (!written) refuse(worded(refusals.unchanged as Message | undefined, scope, 'This would change nothing.'));
+        return;
+      }
       // A plugin's arrangement is kept where positions are kept: every node it places is pinned there, as a drag pins it (DISL 10.4, 11.6).
       if (config?.plugin !== undefined && parts.placed) {
         const placed = parts.placed(config, working);
@@ -1122,12 +1150,12 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
             }
             continue;
           }
-          const { position, placed } = dropped(type, point);
+          const { position, point: landed, placed } = dropped(type, point);
           if (check({ kind: 'create', values: { elementType: type, position, parent: null, dropTarget: null, tool: null } })) {
             const made = add(type, { ...placed, ...values }, undefined, typeof parent === 'string' && parent !== '' ? parent : undefined, next, typeof slot === 'string' && slot !== '' ? slot : undefined);
             kept(action.as, made);
             // Created at a point no attribute places, it is kept there as a drop from the toolbox is (DISL 10.4).
-            if (made !== undefined && position && pins && Object.keys(placed).length === 0) pin(made, position);
+            if (made !== undefined && landed && pins && Object.keys(placed).length === 0) pin(made, landed);
           }
         } else if (isObject(action.connect)) {
           const type = one(action.connect.type)?.value;
@@ -1283,7 +1311,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
 
     // A parent placement (DISL 9.1): the candidate of the lowest rank, the first in model order on a tie, and the index among its children.
     // Nothing is given back when the placement refuses; no parent, for an element that goes to the top level.
-    function placedBy(name: string, type: string, position: Point | null): { readonly parent?: string; readonly index?: number } | undefined {
+    function placedBy(name: string, type: string, position: Position | null): { readonly parent?: string; readonly index?: number } | undefined {
       const placement = Object.hasOwn(placements, name) ? placements[name] : undefined;
       if (!placement) return {};
       const variables = { position, elementType: type };
@@ -1656,22 +1684,30 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     const system = coordinates.systems[node.placement.system ?? ''] ?? view.system;
     const scales = system ? scalesOf(system, model.diagram) : undefined;
     const attributes = attributesOf(metamodel, element?.type ?? '');
-    const read = (name: string | undefined): number | undefined => {
+    // A coordinate as its axis counts it: a number, or the days of a date on an axis of dates (DISL 5.4).
+    const read = (name: string | undefined, axis?: 'x' | 'y'): number | undefined => {
       const value = name === undefined || !element ? undefined : element.attributes[name] ?? (Object.hasOwn(attributes, name) ? defaultOf(attributes[name]) : undefined);
-      return typeof value === 'number' ? value : undefined;
+      return axis && scales ? scales[axis].valueOf(value) : typeof value === 'number' ? value : undefined;
     };
-    const snap = (axis: 'x' | 'y', value: number): number => snapped(ruleFor(system, node.snapping, gesture, axis), value, system?.[axis], model.diagram, (cel, raw) => {
-      const result = expressions.evaluate(cel, run.scopeOf(id, { value: raw }));
-      return result.ok && typeof result.value === 'number' ? result.value : undefined;
-    });
+    // What an attribute stores for a coordinate, in the form the value it replaces is written in.
+    const stored = (name: string, axis: 'x' | 'y', value: number): Value => (scales ? scales[axis].textOf(value, element?.attributes[name]) : value);
+    // A value that carries a time of day is not snapped to the calendar: it keeps its precision, in whole seconds (DISL 5.4, 5.10).
+    const snap = (axis: 'x' | 'y', value: number, name?: string): number => {
+      const rule = ruleFor(system, node.snapping, gesture, axis);
+      if (isObject(rule) && rule.calendar && name !== undefined && scales?.[axis].timed(element?.attributes[name])) return value;
+      return snapped(rule, value, system?.[axis], model.diagram, (cel, raw) => {
+        const result = expressions.evaluate(cel, run.scopeOf(id, { value: raw }));
+        return result.ok && typeof result.value === 'number' ? result.value : undefined;
+      });
+    };
     // The bounds a placement constraint sees, as CEL holds the attributes they are bound to (DISL 8.4).
     const boundsOf = (values: Readonly<Record<string, Value | null>>): Record<string, unknown> => {
       const world = texts.world(model, situation?.env);
       const result: Record<string, unknown> = {};
       for (const key of ['x', 'y', 'x2', 'y2'] as const) {
         const source = bound(node.placement[key]);
-        const value = source && (Object.hasOwn(values, source.attribute) ? values[source.attribute] : read(source.attribute));
-        if (source && typeof value === 'number' && Object.hasOwn(attributes, source.attribute)) result[key] = world.toCel(value, attributes[source.attribute]);
+        const value = source && (Object.hasOwn(values, source.attribute) ? values[source.attribute] : element?.attributes[source.attribute] ?? read(source.attribute));
+        if (source && (typeof value === 'number' || typeof value === 'string') && Object.hasOwn(attributes, source.attribute)) result[key] = world.toCel(value, attributes[source.attribute]);
       }
       for (const key of ['width', 'height'] as const) {
         const name = attributeIn(node.size[key]);
@@ -1680,7 +1716,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
       }
       return result;
     };
-    return { element, node, scales, read, snap, boundsOf };
+    return { element, node, scales, read, stored, snap, boundsOf };
   };
 
   // A drag in a tidy tree (DISL 10.3): past the middle of a sibling it takes that sibling's place in the model, and
@@ -1725,17 +1761,18 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     if (tree && (tree.drag.across === 'reorder' || tree.drag.down === 'row') && elements.length === 1 && situation?.bounds) return dragInTree(model, elements[0], by, situation, tree);
     const run = open(model, situation, 'change');
     for (const id of elements) {
-      const { element, node, scales, read, snap, boundsOf } = placing(model, id, situation, 'move', run);
+      const { element, node, scales, read, stored, snap, boundsOf } = placing(model, id, situation, 'move', run);
       const values: Record<string, Value> = {};
       for (const axis of ['x', 'y'] as const) {
         const source = bound(node.placement[axis]);
-        const current = read(source?.attribute);
+        const current = read(source?.attribute, axis);
         if (!element || !source || !scales || current === undefined || by[axis] === 0 || !allowed(node.placement.movable, axis)) continue;
-        values[source.attribute] = snap(axis, current + source.offset + by[axis] / scales[axis].perUnit) - source.offset;
+        const moved = snap(axis, current + source.offset + by[axis] / scales[axis].perUnit, source.attribute) - source.offset;
+        values[source.attribute] = stored(source.attribute, axis, moved);
         // The opposite edge moves along, so that the extent stays what it is.
         const opposite = bound(node.placement[`${axis}2`]);
-        const far = read(opposite?.attribute);
-        if (opposite && far !== undefined) values[opposite.attribute] = far + (values[source.attribute] as number) - current;
+        const far = read(opposite?.attribute, axis);
+        if (opposite && far !== undefined) values[opposite.attribute] = stored(opposite.attribute, axis, far + moved - current);
       }
       // A node no attribute places is where the layout put it: dragged, it is pinned where it is dropped (DISL 10.4).
       const from = situation?.at?.(id);
@@ -1754,7 +1791,7 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
 
   const resize: Behavior['resize'] = (model, id, by, situation) => {
     const run = open(model, situation, 'change');
-    const { element, node, scales, read, snap, boundsOf } = placing(model, id, situation, 'resize', run);
+    const { element, node, scales, read, stored, snap, boundsOf } = placing(model, id, situation, 'resize', run);
     const values: Record<string, Value> = {};
     const anchor = node.placement.anchor ?? 'top-left';
     const fraction = (axis: 'x' | 'y'): number => {
@@ -1764,16 +1801,20 @@ export function interpretBehavior(specification: Specification, metamodel: Metam
     for (const [axis, near, far, extent, only] of [['x', by.left ?? 0, by.right ?? 0, 'width', 'vertical'], ['y', by.top ?? 0, by.bottom ?? 0, 'height', 'horizontal']] as const) {
       if (!element || !scales || (near === 0 && far === 0) || !allowed(node.placement.resizable, axis) || node.size.resizable === false || node.size.resizable === only) continue;
       const source = bound(node.placement[axis]);
-      const current = read(source?.attribute);
+      const current = read(source?.attribute, axis);
       const opposite = bound(node.placement[`${axis}2`]);
-      const edge = read(opposite?.attribute);
+      const edge = read(opposite?.attribute, axis);
       const sized = attributeIn(node.size[extent]);
       const size = read(sized);
-      const to = (from: number, offset: number, distance: number): number => snap(axis, from + offset + distance / scales[axis].perUnit) - offset;
+      const to = (from: number, offset: number, distance: number, name?: string): number => snap(axis, from + offset + distance / scales[axis].perUnit, name) - offset;
       if (opposite && edge !== undefined) {
-        // The extent lies between two bound coordinates: each dragged edge is one of them.
-        if (source && current !== undefined && near !== 0) values[source.attribute] = to(current, source.offset, near);
-        if (far !== 0) values[opposite.attribute] = to(edge, opposite.offset, far);
+        // The extent lies between two bound coordinates: each dragged edge is one of them, and stops at the other rather than crossing it.
+        const sign = Math.sign(scales[axis].perUnit || 1);
+        if (source && current !== undefined && near !== 0) values[source.attribute] = stored(source.attribute, axis, sign * Math.min(sign * to(current, source.offset, near, source.attribute), sign * edge));
+        if (far !== 0) {
+          const end = to(edge, opposite.offset, far, opposite.attribute);
+          values[opposite.attribute] = stored(opposite.attribute, axis, current === undefined ? end : sign * Math.max(sign * end, sign * current));
+        }
       } else if (sized !== undefined && size !== undefined) {
         // The extent is a size in canvas units, and the anchor moves with the edges by its place between them.
         const shift = near * (1 - fraction(axis)) + far * fraction(axis);

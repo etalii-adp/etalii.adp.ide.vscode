@@ -77,6 +77,11 @@ export interface LayoutPlugin {
    * measures the node itself. A node it names no place for stays where it is.
    */
   place(request: LayoutRequest): Readonly<Record<string, { readonly x: number; readonly y: number; readonly width?: number; readonly height?: number }>>;
+  /**
+   * For a layout that gives rows rather than places: the row of each element it arranges, by id, which
+   * the attribute its node's `y` is bound to takes. An element it names no row for keeps its own.
+   */
+  rows?(request: LayoutRequest): Readonly<Record<string, number>>;
 }
 
 export interface Layout {
@@ -275,9 +280,10 @@ export interface RowItem {
  * goes on a free top row among those in use, the one nearest the average row of its placed linked
  * items, else the first; with none free, on the lowest top row whose rows are free. Whole
  * neighbouring rows are then swapped while that strictly shortens the links, for at most
- * `swapPasses` passes; a row an item of several rows covers stays where it is.
+ * `swapPasses` passes; a row an item of several rows covers stays where it is. The two items of a
+ * pair `apart` never share a row: where their shared row is the only free one, a row is opened.
  */
-export function assignRows(items: readonly RowItem[], links: readonly (readonly [string, string])[], options: Pick<RowsLayout, 'clearance' | 'ties' | 'swapPasses'>): Map<string, number> {
+export function assignRows(items: readonly RowItem[], links: readonly (readonly [string, string])[], options: Pick<RowsLayout, 'clearance' | 'ties' | 'swapPasses'>, apart: readonly (readonly [string, string])[] = []): Map<string, number> {
   const ordered = items.map((item, index) => ({ item: { ...item, rows: Math.max(1, item.rows ?? 1) }, index }))
     .sort((a, b) => a.item.from - b.item.from || a.item.to - b.item.to || a.index - b.index)
     .map((entry) => entry.item);
@@ -289,12 +295,22 @@ export function assignRows(items: readonly RowItem[], links: readonly (readonly 
     }
   }
 
+  // Pairs kept apart: linked or not, the two never share a row.
+  const avoided = new Map<string, string[]>(ordered.map((item) => [item.id, []]));
+  for (const [first, second] of apart) {
+    if (first !== second && avoided.has(first) && avoided.has(second)) {
+      avoided.get(first)!.push(second);
+      avoided.get(second)!.push(first);
+    }
+  }
+
   // Where each row is next free, across.
   const freeFrom: number[] = [];
   const rows = new Map<string, number>();
   for (const item of ordered) {
+    const shunned = new Set(avoided.get(item.id)!.filter((id) => rows.has(id)).map((id) => rows.get(id)!));
     const fits = (top: number): boolean => {
-      for (let row = top; row < top + item.rows; row++) if (row < freeFrom.length && freeFrom[row] > item.from) return false;
+      for (let row = top; row < top + item.rows; row++) if ((row < freeFrom.length && freeFrom[row] > item.from) || shunned.has(row)) return false;
       return true;
     };
     const placed = linked.get(item.id)!.filter((id) => rows.has(id)).map((id) => rows.get(id)!);
@@ -303,6 +319,7 @@ export function assignRows(items: readonly RowItem[], links: readonly (readonly 
 
     let row = 0;
     if (free.length === 0) {
+      // Every row is busy here, or free only beside a pair kept apart: the lowest top from which the item fits, opening rows below.
       while (!fits(row)) row++;
     } else if (placed.length === 0) {
       row = free[0];
