@@ -71,6 +71,10 @@ describe('a value snapped by a rule', () => {
     expect(snapValue(calendar, 17, axis, { step: 'quarter' })).toBe(18);
     expect(snapValue(calendar, 17.4, { origin: 0, fallbackUnit: 'year' } as Axis, {})).toBe(12);
     expect(snapValue({ calendar: { unit: 'month', step: 2 } }, 17.4, axis, {})).toBe(18);
+    // `align` puts a value on the start of its unit or its end rather than the nearer (DISL 5.10).
+    expect(snapValue({ calendar: { unit: 'month', align: 'start' } }, 17.9, axis, {})).toBe(17);
+    expect(snapValue({ calendar: { unit: 'month', align: 'end' } }, 17.1, axis, {})).toBe(18);
+    expect(snapValue({ calendar: { unit: 'month', align: 'nearest' } }, 17.6, axis, {})).toBe(18);
   });
 
   it('is what an expression gives, and the value itself when that fails or there is no rule', () => {

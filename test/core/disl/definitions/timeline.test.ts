@@ -13,21 +13,16 @@ const type = diagramOf(definitionOf('timeline'), registry);
 const examples = ['example-1/roadmap.tml', 'example-2/roadmap.tml', 'marvel-universe-overview/marvel-universe-overview.tml', 'marvel-universe/marvel-universe.tml'];
 const sourceOf = (path: string): Source => ({ fileName: path.split('/').slice(-1)[0], text: readFileSync(`examples/timeline/${path}`, 'utf8') });
 
-// What the spec's later pull requests build, and the definition's stale requirement its pull request B drops: until
-// then the only findings of the definition, and of every example.
-const pending = [
-  'disl.unsupported-feature: This tool needs the DISL feature `persist.yaml`, which this add-on does not support, so a part of it is missing or works differently.',
-  'disl.unsupported-feature: This tool needs the DISL feature `snap.calendar`, which this add-on does not support, so a part of it is missing or works differently.',
-];
+// Every feature the timeline requires is built, so it and its examples read with no finding at all.
 const shown = (source: Source): string[] => type.findings(source).map((finding) => `${finding.rule}: ${finding.message}`).sort();
 
 describe('the timeline, read from its definition', () => {
-  it('reads its definition with no finding but those of what is not built yet', () => {
-    expect(shown({ fileName: 'empty.tml', text: 'timeline: 1\nelements: []\nconnections: []\n' })).toEqual([...pending].sort());
+  it('reads its definition with no finding', () => {
+    expect(shown({ fileName: 'empty.tml', text: 'timeline: 1\nelements: []\nconnections: []\n' })).toEqual([]);
   });
 
-  it.each(examples)('opens %s with no other finding, every expression evaluating', (path) => {
-    expect(shown(sourceOf(path))).toEqual([...pending].sort());
+  it.each(examples)('opens %s with no finding, every expression evaluating', (path) => {
+    expect(shown(sourceOf(path))).toEqual([]);
   });
 
   it('places a period from its begin to its end and a moment at its time, 20 units a day from 1970, on its row', () => {

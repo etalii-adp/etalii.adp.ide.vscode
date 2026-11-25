@@ -7,6 +7,6 @@ They are the definition of one tool type, copied unchanged, byte for byte, from 
 
 | File | Repository | Path | Commit | SHA-256 |
 |---|---|---|---|---|
-| `mindmap.dis` | `etalii.adp` | `definitions/diagrams/mindmap.dis` | `aa2b6a7e6606de7733ffdfff6398bda488989613` | `1af14569bdef4d3e1ea34e409b95662fd959ccfa14b3563f8dd8faad2d652721` |
-| `mindmap.fbl` | `etalii.adp.ide.standalone` | `src/diagrams/mindmap/backend/EtAlii.Adp.Diagram.Mindmap/mindmap.fbl` | `1469af623afd153e7b21d91dc6e62a46e67fe378` | `344dddac8efb564534f54723785c66b3f873eb89706806266a17ddebbbebea56` |
-| `mindmap.md` | `etalii.adp` | `definitions/diagrams/mindmap.md` | `aa2b6a7e6606de7733ffdfff6398bda488989613` | `9e3bdfa0e6b84b1861d9629547f6280d6961aec8fb81f31b4ea82666c437ae12` |
+| `mindmap.dis` | `etalii.adp` | `definitions/diagrams/mindmap.dis` | `a5eed37222a3f0c26ddc61b2cb4decc18502ac1d` | `1af14569bdef4d3e1ea34e409b95662fd959ccfa14b3563f8dd8faad2d652721` |
+| `mindmap.fbl` | `etalii.adp.ide.standalone` | `src/diagrams/mindmap/backend/EtAlii.Adp.Diagram.Mindmap/mindmap.fbl` | `9555565b585dcd55d23d16c5b7008aa59ba30c1c` | `344dddac8efb564534f54723785c66b3f873eb89706806266a17ddebbbebea56` |
+| `mindmap.md` | `etalii.adp` | `definitions/diagrams/mindmap.md` | `a5eed37222a3f0c26ddc61b2cb4decc18502ac1d` | `9e3bdfa0e6b84b1861d9629547f6280d6961aec8fb81f31b4ea82666c437ae12` |
