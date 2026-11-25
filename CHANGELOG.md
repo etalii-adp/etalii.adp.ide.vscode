@@ -4,6 +4,13 @@ All notable changes to **ADP: A Different Perspective** are listed here, newest 
 
 ## [Unreleased]
 
+### Fixed
+
+- **Timeline:** a new timeline now opens on the weeks around today, so what you add first is dated near today rather than in 1970.
+- **Timeline:** an element whose dates you change in ADP Properties is brought into view where its new dates put it.
+- **Timeline:** a timeline that is almost as tall as the editor opens with its last row clear of the date ruler.
+- **All diagrams:** an element changed in ADP Properties is scrolled into view when the change moves it out of sight.
+
 ## [0.2.4] - 2026-11-25
 
 ### Added

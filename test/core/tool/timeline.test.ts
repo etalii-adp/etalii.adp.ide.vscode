@@ -100,8 +100,26 @@ describe('the timeline\'s time axis, fitted to the document', () => {
     expect(written).toMatch(/label: New element\r?\n\s+begin: 2026-09-21\r?\n\s+end: 2026-10-05/);
   });
 
-  it('fits nothing for an empty timeline, which keeps the definition\'s 20 units a day', () => {
-    expect(type.fittedScales!({ fileName: 'empty.tml', text: 'timeline: 1\r\nelements: []\r\n' })).toBeUndefined();
+  // The host test of task T031 found a new timeline starting in 1970 (etalii.adp #853): what a new user drops lands near today.
+  it('fits an empty timeline to the weeks around today, so a drop in its middle writes a day near today', () => {
+    const empty: Source = { fileName: 'empty.tml', text: 'timeline: 1\r\nelements: []\r\n' };
+    const today = Date.UTC(2026, 10, 25) / 86_400_000;
+    const around = type.fittedScales!(empty, today)!;
+    const written = spliced(empty.text, applied(type.edit(empty, { kind: 'drop', entry: 'element', x: 600, y: 15 }, { scales: around }, false)).splices);
+    const begin = /begin: (\d{4}-\d{2}-\d{2})/.exec(written)![1];
+    expect(Math.abs(Date.parse(begin) / 86_400_000 - today)).toBeLessThan(45);
+  });
+});
+
+// The host test of task T031 found an element whose dates were typed in ADP Properties sitting far outside the view, with
+// nothing to bring it back: the edit names the element, for the host to bring into view where it now lies outside it.
+describe('the timeline\'s properties', () => {
+  it('bring the element whose dates they change into view', () => {
+    const source: Source = { fileName: 'roadmap.tml', text: fixture('roadmap.tml') };
+    const begin = type.fields(source, ['build']).find((row) => row.label === 'Begin')!;
+    const outcome = applied(type.edit(source, { kind: 'setField', id: 'build', field: begin.id, value: '2031-03-02' }, {}, false));
+    expect(outcome.splices.length).toBeGreaterThan(0);
+    expect(outcome.show).toBe('build');
   });
 });
 

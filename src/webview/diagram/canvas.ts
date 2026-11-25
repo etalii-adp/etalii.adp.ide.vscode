@@ -302,6 +302,8 @@ export class Canvas {
     this.empty.setAttribute('style', scene.empty === undefined ? '' : [
       `color: ${colourOf(scene.tokens, themeKind(), scene.empty.colour, 'text')}`, ...(scene.empty.fontSize === undefined ? [] : [`font-size: ${scene.empty.fontSize}px`]),
     ].join('; '));
+    // The time ruler's strip, `.adp-ruler` in canvas.css with its border, covers the bottom of the view.
+    this.surface.coverBottom(scene.chrome?.rulers.some((ruler) => ruler.axis === 'x') === true ? 23 : 0);
     this.surface.placeOnce(scene.bounds);
     this.drawRuler();
   }

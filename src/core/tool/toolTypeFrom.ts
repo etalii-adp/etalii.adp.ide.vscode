@@ -431,18 +431,23 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   }
 
   // The scale of each time axis of dates that shows the whole document across about 1200 canvas units, read from where
-  // its nodes are drawn on the declared scale; none for an empty document.
-  function fittedScales(source: Source): ViewOptions['scales'] {
+  // its nodes are drawn on the declared scale. An empty document is fitted to the weeks around today, so that what a new
+  // user draws first lands near now rather than at the axis's origin in 1970 (etalii.adp #853).
+  function fittedScales(source: Source, today = Date.now() / 86_400_000): ViewOptions['scales'] {
     if (dateAxes.length === 0) return undefined;
     scaled({});
     const open = opened(source);
     if (open.unreadable) return undefined;
     const scene = createScene(sceneTool, open.model, measured);
     const system = coordinates.value.systems[scene.system];
-    if (!system || scene.nodes.length === 0) return undefined;
+    if (!system) return undefined;
     const fitted: Record<string, { origin: number; size: number }> = {};
     for (const [axis, across] of [[system.x, true], [system.y, false]] as [Axis, boolean][]) {
       if (!dateAxes.includes(axis)) continue;
+      if (scene.nodes.length === 0) {
+        fitted[axis.name] = fittedScale(Math.floor(today) - 30, Math.floor(today) + 60);
+        continue;
+      }
       const scale = scaleOf(axis);
       const days = scene.nodes.flatMap((node) => (across ? [node.box.x, node.box.x + node.box.width] : [node.box.y, node.box.y + node.box.height]).map((at) => scale.toValue(at)));
       fitted[axis.name] = fittedScale(Math.min(...days), Math.max(...days));
@@ -879,8 +884,11 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
         const parsed = setting ? row.item.parse(on, request.value) : undefined;
         if (setting && parsed && 'refused' in parsed) return refused(parsed.refused);
         const given = parsed && 'set' in parsed ? parsed.set[row.item.attribute!] : undefined;
-        if (setting && given !== undefined && given !== null) return done(intents.operate(model, setting.id, [element.id], situation, undefined, { [setting.param!]: given }));
-        return done(intents.edit(model, element.id, row.item, request.value, situation));
+        // The element follows where its new values put it: brought into view if it now lies outside it, as when a
+        // timeline's dates are typed (the host test of etalii.adp spec 091, task T031).
+        const followed = (outcome: EditOutcome): EditOutcome => (outcome.kind === 'applied' && outcome.splices.length > 0 && outcome.select === undefined && outcome.show === undefined ? { ...outcome, show: element.id } : outcome);
+        if (setting && given !== undefined && given !== null) return followed(done(intents.operate(model, setting.id, [element.id], situation, undefined, { [setting.param!]: given })));
+        return followed(done(intents.edit(model, element.id, row.item, request.value, situation)));
       }
       case 'action': {
         const { id } = request;

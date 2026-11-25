@@ -27,6 +27,8 @@ export class Surface {
   private placedContent: Box | undefined;
   /** Whether the user has panned or zoomed since the document was placed. */
   private moved = false;
+  /** The height in pixels that the canvas's own strips cover at the bottom of the surface, such as a time ruler. */
+  private below = 0;
   private readonly listeners: (() => void)[] = [];
 
   constructor(host: HTMLElement) {
@@ -87,7 +89,8 @@ export class Surface {
     this.placed = true;
     this.placedContent = content;
     const margin = 48;
-    const fit = Math.min(1, (width - 2 * margin) / Math.max(1, content.width), (height - 2 * margin) / Math.max(1, content.height));
+    const room = height - this.below;
+    const fit = Math.min(1, (width - 2 * margin) / Math.max(1, content.width), (room - 2 * margin) / Math.max(1, content.height));
     if (fit >= readableScale) {
       this.reveal(content, true);
       return;
@@ -95,8 +98,16 @@ export class Surface {
     this.scale = readableScale;
     // Room on the left for the names written before the first elements.
     this.tx = Math.min(width / 3, 240) - content.x * this.scale;
-    this.ty = margin - content.y * this.scale;
+    // A document that is all but as tall as the room is shown whole, clear of the strips at the bottom, rather than a
+    // margin down with its last row under them (the host test of etalii.adp spec 091, task T031).
+    const tall = content.height * this.scale;
+    const tight = 8;
+    this.ty = (tall + 2 * tight <= room ? (room - tall) / 2 : margin) - content.y * this.scale;
     this.apply();
+  }
+  /** Says how many pixels at the bottom of the surface the canvas's own strips cover, for the first placing to keep clear of. */
+  coverBottom(pixels: number): void {
+    this.below = pixels;
   }
   /** Scrolls so a box is in view; `fit` also zooms out until it fits. */
   reveal(box: Box, fit = false): void {
@@ -104,15 +115,15 @@ export class Surface {
     if (width === 0 || height === 0) return;
     const margin = 48;
     if (fit) {
-      const scale = Math.min(1, (width - 2 * margin) / Math.max(1, box.width), (height - 2 * margin) / Math.max(1, box.height));
+      const scale = Math.min(1, (width - 2 * margin) / Math.max(1, box.width), (height - this.below - 2 * margin) / Math.max(1, box.height));
       this.scale = Math.min(maxScale, Math.max(minScale, scale));
     }
     const view = this.viewport();
-    const inside = box.x >= view.x && box.y >= view.y && box.x + box.width <= view.x + view.width && box.y + box.height <= view.y + view.height;
+    const inside = box.x >= view.x && box.y >= view.y && box.x + box.width <= view.x + view.width && box.y + box.height <= view.y + view.height - this.below / this.scale;
     if (!fit && inside) return;
     if (!fit) this.moved = true;
     this.tx = width / 2 - (box.x + box.width / 2) * this.scale;
-    this.ty = height / 2 - (box.y + box.height / 2) * this.scale;
+    this.ty = (height - this.below) / 2 - (box.y + box.height / 2) * this.scale;
     this.apply();
   }
 

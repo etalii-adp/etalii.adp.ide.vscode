@@ -160,7 +160,7 @@ export type EditOutcome =
   /** The splices of the gesture, and the registration's new text when the edit changed it (null removes it). */
   | {
     readonly kind: 'applied'; readonly splices: readonly TextSplice[]; readonly viewOptions?: ViewOptions; readonly registration?: string | null; readonly select?: string; readonly editLabel?: boolean; readonly multiline?: boolean;
-    /** An element the edit made and selects nothing of: brought into view where it lies outside it, and not selected. */
+    /** An element the edit made or changed and selects nothing of: brought into view where it lies outside it, and not selected. */
     readonly show?: string;
     /** The splices of other files the step changes as well, each by the name the document gives it in `Source.related`: written with the document's, or none is. */
     readonly others?: readonly { readonly file: string; readonly splices: readonly TextSplice[] }[];
@@ -311,8 +311,8 @@ export interface ToolType<View, Request> {
    * whose documents take part in links; undefined for another, or a document that cannot be read.
    */
   indexed?(source: Source): IndexedDocument | undefined;
-  /** The scales that fit a diagram's time axes of dates to the document, for a viewer to keep in `scales`; none for an empty one or a type without such an axis. */
-  fittedScales?(source: Source): ViewOptions['scales'];
+  /** The scales that fit a diagram's time axes of dates to the document, for a viewer to keep in `scales`, an empty one to the weeks around `today` (in days since 1970); none for a type without such an axis. */
+  fittedScales?(source: Source, today?: number): ViewOptions['scales'];
   /** Everything wrong with the document. Never throws. */
   findings(source: Source): Finding[];
   /** What to show. Never throws. */
