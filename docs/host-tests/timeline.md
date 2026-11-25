@@ -100,3 +100,63 @@ None is fixed in this change.
 ## Verdict
 
 Blocking. Visual Studio Code reads and draws all four examples without a finding, as fast as SC-004 asks, and a new user can reach three periods, a moment and a connection; but moments are not drawn, connections show no arrowheads, a long timeline can never be seen whole or readably, a new timeline starts in 1970, and letting go on a dot duplicates an element. The timeline stays a work in progress in [tools.md](../tools.md) until rows 1 to 3 and the bugs above are settled.
+
+## Re-check after the fixes
+
+The same tests on 2026-11-25, after [#122](https://github.com/etalii-adp/etalii.adp.ide.vscode/pull/122) (moments in the theme's accent colour, a line let go on a dot connects), [#123](https://github.com/etalii-adp/etalii.adp.ide.vscode/pull/123) (the time axis fitted to the document when it opens) and [#125](https://github.com/etalii-adp/etalii.adp.ide.vscode/pull/125) (a line's end direction is the side it enters by). This repository's `develop` at `2cf32f8`, packaged as `etalii-adp-0.2.4.vsix` and installed into a fresh profile, on the same Mac, Visual Studio Code 1.147.0, 1600×900, both themes. The standalone host is unchanged (`9555565`), so its pictures above still stand beside these.
+
+### Rows 1, 2 and 3
+
+| | Light | Dark |
+|---|---|---|
+| `example-1` / `example-2` | ![example-1, light](timeline/recheck-example-1-light.png) | ![example-2, dark](timeline/recheck-example-2-dark.png) |
+| `marvel-universe-overview` | ![Overview, light](timeline/recheck-overview-light.png) | ![Overview, dark](timeline/recheck-overview-dark.png) |
+
+| # | Then | Now | Result |
+|---|---|---|---|
+| 1 | About three months in view at 20 units a day; a long timeline never readable whole | Every example opens with its whole span of time in view and its labels readable: `example-1` from April 2025 to July 2026, `example-2` 2024 to 2029, both overviews 1990 to 2040, the ruler naming years. All the rows of `example-1` and `example-2` are in view. `marvel-universe-overview`'s last row (row 20, Strange's spell goes wrong and World forgets Peter Parker) lies under the ruler: the drawing ends 36 pixels below the ruler's top. `marvel-universe` has 233 rows, and about 20 of them are in view, so the rest are reached by scrolling down ([picture](timeline/recheck-marvel-universe-light.png)); the standalone host draws all 233 in one column too small to read | Passes for time. The overview's last row is hidden, which is a small bug of the fit. The tall document opening at a readable size is this host's convention ([parity.md](../parity.md)) |
+| 2 | No diamond | A filled diamond in the theme's accent colour, in both themes ([picture](timeline/recheck-arrowheads-dark.png)). Its two dots cover most of it, as the standalone host's dots do | Passes |
+| 3 | No arrowheads; lines entering from the right | Every line enters its target from the left, with a filled arrowhead before the target's begin, pointing into it ([picture](timeline/recheck-arrowheads-dark.png)) | Passes |
+
+Two smaller differences remain. A connection to a target that begins before its source ends runs straight back underneath the source's bar, where the standalone host loops forward and back ([picture](timeline/recheck-new-user-done.png)); timeline.dis does not ask for the loop (`bezier.backward`). On a short bar, the begin dot covers the first letter of its label ("ntegration ...", "ngesti..."), as in the standalone host.
+
+### `marvel-universe.tml` (SC-004)
+
+| Run | First drawn | All 907 drawn |
+|---|---|---|
+| 1 | 460 ms | 684 ms |
+| 2 | 306 ms | 497 ms |
+| 3 | 302 ms | 519 ms |
+
+Pan and zoom, 60 wheel steps each and again zoomed fully out: median 16.7 ms between frames, 95th percentile 17.2 to 18.9 ms, maximum 35.8 ms, no frame over 50 ms. No stutter. Passes.
+
+### A new user, again (SC-005)
+
+The same steps, in a fresh profile with an empty folder, Light Modern.
+
+| Step | Now |
+|---|---|
+| "New Timeline" in the Command Palette | Still two matches, the ADP command and Explorer: Focus on Timeline View. |
+| ADP: New Timeline diagram, OK | `untitled.tml` opens with ADP Toolbox, on an empty canvas whose ruler reads "Jan 1970". |
+| Element from ADP Toolbox | **"New element" from 1970-02-01 to 1970-02-15** ([picture](timeline/recheck-new-user-1970.png)): etalii.adp [#853](https://github.com/etalii-adp/etalii.adp/issues/853), still open. |
+| Begin set to `2026-01-05` in ADP Properties | **The element disappears**, with one warning in the status bar. |
+| End set to `2026-02-15` | The element is valid again but drawn 56 years from the view, which stays on February 1970 ([picture](timeline/recheck-new-user-out-of-view.png)). There is still no command to show the whole timeline or the selection; the fit of #123 happens only when the file opens, so I closed the tab and opened the file again. |
+| Tab, Enter | A period after it and one below it, each connected: three periods. |
+| Moment from ADP Toolbox | "New moment" on 2026-01-11, a visible diamond. The toolbox kept working after the tab had been closed and opened again. |
+| A line from the third period's end dot, let go on the second period's begin dot | **It connects** (`from: ptz7o5d5`, `to: waockcl2`), with no new element ([picture](timeline/recheck-new-user-done.png)). Let go outside the window, a line still makes a new element where it ends, as the definition says for empty canvas. |
+
+No error dialog, and the goal is reached. What is left for a new user:
+
+1. **A new timeline starts in 1970** (etalii.adp #853).
+2. **The element vanishes while its dates are typed**, and once the dates are right it is far from the view. There is no way to bring it into view short of opening the file again: no fit or go-to-selection command, and the view does not follow an element moved through ADP Properties.
+3. "Timeline" still also finds Visual Studio Code's own Timeline view.
+
+### Verdict of the re-check
+
+Rows 2 and 3 pass, and row 1 passes for time, apart from `marvel-universe-overview`'s last row lying under the ruler. SC-004 passes. The line let go on a dot is fixed. The new-user rule, no errors or hurdles, is not met yet: hurdles 1 and 2 together leave a new user's first element in 1970 and then out of sight, with no way to bring it back except opening the file again. So the timeline stays 🛠️ Work-in-progress in [tools.md](../tools.md). It can move to ⚗️ Prototype once a new timeline starts near today (#853) and an element changed through ADP Properties stays in view or can be brought into view, and the overview's last row is clear of the ruler.
+
+None of these is fixed in this change:
+
+- **VS Code: the fit leaves the last row under the ruler.** `marvel-universe-overview.tml` opens with its drawing reaching 790 pixels into a 777 pixel surface whose ruler starts at 754, so row 20 is hidden.
+- **VS Code: the view does not follow an element moved through ADP Properties**, and there is no command to show the whole document or the selection.
+- **etalii.adp #853**: a new timeline starts at the Unix epoch.
