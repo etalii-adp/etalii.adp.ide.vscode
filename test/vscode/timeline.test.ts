@@ -7,8 +7,10 @@ import { closeAll, drawn, example, until } from './support';
 
 const viewType = 'etalii.adp.generic.timeline';
 const edit = (request: unknown): Thenable<{ result: string; sentence?: string } | undefined> => vscode.commands.executeCommand('etalii.adp.test.edit', request);
-// 20 canvas units a day from 1970 (the definition's time axis).
-const canvasOf = (date: string): number => (Date.parse(`${date}T00:00:00Z`) / 86_400_000) * 20;
+type Scale = { origin: number; size: number };
+// Where a date is drawn on the scale the timeline was fitted to when it opened.
+const canvasOf = (scale: Scale, date: string): number => (Date.parse(`${date}T00:00:00Z`) / 86_400_000 - scale.origin) * scale.size;
+const scaleOf = (state: { options?: unknown }): Scale => (state.options as { scales: Record<string, Scale> }).scales.time;
 const examples: readonly [string, string, number][] = [
   ['example-1', 'roadmap.tml', 11],
   ['example-2', 'roadmap.tml', 29],
@@ -28,20 +30,30 @@ suite('A timeline in Visual Studio Code', () => {
     });
   }
 
-  const gestures: readonly [string, unknown, RegExp][] = [
-    ['a drop of an element', { kind: 'drop', entry: 'element', x: canvasOf('2026-09-21') + 7, y: 15 }, /label: New element\r?\n\s+begin: 2026-09-21\r?\n\s+end: 2026-10-05/],
-    ['a move', { kind: 'move', id: 'launch', x: canvasOf('2026-03-03'), y: 2 * 60 + 0.3 * 60 - 9 }, /id: launch\r?\n\s+label: [^\r\n]*\r?\n\s+begin: 2026-03-03/],
-    ['Arrange diagram', { kind: 'action', action: 'arrange' }, /row: 0/],
+  // The whole of a timeline is in view when it opens: its time axis is fitted to the document, as the standalone host fits it (host test of task T031).
+  test('fits the time axis to the whole document when it opens', async () => {
+    await vscode.commands.executeCommand('vscode.openWith', example('timeline', 'example-1', 'roadmap.tml'), viewType);
+    const state = await drawn();
+    const boxes = (state.scene as unknown as { nodes: { box: { x: number; width: number } }[] }).nodes.map((node) => node.box);
+    const from = Math.min(...boxes.map((box) => box.x));
+    const to = Math.max(...boxes.map((box) => box.x + box.width));
+    assert.ok(to - from > 800 && to - from < 1300, `the document is drawn across ${to - from} canvas units`);
+  });
+
+  const gestures: readonly [string, (scale: Scale) => unknown, RegExp][] = [
+    ['a drop of an element', (scale) => ({ kind: 'drop', entry: 'element', x: canvasOf(scale, '2026-09-21') + scale.size / 3, y: 15 }), /label: New element\r?\n\s+begin: 2026-09-21\r?\n\s+end: 2026-10-05/],
+    ['a move', (scale) => ({ kind: 'move', id: 'launch', x: canvasOf(scale, '2026-03-03'), y: 2 * 60 + 0.3 * 60 - 9 }), /id: launch\r?\n\s+label: [^\r\n]*\r?\n\s+begin: 2026-03-03/],
+    ['Arrange diagram', () => ({ kind: 'action', action: 'arrange' }), /row: 0/],
   ];
   for (const [what, request, written] of gestures) {
     test(`takes back ${what} with one undo`, async () => {
       const uri = example('timeline', 'example-1', 'roadmap.tml');
       await vscode.commands.executeCommand('vscode.openWith', uri, viewType);
-      await drawn();
+      const scale = scaleOf(await drawn());
       const document = await vscode.workspace.openTextDocument(uri);
       const original = document.getText();
 
-      assert.deepStrictEqual(await edit(request), { result: 'applied' });
+      assert.deepStrictEqual(await edit(request(scale)), { result: 'applied' });
       await until(`${what} to be written`, () => written.test(document.getText()) && document.getText() !== original);
       await vscode.commands.executeCommand('undo');
       await until('the undo', () => document.getText() === original);

@@ -332,6 +332,15 @@ export function scalesOf(system: CoordinateSystem, diagram: Attributes = {}): { 
   return { x: scaleOf(system.x, diagram), y: { ...y, perUnit: -y.perUnit, toCanvas: (value) => -y.toCanvas(value), toValue: (at) => y.toValue(-at) } };
 }
 
+/**
+ * The scale that shows the days `from` to `to` across about `width` canvas units, with a tenth of the span to spare on
+ * each side, and at least a day: how the standalone host fits a timeline's time axis when it is first opened.
+ */
+export function fittedScale(from: number, to: number, width = 1200): { readonly origin: number; readonly size: number } {
+  const span = Math.max(to - from, 1);
+  return { origin: from - span * 0.1, size: width / (span * 1.2) };
+}
+
 // ---- rulers ----
 
 const most = 2000;

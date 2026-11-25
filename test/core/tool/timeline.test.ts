@@ -77,3 +77,30 @@ describe('the timeline\'s gestures, as the roadmap fixture records them', () => 
       .toEqual({ kind: 'ask', title: 'Give it an end…', confirmLabel: 'OK', fields: [{ param: 'end', label: 'End', initial: '2026-01-13' }] });
   });
 });
+
+// The host test of task T031 found a long timeline never readable as a whole: the definition's 20 units a day show about three months.
+// The standalone host fits the time axis to the document when it is first opened, and a viewer here keeps the scale it is given.
+describe('the timeline\'s time axis, fitted to the document', () => {
+  const source: Source = { fileName: 'roadmap.tml', text: fixture('roadmap.tml') };
+  const scales = type.fittedScales!(source)!;
+  const boxes = type.view(source, { scales }).nodes.map((node) => (node.shape as { box: { x: number; width: number } }).box);
+
+  it('draws the whole document across about 1200 canvas units, a tenth of its span spare on each side', () => {
+    const from = Math.min(...boxes.map((drawn) => drawn.x));
+    const to = Math.max(...boxes.map((drawn) => drawn.x + drawn.width));
+    expect(from).toBeGreaterThan(90);
+    expect(to).toBeLessThan(1110);
+    expect(to - from).toBeGreaterThan(900);
+  });
+
+  it('writes the day a drop is let go on, on the scale the viewer keeps', () => {
+    // 2026-09-21 14:13 on the fitted scale.
+    const x = (1_790_000_000 / 86_400 - scales.time.origin) * scales.time.size;
+    const written = spliced(source.text, applied(type.edit(source, { kind: 'drop', entry: 'element', x, y: 15 }, { scales }, false)).splices);
+    expect(written).toMatch(/label: New element\r?\n\s+begin: 2026-09-21\r?\n\s+end: 2026-10-05/);
+  });
+
+  it('fits nothing for an empty timeline, which keeps the definition\'s 20 units a day', () => {
+    expect(type.fittedScales!({ fileName: 'empty.tml', text: 'timeline: 1\r\nelements: []\r\n' })).toBeUndefined();
+  });
+});
