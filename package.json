@@ -3,7 +3,7 @@
   "publisher": "etalii",
   "displayName": "ADP: A Different Perspective",
   "description": "Visual tools that open your text files as diagrams and designers: mind maps, causal loop diagrams, dependency graphs, hype cycles, requirements and knowledge tables, and ITIL 4-aligned value stream maps, SLO maps and post-incident reviews.",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "license": "Apache-2.0",
   "icon": "media/icon.png",
   "private": true,
