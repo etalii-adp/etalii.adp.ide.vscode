@@ -2,6 +2,13 @@
 
 All notable changes to **ADP: A Different Perspective** are listed here, newest first.
 
+## [Unreleased]
+
+### Fixed
+
+- **Causal loop diagram:** an exported flow page now shows each loop's name under its loop marker, as the diagram does, not only its R1 or B2 tag.
+- **Causal loop diagram:** in an exported flow page, links now curve as deeply as on the canvas, so a page looks like the diagram it was exported from.
+
 ## [0.2.3] - 2026-11-25
 
 ### Added
@@ -90,7 +97,8 @@ First release on the Visual Studio Marketplace and Open VSX.
 - **ADP Toolbox** and **ADP Properties** in the ADP view of the activity bar, **ADP: Open as Text**, and full Undo and Redo for every change.
 - Language support for `.atd` tool descriptions: colouring, completion, hover, rename, formatting and live problem checking, with **ADP: New Tool Description**, **ADP: Check Tool Description** and **ADP: Validate Tool Description**.
 
-[Unreleased]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.2...develop
+[Unreleased]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.3...develop
+[0.2.3]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.1.2...v0.2.0
