@@ -3,7 +3,7 @@
   "disl": "0.12",
   "language": {
     "id": "net.etalii.adp.generic.timeline",
-    "version": "1.2.4",
+    "version": "1.2.5",
     "origin": "generic/timeline",
     "label": "Timeline diagram",
     "doc": {
@@ -555,7 +555,8 @@
           { "attribute": "begin", "widget": "text",
             "validate": [
               { "rule": "readableTime(value)", "message": { "cel": "'\\'' + value + '\\' is not a time this timeline can read.'" }, "timing": "commit" },
-              { "rule": "value.contains('T') == self.end.contains('T')", "message": "This element uses the other time form; begin and end must both be dates, or both carry a time.", "timing": "commit" }
+              { "rule": "value.contains('T') == self.end.contains('T')", "message": "This element uses the other time form; begin and end must both be dates, or both carry a time.", "timing": "commit" },
+              { "rule": "!has(self.end) || !readableTime(self.end) || compareTimes(value, self.end) <= 0", "message": "An element cannot end before it begins.", "timing": "commit" }
             ] },
           { "attribute": "end", "widget": "text",
             "validate": [

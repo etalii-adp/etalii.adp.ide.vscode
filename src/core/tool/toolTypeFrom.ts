@@ -377,7 +377,9 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     // The rows of each ruler, every level at once: which of them has room is the zoom's to say, which only the page knows.
     const diagram = { ...Object.fromEntries(Object.entries(metamodel.value.diagram).flatMap(([name, attribute]) => (defaultOf(attribute) === undefined ? [] : [[name, defaultOf(attribute)!]]))), ...model.diagram };
     const system = coordinates.value.systems[scene.system];
-    const shown = options.viewport ?? scene.bounds ?? { x: 0, y: 0, width: 0, height: 0 };
+    // An empty document has no bounds: its ruler is labelled across the 1200 canvas units an empty time axis is fitted to,
+    // where a page not yet moved begins, so a new timeline's ruler shows its dates (vscode #129).
+    const shown = options.viewport ?? scene.bounds ?? { x: 0, y: 0, width: 1200, height: 800 };
     const rulers: SceneRuler[] = [];
     for (const along of ['x', 'y'] as const) {
       const axis = system?.[along];

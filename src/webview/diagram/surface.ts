@@ -100,9 +100,9 @@ export class Surface {
     this.tx = Math.min(width / 3, 240) - content.x * this.scale;
     // A document that is all but as tall as the room is shown whole, clear of the strips at the bottom, rather than a
     // margin down with its last row under them (the host test of etalii.adp spec 091, task T031).
+    // Its whole height counts, without margins: a 1600 by 900 window leaves 12 pixels for the overview example (vscode #128).
     const tall = content.height * this.scale;
-    const tight = 8;
-    this.ty = (tall + 2 * tight <= room ? (room - tall) / 2 : margin) - content.y * this.scale;
+    this.ty = (tall <= room ? (room - tall) / 2 : margin) - content.y * this.scale;
     this.apply();
   }
   /** Says how many pixels at the bottom of the surface the canvas's own strips cover, for the first placing to keep clear of. */

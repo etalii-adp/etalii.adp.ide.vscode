@@ -10,11 +10,12 @@ import { diagram } from '../support';
 const type = diagram('timeline');
 const source: Source = { fileName: 'marvel-universe-overview.tml', text: readFileSync('examples/timeline/marvel-universe-overview/marvel-universe-overview.tml', 'utf8') };
 
-describe('a timeline\'s canvas, first shown', () => {
+// The second re-check found it still under the ruler in an editor 777 pixels tall, as a 1600 by 900 window has it (vscode #128).
+describe.each([800, 777])('a timeline\'s canvas, first shown in an editor %i pixels tall', (height) => {
   const sizes = ['clientWidth', 'clientHeight'].map((name) => [name, Object.getOwnPropertyDescriptor(Element.prototype, name)] as const);
   beforeAll(() => {
     Object.defineProperty(Element.prototype, 'clientWidth', { configurable: true, get: () => 1200 });
-    Object.defineProperty(Element.prototype, 'clientHeight', { configurable: true, get: () => 800 });
+    Object.defineProperty(Element.prototype, 'clientHeight', { configurable: true, get: () => height });
   });
   afterAll(() => {
     for (const [name, descriptor] of sizes) if (descriptor) Object.defineProperty(Element.prototype, name, descriptor);
@@ -28,6 +29,6 @@ describe('a timeline\'s canvas, first shown', () => {
     const [, ty, scale] = /translate\(\S+ (\S+)\) scale\((\S+)\)/.exec(document.querySelector('.adp-world')!.getAttribute('transform')!)!.map(Number);
     const lowest = Math.max(...view.nodes.map((node) => node.box.y + node.box.height));
     expect(ty + view.nodes.reduce((top, node) => Math.min(top, node.box.y), Infinity) * scale).toBeGreaterThanOrEqual(0);
-    expect(ty + lowest * scale).toBeLessThanOrEqual(800 - 23);
+    expect(ty + lowest * scale).toBeLessThanOrEqual(height - 23);
   });
 });
