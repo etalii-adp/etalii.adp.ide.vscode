@@ -121,6 +121,26 @@ describe('coordinates in general', () => {
     expect([x.toCanvas(10), x.toValue(210), y.perUnit]).toEqual([200, 10.5, 10]);
   });
 
+  it('give a date axis whose ruler lists no levels the calendar\'s levels, from a day to a thousand years, labelled as standalone labels them', () => {
+    const { value } = interpret(withCoordinates({
+      axes: { time: { kind: 'time', valueType: 'datetime', origin: '1970-01-01T00:00:00Z', scale: { unit: 'day', size: 20 }, ruler: { visible: true, position: 'bottom' } } },
+      systems: { timeline: { kind: 'cartesian', x: 'time', y: 'time' } },
+    }));
+    const axis = value.axes.time;
+    expect(axis.ruler?.levels?.map((level) => `${level.step} ${level.unit}`)).toEqual(['1 day', '1 week', '1 month', '1 quarter', '1 year', '2 year', '5 year', '10 year', '25 year', '50 year', '100 year', '250 year', '500 year', '1000 year']);
+    // 2025-04-27 to 2025-07-03, at zoom 4: a day is 80 pixels.
+    const [from, to] = [20_205 * 20, 20_272 * 20];
+    const rows = rulerRows(axis, {}, { from, to, zoom: 4 });
+    const labels = (unit: string, step = 1): string[] => rows.find((row) => row.unit === unit && row.step === step)!.ticks.map((tick) => tick.label);
+    expect(labels('day').slice(0, 6)).toEqual(['Apr 27', 'Apr 28', 'Apr 29', 'Apr 30', 'May 2025', 'May 2']);
+    expect(labels('month')).toEqual(['May 2025', 'Jun 2025', 'Jul 2025']);
+    expect(rows.find((row) => row.unit === 'day')!.ticks[4]).toMatchObject({ value: 20_209, at: 20_209 * 20 });
+    // Zoomed out so far that a day is a twentieth of a pixel, only the levels whose labels stand 80 pixels apart are left.
+    const wide = rulerRows(axis, {}, { from: -720_000 * 20, to: 21_000 * 20, zoom: 0.0005 });
+    expect(wide.map((row) => `${row.step} ${row.unit}`)).toEqual(['25 year', '50 year', '100 year', '250 year', '500 year', '1000 year']);
+    expect(wide.find((row) => row.step === 1000)!.ticks.map((tick) => tick.label)).toEqual(['0', '1000', '2000']);
+  });
+
   it('report what they cannot draw, and draw the nearest thing', () => {
     const { value, findings } = interpret(withCoordinates({
       axes: { lanes: { kind: 'ordinal' }, when: { kind: 'time', origin: 'now', scale: { unit: 'month' } }, months: { kind: 'time', valueType: 'yearMonth', origin: 'soon', scale: { unit: 'day', size: 2 } } },
