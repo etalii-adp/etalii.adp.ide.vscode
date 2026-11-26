@@ -43,8 +43,8 @@ function write(name: string, text: string): vscode.Uri {
   return uri;
 }
 
-async function open(uri: vscode.Uri): Promise<vscode.TextDocument> {
-  await vscode.commands.executeCommand('vscode.open', uri);
+async function open(uri: vscode.Uri, preview?: boolean): Promise<vscode.TextDocument> {
+  await vscode.commands.executeCommand('vscode.open', uri, ...(preview === undefined ? [] : [{ preview }]));
   await until('the map to be active', async () => (await state())?.uri === uri.toString());
   await drawn();
   return vscode.workspace.openTextDocument(uri);
@@ -72,6 +72,24 @@ suite('Links between documents in Visual Studio Code', () => {
     const broken = await until('the broken link', () => vscode.languages.getDiagnostics(consumerUri).find((diagnostic) => diagnostic.code === 'link.broken-element'));
     assert.match(broken.message, /'Gone' is no longer in 'target\.mm'/);
     assert.strictEqual(vscode.languages.getDiagnostics(consumerUri).filter((diagnostic) => String(diagnostic.code).startsWith('link.')).length, 1);
+  });
+
+  test('a link held by a map kept open in a background tab is in the Problems panel as soon as its target is deleted', async () => {
+    // Both are opened as kept tabs, not previews, so the target coming to the front leaves the consuming map open behind it (etalii.adp spec 092, host test T034).
+    await open(consumerUri, false);
+    await until('the target\'s name', async () => (await labelOf('ID_c2')) === 'Target');
+    const front = await open(targetUri, false);
+    const tabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs).map((tab) => (tab.input as { uri?: vscode.Uri } | undefined)?.uri?.toString());
+    assert.ok(tabs.includes(consumerUri.toString()), 'the consuming map is still open in a tab');
+    const removal = new vscode.WorkspaceEdit();
+    const text = front.getText();
+    const node = '\n<node TEXT="Target" ID="ID_t2"/>';
+    const at = text.indexOf(node);
+    removal.delete(targetUri, new vscode.Range(front.positionAt(at), front.positionAt(at + node.length)));
+    assert.ok(await vscode.workspace.applyEdit(removal));
+    assert.strictEqual((await state())?.uri, targetUri.toString());
+    const broken = await until('the broken link of the map behind', () => vscode.languages.getDiagnostics(consumerUri).find((diagnostic) => diagnostic.code === 'link.broken-element' && /'(Old name|Target)' is no longer/.test(diagnostic.message)), 5000);
+    assert.match(broken.message, /is no longer in 'target\.mm'/);
   });
 
   test('the first edit writes what the load-time check finds, in the same undo step', async () => {

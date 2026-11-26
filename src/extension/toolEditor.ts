@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { Action, EditRequest, Field, Source, TextSplice, ViewOptions } from '../core/frame/toolType';
 import { exportOf, LINKED_FROM, OPEN_LINKED, viewTypeOf } from '../core/frame/toolType';
-import { lookupItems } from '../core/tool/linkActions';
+import { emptyLookup, lookupItems } from '../core/tool/linkActions';
 import type { LinkIndex } from './linkIndex';
 import type { FromCanvas, ToCanvas, ViewCause } from '../core/frame/protocol';
 import { linkKind } from '../core/disl/metamodel';
@@ -707,7 +707,10 @@ export class Tools implements vscode.Disposable {
         const links = diagram.source.links;
         if (links === undefined) return { result: 'cancelled' };
         const origins = outcome.origins;
-        const items = lookupItems(links, (path) => origins === undefined || origins.includes(this.links?.originOf(path) ?? ''));
+        const admits = (path: string): boolean => origins === undefined || origins.includes(this.links?.originOf(path) ?? '');
+        const items = lookupItems(links, admits);
+        // An empty list says why, and what to do (etalii.adp spec 092, host test T034).
+        if (items.length === 0) return { result: 'refused', sentence: emptyLookup(links, admits) };
         const picked = await this.quickPick(items.map((item) => ({ label: item.pick.name || '(unnamed)', description: item.document, detail: item.folder, item })), { title: 'Add from another document', placeHolder: 'Type to search the elements of the workspace by name', matchOnDescription: true });
         if (picked === undefined) return { result: 'cancelled' };
         if (version !== undefined && version !== diagram.document.version) return { result: 'cancelled' };

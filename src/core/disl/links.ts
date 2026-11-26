@@ -5,7 +5,7 @@
 // the target, a link that does not resolve reported where it is held, and what load-time validation
 // writes (FBL 17.4).
 
-import { cachedName, linkText } from '../fbl/links/link';
+import { cachedName, linkText, parseLink } from '../fbl/links/link';
 import { attributeOf, type HeldLink, type IndexedDocument, type IndexedElement, type LinkFinding, linkCodes, type LinkWorkspace } from '../fbl/links/workspace';
 import { attributesOf, type Metamodel, valueKind } from './metamodel';
 import { finding, type Finding, type Model, type ModelElement } from './model';
@@ -82,10 +82,28 @@ export function indexedDocument(metamodel: Metamodel, model: Model, path: string
     nameProperty ??= linkable.nameProperty;
     const names = Object.keys(attributesOf(metamodel, element.type)).filter((name) => namesBy(metamodel, element.type, name));
     const ordered = linkable.nameProperty !== undefined && names.includes(linkable.nameProperty) ? [linkable.nameProperty, ...names.filter((name) => name !== linkable.nameProperty)] : names;
-    elements.push({ id: element.id, attributes: ordered.map((name) => [name, typeof element.attributes[name] === 'string' ? element.attributes[name] as string : ''] as const) });
+    const cached = cachedNameOf(metamodel, element);
+    elements.push({
+      id: element.id,
+      attributes: ordered.map((name) => {
+        const value = typeof element.attributes[name] === 'string' ? element.attributes[name] as string : '';
+        // A linked element that keeps no label of its own is named by the name its link caches (FBL 17.1).
+        return [name, value === '' && cached !== undefined && name === cached.attribute ? cached.name : value] as const;
+      }),
+    });
   }
   const links: HeldLink[] = [...model.elements, ...model.relations].flatMap((element) => linksOf(metamodel, element).map(({ text }) => ({ holder: element.id, text })));
   return { path, ...(documentId === undefined ? {} : { documentId }), ...(nameProperty === undefined ? {} : { nameProperty }), elements, links };
+}
+
+/** For a linked element whose label attribute caches its target's name: that attribute, and the name its link caches. */
+function cachedNameOf(metamodel: Metamodel, element: ModelElement): { readonly attribute: string; readonly name: string } | undefined {
+  const linked = linkedOf(metamodel, element.type);
+  const label = linked === undefined ? undefined : labelOf(metamodel, element, linked.attribute);
+  const text = linked === undefined ? undefined : element.attributes[linked.attribute];
+  const link = typeof text === 'string' ? parseLink(text) : undefined;
+  const name = link === undefined ? undefined : cachedName(link);
+  return label === undefined || name === undefined ? undefined : { attribute: label, name };
 }
 
 /** A link of the document that load-time validation writes again (FBL 17.4, step 4): where it is held, and its new text. */

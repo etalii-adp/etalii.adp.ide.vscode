@@ -1048,7 +1048,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
     exports: exportOffers,
     exported,
     newDocument: (name) => {
-      const made = produceTemplate(bindings[0], undefined, name, () => crypto.randomUUID(), bindings[0].plugin && plugins.persistence(bindings[0].plugin.plugin));
+      const made = produceTemplate(bindings[0], undefined, name, (rule) => (rule === 'document' ? newDocumentId(persistence.value) : newId(persistence.value, rule)), bindings[0].plugin && plugins.persistence(bindings[0].plugin.plugin));
       return made ? decode(made) : '';
     },
     newRegistration: (text) => registrationOfNew(bindings[0], origin, keptBeside, text),
