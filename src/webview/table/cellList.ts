@@ -15,7 +15,13 @@ export interface CellListHost {
   readonly creates: boolean;
   /** An option chosen: for a choice its value, `''` for none; for choices whether it is now present. */
   readonly choose: (value: string, present?: boolean) => void;
-  readonly create: (name: string) => void;
+  /** A name that is no option made, of the kind chosen where `kinds` offers several. */
+  readonly create: (name: string, kind?: string) => void;
+  /**
+   * The kinds a name can be made as, each offered as a "Create" row of its own while a name that is no option is typed: a
+   * diagram's kinds of element, for a relation to one (etalii.adp spec 092, FR-025). Absent for one kind, made on Enter.
+   */
+  readonly kinds?: readonly { readonly id: string; readonly label: string }[];
   /** The list closed: the focus goes back to the cell where `refocus`. */
   readonly closed: (refocus: boolean) => void;
 }
@@ -33,7 +39,9 @@ export function openCellList(root: HTMLElement, cell: HTMLElement, property: Tab
   const element = html('ul', { class: 'adp-table-list', role: 'listbox', 'aria-label': property.name, 'aria-multiselectable': many ? 'true' : undefined }, ...items);
   const search = host.searchable ? html('input', { class: 'adp-table-list-search', type: 'text', 'aria-label': `Search or create an option of ${property.name}`, placeholder: host.creates ? 'Search, or create an option' : 'Search' }) : undefined;
   const frame = search ? html('div', { class: 'adp-table-picker' }, search, element) : element;
-  const shown = (): HTMLLIElement[] => items.filter((item) => !item.hidden);
+  // The "Create" rows of a name typed that is no option, one per kind, below the options.
+  let creating: HTMLLIElement[] = [];
+  const shown = (): HTMLLIElement[] => [...items, ...creating].filter((item) => !item.hidden);
   const has = (value: string): boolean => {
     const held = host.held();
     if (many) return held?.items.some((item) => item.value === value) === true;
@@ -49,6 +57,12 @@ export function openCellList(root: HTMLElement, cell: HTMLElement, property: Tab
     host.closed(refocus);
   };
   const choose = (item: HTMLElement): void => {
+    if (item.dataset.kind !== undefined) {
+      const typed = search?.value.trim() ?? '';
+      close(true);
+      host.create(typed, item.dataset.kind);
+      return;
+    }
     const value = item.dataset.value ?? '';
     if (many) {
       const present = item.getAttribute(state) !== 'true';
@@ -66,9 +80,10 @@ export function openCellList(root: HTMLElement, cell: HTMLElement, property: Tab
   });
   element.addEventListener('keydown', (event) => {
     event.stopPropagation();
-    const index = items.indexOf(document.activeElement as HTMLLIElement);
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') items[clamp(index + (event.key === 'ArrowDown' ? 1 : -1), items.length - 1)]?.focus();
-    else if ((event.key === 'Enter' || event.key === ' ') && items[index]) choose(items[index]);
+    const rows = shown();
+    const index = rows.indexOf(document.activeElement as HTMLLIElement);
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') rows[clamp(index + (event.key === 'ArrowDown' ? 1 : -1), rows.length - 1)]?.focus();
+    else if ((event.key === 'Enter' || event.key === ' ') && rows[index]) choose(rows[index]);
     else if (event.key === 'Escape' || event.key === 'Tab') close(true);
     else return;
     event.preventDefault();
@@ -76,6 +91,11 @@ export function openCellList(root: HTMLElement, cell: HTMLElement, property: Tab
   search?.addEventListener('input', () => {
     const needle = search.value.trim().toLowerCase();
     for (const item of items) item.hidden = needle !== '' && !(item.textContent ?? '').toLowerCase().includes(needle);
+    for (const row of creating) row.remove();
+    const typed = search.value.trim();
+    const named = items.some((item) => item.dataset.value !== '' && (item.textContent ?? '').toLowerCase() === typed.toLowerCase());
+    creating = typed === '' || named || !host.creates || (host.kinds?.length ?? 0) < 2 ? [] : host.kinds!.map((kind) => html('li', { role: 'option', tabindex: -1, class: 'adp-table-list-create', 'data-kind': kind.id }, `Create ${kind.label.toLowerCase()} “${typed}”`));
+    element.append(...creating);
   });
   search?.addEventListener('keydown', (event) => {
     event.stopPropagation();
@@ -85,6 +105,7 @@ export function openCellList(root: HTMLElement, cell: HTMLElement, property: Tab
     else if (event.key === 'Enter') {
       const same = items.find((item) => item.dataset.value !== '' && (item.textContent ?? '').toLowerCase() === typed.toLowerCase());
       if (same ?? (typed !== '' ? undefined : shown()[0])) choose((same ?? shown()[0])!);
+      else if (creating[0]) creating[0].focus();
       else if (typed !== '' && host.creates) {
         close(true);
         host.create(typed);

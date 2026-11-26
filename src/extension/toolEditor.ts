@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import type { Action, EditRequest, Field, Source, TextSplice, ViewOptions } from '../core/frame/toolType';
+import type { Action, EditRequest, ElementMaker, Field, Source, TextSplice, ViewOptions } from '../core/frame/toolType';
+import { elementMaker } from '../core/frame/elementMaker';
 import { exportOf, LINKED_FROM, OPEN_LINKED, viewTypeOf } from '../core/frame/toolType';
 import { emptyLookup, lookupItems } from '../core/tool/linkActions';
 import type { LinkIndex } from './linkIndex';
@@ -62,12 +63,14 @@ export class OpenTool {
   folder: Readonly<Record<string, string>> | undefined;
   /** The workspace's index of documents that link to each other, for a tool type that takes part in links (FBL 17.3). */
   links: LinkIndex | undefined;
+  /** The tool types that make elements in the files the document names, for a relation's "Create" (etalii.adp spec 092, FR-025). */
+  makers: readonly AnyToolType[] | undefined;
 
   constructor(readonly type: AnyToolType, readonly document: vscode.TextDocument, readonly panel: vscode.WebviewPanel) {
     this.registrationUri = registrationUriOf(document.uri);
   }
 
-  get source(): Source {
+  private get read(): Source {
     const source = { fileName: this.document.fileName, text: this.document.getText() };
     const related = this.related?.texts;
     return {
@@ -76,6 +79,17 @@ export class OpenTool {
       ...(this.folder === undefined ? {} : { folder: this.folder }),
       ...(this.links === undefined ? {} : this.links.sourceOf(this.document.uri)),
     };
+  }
+
+  /** The maker of the files the document names as they were last read, kept while they are: it remembers what each can be given. */
+  private maker: { readonly related: Source['related']; readonly makes: ElementMaker } | undefined;
+
+  /** The document as its tool type reads it, with what the other tool types can make in the files it names. */
+  get source(): Source {
+    const read = this.read;
+    if (this.makers === undefined || read.related === undefined) return read;
+    if (this.maker?.related !== read.related) this.maker = { related: read.related, makes: elementMaker(this.makers, read) };
+    return { ...read, makes: this.maker.makes };
   }
 
   fields(): Field[] {
@@ -191,7 +205,7 @@ export class Tools implements vscode.Disposable {
   /** Fires when the active diagram, its selection or its document changes. */
   readonly onDidChange = this.changed.event;
 
-  constructor(private readonly findings: Findings, readonly links?: LinkIndex) {
+  constructor(private readonly findings: Findings, readonly links?: LinkIndex, readonly types: readonly AnyToolType[] = []) {
     // A document that links to others is drawn again when they change: a name, a link that now resolves (FBL 17.4).
     let pending: ReturnType<typeof setTimeout> | undefined;
     this.linking = links?.onDidChange(() => {
@@ -859,7 +873,10 @@ export class ToolEditorProvider implements vscode.CustomTextEditorProvider {
       // What the file watcher missed is read now; the index announces it, and the diagram is drawn again.
       void this.tools.links?.catchUp();
     }
-    if (this.type.related) diagram.related = new RelatedFiles(document.uri, () => this.tools.refresh(diagram));
+    if (this.type.related) {
+      diagram.related = new RelatedFiles(document.uri, () => this.tools.refresh(diagram));
+      diagram.makers = this.tools.types;
+    }
     diagram.selectOnReady = this.tools.selecting.get(document.uri.toString());
     this.tools.selecting.delete(document.uri.toString());
     diagram.folder = folder;

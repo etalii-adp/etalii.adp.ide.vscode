@@ -8,6 +8,7 @@
 
 import type { ModelElement, Value } from '../../disl/model';
 import { gesturesOf } from './gestures';
+import { createRelated } from './diagrams';
 import { across, choices, findings, itemValue, ownSteps, relations, retarget, targets } from './relations';
 import { backlinkColumns, conversion, indexed } from './links';
 import type { ShownView, TableCell, TableNest, TableData, TableGroup, TableProperty, TableRow, ThemedColour, ViewLogic } from '../../tool/tableView';
@@ -267,6 +268,6 @@ const colour = (key: string): ThemedColour | undefined => (Object.hasOwn(colours
 
 /** The view logic of the tool type `etalii/knowledge`. */
 export const knowledgeViews: ViewLogic = {
-  id: 'etalii/knowledge', shown, colour, targets, relations, findings, across, ownSteps, retarget, choices,
+  id: 'etalii/knowledge', shown, colour, targets, relations, findings, across, ownSteps, retarget, choices, createRelated,
   itemValue, indexed, shownColumns: backlinkColumns, conversion,
 };

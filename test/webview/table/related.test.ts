@@ -141,3 +141,42 @@ describe('a new relation', () => {
     expect(edits()).toEqual([{ kind: 'operation', operation: 'createRelation', on: [], args: { name: 'Seat of', targetFile: 'provinces.yaml', limit: 'none', backlinkName: 'Seats' } }]);
   });
 });
+
+// A relation to a diagram (etalii.adp spec 092, FR-025): a name its elements do not hold makes one in the diagram, of the
+// kind chosen where it offers several, and relates it, as one request the designer makes over both files.
+describe('a relation to a diagram', () => {
+  const withKinds = (kinds: readonly { id: string; label: string }[]): TableView => {
+    const shown = viewOf(false);
+    return { ...shown, properties: shown.properties.map((given) => (given.id === 'province' ? { ...given, elsewhere: 'plan.tml', createKinds: kinds } : given)) };
+  };
+  const typeIn = (text: string): HTMLInputElement => {
+    const cell = cellOf('r2', 'province');
+    cell.focus();
+    key(cell, 'Enter');
+    const search = one<HTMLInputElement>('.adp-table-list-search');
+    search.value = text;
+    search.dispatchEvent(new Event('input'));
+    return search;
+  };
+
+  it('offers a Create for each kind of element, and makes the one chosen', () => {
+    surface.receive(message(withKinds([{ id: 'timeline.add-element', label: 'Element' }, { id: 'timeline.add-moment', label: 'Moment' }])));
+    const search = typeIn('Retro');
+    expect(all('.adp-table-list [role="option"]').filter((item) => !item.hidden).map((item) => item.textContent)).toEqual(['Create element “Retro”', 'Create moment “Retro”']);
+    key(search, 'Enter');
+    expect(document.activeElement?.textContent).toBe('Create element “Retro”');
+    press(all('.adp-table-list [data-kind]')[1]!);
+    expect(edits()).toEqual([{ kind: 'createRelated', row: 'r2', property: 'province', name: 'Retro', elementKind: 'timeline.add-moment' }]);
+  });
+
+  it('makes the one kind there is on Enter, and offers none where the diagram can be given none', () => {
+    surface.receive(message(withKinds([{ id: 'mindmap.add-child', label: 'Node' }])));
+    key(typeIn('Retro'), 'Enter');
+    expect(edits()).toEqual([{ kind: 'createRelated', row: 'r2', property: 'province', name: 'Retro' }]);
+    sent = [];
+    surface.receive(message(withKinds([])));
+    key(typeIn('Retro'), 'Enter');
+    expect(edits()).toEqual([]);
+  });
+});
+

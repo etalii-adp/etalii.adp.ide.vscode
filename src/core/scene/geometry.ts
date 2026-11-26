@@ -1,6 +1,8 @@
 // The geometry of a drawing, in canvas units with y downwards: points, boxes, paths, the outline
 // an edge attaches to, and the cubic Bézier an edge is drawn as. Plain functions over plain data.
 
+import type { SceneNode } from './scene';
+
 export interface Point {
   readonly x: number;
   readonly y: number;
@@ -297,4 +299,25 @@ export function distanceTo(points: readonly Point[], point: Point): number {
   let least = points.length === 1 ? distance(points[0], point) : Infinity;
   for (let index = 0; index + 1 < points.length; index++) least = Math.min(least, distanceToLine(point, points[index], points[index + 1]));
   return least;
+}
+
+/**
+ * The point nearest a wanted point, within what is in view, around which nothing is drawn for the size of the
+ * largest node: an entry added from the toolbox lands there rather than on top of a node. Where no point in view
+ * is free, the wanted point itself.
+ */
+export function freePointNear(nodes: readonly SceneNode[], wanted: Point, view: Box): Point {
+  const width = Math.max(40, ...nodes.map((node) => node.box.width));
+  const height = Math.max(24, ...nodes.map((node) => node.box.height));
+  const clear = (point: Point): boolean => nodes.every((node) => {
+    const box = node.box;
+    return point.x + width <= box.x || point.x - width >= box.x + box.width || point.y + height <= box.y || point.y - height >= box.y + box.height;
+  });
+  if (clear(wanted)) return wanted;
+  const step = Math.max(20, height);
+  const candidates: Point[] = [];
+  for (let dy = -view.height / 2; dy <= view.height / 2; dy += step) {
+    for (let dx = -view.width / 2; dx <= view.width / 2; dx += step) candidates.push({ x: wanted.x + dx, y: wanted.y + dy });
+  }
+  return candidates.filter(clear).sort((one, other) => Math.hypot(one.x - wanted.x, one.y - wanted.y) - Math.hypot(other.x - wanted.x, other.y - wanted.y))[0] ?? wanted;
 }
