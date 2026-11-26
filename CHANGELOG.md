@@ -14,7 +14,6 @@ All notable changes to **ADP: A Different Perspective** are listed here, newest 
 - **Timeline**, **Dependency graph** and **Mind map:** a new file can be linked to at once, before its first edit, and its id is short like the ids of its elements.
 - **All tools:** when **Add from another document…** has nothing to offer, it says why: the files it names have no id yet, and get one with their first edit and save.
 - **Knowledge:** opening a link to a row that the current view filters out says so, instead of nothing happening.
-- **All tools:** a link held by a file open in a background tab is listed in the Problems panel as soon as its target is deleted.
 
 ## [0.2.5] - 2026-11-25
 

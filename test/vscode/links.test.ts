@@ -74,7 +74,7 @@ suite('Links between documents in Visual Studio Code', () => {
     assert.strictEqual(vscode.languages.getDiagnostics(consumerUri).filter((diagnostic) => String(diagnostic.code).startsWith('link.')).length, 1);
   });
 
-  test('a link held by a map in a background tab is in the Problems panel as soon as its target is deleted', async () => {
+  test('a link held by a map kept open in a background tab is in the Problems panel as soon as its target is deleted', async () => {
     // Both are opened as kept tabs, not previews, so the target coming to the front leaves the consuming map open behind it (etalii.adp spec 092, host test T034).
     await open(consumerUri, false);
     await until('the target\'s name', async () => (await labelOf('ID_c2')) === 'Target');
