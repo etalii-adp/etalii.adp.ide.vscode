@@ -225,6 +225,11 @@
         "icon": "$(go-to-file)"
       },
       {
+        "command": "etalii.adp.newTool",
+        "title": "New ADP Tool…",
+        "category": "ADP"
+      },
+      {
         "command": "etalii.adp.arrangeDiagram",
         "title": "Arrange Diagram",
         "category": "ADP"
@@ -542,6 +547,10 @@
         }
       ],
       "explorer/context": [
+        {
+          "command": "etalii.adp.newTool",
+          "group": "navigation@10"
+        },
         {
           "command": "etalii.adp.export.flowPage",
           "when": "resourceExtname in etalii.adp.exports.flowPage",

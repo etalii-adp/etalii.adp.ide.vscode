@@ -99,6 +99,12 @@ body {
   pointer-events: none;
 }
 
+/* A node's label beside its node presses as the node: the text's box, not only its letters. */
+.adp-scene-label.adp-node-label-outside {
+  pointer-events: bounding-box;
+  cursor: default;
+}
+
 /* An edge's label is ringed in the editor's background, so that a line under it does not cross its letters. */
 text.adp-relation-label {
   paint-order: stroke;
