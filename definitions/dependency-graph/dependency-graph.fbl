@@ -1,7 +1,7 @@
 {
   "$schema": "https://etalii.net/adp/fbl/schema/0.1/fbl.schema.json#/$defs/Document",
   "fbl": "0.23",
-  "doc": "The dependency graph's .dgr body (definitions/diagrams/dependency-graph.dis, dependency-graph.md): ADP's own YAML, read through FBL. A dependency is an element rule whose from and to are references by storedId, so a dependency whose end names no node is kept and reported by the definition's rules. Every rule reads the id as written as the host attribute storedId, and a dependency each end a second time as written, writtenFrom and writtenTo, for the rules that judge the ids as written. Every scalar is read as written. x and row are read as their text and converted as the tool converts them, so a value that will not read is 0 (DependencyGraphReading). There is no header, so a missing or other dependencies: line raises nothing. An entry that is not a mapping is read as Unreadable, kept and not drawn. (FBL 0.23, specs 089 and 092) The top-level key `id` is the document id, and an entry of `elements` with a `link` key is a LinkedNode, whose label is its target's name and is not written.",
+  "doc": "The dependency graph's .dgr body (definitions/diagrams/dependency-graph.dis, dependency-graph.md): ADP's own YAML, read through FBL. A dependency is an element rule whose from and to are references by storedId, so a dependency whose end names no node is kept and reported by the definition's rules. Every rule reads the id as written as the host attribute storedId, and a dependency each end a second time as written, writtenFrom and writtenTo, for the rules that judge the ids as written. Every scalar is read as written. x and row are read as their text and converted as the tool converts them, so a value that will not read is 0 (DependencyGraphReading). There is no header, so a missing or other dependencies: line raises nothing. An entry that is not a mapping is read as Unreadable, kept and not drawn. (FBL 0.23, specs 089 and 092) The top-level key `id` is the document id, and an entry of `elements` with a `link` key is a LinkedNode, whose label is its target's name and is not written. Setting its link empty removes the key, which leaves an ordinary node (the fix of a broken link, FBL 17.6).",
   "bindings": {
     "dgr": {
       "title": "Dependency graph",
@@ -28,7 +28,7 @@
           "id": { "from": { "key": "id" } },
           "attributes": {
             "storedId": { "key": "id", "read": "text", "readOnly": true },
-            "link": { "key": "link", "read": "text" },
+            "link": { "key": "link", "read": "text", "empty": "remove" },
             "x": { "key": "x", "read": "text", "style": "plain", "default": "" },
             "row": { "key": "row", "read": "text", "style": "plain", "default": "" }
           },
