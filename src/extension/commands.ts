@@ -12,6 +12,7 @@ import type { HierarchyRequest } from '../core/tool/hierarchyView';
 import type { SectionsRequest } from '../core/tool/sectionsView';
 import type { TableRequest } from '../core/tool/tableView';
 import type { AnyToolType } from './toolTypes';
+import { folderOfResource, newToolChoices, type NewToolChoice } from './newTool';
 import { untitledName } from './untitledName';
 
 /** The commands the plug-in adds, all in the category "ADP". */
@@ -134,6 +135,30 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
       await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
     });
   }
+
+  // "New ADP Tool…" in the Explorer's context menu: which tool, then its name, and the document is made in the folder
+  // that was right-clicked by that tool's own "New ..." command, given the file so it asks nothing more.
+  const choices = newToolChoices(types.flatMap((type) => {
+    const command = `etalii.adp.new.${type.origin.replace('/', '.')}`;
+    const extension = type.claims.flatMap((claim) => claim.extensions)[0];
+    return contributed.has(command) && extension !== undefined ? [{ displayName: type.displayName, command, extension }] : [];
+  }));
+  register('etalii.adp.newTool', async (uri?: unknown) => {
+    const resource = uri instanceof vscode.Uri ? uri : vscode.workspace.workspaceFolders?.[0]?.uri;
+    if (!resource) return;
+    const isFolder = uri instanceof vscode.Uri ? ((await vscode.workspace.fs.stat(uri)).type & vscode.FileType.Directory) !== 0 : true;
+    const folder = resource.with({ path: folderOfResource(resource.path, isFolder) });
+    const choice = await vscode.window.showQuickPick<vscode.QuickPickItem & { choice: NewToolChoice }>(
+      choices.map((entry) => ({ label: entry.label, description: `.${entry.extension}`, choice: entry })), { title: 'New ADP Tool', placeHolder: 'Which tool?' });
+    if (!choice) return;
+    const offered = await untitledName(choice.choice.extension, (name) => exists(vscode.Uri.joinPath(folder, name)));
+    const name = await vscode.window.showInputBox({
+      title: `New ${choice.label}`, prompt: 'File name', value: offered, valueSelection: [0, offered.length - choice.choice.extension.length - 1],
+      validateInput: async (value) => (value.trim() === '' ? 'Give the file a name.' : (await exists(vscode.Uri.joinPath(folder, value.trim()))) ? `${value.trim()} is already there.` : undefined),
+    });
+    if (!name) return;
+    await vscode.commands.executeCommand(choice.choice.command, vscode.Uri.joinPath(folder, name.trim()));
+  });
 
   registerLlmInstructions(context, contributed);
 

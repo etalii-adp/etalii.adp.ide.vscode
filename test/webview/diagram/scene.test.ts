@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { tokensOf } from '../../../src/core/disl/notation';
 import { pathData, pointOn } from '../../../src/core/scene/geometry';
@@ -195,6 +196,20 @@ describe('a label', () => {
     const line = label.querySelector('tspan')!;
     expect(Number(line.getAttribute('x'))).toBeCloseTo(box.x + box.width, 6);
     expect(Number(line.getAttribute('y'))).toBeCloseTo(box.y + box.height / 2, 6);
+  });
+
+  it('outside its node presses as the node, so a short shape is not the only place to hit it', () => {
+    const label = group(drawn(), 'transistors').querySelector('[data-label="name"]')!;
+    const css = readFileSync('src/webview/diagram/canvas.css', 'utf8');
+    expect(label.classList.contains('adp-node-label-outside')).toBe(true);
+    expect(label.closest('.adp-element')?.getAttribute('data-id')).toBe('transistors');
+    expect(css).toMatch(/\.adp-scene-label\.adp-node-label-outside\s*\{[^}]*pointer-events:\s*bounding-box/);
+  });
+
+  it('beside an edge stays out of the way of the line under it', () => {
+    const label = { id: 'polarity', text: '+', editText: '+', box: { x: 10, y: 20, width: 8, height: 15 }, position: 'outside', align: 'center', fontSize: 15, style: {}, editable: false, wrap: 'none', overflow: 'ellipsis' } as const;
+    const root = drawn(withEdge({ ...edge('i-12'), labels: [label] }));
+    expect(group(root, 'i-12').querySelector('[data-label="polarity"]')?.classList.contains('adp-node-label-outside')).toBe(false);
   });
 
   it('holds its text at the start or the middle of its box as well', () => {

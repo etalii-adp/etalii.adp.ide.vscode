@@ -123,8 +123,10 @@ function drawLabel(label: SceneLabel, paints: Paints, node: SceneNode | undefine
   if (words[0] === 'outside') {
     const lines = label.text.split('\n');
     const x = label.align === 'start' ? box.x : label.align === 'end' ? box.x + box.width : box.x + box.width / 2;
+    // A node's label beside it is part of the element, so pressing it selects the element as its
+    // shape does: a short shape such as a moment's mark is otherwise hard to hit (spec 092, T034).
     return svg('text', {
-      class: 'adp-scene-label', 'data-label': label.id, 'text-anchor': label.align === 'center' ? 'middle' : label.align, 'font-size': label.fontSize, 'font-weight': weight, style: [`fill: ${colour}`, ...lettering].join('; '),
+      class: node === undefined ? 'adp-scene-label' : 'adp-scene-label adp-node-label-outside', 'data-label': label.id, 'text-anchor': label.align === 'center' ? 'middle' : label.align, 'font-size': label.fontSize, 'font-weight': weight, style: [`fill: ${colour}`, ...lettering].join('; '),
     }, ...lines.map((line, index) => svg('tspan', { x, y: box.y + ((index + 0.5) * box.height) / lines.length, 'dominant-baseline': 'central' }, line)));
   }
   const held = words.includes('top') ? 'flex-start' : words.includes('bottom') ? 'flex-end' : 'center';
