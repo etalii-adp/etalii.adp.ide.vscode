@@ -13,6 +13,9 @@ import { SelectionBar } from './selection';
 import { openCellList } from './cellList';
 import { lineHeight, windowFrom, windowOf } from './windowing';
 
+/** What a reveal of a row this view does not show says. */
+export const HIDDEN_ROW = 'The row is not shown in this view: its filter, or the view itself, leaves it out.';
+
 // The table surface of a designer: it draws the table view it is sent and asks for every change
 // with a request. It never changes the model itself, so what it shows after a gesture is the view
 // that follows it.
@@ -198,7 +201,12 @@ export class Table {
   private reveal(id: string): void {
     const line = [...this.grid.querySelectorAll<HTMLElement>('tr[data-id]')].find((row) => row.dataset.id === id);
     const cell = line?.querySelector<HTMLElement>('[role="rowheader"]') ?? this.cell({ key: '', column: id });
-    if (!cell || id === '') return;
+    if (id === '') return;
+    // A row a link or an edit leads to that this view does not show is said so, rather than nothing happening (etalii.adp spec 092, host test T034).
+    if (!cell) {
+      this.status.textContent = HIDDEN_ROW;
+      return;
+    }
     this.place = placeOf(cell);
     this.rove();
     this.select([id]);

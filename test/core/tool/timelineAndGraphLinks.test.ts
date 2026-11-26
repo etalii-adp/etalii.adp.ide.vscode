@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { LinkWorkspace } from '../../../src/core/fbl/links/workspace';
 import type { DiagramToolType, Source } from '../../../src/core/frame/toolType';
 import { plugins as registry } from '../../../src/core/plugins/index';
-import { lookupItems } from '../../../src/core/tool/linkActions';
+import { emptyLookup, lookupItems } from '../../../src/core/tool/linkActions';
 import { conformance, diagram, root, theWorkspace } from '../fbl/support/linksWorkspace';
 import { applied, definitionOf, diagramOf, spliced } from './support';
 
@@ -33,6 +33,18 @@ describe.each(cases)('a $tool that links', ({ tool, file, linkedTypes, id }) => 
     const indexed = type.indexed!(source)!;
     expect(indexed.documentId).toBe(id);
     expect(indexed.links.map((link) => link.text).sort()).toEqual(diagram(path).links.map((link) => link.text).sort());
+  });
+
+  it('names a linked element in the index by the name its link caches, so the lookup and Linked from show it', () => {
+    const indexed = type.indexed!(source)!;
+    const entry = listed.find((candidate) => candidate.link.includes('='))!;
+    const element = indexed.elements.find((candidate) => candidate.id === entry.at)!;
+    expect(element.attributes.find(([name]) => name === indexed.nameProperty)?.[1]).toBe(entry.link.slice(entry.link.lastIndexOf('=') + 1));
+  });
+
+  it('starts a new document with a document id of 8 characters of 0-9a-z (FBL 17.2)', () => {
+    const fileName = `untitled.${type.claims.flatMap((claim) => claim.extensions)[0]}`;
+    expect(type.indexed!({ fileName, text: type.newDocument(fileName) })?.documentId).toMatch(/^[0-9a-z]{8}$/);
   });
 
   it('reads an entry with a link as a linked element', () => {
@@ -72,5 +84,14 @@ describe.each(cases)('Add from another document in a $tool', ({ tool, file, link
     expect(after).toMatch(placed);
     const added = type.view({ ...source, text: after }, {}).nodes.find((node) => node.id === outcome.select);
     expect(linkedTypes).toContain(added?.type);
+  });
+});
+
+describe('the lookup with nothing to offer', () => {
+  it('names the documents that hold no document id yet, and says how they get one', () => {
+    const links = new LinkWorkspace('/w', [{ path: '/w/data/cities.yaml', elements: [{ id: 'r1', attributes: [['Name', 'Amsterdam']] }], links: [] }]);
+    expect(lookupItems(links)).toEqual([]);
+    expect(emptyLookup(links)).toBe("Nothing can be linked to yet: 'data/cities.yaml' has no document id. A document is given one with its first edit; change something in it and save it, then add the link.");
+    expect(emptyLookup(new LinkWorkspace('/w'))).toBe('No document of the workspace has an element that can be linked to here.');
   });
 });

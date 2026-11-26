@@ -4,7 +4,7 @@ import type { FromCanvas, ToCanvas } from '../../../src/core/frame/protocol';
 import type { Source } from '../../../src/core/frame/toolType';
 import { plugins as registry } from '../../../src/core/plugins/index';
 import type { TableRequest, TableView } from '../../../src/core/tool/tableView';
-import { Table } from '../../../src/webview/table/table';
+import { HIDDEN_ROW, Table } from '../../../src/webview/table/table';
 import { definitionOf, designerOf } from '../../core/tool/support';
 
 // A column's menu on the Knowledge designer's own view of cities.yaml (etalii.adp spec 079,
@@ -121,6 +121,13 @@ describe('a column\'s menu', () => {
     press(one('.adp-table-new-panel [data-entry="number"]'));
     surface.receive({ v: 2, type: 'reveal', id: 'p3' });
     expect(document.querySelector('.adp-table-rename')).toBeNull();
+  });
+});
+
+describe('a row revealed that the view does not show', () => {
+  it('says so on the status line, rather than nothing happening', () => {
+    surface.receive({ v: 2, type: 'reveal', id: 'not-in-this-view' });
+    expect(one('.adp-table-status').textContent).toBe(HIDDEN_ROW);
   });
 });
 

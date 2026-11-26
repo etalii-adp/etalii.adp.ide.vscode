@@ -65,3 +65,14 @@ export function lookupItems(links: LinkWorkspace, admits: (path: string) => bool
     });
   });
 }
+
+/**
+ * What the lookup says when it has nothing to offer (DISL 9.4): a document is linked to by its document id (FBL 17.2),
+ * which it is given with its first edit, so the documents it lets through that hold none yet are named, and how to give them one.
+ */
+export function emptyLookup(links: LinkWorkspace, admits: (path: string) => boolean = () => true): string {
+  const without = links.documents.filter((document) => document.documentId === undefined && admits(document.path)).map((document) => links.display(document.path));
+  if (without.length === 0) return 'No document of the workspace has an element that can be linked to here.';
+  const named = without.length === 1 ? `'${without[0]}' has` : `${without.slice(0, -1).map((path) => `'${path}'`).join(', ')} and '${without.at(-1)}' have`;
+  return `Nothing can be linked to yet: ${named} no document id. A document is given one with its first edit; change something in it and save it, then add the link.`;
+}

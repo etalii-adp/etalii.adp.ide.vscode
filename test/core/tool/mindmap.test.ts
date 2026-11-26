@@ -305,9 +305,10 @@ describe('the mind map, a tool type from its definition', () => {
     expect(type.toolbox(architecture).map((entry) => `${String(toolOf(entry.id).id)} | ${entry.label} | ${entry.icon} | drops ${entry.id} | ${entry.description}`)).toEqual(transcript.toolbox);
   });
 
-  it('starts a new document as one central topic named after the file, which reads cleanly', () => {
+  it('starts a new document as one central topic named after the file, holding the map\'s document id, which reads cleanly', () => {
     const created = type.newDocument('plans');
-    expect(created).toMatch(/^<map version="freeplane 1\.11\.5">\n<node TEXT="plans" ID="ID_[0-9a-z]{8}"\/>\n<\/map>\n?$/);
+    expect(created).toMatch(/^<map version="freeplane 1\.11\.5">\n<node TEXT="plans" ID="ID_[0-9a-z]{8}">\n<attribute NAME="adp-id" VALUE="[0-9a-z]{8}"\/>\n<\/node>\n<\/map>\n?$/);
+    expect(type.indexed!({ fileName: 'plans.mm', text: created })?.documentId).toMatch(/^[0-9a-z]{8}$/);
     const source: Source = { fileName: 'plans.mm', text: created };
     expect(type.findings(source)).toEqual([]);
     expect(type.view(source, {}).nodes.map((node) => node.labels[0].text)).toEqual(['plans']);

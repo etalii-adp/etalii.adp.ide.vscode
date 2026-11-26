@@ -8,6 +8,14 @@ All notable changes to **ADP: A Different Perspective** are listed here, newest 
 
 - **Timeline** and **Dependency graph:** an element can now stand for an element of another file in your workspace, such as a knowledge row, a mind map node or an element of another timeline or graph. Choose **Add from another document…** on the canvas, and the linked element shows its target's current name. **Open linked element** and **Linked from** in its menu take you to the other side, and a link whose target was deleted or cannot be found is listed in the Problems panel.
 
+### Fixed
+
+- **Timeline** and **Dependency graph:** a linked element is listed by its target's name, not by an id, in **Linked from** and in the list of **Add from another document…**.
+- **Timeline**, **Dependency graph** and **Mind map:** a new file can be linked to at once, before its first edit, and its id is short like the ids of its elements.
+- **All tools:** when **Add from another document…** has nothing to offer, it says why: the files it names have no id yet, and get one with their first edit and save.
+- **Knowledge:** opening a link to a row that the current view filters out says so, instead of nothing happening.
+- **All tools:** a link held by a file open in a background tab is listed in the Problems panel as soon as its target is deleted.
+
 ## [0.2.5] - 2026-11-25
 
 ### Fixed

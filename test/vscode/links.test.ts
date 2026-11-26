@@ -74,6 +74,22 @@ suite('Links between documents in Visual Studio Code', () => {
     assert.strictEqual(vscode.languages.getDiagnostics(consumerUri).filter((diagnostic) => String(diagnostic.code).startsWith('link.')).length, 1);
   });
 
+  test('a link held by a map in a background tab is in the Problems panel as soon as its target is deleted', async () => {
+    await open(consumerUri);
+    await until('the target\'s name', async () => (await labelOf('ID_c2')) === 'Target');
+    // The target comes to the front, and the consuming map stays open behind it (etalii.adp spec 092, host test T034).
+    const front = await open(targetUri);
+    const removal = new vscode.WorkspaceEdit();
+    const text = front.getText();
+    const node = '\n<node TEXT="Target" ID="ID_t2"/>';
+    const at = text.indexOf(node);
+    removal.delete(targetUri, new vscode.Range(front.positionAt(at), front.positionAt(at + node.length)));
+    assert.ok(await vscode.workspace.applyEdit(removal));
+    assert.strictEqual((await state())?.uri, targetUri.toString());
+    const broken = await until('the broken link of the map behind', () => vscode.languages.getDiagnostics(consumerUri).find((diagnostic) => diagnostic.code === 'link.broken-element' && /'(Old name|Target)' is no longer/.test(diagnostic.message)), 5000);
+    assert.match(broken.message, /is no longer in 'target\.mm'/);
+  });
+
   test('the first edit writes what the load-time check finds, in the same undo step', async () => {
     const document = await open(consumerUri);
     await until('the target\'s name', async () => (await labelOf('ID_c2')) === 'Target');
