@@ -256,6 +256,25 @@ export interface Source {
   readonly links?: LinkWorkspace;
   /** The document's path as the index holds it, where it is not `fileName` (FBL 17.3): what its own backlinks are found by. */
   readonly linkPath?: string;
+  /** What the host can add to another document the document names, made by that document's own tool type (etalii.adp spec 092, FR-025). */
+  readonly makes?: ElementMaker;
+}
+
+/** A kind of element another document can be given: its id, as the maker takes it, and its name, as a menu offers it. */
+export interface ElementKind {
+  readonly id: string;
+  readonly label: string;
+}
+
+/**
+ * Elements made in other documents by their own tool types (etalii.adp spec 092, FR-025): a knowledge relation's "Create"
+ * adds an element with a name to the diagram it relates to. A file is named as the document names it in `Source.related`.
+ */
+export interface ElementMaker {
+  /** The kinds of element the file can be given, in the order its toolbox offers them; none for a file that can be given none. */
+  offered(file: string): readonly ElementKind[];
+  /** The file's splices to hold one more element of the kind, named `name`, where its tool places one added without a position, and its id; undefined when it cannot be added. */
+  make(file: string, kind: string, name: string): { readonly id: string; readonly splices: readonly TextSplice[] } | undefined;
 }
 
 /** A file a document names, as the host found it: open in an editor, unsaved changes and all, or on disk. */

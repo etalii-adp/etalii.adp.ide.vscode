@@ -1197,7 +1197,9 @@ export class Table {
     this.list = openCellList(this.root, cell, property, {
       held: () => this.rows.get(row.id)?.cells[property.id],
       searchable: gestures !== undefined,
-      creates: gestures?.createOption?.[property.id] !== undefined,
+      // A relation to a diagram makes an element there of a kind it offers (etalii.adp spec 092, FR-025).
+      creates: property.editor === 'rows' ? gestures !== undefined && (property.createKinds?.length ?? 0) > 0 : gestures?.createOption?.[property.id] !== undefined,
+      ...((property.createKinds?.length ?? 0) > 1 ? { kinds: property.createKinds } : {}),
       choose: (value, present) => this.request(present !== undefined
         ? { kind: 'item', row: row.id, property: property.id, value, present }
         : property.editor === 'rows'
@@ -1207,7 +1209,9 @@ export class Table {
             ...(value === '' ? [] : [{ kind: 'item', row: row.id, property: property.id, value, present: true } as const]),
           ] }
           : { kind: 'cell', row: row.id, property: property.id, value: value === '' ? null : value }),
-      create: (name) => this.make(gestures!.createOption![property.id], undefined, name, row.id),
+      create: (name, kind) => (property.editor === 'rows'
+        ? this.request({ kind: 'createRelated', row: row.id, property: property.id, name, ...(kind === undefined ? {} : { elementKind: kind }) })
+        : this.make(gestures!.createOption![property.id], undefined, name, row.id)),
       closed: (refocus) => {
         this.list = undefined;
         if (refocus) this.focus(here);

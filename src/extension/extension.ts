@@ -28,7 +28,7 @@ export function activate(context: vscode.ExtensionContext): AdpApi {
   const findings = new Findings();
   // The documents of the workspace that link to each other, indexed by folder (etalii.adp spec 089, FBL 17.3).
   const links = new LinkIndex(types);
-  const tools = new Tools(findings, links);
+  const tools = new Tools(findings, links, types);
   context.subscriptions.push(findings, links, tools);
 
   for (const type of types) {

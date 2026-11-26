@@ -1,7 +1,7 @@
 import { treeDragPreview } from '../../core/scene/tidyTree';
 import type { Action, Box, EditRequest, ViewOptions } from '../../core/frame/toolType';
 import type { FromCanvas, ToCanvas } from '../../core/frame/protocol';
-import { centreOf, holds, pointOn, type Point } from '../../core/scene/geometry';
+import { centreOf, freePointNear, holds, pointOn, type Point } from '../../core/scene/geometry';
 import type { Scene, SceneEdge, SceneNode, SceneRow } from '../../core/scene/scene';
 import { toolboxMime } from '../toolbox/toolbox';
 import { html, svg } from './dom';
@@ -30,6 +30,8 @@ type Side = 'left' | 'right' | 'top' | 'bottom' | 'corner';
 /** A point in canvas units. */
 type CanvasPoint = Point;
 
+export { freePointNear };
+
 // A key press as a definition writes a shortcut, in lower case: `ctrl+up`, `space`, `enter`.
 const pressed = (event: KeyboardEvent): string =>
   `${event.ctrlKey || event.metaKey ? 'ctrl+' : ''}${event.altKey ? 'alt+' : ''}${event.shiftKey ? 'shift+' : ''}${event.key === ' ' ? 'space' : event.key.replace(/^Arrow/, '').toLowerCase()}`;
@@ -37,27 +39,6 @@ const pressed = (event: KeyboardEvent): string =>
 // A distance on its step, a half rounding away from zero; without a step, on whole canvas units, so
 // a drop made at any zoom is stored as a whole number.
 const snapTo = (value: number, step: number): number => Math.sign(value) * Math.round(Math.abs(value) / (step > 0 ? step : 1)) * (step > 0 ? step : 1);
-
-/**
- * The point nearest a wanted point, within what is in view, around which nothing is drawn for the size of the
- * largest node: an entry added from the toolbox lands there rather than on top of a node. Where no point in view
- * is free, the wanted point itself.
- */
-export function freePointNear(nodes: readonly SceneNode[], wanted: CanvasPoint, view: Box): CanvasPoint {
-  const width = Math.max(40, ...nodes.map((node) => node.box.width));
-  const height = Math.max(24, ...nodes.map((node) => node.box.height));
-  const clear = (point: CanvasPoint): boolean => nodes.every((node) => {
-    const box = node.box;
-    return point.x + width <= box.x || point.x - width >= box.x + box.width || point.y + height <= box.y || point.y - height >= box.y + box.height;
-  });
-  if (clear(wanted)) return wanted;
-  const step = Math.max(20, height);
-  const candidates: CanvasPoint[] = [];
-  for (let dy = -view.height / 2; dy <= view.height / 2; dy += step) {
-    for (let dx = -view.width / 2; dx <= view.width / 2; dx += step) candidates.push({ x: wanted.x + dx, y: wanted.y + dy });
-  }
-  return candidates.filter(clear).sort((one, other) => Math.hypot(one.x - wanted.x, one.y - wanted.y) - Math.hypot(other.x - wanted.x, other.y - wanted.y))[0] ?? wanted;
-}
 
 /**
  * Where on a node of a scene an end of an edge let go at a point sits: on the nearest part an end

@@ -8,7 +8,7 @@ import type { Editor, TableSurface, ValueType } from '../desl/surface';
 import { attributesOf, defaultOf, valueKind, type Metamodel } from '../disl/metamodel';
 import type { Change } from '../disl/behavior';
 import type { Model, ModelElement, Value } from '../disl/model';
-import type { Severity } from '../frame/toolType';
+import type { ElementKind, ElementMaker, Severity, TextSplice } from '../frame/toolType';
 import type { IndexedDocument, LinkWorkspace } from '../fbl/links/workspace';
 import { isCel, localized } from '../disl/specification';
 
@@ -58,6 +58,10 @@ export interface TableProperty {
   readonly related?: readonly TableOption[];
   /** Whether a cell names one row at most, so that choosing another replaces it. */
   readonly single?: boolean;
+  /** For a column whose rows are elements of a document of another tool type: that file, as the column names it (etalii.adp spec 092, FR-025). */
+  readonly elsewhere?: string;
+  /** The kinds of element a name typed in its cell can create in that file, where the host can make one. */
+  readonly createKinds?: readonly ElementKind[];
 }
 
 /** One of several values of a cell. */
@@ -380,6 +384,8 @@ export type TableRequest =
   | { readonly kind: 'cell'; readonly row: string; readonly property: string; readonly value: TableValue }
   /** One of several values of a cell added or taken away. */
   | { readonly kind: 'item'; readonly row: string; readonly property: string; readonly value: string; readonly present: boolean }
+  /** *(etalii.adp spec 092, FR-025)* An element named as typed, of a kind its file offers, made in the file a relation's column names, and related in the cell, as one step. */
+  | { readonly kind: 'createRelated'; readonly row: string; readonly property: string; readonly name: string; readonly elementKind?: string }
   /** Another view shown. */
   | { readonly kind: 'show'; readonly view: string }
   /** A property of a row edited in ADP Properties. */
@@ -420,6 +426,11 @@ export interface ViewLogic {
    * writes two files: nothing for any other, or why it cannot be made.
    */
   across?(step: TableStep): TableAcross | { readonly refused: string } | { readonly confirm: TableConfirm } | undefined;
+  /**
+   * *(etalii.adp spec 092, FR-025)* An element made in the file a relation's column names, by that file's own tool type
+   * through `makes`, and related in the cell: the request that relates it here, and the other file's splices.
+   */
+  createRelated?(table: TableData, request: Extract<TableRequest, { kind: 'createRelated' }>, makes: ElementMaker | undefined): { readonly request: TableRequest; readonly others: readonly { readonly file: string; readonly splices: readonly TextSplice[] }[] } | { readonly refused: string };
   /**
    * Operations the definition does not have, which the tool type makes itself: each is given to
    * `across` with nothing changed by the definition, and is refused there when it cannot be made.
@@ -498,6 +509,8 @@ export interface TableRelation {
   readonly values?: Readonly<Record<string, readonly string[]>>;
   /** Why its cells are shown and not edited. */
   readonly readOnly?: string;
+  /** Where its rows are elements of a document of another tool type: that file, as the column names it. */
+  readonly elsewhere?: string;
 }
 
 /** A finding of the tool type's own, on the element it is about. */
@@ -780,7 +793,7 @@ export function tableReader(parts: TableParts) {
     const titles = new Map(Object.entries(relations).map(([id, relation]) => [id, relation.rows && new Map(relation.rows.map((row) => [row.id, row.name]))]));
     const properties = data.properties.map((property) => {
       const relation = relations[property.id];
-      return relation ? { ...property, single: relation.single, ...(relation.rows ? { related: relation.rows } : {}), ...(relation.readOnly === undefined ? {} : { readOnly: relation.readOnly }) } : property;
+      return relation ? { ...property, single: relation.single, ...(relation.rows ? { related: relation.rows } : {}), ...(relation.readOnly === undefined ? {} : { readOnly: relation.readOnly }), ...(relation.elsewhere === undefined ? {} : { elsewhere: relation.elsewhere }) } : property;
     });
     const linked = data.rows.map((row): TableRow => {
       let cells: Record<string, TableCell> | undefined;

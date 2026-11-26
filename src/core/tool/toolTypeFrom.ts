@@ -1317,7 +1317,8 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     if (!table || open.unreadable) return emptyTable(open.refusal ?? UNREADABLE);
     const related = relatedOf(source);
     const model = shownModel(source, open);
-    const shown = withFindings(table.view(model, { readOnly: open.refusal !== undefined, ...(open.refusal === undefined ? {} : { notice: open.refusal }) }, related, source.peers, linkingOf(source)), [...open.found, ...relatedFound(source, open)], model);
+    const viewed = withFindings(table.view(model, { readOnly: open.refusal !== undefined, ...(open.refusal === undefined ? {} : { notice: open.refusal }) }, related, source.peers, linkingOf(source)), [...open.found, ...relatedFound(source, open)], model);
+    const shown = withCreateKinds(viewed, source);
     return shown.gestures && operations ? { ...shown, gestures: checkedGestures(shown.gestures, open.model) } : shown;
   };
 
@@ -1672,6 +1673,16 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
     return { ...here, others: [{ file: step.file, splices: there.length === 0 ? [] : composedSplices(there) }] };
   }
 
+  /**
+   * A table whose relations to documents of other tool types say which kinds of element a name typed in a cell can make
+   * there (etalii.adp spec 092, FR-025): none where the host can make none, or the column holds what another does.
+   */
+  function withCreateKinds(shown: TableView, source: Source): TableView {
+    const { makes } = source;
+    if (!makes || !logic?.createRelated || shown.properties.every((property) => property.elsewhere === undefined)) return shown;
+    return { ...shown, properties: shown.properties.map((property) => (property.elsewhere === undefined || property.readOnly !== undefined ? property : { ...property, createKinds: makes.offered(property.elsewhere) })) };
+  }
+
   /** A request with every id it names given by `now`: an id written in a step before, or one a step before created. */
   function renamed(request: TableRequest, now: (id: string) => string): TableRequest {
     const value = <V>(given: V): V => (typeof given === 'string' ? now(given) as V : given);
@@ -1683,6 +1694,7 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
       case 'steps': return { ...request, steps: request.steps.map((step) => renamed(step, now)) };
       case 'cell': return { ...request, row: now(request.row), property: now(request.property), value: value(request.value) };
       case 'item': return { ...request, row: now(request.row), property: now(request.property), value: now(request.value) };
+      case 'createRelated': return { ...request, row: now(request.row), property: now(request.property) };
       case 'follow': return { ...request, row: now(request.row) };
     }
   }
@@ -1787,6 +1799,14 @@ function designerFrom(definition: Definition, bindings: readonly FblBinding[], p
         return done(run.setItem(open.model, request.row, request.property, request.value, request.present));
       case 'show':
         return done(run.activate(open.model, request.view));
+      case 'createRelated': {
+        // The element is made in its own file first; this file relates it, as one step over both.
+        const planned = logic?.createRelated?.(data, request, source.makes);
+        if (planned === undefined) return { kind: 'refused', sentence: NOT_HERE };
+        if ('refused' in planned) return { kind: 'refused', sentence: planned.refused };
+        const here = editTable(source, planned.request, options, confirmed);
+        return here.kind === 'applied' ? { ...here, others: [...(here.others ?? []), ...planned.others] } : here;
+      }
       case 'follow':
         return { kind: 'open', path: request.file, select: request.row };
       case 'steps': {

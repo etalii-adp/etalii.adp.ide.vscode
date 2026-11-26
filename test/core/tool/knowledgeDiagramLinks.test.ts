@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { type IndexedDocument, LinkWorkspace } from '../../../src/core/fbl/links/workspace';
+import { LinkWorkspace } from '../../../src/core/fbl/links/workspace';
+import { elementMaker } from '../../../src/core/frame/elementMaker';
 import type { Source } from '../../../src/core/frame/toolType';
 import { plugins as registry } from '../../../src/core/plugins/index';
+import { CANNOT_CREATE } from '../../../src/core/plugins/knowledge-views/diagrams';
 import { TO_A_DIAGRAM } from '../../../src/core/plugins/knowledge-views/relations';
-import { applied, definitionOf, designerOf, spliced } from './support';
+import { applied, definitionOf, designerOf, diagramOf, refusal, spliced } from './support';
 
 // A relation to a diagram (etalii.adp spec 092, FR-025; `knowledge.md`, "A relation to a diagram"): a knowledge file's
 // relation may target any document of the workspace with linkable elements, here a timeline the index holds. Its cells link
@@ -15,23 +17,22 @@ const folder = 'fixtures/fbl/conformance/fixtures/links-workspace/knowledge';
 const read = (name: string): string => readFileSync(`${folder}/${name}`, 'utf8').replace(/\r\n/g, '\n');
 const files = ['cities.yaml', 'provinces.yaml', 'regions.yaml', 'towns.yaml'];
 
-/** A timeline beside the knowledge files, as the index of links holds it: one moment, and one element that holds a link and has no name of its own. */
-const plan: IndexedDocument = {
-  path: 'knowledge/plan.tml', documentId: 't7m2k9qa', nameProperty: 'label',
-  elements: [{ id: 'launch', attributes: [['label', 'Launch']] }, { id: 'linked', attributes: [] }],
-  links: [{ holder: 'linked', text: '$k3f9x2ma@provinces.yaml#nh' }],
-};
+/** A timeline beside the knowledge files: one moment, and one element that links a province and has no name of its own. */
+const timeline = diagramOf(definitionOf('timeline'), registry);
+const planText = 'timeline: 1\nid: t7m2k9qa\nelements:\n  - id: launch\n    label: Launch\n    begin: 2027-01-04\n    row: 0\n  - id: linked\n    link: $k3f9x2ma@provinces.yaml#nh\n    begin: 2027-01-11\n    row: 1\n';
+const plan = { ...timeline.indexed!({ fileName: '/w/knowledge/plan.tml', text: planText })!, path: 'knowledge/plan.tml' };
 
 /** `cities.converted`, with its relation p4 to the timeline, Amsterdam's cell of it linking the launch. */
 const cities = read('cities.converted')
   .replace('    target: ../teams/nowhere.yaml', '    target: $t7m2k9qa@plan.tml')
   .replace('          - row: x1', '          - row: $t7m2k9qa@plan.tml#launch.label=Launch');
 
-function source(text = cities): Source {
-  const related = Object.fromEntries(files.filter((file) => file !== 'cities.yaml').map((file) => [file, { fileName: `/w/knowledge/${file}`, text: read(file) }]));
+function source(text = cities, makes = true): Source {
+  const related = { ...Object.fromEntries(files.filter((file) => file !== 'cities.yaml').map((file) => [file, { fileName: `/w/knowledge/${file}`, text: read(file) }])), 'plan.tml': { fileName: '/w/knowledge/plan.tml', text: planText } };
   const plain = (file: string, body: string): Source => ({ fileName: `/w/knowledge/${file}`, text: body, linkPath: `knowledge/${file}`, related, peers: files.filter((other) => other !== file) });
   const indexed = files.map((file) => type.indexed!(plain(file, file === 'cities.yaml' ? text : read(file)))!);
-  return { ...plain('cities.yaml', text), links: new LinkWorkspace('/w', [...indexed, plan]) };
+  const given: Source = { ...plain('cities.yaml', text), links: new LinkWorkspace('/w', [...indexed, plan]) };
+  return makes ? { ...given, makes: elementMaker([timeline, type], given) } : given;
 }
 
 describe('a relation to a diagram', () => {
@@ -66,5 +67,27 @@ describe('a relation to a diagram', () => {
   it('cannot be made two-way', () => {
     const outcome = type.edit(source(), { kind: 'operation', operation: 'setRelationOtherSide', on: ['p4'], args: { twoWay: true } }, {}, false);
     expect(outcome).toEqual({ kind: 'refused', sentence: TO_A_DIAGRAM });
+  });
+
+  it('offers the kinds of element the diagram can be given in its cells', () => {
+    const relation = type.view(source(), {}).properties.find((property) => property.id === 'p4')!;
+    expect(relation.createKinds?.map((kind) => kind.label)).toEqual(['Element', 'Moment']);
+    expect(type.view(source(cities, false), {}).properties.find((property) => property.id === 'p4')!.createKinds).toBeUndefined();
+  });
+
+  it('creates a moment in the diagram, named as typed, and relates it in the cell, as one step over both files', () => {
+    const outcome = applied(type.edit(source(), { kind: 'createRelated', row: 'utr', property: 'p4', name: 'Retro', elementKind: 'timeline.add-moment' }, {}, false));
+    const [other] = outcome.others ?? [];
+    const grown = spliced(planText, other!.splices);
+    const id = /- id: ([0-9a-z]{8})\n    label: Retro\n/.exec(grown)?.[1];
+    expect(other!.file).toBe('plan.tml');
+    expect(grown.startsWith(planText.slice(0, planText.indexOf('  - id: linked')))).toBe(true);
+    expect(id).toBeDefined();
+    expect(spliced(cities, outcome.splices)).toContain(`      - property: p4\n        rows:\n          - row: $t7m2k9qa@plan.tml#${id!}.label=Retro\n`);
+  });
+
+  it('asks which kind when the diagram offers several, and creates nothing where the host can make nothing', () => {
+    expect(refusal(type.edit(source(), { kind: 'createRelated', row: 'utr', property: 'p4', name: 'Retro' }, {}, false))).toBe('Choose which kind of element to create in this diagram.');
+    expect(refusal(type.edit(source(cities, false), { kind: 'createRelated', row: 'utr', property: 'p4', name: 'Retro', elementKind: 'timeline.add-moment' }, {}, false))).toBe(CANNOT_CREATE);
   });
 });

@@ -36,7 +36,7 @@ export function relations(table: TableData): Record<string, TableRelation> {
     // A link that does not resolve names its file by the name it caches.
     const named = file ?? (isLink(written) ? parseLink(written)?.documentName ?? written : written);
     if (property.attributes.computed !== true) {
-      held[property.id] = { file: named, single: property.attributes.limit === 'one', idOf: rowIdOf, ...(rows ? { rows } : {}) };
+      held[property.id] = { file: named, single: property.attributes.limit === 'one', idOf: rowIdOf, ...(rows ? { rows } : {}), ...(diagram === undefined ? {} : { elsewhere: named }) };
       continue;
     }
     held[property.id] = { file: named, single: false, readOnly: COMPUTED, idOf: rowIdOf, ...(rows ? { rows } : {}), ...(other ? { values: pointingAt(other.model, text(property.attributes.counterpart)) } : {}) };

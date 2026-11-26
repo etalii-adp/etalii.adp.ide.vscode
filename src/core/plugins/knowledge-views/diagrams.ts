@@ -4,8 +4,10 @@
 // those elements. The diagram has no column to show a relation's backlinks in, so a relation to one is one-way.
 
 import type { Change } from '../../disl/behavior';
-import type { IndexedDocument } from '../../fbl/links/workspace';
-import type { RelatedRows, TableLinking, TableOption } from '../../tool/tableView';
+import { linkText, linkToElement } from '../../fbl/links/link';
+import { fileNameOf, type IndexedDocument } from '../../fbl/links/workspace';
+import type { ElementMaker, TextSplice } from '../../frame/toolType';
+import type { RelatedRows, TableData, TableLinking, TableOption, TableRequest } from '../../tool/tableView';
 import { isLink, relativeTo, SELF, targetLink, text } from './links';
 
 /** What is known of the document a relation sits in: what tells a knowledge file from a diagram. */
@@ -61,4 +63,33 @@ export function oneWay(created: readonly { readonly id: string; readonly attribu
   return created.flatMap((property) => text(property.attributes.backlinkName as string | undefined) !== '' && diagramOf(text(property.attributes.targetFile as string | undefined), around) !== undefined
     ? [{ kind: 'set', id: property.id, attributes: { backlinkName: null } } as Change]
     : []);
+}
+
+export const CANNOT_CREATE = 'This diagram cannot be given an element from here.';
+export const CHOOSE_A_KIND = 'Choose which kind of element to create in this diagram.';
+const NOT_A_RELATION = 'That property is not a relation of this table\'s own.';
+
+/**
+ * "Create" in a relation's cell, for a relation to a diagram: the element is made in the diagram by its own tool type, of
+ * the kind asked for or the only one it offers, named as typed, where that tool places one added without a position; the
+ * cell relates it by a link to it, replacing what a relation that holds one row held. Both files are written, as one step.
+ */
+export function createRelated(table: TableData, request: Extract<TableRequest, { kind: 'createRelated' }>, makes: ElementMaker | undefined): { readonly request: TableRequest; readonly others: readonly { readonly file: string; readonly splices: readonly TextSplice[] }[] } | { readonly refused: string } {
+  const property = table.model.elements.find((element) => element.id === request.property && element.type === 'Property');
+  if (!property || property.attributes.valueType !== 'relation' || property.attributes.computed === true) return { refused: NOT_A_RELATION };
+  const diagram = diagramOf(text(property.attributes.targetFile), table);
+  const name = request.name.trim();
+  if (diagram === undefined || makes === undefined || table.linking === undefined || name === '') return { refused: CANNOT_CREATE };
+  const file = relativeTo(table.linking.path, diagram.path);
+  const kinds = makes.offered(file);
+  const kind = request.elementKind === undefined ? (kinds.length === 1 ? kinds[0] : undefined) : kinds.find((candidate) => candidate.id === request.elementKind);
+  if (kind === undefined) return { refused: kinds.length === 0 ? CANNOT_CREATE : CHOOSE_A_KIND };
+  const made = makes.make(file, kind.id, name);
+  if (made === undefined) return { refused: CANNOT_CREATE };
+  const documentName = fileNameOf(diagram.path);
+  const link = linkText(diagram.nameProperty === undefined ? linkToElement(diagram.documentId!, documentName, made.id) : linkToElement(diagram.documentId!, documentName, made.id, diagram.nameProperty, name));
+  const added: TableRequest = { kind: 'item', row: request.row, property: property.id, value: link, present: true };
+  const held = property.attributes.limit === 'one' ? table.rows.find((row) => row.id === request.row)?.cells[property.id]?.items ?? [] : [];
+  const relating: TableRequest = held.length === 0 ? added : { kind: 'steps', steps: [...held.map((item): TableRequest => ({ kind: 'item', row: request.row, property: property.id, value: item.value, present: false })), added] };
+  return { request: relating, others: [{ file, splices: made.splices }] };
 }
