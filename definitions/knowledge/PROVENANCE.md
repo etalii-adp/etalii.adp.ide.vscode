@@ -7,6 +7,6 @@ They are the definition of one tool type, copied unchanged, byte for byte, from 
 
 | File | Repository | Path | Commit | SHA-256 |
 |---|---|---|---|---|
-| `knowledge.des` | `etalii.adp` | `definitions/designers/knowledge.des` | `b003920534c33a9326bf71ba589f1af87baec153` | `acf9c75f3b76099fbb642b42a42e540a71421b0b54b4c290ec7ccb3990f25553` |
-| `knowledge.fbl` | `etalii.adp` | `definitions/designers/knowledge.fbl` | `b003920534c33a9326bf71ba589f1af87baec153` | `1e3eca7e03ce9c97c398ed3d2dabeeafd1a885d73c429b3fe819c38a0d5c5ecf` |
-| `knowledge.md` | `etalii.adp` | `definitions/designers/knowledge.md` | `b003920534c33a9326bf71ba589f1af87baec153` | `522994fd07bc6eb24223f80a8bf3969d068265d765ab3af5e5c4ad01ed98fdf1` |
+| `knowledge.des` | `etalii.adp` | `definitions/designers/knowledge.des` | `a9f978357ce1e98b9bd00c0624446c8c748a3eb1` | `ebe07832c1fdccf0afe52f56d0d86847b269289fcc832760098ddf4e80371235` |
+| `knowledge.fbl` | `etalii.adp` | `definitions/designers/knowledge.fbl` | `a9f978357ce1e98b9bd00c0624446c8c748a3eb1` | `1e3eca7e03ce9c97c398ed3d2dabeeafd1a885d73c429b3fe819c38a0d5c5ecf` |
+| `knowledge.md` | `etalii.adp` | `definitions/designers/knowledge.md` | `a9f978357ce1e98b9bd00c0624446c8c748a3eb1` | `f538c46d200f55d5714feb60c2a5b982780c2a34677b3f51f95531ddf58f8f0a` |

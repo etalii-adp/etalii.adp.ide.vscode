@@ -7,6 +7,6 @@ They are the definition of one tool type, copied unchanged, byte for byte, from 
 
 | File | Repository | Path | Commit | SHA-256 |
 |---|---|---|---|---|
-| `openslo-slo.dis` | `etalii.adp` | `definitions/diagrams/openslo-slo.dis` | `b003920534c33a9326bf71ba589f1af87baec153` | `a64abb4ca42648b30af1d5f2424d3feb64304cfd50b1273d46404eb7cfc00836` |
-| `openslo-slo.fbl` | `etalii.adp` | `definitions/diagrams/openslo-slo.fbl` | `b003920534c33a9326bf71ba589f1af87baec153` | `4bd695f90dbb8d4d588a4a25969c760c9b68e26a3d07a089afa49e63bba744bc` |
-| `openslo-slo.md` | `etalii.adp` | `definitions/diagrams/openslo-slo.md` | `b003920534c33a9326bf71ba589f1af87baec153` | `5325396303b37c9dadbd702cf5f9c6569d259794cc9b48fc07847784c5fddd04` |
+| `openslo-slo.dis` | `etalii.adp` | `definitions/diagrams/openslo-slo.dis` | `a9f978357ce1e98b9bd00c0624446c8c748a3eb1` | `a64abb4ca42648b30af1d5f2424d3feb64304cfd50b1273d46404eb7cfc00836` |
+| `openslo-slo.fbl` | `etalii.adp` | `definitions/diagrams/openslo-slo.fbl` | `a9f978357ce1e98b9bd00c0624446c8c748a3eb1` | `4bd695f90dbb8d4d588a4a25969c760c9b68e26a3d07a089afa49e63bba744bc` |
+| `openslo-slo.md` | `etalii.adp` | `definitions/diagrams/openslo-slo.md` | `a9f978357ce1e98b9bd00c0624446c8c748a3eb1` | `5325396303b37c9dadbd702cf5f9c6569d259794cc9b48fc07847784c5fddd04` |

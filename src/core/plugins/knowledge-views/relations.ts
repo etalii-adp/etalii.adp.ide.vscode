@@ -9,6 +9,7 @@ import type { Model, ModelElement } from '../../disl/model';
 import type { Change } from '../../disl/behavior';
 import { parseLink } from '../../fbl/links/link';
 import type { TableAcross, TableConfirm, TableData, TableFound, TableLinking, TableRelation, TableStep } from '../../tool/tableView';
+import { diagramChoices, diagramOf, elementsOf, oneWay } from './diagrams';
 import { fileOfTarget, isLink, ownIdOf, relationsOf, rowIdOf, rowLink, SELF, targetLink, text } from './links';
 
 /** The files other than itself that a document's relations name, each once, as it names them: a counterpart's too, which its rows come from. */
@@ -29,7 +30,9 @@ export function relations(table: TableData): Record<string, TableRelation> {
     const written = text(property.attributes.targetFile);
     const file = fileOfTarget(written, table.model, table.linking).file;
     const other = file === SELF ? { rows: table.rows.map((row) => ({ id: row.id, name: row.title })), model: table.model } : file === undefined ? undefined : table.related?.(file);
-    const rows = other?.rows;
+    // A target that is no knowledge file may be a diagram, whose elements the cells link to (spec 092, FR-025).
+    const diagram = other === undefined && file !== undefined && file !== SELF ? diagramOf(written, table) : undefined;
+    const rows = other?.rows ?? (diagram === undefined ? undefined : elementsOf(diagram));
     // A link that does not resolve names its file by the name it caches.
     const named = file ?? (isLink(written) ? parseLink(written)?.documentName ?? written : written);
     if (property.attributes.computed !== true) {
@@ -111,6 +114,10 @@ export function across(step: TableStep): TableAcross | { readonly refused: strin
   if (step.operation === 'deleteRows' && !step.confirmed) return relating(step);
   if (step.operation === SET_LIMIT) return limited(step);
   if (step.operation === SET_OTHER_SIDE) return otherSide(step);
+  if (step.operation === 'createRelation') {
+    const here = oneWay(step.after.elements.filter((element) => step.created.includes(element.id)), step);
+    return here.length === 0 ? undefined : { file: SELF, here, there: [] };
+  }
   return undefined;
 }
 
@@ -123,6 +130,7 @@ export const SET_LIMIT = 'setRelationLimit';
 export const SET_OTHER_SIDE = 'setRelationOtherSide';
 export const ownSteps = [SET_LIMIT, SET_OTHER_SIDE];
 
+export const TO_A_DIAGRAM = 'A diagram has no column to show a relation\'s backlinks in, so a relation to one is one-way.';
 const GONE = 'That property is no longer in this table.';
 const NOT_OWN = 'That property is not a relation of this table\'s own.';
 const PARENT_HOLDS_ONE = 'The parent relation holds one row.';
@@ -169,6 +177,7 @@ function otherSide(step: TableStep): TableAcross | { readonly refused: string } 
   const named = text(property.attributes.backlinkName);
   if (twoWay === (named !== '' || counterpart !== '')) return { file: SELF, here: [], there: [] };
   if (!twoWay) return { file: SELF, here: [{ kind: 'set', id: property.id, attributes: { backlinkName: null } }], there: [] };
+  if (diagramOf(text(property.attributes.targetFile), step) !== undefined) return { refused: TO_A_DIAGRAM };
   const asked = text(step.args.backlinkName ?? step.args.counterpartName).trim();
   const own = text(step.before.diagram.name).trim();
   return { file: SELF, here: [{ kind: 'set', id: property.id, attributes: { backlinkName: asked !== '' ? asked : own !== '' ? own : 'Relation' } }], there: [] };
@@ -255,7 +264,7 @@ export function choices(table: TableData): Record<string, Record<string, { value
         const other = table.related?.(peer);
         const id = other === undefined ? '' : ownIdOf(other.model);
         return { value: id === '' ? peer : targetLink(id, peer), label: peer };
-      })],
+      }), ...diagramChoices(table)],
     },
   };
 }

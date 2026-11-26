@@ -1,7 +1,7 @@
 {
   "$schema": "https://etalii.net/adp/fbl/schema/0.1/fbl.schema.json#/$defs/Document",
   "fbl": "0.23",
-  "doc": "The timeline's .tml body (definitions/diagrams/timeline.dis, timeline.md): ADP's own YAML, read through FBL instead of a hand-written parser. It differs from the example specifications/fbl/timeline.fbl where the tool reads differently. A relation is an element rule whose from and to are references by storedId, so a relation whose end names no element is kept and reported by the definition's rules. Every rule reads the id as written as the host attribute storedId, so an id written more than once is reported and an element is found by what is written. There is no header, so a missing or other timeline: line raises nothing. A row is read as its text and converted as the tool converts it, so 1.0 and 0x10 are row 0. A missing begin reads as the empty text. An entry is a period when its end key holds a scalar, empty included, and a moment otherwise, so an end holding a mapping or a sequence is a moment. An entry that is not a mapping is taken by no rule and kept as it is. A new period or moment goes after the last element of either kind, as the tool has always added one, rather than after the last of its own kind. (FBL 0.23, specs 089 and 092) The top-level key `id` is the document id, and an entry of `elements` with a `link` key is a linked element, a LinkedPeriod when its end key holds a scalar and a LinkedMoment otherwise, whose label is its target's name and is not written; its rules follow the ordinary ones, which take no entry with a `link` key.",
+  "doc": "The timeline's .tml body (definitions/diagrams/timeline.dis, timeline.md): ADP's own YAML, read through FBL instead of a hand-written parser. It differs from the example specifications/fbl/timeline.fbl where the tool reads differently. A relation is an element rule whose from and to are references by storedId, so a relation whose end names no element is kept and reported by the definition's rules. Every rule reads the id as written as the host attribute storedId, so an id written more than once is reported and an element is found by what is written. There is no header, so a missing or other timeline: line raises nothing. A row is read as its text and converted as the tool converts it, so 1.0 and 0x10 are row 0. A missing begin reads as the empty text. An entry is a period when its end key holds a scalar, empty included, and a moment otherwise, so an end holding a mapping or a sequence is a moment. An entry that is not a mapping is taken by no rule and kept as it is. A new period or moment goes after the last element of either kind, as the tool has always added one, rather than after the last of its own kind. (FBL 0.23, specs 089 and 092) The top-level key `id` is the document id, and an entry of `elements` with a `link` key is a linked element, a LinkedPeriod when its end key holds a scalar and a LinkedMoment otherwise, whose label is its target's name and is not written; its rules follow the ordinary ones, which take no entry with a `link` key. Setting its link empty removes the key, which leaves an ordinary element (the fix of a broken link, FBL 17.6).",
   "bindings": {
     "timeline": {
       "title": "Timeline Markup Language",
@@ -53,7 +53,7 @@
           "id": { "from": { "key": "id" } },
           "attributes": {
             "storedId": { "key": "id", "readOnly": true },
-            "link": { "key": "link" },
+            "link": { "key": "link", "empty": "remove" },
             "begin": { "key": "begin", "read": "text", "time": "keep-precision", "default": "" },
             "end": { "key": "end", "read": "text", "time": "keep-precision", "empty": "remove" },
             "row": { "key": "row", "read": "text", "default": 0 }
@@ -69,7 +69,7 @@
           "id": { "from": { "key": "id" } },
           "attributes": {
             "storedId": { "key": "id", "readOnly": true },
-            "link": { "key": "link" },
+            "link": { "key": "link", "empty": "remove" },
             "begin": { "key": "begin", "read": "text", "time": "keep-precision", "default": "" },
             "row": { "key": "row", "read": "text", "default": 0 }
           },
