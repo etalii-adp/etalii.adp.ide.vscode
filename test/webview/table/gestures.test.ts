@@ -584,6 +584,33 @@ describe('dragging on a table with gestures, and the keyboard\'s way to the same
     expect(one('thead [data-id="size"]').classList.contains('adp-table-resizing')).toBe(false);
   });
 
+  // The lead column is 52 pixels and the column under the header's + is 32.
+  it('fills the width of the editor, stretching the columns in proportion to their own widths, and keeps them where it is narrower', () => {
+    const room = (width: number): void => {
+      Object.defineProperty(one('.adp-table-scroll'), 'clientWidth', { value: width, configurable: true });
+      surface.receive(message({ ...three, properties: [property('name', { title: true, width: 100 }), property('size', { valueType: 'number', editor: 'number', width: 300 })] }));
+    };
+    room(84 + 800);
+    expect(one('.adp-table-grid').style.width).toBe('884px');
+    expect(all('thead [data-id]').map((header) => header.style.width)).toEqual(['200px', '600px']);
+    room(84 + 200);
+    expect(one('.adp-table-grid').style.width).toBe('484px');
+    expect(all('thead [data-id]').map((header) => header.style.width)).toEqual(['100px', '300px']);
+  });
+
+  it('writes the column\'s own width when a stretched column\'s border is dragged', () => {
+    Object.defineProperty(one('.adp-table-scroll'), 'clientWidth', { value: 84 + 640, configurable: true });
+    surface.receive(message(three));
+    const header = one<HTMLElement>('thead [data-id="size"]');
+    expect(header.style.width).toBe('320px');
+    mouse(header.querySelector('.adp-table-resizer')!, 'mousedown', 300, 10);
+    mouse(window, 'mousemove', 340, 10);
+    expect(one('.adp-table-grid').style.width).toBe('724px');
+    expect(Number.parseFloat(header.style.width)).toBeGreaterThan(320);
+    mouse(window, 'mouseup', 340, 10);
+    expect(edits()).toEqual([op('setColumn', ['va'], { property: 'size', width: 180 })]);
+  });
+
   it('moves a row by its handle, the rows selected with it, and by Alt with an arrow', () => {
     const lines = all('tbody tr.adp-table-row');
     lay(lines, 'y');

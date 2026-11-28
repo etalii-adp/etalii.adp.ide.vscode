@@ -28,6 +28,8 @@ const defaultWidth = 160;
 /** The narrowest a drag of its border leaves a column, as in the standalone host; and how far a key widens or narrows it. */
 const minimumWidth = 60;
 const widthStep = 20;
+/** The width of the column under the header's + that adds a property. */
+const addWidth = 32;
 
 /** Where a cell is: the key of its line (empty for the header) and its column (empty for the row numbers). */
 interface Place {
@@ -60,6 +62,14 @@ const marked = <E extends HTMLElement>(element: E, findings: readonly TableFindi
   element.title = [element.title, said].filter((part) => part !== '').join('\n');
   element.append(html('span', { class: 'adp-table-finding-mark', role: 'img', 'aria-label': said }, icon(worst === 'error' ? 'mdi-alert-circle' : worst === 'warning' ? 'mdi-alert' : 'mdi-information-outline')));
   return element;
+};
+/** Widths stretched in proportion to fill a room, whole pixels, the last taking what rounding leaves; as they are where the room is smaller. */
+const stretched = (widths: readonly number[], room: number): number[] => {
+  const total = widths.reduce((sum, width) => sum + width, 0);
+  if (total <= 0 || room <= total) return [...widths];
+  const shown = widths.map((width) => Math.floor((width * room) / total));
+  shown[shown.length - 1] += room - shown.reduce((sum, width) => sum + width, 0);
+  return shown;
 };
 const several = (property: TableProperty): boolean => property.many || property.editor === 'choices' || property.editor === 'rows';
 const menuButton = (name: string, tabindex: number): HTMLButtonElement => html('button',
@@ -129,6 +139,8 @@ export class Table {
 
   constructor(host: HTMLElement, private readonly send: (message: FromCanvas) => void) {
     host.append(this.root);
+    // The table fills the editor's width, so it is laid out again when that changes.
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this.layout()).observe(this.scroller);
     this.menu = new Menu(this.root, (action) => this.run(action, true));
     this.entries = new EntryMenu(this.root, (entry) => this.chosen(entry));
     this.search.before(this.find);
@@ -263,16 +275,9 @@ export class Table {
     this.drawOptions();
 
     const columns = view.properties.filter((property) => property.visible);
-    const widths = columns.map((property) => (this.resizing?.id === property.id ? this.resizing.width : property.width ?? defaultWidth));
-    // A frozen column stays at the sum of the widths of what is frozen before it.
-    const lefts = new Map<string, number>();
-    const lead = gestures ? leadWidth : numberWidth;
-    columns.reduce((left, property, index) => (property.frozen ? (lefts.set(property.id, left), left + widths[index]) : left), lead);
+    // A frozen column's cells are placed by layout(), with the widths of the columns.
     const frozen = <E extends HTMLElement>(cell: E, property: TableProperty): E => {
-      const left = lefts.get(property.id);
-      if (left === undefined) return cell;
-      cell.classList.add('adp-table-frozen');
-      cell.style.left = `${left}px`;
+      if (property.frozen) cell.classList.add('adp-table-frozen');
       return cell;
     };
     const numbers = new Map(view.rows.map((row, index) => [row.id, index + 1]));
@@ -325,20 +330,18 @@ export class Table {
     this.grid.setAttribute('aria-label', view.name);
     this.grid.setAttribute('aria-rowcount', String(view.total + 1));
     this.grid.setAttribute('aria-colcount', String(columns.length + 1));
-    this.grid.style.width = `${widths.reduce((sum, width) => sum + width, lead + (gestures?.newProperty ? 32 : 0))}px`;
     this.grid.replaceChildren(
       html('thead', {}, html('tr', { role: 'row', 'data-key': '' },
         gestures
           ? html('th', { class: 'adp-table-number adp-table-lead', role: 'columnheader', scope: 'col', 'data-column': '', tabindex: -1, 'aria-label': 'Row' },
             html('input', { class: 'adp-table-check adp-table-all', type: 'checkbox', tabindex: -1, 'aria-label': 'Select all rows' }))
           : html('th', { class: 'adp-table-number', role: 'columnheader', scope: 'col', 'data-column': '', tabindex: -1, 'aria-label': 'Row' }),
-        ...columns.map((property, index) => {
+        ...columns.map((property) => {
           const shortcuts = [...(gestures?.moves?.columns ? ['Alt+ArrowLeft', 'Alt+ArrowRight'] : []), ...(gestures?.widths ? ['Alt+Shift+ArrowLeft', 'Alt+Shift+ArrowRight'] : [])];
           const cell = html('th', { role: 'columnheader', scope: 'col', 'data-id': property.id, 'data-column': property.id, tabindex: -1, 'aria-haspopup': gestures?.columnMenus?.[property.id] ? 'menu' : undefined, 'aria-keyshortcuts': shortcuts.length > 0 ? shortcuts.join(' ') : undefined },
             property.icon ? icon(property.icon) : undefined, html('span', { class: 'adp-table-name' }, property.name),
             view.readOnly || gestures ? undefined : menuButton(property.name, -1),
             gestures?.widths?.[property.id] ? html('span', { class: 'adp-table-resizer', 'aria-hidden': 'true' }) : undefined);
-          cell.style.width = `${widths[index]}px`;
           if (this.resizing?.id === property.id) cell.classList.add('adp-table-resizing');
           return frozen(cell, property);
         }),
@@ -353,6 +356,7 @@ export class Table {
           : property.summary ? `${property.summary.label} ${property.summary.text}` : ''), property)),
         ...(gestures?.newProperty ? [html('td', {})] : [])))] : []),
     );
+    this.layout();
     this.filter();
     this.mark();
     this.rove();
@@ -361,6 +365,33 @@ export class Table {
   }
 
 
+
+  /**
+   * Gives the columns their widths: each its own, stretched in proportion to the others so that the
+   * table fills the width of the editor, and its own only where they need more room than there is.
+   * Every line then ends at the same right edge. A frozen column's cells stay at the sum of the widths
+   * of what is frozen before it.
+   */
+  private layout(): void {
+    const view = this.view;
+    if (!view) return;
+    const columns = view.properties.filter((property) => property.visible);
+    const own = columns.map((property) => (this.resizing?.id === property.id ? this.resizing.width : property.width ?? defaultWidth));
+    const lead = this.gestures ? leadWidth : numberWidth;
+    const fixed = lead + (this.gestures?.newProperty ? addWidth : 0);
+    const widths = stretched(own, this.scroller.clientWidth - fixed);
+    this.grid.style.width = `${widths.reduce((sum, width) => sum + width, fixed)}px`;
+    const lefts = new Map<string, number>();
+    columns.reduce((left, property, index) => (property.frozen ? (lefts.set(property.id, left), left + widths[index]) : left), lead);
+    columns.forEach((property, index) => {
+      const header = this.grid.querySelector<HTMLElement>(`thead [role="columnheader"][data-id="${CSS.escape(property.id)}"]`);
+      if (header) header.style.width = `${widths[index]}px`;
+    });
+    for (const cell of this.grid.querySelectorAll<HTMLElement>('.adp-table-frozen')) {
+      const left = lefts.get(cell.dataset.column ?? cell.dataset.calculation ?? '');
+      if (left !== undefined) cell.style.left = `${left}px`;
+    }
+  }
 
   /** One cell of a row: its text, its tags or its checkbox. */
   private cellOf(row: TableRow, property: TableProperty): HTMLTableCellElement {
@@ -998,19 +1029,16 @@ export class Table {
     const request = this.gestures?.widths?.[id];
     if (!request) return;
     const grabbed = this.view?.properties.find((property) => property.id === id)?.width ?? defaultWidth;
-    const widthAt = (dx: number): number => Math.max(minimumWidth, Math.round(grabbed + dx));
+    // The columns are drawn stretched: the pointer moves the width drawn, which is the column's own times the stretch.
+    const drawn = Number.parseFloat(header.style.width);
+    const stretch = drawn > grabbed ? drawn / grabbed : 1;
+    const widthAt = (dx: number): number => Math.max(minimumWidth, Math.round(grabbed + dx / stretch));
     const shown = (): HTMLElement | null => this.grid.querySelector<HTMLElement>(`thead [role="columnheader"][data-id="${CSS.escape(id)}"]`);
     this.resizing = { id, width: grabbed };
     header.classList.add('adp-table-resizing');
     follow(start, (dx) => {
-      const width = widthAt(dx);
-      const cell = shown();
-      if (cell) {
-        const before = Number.parseFloat(cell.style.width) || width;
-        this.grid.style.width = `${(Number.parseFloat(this.grid.style.width) || 0) + width - before}px`;
-        cell.style.width = `${width}px`;
-      }
-      this.resizing = { id, width };
+      this.resizing = { id, width: widthAt(dx) };
+      this.layout();
     }, (dx, _dy, dragged) => {
       this.resizing = undefined;
       shown()?.classList.remove('adp-table-resizing');

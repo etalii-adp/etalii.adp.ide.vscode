@@ -4,6 +4,10 @@ All notable changes to **ADP: A Different Perspective** are listed here, newest 
 
 ## [Unreleased]
 
+### Changed
+
+- **Knowledge:** a table now fills the whole width of the editor. Its columns are stretched in proportion to the widths you gave them, and they follow when the editor is resized, so every line of the table, grouped or not, ends at the same right edge. Where the columns need more room than the editor has, they keep their own widths and the table scrolls. Dragging a column's border still sets that column's own width.
+
 ## [0.2.7] - 2026-11-28
 
 ### Fixed
