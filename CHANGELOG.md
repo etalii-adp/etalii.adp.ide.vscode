@@ -4,6 +4,8 @@ All notable changes to **ADP: A Different Perspective** are listed here, newest 
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-11-28
+
 ### Fixed
 
 - **Knowledge:** a related row shown as a link in a cell is written in its chip's own text colour, like its ×, so it reads clearly on the chip in light, dark and high-contrast themes.
@@ -141,7 +143,8 @@ First release on the Visual Studio Marketplace and Open VSX.
 - **ADP Toolbox** and **ADP Properties** in the ADP view of the activity bar, **ADP: Open as Text**, and full Undo and Redo for every change.
 - Language support for `.atd` tool descriptions: colouring, completion, hover, rename, formatting and live problem checking, with **ADP: New Tool Description**, **ADP: Check Tool Description** and **ADP: Validate Tool Description**.
 
-[Unreleased]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.6...develop
+[Unreleased]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.7...develop
+[0.2.7]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.3...v0.2.4
