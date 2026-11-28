@@ -4,6 +4,8 @@ All notable changes to **ADP: A Different Perspective** are listed here, newest 
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-11-28
+
 ### Added
 
 - **Timeline** and **Dependency graph:** an element can now stand for an element of another file in your workspace, such as a knowledge row, a mind map node or an element of another timeline or graph. Choose **Add from another document…** on the canvas, and the linked element shows its target's current name. **Open linked element** and **Linked from** in its menu take you to the other side, and a link whose target was deleted or cannot be found is listed in the Problems panel.
@@ -133,7 +135,8 @@ First release on the Visual Studio Marketplace and Open VSX.
 - **ADP Toolbox** and **ADP Properties** in the ADP view of the activity bar, **ADP: Open as Text**, and full Undo and Redo for every change.
 - Language support for `.atd` tool descriptions: colouring, completion, hover, rename, formatting and live problem checking, with **ADP: New Tool Description**, **ADP: Check Tool Description** and **ADP: Validate Tool Description**.
 
-[Unreleased]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.5...develop
+[Unreleased]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.6...develop
+[0.2.6]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/etalii-adp/etalii.adp.ide.vscode/compare/v0.2.2...v0.2.3
