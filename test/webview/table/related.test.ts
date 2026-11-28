@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { FromCanvas, ToCanvas } from '../../../src/core/frame/protocol';
 import type { TableProperty, TableRequest, TableView } from '../../../src/core/tool/tableView';
@@ -67,6 +68,20 @@ describe('a relation\'s cells', () => {
     expect(link.textContent).toBe('Noord-Holland');
     press(link);
     expect(edits()).toEqual([{ kind: 'follow', file: 'provinces.yaml', row: 'nh' }]);
+  });
+
+  it('write a related row\'s title in its chip\'s own colour, as its ×, not in the link colour', () => {
+    const style = document.createElement('style');
+    style.textContent = readFileSync('src/webview/table/table.css', 'utf8');
+    document.head.append(style);
+    try {
+      open(false);
+      const link = one('tbody tr[data-id="r1"] .adp-table-link');
+      const chip = link.closest<HTMLElement>('.adp-table-tag')!;
+      expect(getComputedStyle(link).color).toBe(getComputedStyle(chip).color);
+    } finally {
+      style.remove();
+    }
   });
 
   it('select a related row of the same table in place, writing nothing', () => {
