@@ -42,6 +42,7 @@ Understand how a system behaves: variables joined by cause-and-effect links, eac
 - Set a link's polarity, delay, weight and note in ADP Properties; with nothing selected, ADP Properties shows the diagram's own settings.
 - **ADP: Arrange Diagram** lays the diagram out for you.
 - **ADP: Export Flow Page** saves an animated, self-contained HTML page of the diagram next to the file and opens it, ready to share. It is also on the diagram's right-click menu, on the right-click of a `.cld` file in the Explorer and in the ADP menu of the editor title bar.
+- **ADP: Include Flow Page user instructions** saves a Markdown guide to the flow page for you and the people you share it with: how to read the variables, links and loops, what the heatmap shows, how to trace a loop and let it go again, and how to try out changes. **How to Use It** on the message that follows an export opens the same guide.
 - **ADP: Include Causal loop diagram LLM instructions** saves a Markdown guide that teaches an AI assistant how to read and write causal loop diagrams, so it can draft or extend one with you.
 
 ### Dependency graph (`.dgr`)
@@ -135,6 +136,7 @@ All commands are in the Command Palette under **ADP**.
 | **ADP: Move Earlier** (`Alt+Up`) / **ADP: Move Later** (`Alt+Down`) | Moves the selection up or down among its siblings |
 | **ADP: Even Phases** / **ADP: Toggle Compact** | Spaces the hype cycle's phases evenly, or switches its compact view |
 | **ADP: Export Flow Page** | Saves an animated HTML page of a causal loop diagram |
+| **ADP: Include Flow Page user instructions** | Saves a guide on reading and using an exported flow page |
 | **ADP: Include ... LLM instructions** | Saves a guide that teaches an AI assistant to work with a tool's files |
 | **ADP: Focus on ADP Toolbox** / **ADP: Focus on ADP Properties** | Moves the keyboard to the side bar views |
 | **ADP: New / Check / Validate Tool Description** | Creates and checks your own tool descriptions |

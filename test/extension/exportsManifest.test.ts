@@ -26,6 +26,13 @@ describe('the commands of the exports', () => {
     }
   });
 
+  it('come with a command that saves how to use them, for the exports that explain themselves', () => {
+    expect(commands.filter((entry) => entry.command?.startsWith('etalii.adp.exportInstructions.')).map((entry) => [entry.command, entry.title, entry.category]))
+      .toEqual([['etalii.adp.exportInstructions.flowPage', 'Include Flow Page user instructions', 'ADP']]);
+    expect(menus['etalii.adp.menu'].filter((entry) => entry.command?.startsWith('etalii.adp.exportInstructions.')).map((entry) => entry.when))
+      .toEqual(['resourceExtname in etalii.adp.exports.flowPage']);
+  });
+
   it('are in the ADP menu of the title bar of every tool\'s editor', () => {
     expect(submenus).toEqual([{ id: 'etalii.adp.menu', label: 'ADP', icon: '$(layers)' }]);
     expect(menus['editor/title'].filter((entry) => entry.submenu === 'etalii.adp.menu').map((entry) => entry.when)).toEqual(['activeCustomEditorId =~ /^etalii\\.adp\\./']);

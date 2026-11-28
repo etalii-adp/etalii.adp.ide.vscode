@@ -81,6 +81,8 @@ export interface ToolExport {
   name(stem: string, moment: Date): string;
   /** The text of the file. */
   write(request: ExportRequest): string;
+  /** How a person reads and uses the file, in Markdown, saved by the command `etalii.adp.exportInstructions.<id>`; none where the file needs no explaining. */
+  readonly instructions?: string;
 }
 
 /**

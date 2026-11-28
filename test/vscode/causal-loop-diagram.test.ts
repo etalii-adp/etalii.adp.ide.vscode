@@ -157,4 +157,18 @@ suite('A causal loop diagram in Visual Studio Code', () => {
       await vscode.workspace.fs.delete(target).then(undefined, () => undefined);
     }
   });
+  // "ADP: Include Flow Page user instructions" saves how a person reads and uses an exported flow page (Peter, 2026-11-28).
+  test('Include Flow Page user instructions saves the instructions where it is told and opens them', async () => {
+    const target = example('flow-page-instructions.md');
+    await vscode.workspace.fs.delete(target).then(undefined, () => undefined);
+    try {
+      await vscode.commands.executeCommand('etalii.adp.exportInstructions.flowPage', target);
+      const text = new TextDecoder().decode(await vscode.workspace.fs.readFile(target));
+      assert.ok(text.startsWith('# Reading a flow page'), text.slice(0, 80));
+      assert.ok(text.includes('## Reading the loops'));
+      assert.strictEqual(vscode.window.activeTextEditor?.document.uri.toString(), target.toString());
+    } finally {
+      await vscode.workspace.fs.delete(target).then(undefined, () => undefined);
+    }
+  });
 });
