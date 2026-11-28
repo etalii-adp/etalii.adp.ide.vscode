@@ -9,6 +9,7 @@ All notable changes to **ADP: A Different Perspective** are listed here, newest 
 - **Timeline** and **Dependency graph:** an element can now stand for an element of another file in your workspace, such as a knowledge row, a mind map node or an element of another timeline or graph. Choose **Add from another document…** on the canvas, and the linked element shows its target's current name. **Open linked element** and **Linked from** in its menu take you to the other side, and a link whose target was deleted or cannot be found is listed in the Problems panel.
 - **Knowledge:** a relation can now point at a timeline, a dependency graph or a mind map. Choose the diagram as the relation's target, and each cell picks that diagram's elements by name and shows their current names. Type a name that is not there yet and choose **Create** to add it to the diagram as well, as a moment or a period in a timeline and as a node in a dependency graph or a mind map; one undo takes back both files.
 - **All tools:** **New ADP Tool…** in the Explorer's right-click menu makes a new tool document in the folder you clicked.
+- **Causal loop diagram:** new command **ADP: Include Flow Page user instructions** saves a Markdown guide on reading and using an exported flow page: what the variables, links, loops and heatmap show, how to trace and pin a loop and let it go again, and how to try out changes. It is also in the ADP menu of the editor title bar, and **How to Use It** on the message after an export opens it.
 
 ### Fixed
 

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { EditRequest, ViewOptions } from '../core/frame/toolType';
 import { viewTypeOf } from '../core/frame/toolType';
-import { exportCommand, exportContext, exportingOf, lastExport, writeExport } from './exports';
+import { exportCommand, exportContext, exportingOf, instructionsCommand, lastExport, saveInstructions, writeExport } from './exports';
 import { registerLlmInstructions } from './llmInstructions';
 import { keepAsText } from './opening';
 import { PropertiesView } from './propertiesView';
@@ -179,6 +179,12 @@ export function registerCommands(context: vscode.ExtensionContext, tools: Tools,
       const exporting = open ? { type: open.type, uri: target, source: open.source, options: open.options } : await exportingOf(target, types);
       if (!exporting || !(exporting.type.exports ?? []).some((offer) => offer.id === id)) return;
       await writeExport(exporting, id);
+    });
+    // How a person reads and uses the export, as "Include ... LLM instructions" saves how an AI assistant writes a document.
+    const instructions = types.flatMap((type) => type.exports ?? []).find((offer) => offer.id === id && offer.instructions !== undefined)?.instructions;
+    if (instructions === undefined || !contributed.has(instructionsCommand(id))) continue;
+    register(instructionsCommand(id), async (uri?: unknown) => {
+      await saveInstructions(id, instructions, uri instanceof vscode.Uri ? uri : undefined);
     });
   }
 

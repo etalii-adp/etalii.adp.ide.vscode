@@ -15,7 +15,7 @@ const dataOf = (text: string): { v: [string, string, number, number][] } => JSON
 
 describe('an export of a tool type', () => {
   it('is offered on the diagram itself, after its own entries, and not on an element', () => {
-    expect(type.exports).toEqual([{ id: 'flowPage', label: 'Export flow page' }]);
+    expect(type.exports?.map(({ id, label }) => ({ id, label }))).toEqual([{ id: 'flowPage', label: 'Export flow page' }]);
     const actions = type.actions(source, []);
     expect(actions.at(-1)).toEqual({ id: 'export:flowPage', label: 'Export flow page', enabled: true });
     expect(actions.map((action) => action.label)).toContain('Arrange diagram');

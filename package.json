@@ -310,6 +310,11 @@
         "category": "ADP"
       },
       {
+        "command": "etalii.adp.exportInstructions.flowPage",
+        "title": "Include Flow Page user instructions",
+        "category": "ADP"
+      },
+      {
         "command": "etalii.adp.new.etalii.agent-activity-diagram",
         "title": "New Agent activity diagram",
         "category": "ADP"
@@ -585,6 +590,11 @@
       "etalii.adp.menu": [
         {
           "command": "etalii.adp.export.flowPage",
+          "when": "resourceExtname in etalii.adp.exports.flowPage",
+          "group": "export"
+        },
+        {
+          "command": "etalii.adp.exportInstructions.flowPage",
           "when": "resourceExtname in etalii.adp.exports.flowPage",
           "group": "export"
         }

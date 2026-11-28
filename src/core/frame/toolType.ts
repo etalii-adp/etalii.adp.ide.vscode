@@ -216,6 +216,8 @@ export const LINKED_FROM = 'link:backlinks';
 export interface ExportOffer {
   readonly id: string;
   readonly label: string;
+  /** How a person reads and uses the exported file, in Markdown, where the tool type explains it. */
+  readonly instructions?: string;
 }
 
 /** A file an export writes beside the document: its name and its text. */

@@ -12,6 +12,7 @@
 import { elementaryCycles } from '../../disl/cycles';
 import type { Attributes, Model, ModelElement, Value } from '../../disl/model';
 import type { ExportLogic, ExportRequest } from '../../tool/pluginRegistry';
+import { INSTRUCTIONS } from './instructions';
 import { TEMPLATE } from './template';
 
 /** Where the page's title and heading are written, HTML-escaped. */
@@ -187,5 +188,5 @@ export function flowPage(request: ExportRequest): string {
 /** What the causal loop diagram exports: its flow page, as the desktop host's ribbon offers it. */
 export const cldFlowPage: ExportLogic = {
   id: 'systems/causal-loop-diagram',
-  exports: [{ id: 'flowPage', label: 'Export flow page', name: pageName, write: flowPage }],
+  exports: [{ id: 'flowPage', label: 'Export flow page', name: pageName, write: flowPage, instructions: INSTRUCTIONS }],
 };

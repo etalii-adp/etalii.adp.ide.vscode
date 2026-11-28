@@ -141,7 +141,7 @@ function diagramFrom(definition: Definition, bindings: readonly FblBinding[], pl
   const readingLogic = plugins.reading(origin);
   // What the tool type exports of a document, which no definition states (`docs/disl-support.md`, "Code for one tool type").
   const exportLogic = plugins.exports(origin);
-  const exportOffers: ExportOffer[] = (exportLogic?.exports ?? []).map((offer) => ({ id: offer.id, label: offer.label }));
+  const exportOffers: ExportOffer[] = (exportLogic?.exports ?? []).map((offer) => ({ id: offer.id, label: offer.label, ...(offer.instructions === undefined ? {} : { instructions: offer.instructions }) }));
   const metamodel = interpretMetamodel(specification);
   const persistence = interpretPersistence(specification, metamodel.value);
   const expressions = createExpressions(specification, metamodel.value, { pluginFunction: (plugin, name) => plugins.celFunctions(plugin)?.functions[name] });
