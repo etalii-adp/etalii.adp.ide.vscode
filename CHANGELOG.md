@@ -4,6 +4,12 @@ All notable changes to **ADP: A Different Perspective** are listed here, newest 
 
 ## [Unreleased]
 
+### Fixed
+
+- **Knowledge:** a related row shown as a link in a cell is written in its chip's own text colour, like its ×, so it reads clearly on the chip in light, dark and high-contrast themes.
+- **Knowledge:** the bar for the selected rows opens beside the search box instead of on a line below it, so the table no longer jumps down and up as rows are selected and cleared.
+- **Knowledge:** every row's lines now run as far as the header's **+** column, as the header, the **New** row and the footer already did, so the table's right edge is one straight line.
+
 ## [0.2.6] - 2026-11-28
 
 ### Added

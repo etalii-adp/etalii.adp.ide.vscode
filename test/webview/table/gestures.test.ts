@@ -381,6 +381,35 @@ describe('the rows and groups of a table with gestures', () => {
     }
   });
 
+  it('opens the bar of the rows selected beside the search, on the toolbar\'s line, not on a line of its own', () => {
+    const style = document.createElement('style');
+    style.textContent = readFileSync('src/webview/table/table.css', 'utf8');
+    document.head.append(style);
+    try {
+      surface.receive(message({ ...shown, groups: undefined }));
+      tick(one<HTMLInputElement>('tbody tr[data-id="r1"] .adp-table-check'));
+      const bar = one('.adp-table-selection');
+      expect(bar.hidden).toBe(false);
+      expect(bar.parentElement).toBe(one('.adp-table-toolbar'));
+      expect(bar.previousElementSibling).toBe(one('.adp-table-search'));
+      expect(getComputedStyle(bar).width).not.toBe('100%');
+    } finally {
+      style.remove();
+    }
+  });
+
+  it('runs every line of the table as far as the header\'s +, rows included, and keeps the arrows off that cell', () => {
+    surface.receive(message({ ...shown, groups: undefined }));
+    const width = (line: Element): number => [...line.children].reduce((sum, cell) => sum + ((cell as HTMLTableCellElement).colSpan || 1), 0);
+    const header = width(one('thead tr'));
+    expect(all('tbody tr, tfoot tr').map(width)).toEqual(all('tbody tr, tfoot tr').map(() => header));
+    const cells = all('tbody tr[data-id="r1"] [role="gridcell"]');
+    const last = cells[cells.length - 1];
+    last.focus();
+    last.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(last);
+  });
+
   it('says how many rows a row\'s menu deletes', () => {
     surface.receive(message({ ...shown, groups: undefined }));
     tick(one<HTMLInputElement>('tbody tr[data-id="r1"] .adp-table-check'));

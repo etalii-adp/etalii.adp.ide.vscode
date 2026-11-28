@@ -777,11 +777,13 @@ thead .adp-table-lead .adp-table-check,
 }
 
 /* The bar of the rows selected takes a line of its own under the sort and filter items, which stay, as in the standalone host. */
+/* It stands beside the search, on the toolbar's line, so the table does not move when a row is selected. */
 .adp-table-selection {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  width: 100%;
+  margin-left: 8px;
 }
 
 .adp-table-selection-count {
@@ -977,4 +979,14 @@ thead .adp-table-lead .adp-table-check,
 }
 .adp-table-link:hover {
   color: var(--vscode-textLink-activeForeground);
+}
+
+/* On a chip, a related row's title takes the chip's own text colour, as its × does: the link colour on
+   the badge or a coloured background reads poorly. The underline still says it is a link. */
+.adp-table-tag .adp-table-link,
+.adp-table-tag .adp-table-link:hover {
+  color: inherit;
+}
+.adp-table-tag .adp-table-link:hover {
+  text-decoration-thickness: 2px;
 }

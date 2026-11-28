@@ -90,7 +90,7 @@ export class Table {
   });
   private readonly root = html('div', { class: 'adp-table' },
     this.tabs,
-    html('div', { class: 'adp-table-toolbar', role: 'toolbar', 'aria-label': 'Table' }, this.buttons, this.search, this.chips, this.tune, this.bar.element),
+    html('div', { class: 'adp-table-toolbar', role: 'toolbar', 'aria-label': 'Table' }, this.buttons, this.search, this.bar.element, this.chips, this.tune),
     this.panels.element, this.options, this.notice, this.scroller, this.status);
   private readonly menu: Menu;
   private readonly entries: EntryMenu;
@@ -282,7 +282,9 @@ export class Table {
         html('input', { class: 'adp-table-check', type: 'checkbox', tabindex: -1, 'aria-label': `Select ${row.cells[columns.find((property) => property.title)?.id ?? '']?.text || 'row'}`, 'data-row': row.id }))
       : html('th', { class: 'adp-table-number', role: 'rowheader', scope: 'row', 'data-column': '', tabindex: -1 }, String(numbers.get(row.id) ?? '')), row.findings);
     const line = (row: TableRow, key: string): HTMLElement => html('tr', { class: 'adp-table-row', role: 'row', 'data-id': row.id, 'data-key': key, 'aria-level': view.tree?.[row.id] ? String(view.tree[row.id].depth + 1) : undefined },
-      leadOf(row), ...columns.map((property) => frozen(this.cellOf(row, property), property)));
+      leadOf(row), ...columns.map((property) => frozen(this.cellOf(row, property), property)),
+      // Under the header's + a row has an empty cell too, so that its lines run as far as the header's and the footer's.
+      ...(gestures?.newProperty ? [html('td', { class: 'adp-table-add-column', 'aria-hidden': 'true' })] : []));
     const span = columns.length + (gestures?.newProperty ? 2 : 1);
     const adding = (request: TableRequest | undefined, group?: string): HTMLElement[] => (request === undefined || view.readOnly ? [] : [html('tr', { class: 'adp-table-new', role: 'row', 'data-group': group },
       html('td', { colspan: span }, html('button', { class: 'adp-table-new-row', type: 'button', 'data-group': group }, icon('mdi-plus'), 'New')))]);
@@ -592,8 +594,10 @@ export class Table {
     if (move) {
       event.preventDefault();
       const lines = this.lines();
-      const cells = [...(lines[clamp(lines.indexOf(line) + move[0], lines.length - 1)]?.children ?? [])] as HTMLElement[];
-      const next = cells[clamp([...line.children].indexOf(cell) + move[1], cells.length - 1)];
+      // Only the cells of a column, so that the arrows never land on the empty cell under the header's +.
+      const columnsOf = (given: Element | undefined): HTMLElement[] => [...(given?.querySelectorAll<HTMLElement>(':scope > [data-column]') ?? [])];
+      const cells = columnsOf(lines[clamp(lines.indexOf(line) + move[0], lines.length - 1)]);
+      const next = cells[clamp(columnsOf(line).indexOf(cell) + move[1], cells.length - 1)];
       if (next) this.focus(placeOf(next), false);
     } else if (event.key === 'Escape') {
       this.select([]);
